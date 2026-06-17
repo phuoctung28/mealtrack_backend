@@ -279,9 +279,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
                 "_sync_targets_if_stale",
                 AsyncMock(return_value=(mock_budget, 1800.0)),
             ),
-            patch.object(
-                handler,
-                "_get_effective_adjusted_daily_async",
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler."
+                "WeeklyBudgetService.get_effective_adjusted_daily_async",
                 AsyncMock(return_value=mock_effective),
             ),
         ):

@@ -4,44 +4,43 @@ Handler for getting weekly macro budget status.
 
 import logging
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
-from typing import Dict, Any, Optional
+from datetime import date, datetime, timedelta
+from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.constants import WeeklyBudgetConstants
+from src.domain.model.weekly import WeeklyMacroBudget
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
+from src.domain.ports.cache_port import CachePort
 from src.domain.services.weekly_budget_service import (
     AdjustedDailyTargets,
     WeeklyBudgetService,
 )
-from src.domain.model.weekly import WeeklyMacroBudget
-from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import (
-    ensure_utc,
     get_user_monday,
     get_zone_info,
     resolve_user_timezone_async,
 )
-from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
 
 @handles(GetWeeklyBudgetQuery)
-class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, Any]]):
+class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, Any]]):
     """Handler for getting weekly macro budget status."""
 
     def __init__(
         self,
-        uow: Optional[AsyncUnitOfWorkPort] = None,
-        cache_service: Optional[CachePort] = None,
+        uow: AsyncUnitOfWorkPort | None = None,
+        cache_service: CachePort | None = None,
     ):
         self.uow = uow
         self.cache_service = cache_service
 
-    async def handle(self, query: GetWeeklyBudgetQuery) -> Dict[str, Any]:
+    async def handle(self, query: GetWeeklyBudgetQuery) -> dict[str, Any]:
         """Handle getting weekly budget status."""
         uow = self.uow or AsyncUnitOfWork()
         async with uow:
@@ -102,8 +101,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 base_daily_fat = weekly_budget.target_fat / 7
                 base_daily_protein = weekly_budget.target_protein / 7
 
-                # --- Skip & Redistribute (inline async version of WeeklyBudgetService.get_effective_adjusted_daily) ---
-                effective = await self._get_effective_adjusted_daily_async(
+                effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
                     uow=uow,
                     user_id=query.user_id,
                     week_start=week_start,
@@ -134,7 +132,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
 
                 # --- Tomorrow Preview ---
                 # Shows real impact of today's consumption on tomorrow's target.
-                preview_data: Dict[str, Any] = {}
+                preview_data: dict[str, Any] = {}
                 today_consumed_cal = (
                     consumed["calories"] - consumed_before_today["calories"]
                 )
@@ -264,183 +262,14 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
 
                 return result
 
-            except Exception as e:
+            except Exception:
                 raise
-
-    async def _get_effective_adjusted_daily_async(
-        self,
-        uow: AsyncUnitOfWork,
-        user_id: str,
-        week_start: date,
-        target_date: date,
-        weekly_budget: WeeklyMacroBudget,
-        base_daily_cal: float,
-        base_daily_protein: float,
-        base_daily_carbs: float,
-        base_daily_fat: float,
-        bmr: float,
-        user_timezone: str = "UTC",
-        cheat_dates=None,
-    ):
-        """Async version of WeeklyBudgetService.get_effective_adjusted_daily."""
-        from src.domain.services.weekly_budget_service import (
-            AdjustedDailyTargets,
-            EffectiveAdjustedResult,
-            WeeklyBudgetService,
-        )
-
-        # Cheat days already pre-loaded by caller
-        all_cheat_dates = cheat_dates if cheat_dates is not None else []
-        past_cheat_dates = [d for d in all_cheat_dates if d < target_date]
-        past_cheat_count = len(past_cheat_dates)
-
-        remaining_days = WeeklyBudgetService.calculate_remaining_days(
-            week_start, target_date
-        )
-
-        skipped_days = 0
-        show_logging_prompt = False
-        logged_past_days = 0
-
-        past_days_count = (target_date - week_start).days
-        if past_days_count > 0:
-            past_end = target_date - timedelta(days=1)
-            daily_counts = await uow.meals.get_daily_meal_counts(
-                user_id,
-                week_start,
-                past_end,
-                user_timezone=user_timezone,
-            )
-            logged_past_days = len(daily_counts)
-            skipped_days = past_days_count - logged_past_days
-
-            total_logged = logged_past_days + 1  # +1 for today
-            if (
-                total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
-                and past_days_count >= 3
-            ):
-                show_logging_prompt = True
-
-        redistribution_logged_days = max(0, logged_past_days - past_cheat_count)
-
-        # Fetch meals for the week once — used by all consumed calculations
-        week_end = week_start + timedelta(days=6)
-        week_meals = await uow.meals.find_by_date_range(
-            user_id,
-            week_start,
-            week_end,
-            user_timezone=user_timezone,
-        )
-
-        tz = get_zone_info(user_timezone) if user_timezone else None
-        from src.domain.model.meal import MealStatus
-
-        def _sum_meals(meals, end_date=None, exclude_dates=None):
-            exclude_dates_set = set(exclude_dates) if exclude_dates else set()
-            cal = prot = carbs = fat = 0.0
-            for meal in meals:
-                if meal.status == MealStatus.READY and meal.nutrition:
-                    if (end_date or exclude_dates_set) and meal.created_at:
-                        aware_dt = ensure_utc(meal.created_at)
-                        meal_local_date = (
-                            aware_dt.astimezone(tz).date() if tz else aware_dt.date()
-                        )
-                        if end_date and meal_local_date > end_date:
-                            continue
-                        if meal_local_date in exclude_dates_set:
-                            continue
-                    macros = meal.nutrition.macros
-                    cal += WeeklyBudgetService._derive_macro_calories(macros)
-                    prot += macros.protein or 0
-                    carbs += macros.carbs or 0
-                    fat += macros.fat or 0
-            return {"calories": cal, "protein": prot, "carbs": carbs, "fat": fat}
-
-        consumed_total = _sum_meals(week_meals)
-        past_end = target_date - timedelta(days=1)
-        consumed_before_today = _sum_meals(week_meals, end_date=past_end)
-        if past_cheat_dates:
-            consumed_for_redistribution = _sum_meals(
-                week_meals, end_date=past_end, exclude_dates=past_cheat_dates
-            )
-        else:
-            consumed_for_redistribution = consumed_before_today
-
-        # Calculate adjusted daily
-        if show_logging_prompt:
-            adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-                replace(
-                    weekly_budget,
-                    consumed_calories=0,
-                    consumed_protein=0,
-                    consumed_carbs=0,
-                    consumed_fat=0,
-                ),
-                standard_daily_calories=base_daily_cal,
-                standard_daily_carbs=base_daily_carbs,
-                standard_daily_fat=base_daily_fat,
-                standard_daily_protein=base_daily_protein,
-                bmr=bmr,
-                remaining_days=7,
-            )
-        else:
-            effective_week_days = redistribution_logged_days + remaining_days
-            budget_for_adjustment = replace(
-                weekly_budget,
-                target_calories=base_daily_cal * effective_week_days,
-                target_protein=base_daily_protein * effective_week_days,
-                target_carbs=base_daily_carbs * effective_week_days,
-                target_fat=base_daily_fat * effective_week_days,
-                consumed_calories=consumed_for_redistribution["calories"],
-                consumed_protein=consumed_for_redistribution["protein"],
-                consumed_carbs=consumed_for_redistribution["carbs"],
-                consumed_fat=consumed_for_redistribution["fat"],
-            )
-            adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-                budget_for_adjustment,
-                standard_daily_calories=base_daily_cal,
-                standard_daily_carbs=base_daily_carbs,
-                standard_daily_fat=base_daily_fat,
-                standard_daily_protein=base_daily_protein,
-                bmr=bmr,
-                remaining_days=remaining_days,
-            )
-
-        # Budget cap
-        remaining_before_today = (
-            weekly_budget.target_calories - consumed_before_today["calories"]
-        )
-        if remaining_days > 0 and remaining_before_today > 0:
-            max_daily = remaining_before_today / remaining_days
-            if adjusted.calories > max_daily:
-                scale = max_daily / adjusted.calories
-                adjusted = AdjustedDailyTargets(
-                    calories=round(max_daily, 1),
-                    carbs=round(adjusted.carbs * scale, 1),
-                    fat=round(adjusted.fat * scale, 1),
-                    protein=adjusted.protein,
-                    bmr_floor_active=adjusted.bmr_floor_active,
-                    remaining_days=adjusted.remaining_days,
-                )
-
-        return EffectiveAdjustedResult(
-            adjusted=adjusted,
-            consumed_before_today=consumed_before_today,
-            consumed_total=consumed_total,
-            logged_past_days=logged_past_days,
-            skipped_days=skipped_days,
-            show_logging_prompt=show_logging_prompt,
-        )
 
     async def _create_weekly_budget(
         self, uow: AsyncUnitOfWork, user_id: str, week_start: date, target_date: date
     ) -> tuple[WeeklyMacroBudget, float]:
         """Create a new weekly budget for the user. Returns (budget, bmr)."""
         import uuid
-
-        # Get user profile to find fitness goal
-        profile = await uow.users.get_profile(user_id)
-        fitness_goal = profile.fitness_goal if profile else "cut"
 
         # Get TDEE-based macros using GetUserTdeeQueryHandler (correct pattern)
         target_calories = None

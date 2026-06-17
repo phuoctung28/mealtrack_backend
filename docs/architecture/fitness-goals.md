@@ -11,7 +11,9 @@ Unified 3-value structure used across all layers:
 
 ## TDEE Calculation
 
-Calculated using the Mifflin-St Jeor formula, adjusted by Activity Level and the chosen Fitness Goal.
+Calculated using the Mifflin-St Jeor formula, adjusted by non-exercise job/lifestyle activity and the chosen Fitness Goal.
+
+Planned training volume is not added to baseline TDEE. Workout calories are credited only when users log movement entries with `include_in_balance = true`; this prevents double-counting the same exercise in both TDEE and logged movement.
 
 ## Multi-Layer Mapping
 

@@ -105,9 +105,6 @@ class TDEEConstants:
         "physical": 1.6,  # Manual labor (construction, warehouse)
     }
 
-    # Exercise contribution per weekly hour
-    EXERCISE_MULTIPLIER_PER_HOUR = 0.05
-
     # Goal adjustments (calories)
     # 300 deficit = ~0.3 kg/week, sustainable for small users
     CUTTING_DEFICIT = 300

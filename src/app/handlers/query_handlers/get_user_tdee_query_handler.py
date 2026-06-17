@@ -4,18 +4,19 @@ Auto-extracted for better maintainability.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
+
+from sqlalchemy import select
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.cache.cache_keys import CacheKeys
-from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.constants import NutritionConstants, TDEEConstants
-from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem
-from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
+from src.domain.model.user import Sex, TdeeRequest, UnitSystem
 from src.domain.ports.cache_port import CachePort
-from sqlalchemy import select
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -23,18 +24,18 @@ logger = logging.getLogger(__name__)
 
 
 @handles(GetUserTdeeQuery)
-class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
+class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
     """Handler for getting user's TDEE calculation."""
 
     def __init__(
         self,
         tdee_service: TdeeCalculationService = None,
-        cache_service: Optional[CachePort] = None,
+        cache_service: CachePort | None = None,
     ):
         self.tdee_service = tdee_service or TdeeCalculationService()
         self.cache_service = cache_service
 
-    async def handle(self, query: GetUserTdeeQuery) -> Dict[str, Any]:
+    async def handle(self, query: GetUserTdeeQuery) -> dict[str, Any]:
         cache_key, ttl = CacheKeys.user_tdee(query.user_id)
         if self.cache_service:
             cached = await self.cache_service.get_json(cache_key)
@@ -45,7 +46,7 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             await self.cache_service.set_json(cache_key, result, ttl)
         return result
 
-    async def _compute_tdee(self, query: GetUserTdeeQuery) -> Dict[str, Any]:
+    async def _compute_tdee(self, query: GetUserTdeeQuery) -> dict[str, Any]:
         """Get user's TDEE calculation based on current profile."""
         async with AsyncUnitOfWork() as uow:
             # Get current user profile using the UnitOfWork session
@@ -93,22 +94,17 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             # Calculate TDEE
             result = self.tdee_service.calculate_tdee(tdee_request)
 
-            # Calculate total multiplier for response
+            # Baseline excludes planned workouts; logged movement credits them.
             base_multiplier = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(
                 profile.job_type, 1.2
             )
-            weekly_hours = (
-                profile.training_days_per_week * profile.training_minutes_per_session
-            ) / 60.0
-            exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
-            total_multiplier = base_multiplier + exercise_add
 
             return {
                 "user_id": query.user_id,
                 "bmr": result.bmr,
                 "tdee": result.tdee,
                 "target_calories": round(result.macros.calories, 0),
-                "activity_multiplier": round(total_multiplier, 3),
+                "activity_multiplier": round(base_multiplier, 3),
                 "formula_used": result.formula_used,
                 "is_custom": False,
                 "macros": {
@@ -132,7 +128,7 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
 
     def _build_custom_macros_response(
         self, query: GetUserTdeeQuery, profile
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build response using custom macro overrides, still calculating BMR/TDEE for reference."""
         custom_calories = (
             profile.custom_protein_g * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
@@ -164,18 +160,13 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
         result = self.tdee_service.calculate_tdee(tdee_request)
 
         base_multiplier = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(profile.job_type, 1.2)
-        weekly_hours = (
-            profile.training_days_per_week * profile.training_minutes_per_session
-        ) / 60.0
-        exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
-        total_multiplier = base_multiplier + exercise_add
 
         return {
             "user_id": query.user_id,
             "bmr": result.bmr,
             "tdee": result.tdee,
             "target_calories": round(custom_calories, 0),
-            "activity_multiplier": round(total_multiplier, 3),
+            "activity_multiplier": round(base_multiplier, 3),
             "formula_used": result.formula_used,
             "is_custom": True,
             "macros": {
