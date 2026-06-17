@@ -17486,9 +17486,9 @@ def extract_usda_nutrition(nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
 
 
 def parse_fatsecret_nutrition(food: Dict[str, Any]) -> Dict[str, float]:
-    """Parse per-100g nutrition from FatSecret food_description field.
+    """Parse per-100g nutrition from fatsecret food_description field.
 
-    FatSecret format: 'Per 100g - Calories: 155kcal | Fat: 11g | Carbs: 1.1g | Protein: 13g'
+    fatsecret format: 'Per 100g - Calories: 155kcal | Fat: 11g | Carbs: 1.1g | Protein: 13g'
     """
     desc = food.get("food_description", "")
     if not desc:
@@ -17514,7 +17514,7 @@ def parse_fatsecret_nutrition(food: Dict[str, Any]) -> Dict[str, float]:
                 if val:
                     result["protein"] = float(val.group(1))
     except Exception as e:
-        logger.debug(f"Could not parse FatSecret nutrition: {e}")
+        logger.debug(f"Could not parse fatsecret nutrition: {e}")
         return {}
     return result if result else {}
 </file>
@@ -22346,7 +22346,7 @@ class GoalEnum(str, enum.Enum):
 """
 Food reference database model — canonical food catalog.
 Evolved from barcode_products to serve as the single source of truth
-for per-100g nutrition data across barcode scans, USDA, and FatSecret.
+for per-100g nutrition data across barcode scans, USDA, and fatsecret.
 """
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, Integer, JSON, String, Text, func,
@@ -31225,7 +31225,7 @@ DEV_USER_FIREBASE_UID=your_dev_firebase_uid_here
 DEV_USER_EMAIL=your_dev_email@example.com
 DEV_USER_USERNAME=your_dev_username
 
-# FatSecret API (barcode lookup + food search) - OAuth 2.0
+# fatsecret API (barcode lookup + food search) - OAuth 2.0
 FATSECRET_CLIENT_ID=your_client_id
 FATSECRET_CLIENT_SECRET=your_client_secret
 </file>
@@ -34342,7 +34342,7 @@ class GetMealByIdQueryHandler(EventHandler[GetMealByIdQuery, Meal]):
 
 <file path="src/app/handlers/query_handlers/lookup_barcode_query_handler.py">
 """
-LookupBarcodeQueryHandler - Handle barcode lookup with cascade: DB -> FatSecret -> OpenFoodFacts.
+LookupBarcodeQueryHandler - Handle barcode lookup with cascade: DB -> fatsecret -> OpenFoodFacts.
 """
 import logging
 from typing import Optional, Dict, Any
@@ -34371,7 +34371,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
         self.repo = food_reference_repository
 
     async def handle(self, query: LookupBarcodeQuery) -> Optional[Dict[str, Any]]:
-        """Look up product by barcode with cascade: DB -> FatSecret -> OpenFoodFacts."""
+        """Look up product by barcode with cascade: DB -> fatsecret -> OpenFoodFacts."""
 
         # Step 1: Check local cache (DB)
         cached = self.repo.get_by_barcode(query.barcode)
@@ -34379,7 +34379,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             cached["source"] = "cache"
             return cached
 
-        # Step 2: Try FatSecret
+        # Step 2: Try fatsecret
         fat_secret_result = await self.fat_secret.get_product(query.barcode)
         if fat_secret_result:
             fat_secret_result["source"] = "fatsecret"
@@ -36920,10 +36920,10 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
 class FoodMappingService(FoodMappingServicePort):
     def map_search_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        # Handle FatSecret results with embedded nutrition
+        # Handle fatsecret results with embedded nutrition
         if item.get("source") == "fatsecret":
             return {
-                "fdc_id": None,  # FatSecret doesn't use FDC IDs
+                "fdc_id": None,  # fatsecret doesn't use FDC IDs
                 "food_id": item.get("food_id"),
                 "name": item.get("description"),
                 "brand": item.get("brand"),
@@ -48004,7 +48004,7 @@ class WeeklyBudgetService:
 
 <file path="src/infra/adapters/fat_secret_service.py">
 """
-FatSecret API HTTP client.
+fatsecret API HTTP client.
 Provides product lookup by barcode and food search using OAuth 2.0.
 """
 from typing import Dict, Any, Optional, List
@@ -48019,7 +48019,7 @@ from src.infra.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# FatSecret API endpoints
+# fatsecret API endpoints
 FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token"
 FATSECRET_API_BASE = "https://platform.fatsecret.com/rest/v1"
 
@@ -48028,7 +48028,7 @@ BARCODE_PATTERN = re.compile(r'^\d{8,14}$')
 
 
 class FatSecretService:
-    """HTTP client for FatSecret API with OAuth 2.0."""
+    """HTTP client for fatsecret API with OAuth 2.0."""
 
     def __init__(self, client_id: str, client_secret: str):
         self.client_id = client_id
@@ -48074,7 +48074,7 @@ class FatSecretService:
 
             if response.status_code != 200:
                 logger.warning(
-                    f"FatSecret token request failed: {response.status_code} - {response.text[:200]}"
+                    f"fatsecret token request failed: {response.status_code} - {response.text[:200]}"
                 )
                 return None
 
@@ -48085,7 +48085,7 @@ class FatSecretService:
 
             return self._access_token
         except Exception as e:
-            logger.warning(f"FatSecret OAuth error: {e}")
+            logger.warning(f"fatsecret OAuth error: {e}")
             return None
 
     async def _api_request(
@@ -48111,17 +48111,17 @@ class FatSecretService:
 
             if response.status_code != 200:
                 logger.warning(
-                    f"FatSecret API error: {response.status_code} - {response.text[:200]}"
+                    f"fatsecret API error: {response.status_code} - {response.text[:200]}"
                 )
                 return None
 
             return response.json()
         except httpx.HTTPError as e:
-            logger.warning(f"FatSecret request error: {e}")
+            logger.warning(f"fatsecret request error: {e}")
             return None
 
     async def get_product(self, barcode: str) -> Optional[Dict[str, Any]]:
-        """Fetch product by barcode from FatSecret."""
+        """Fetch product by barcode from fatsecret."""
         # Validate barcode format
         if not BARCODE_PATTERN.match(barcode):
             logger.warning(f"Invalid barcode format: {barcode}")
@@ -48150,7 +48150,7 @@ class FatSecretService:
 
             return self._map_product(food_details, normalized_barcode)
         except Exception as e:
-            logger.warning(f"FatSecret API error for barcode {barcode}: {e}")
+            logger.warning(f"fatsecret API error for barcode {barcode}: {e}")
             return None
 
     async def search_foods(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
@@ -48181,11 +48181,11 @@ class FatSecretService:
                 error = result.get("error")
                 if error:
                     logger.error(
-                        f"FatSecret API error for '{query}': {error}"
+                        f"fatsecret API error for '{query}': {error}"
                     )
                 else:
                     logger.warning(
-                        f"FatSecret returned no foods for '{query}'. "
+                        f"fatsecret returned no foods for '{query}'. "
                         f"Response keys: {list(result.keys())}"
                     )
                 return []
@@ -48215,11 +48215,11 @@ class FatSecretService:
 
             return processed
         except Exception as e:
-            logger.warning(f"FatSecret search error for query '{query}': {e}")
+            logger.warning(f"fatsecret search error for query '{query}': {e}")
             return []
 
     def _extract_serving_units(self, food: Dict) -> List[Dict]:
-        """Extract all serving units from FatSecret food details."""
+        """Extract all serving units from fatsecret food details."""
         servings = food.get("servings", {}).get("serving", [])
         if not servings:
             return []
@@ -48245,7 +48245,7 @@ class FatSecretService:
         return units
 
     def _extract_nutrition_from_details(self, food: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract per-100g nutrition from FatSecret food details."""
+        """Extract per-100g nutrition from fatsecret food details."""
         servings = food.get("servings", {}).get("serving", [])
         serving = None
         if isinstance(servings, list) and servings:
@@ -48273,7 +48273,7 @@ class FatSecretService:
         return [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
     def _map_product(self, food: Dict[str, Any], barcode: str) -> Dict[str, Any]:
-        """Map FatSecret response to clean dict."""
+        """Map fatsecret response to clean dict."""
         servings = food.get("servings", {}).get("serving", [])
         serving = None
         if isinstance(servings, list) and servings:
@@ -48320,13 +48320,13 @@ class FatSecretService:
         return (raw_value / metric_amount) * 100
 
     def _map_search_result(self, food: Dict[str, Any]) -> Dict[str, Any]:
-        """Map FatSecret search result to clean dict."""
+        """Map fatsecret search result to clean dict."""
         return {
             "description": food.get("food_name", ""),
             "brand": food.get("brand_name"),
             "food_description": food.get("food_description", ""),
             "source": "fatsecret",
-            "food_id": food.get("food_id"),  # FatSecret's internal ID for getting details
+            "food_id": food.get("food_id"),  # fatsecret's internal ID for getting details
             "allowed_units": self._default_allowed_units(),  # Will be enriched with details
         }
 
@@ -48354,7 +48354,7 @@ def get_fat_secret_service() -> FatSecretService:
         if not client_id or not client_secret:
             # Fall back to OAuth 1.0 (legacy)
             logger.warning(
-                "FatSecret OAuth 2.0 credentials not configured, OAuth 1.0 not supported"
+                "fatsecret OAuth 2.0 credentials not configured, OAuth 1.0 not supported"
             )
             raise ValueError(
                 "FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET must be set for OAuth 2.0"
@@ -56769,7 +56769,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
             mapped = [self.mapping_service.map_search_item(i) for i in processed_cached]
             return {"results": mapped, "query": event.query, "total": len(mapped)}
 
-        # FatSecret only
+        # fatsecret only
         processed_raw = []
 
         if self.fat_secret_service:
@@ -56777,7 +56777,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
                 fs_results = await self.fat_secret_service.search_foods(event.query, max_results=event.limit)
                 processed_raw.extend(fs_results)
             except Exception:
-                logger.warning("FatSecret search failed", exc_info=True)
+                logger.warning("fatsecret search failed", exc_info=True)
 
         # Only cache non-empty results to avoid persisting API failures
         if processed_raw:
@@ -57744,8 +57744,8 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     PINECONE_API_KEY: str | None = Field(default=None)
-    FATSECRET_CLIENT_ID: str | None = Field(default=None, description="FatSecret OAuth 2.0 client ID")
-    FATSECRET_CLIENT_SECRET: str | None = Field(default=None, description="FatSecret OAuth 2.0 client secret")
+    FATSECRET_CLIENT_ID: str | None = Field(default=None, description="fatsecret OAuth 2.0 client ID")
+    FATSECRET_CLIENT_SECRET: str | None = Field(default=None, description="fatsecret OAuth 2.0 client secret")
 
     # LLM Provider configuration
     LLM_PROVIDER: str | None = Field(
@@ -60290,7 +60290,7 @@ firebase-admin>=6.0.0
 redis>=5.0.0
 redis[hiredis]>=5.0.0
 
-# FatSecret API
+# fatsecret API
 fatsecret
 </file>
 
@@ -64622,7 +64622,7 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         # Extract JSON from response
         parsed_items = extract_json_from_response(content)
 
-        # Enhance items with USDA/FatSecret cascade lookup
+        # Enhance items with USDA/fatsecret cascade lookup
         enhanced_items = []
         for item in parsed_items:
             enhanced = await self._cascade_lookup(item)
@@ -64662,8 +64662,8 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
 
     async def _cascade_lookup(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Cascade lookup: FatSecret -> AI estimate.
-        FatSecret prioritized for precision.
+        Cascade lookup: fatsecret -> AI estimate.
+        fatsecret prioritized for precision.
         Applies unit-to-grams conversion so nutrition matches what manual-meal stores.
         """
         name = item.get("name", "")
@@ -64674,7 +64674,7 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             item["data_source"] = "ai_estimate"
             return item
 
-        # Try FatSecret (more precise for common foods)
+        # Try fatsecret (more precise for common foods)
         try:
             fatsecret_results = await self._fat_secret_service.search_foods(name, max_results=5)
             if fatsecret_results and len(fatsecret_results) > 0:
@@ -64690,7 +64690,7 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
                 item["data_source"] = "fatsecret"
                 return item
         except Exception as e:
-            logger.debug(f"FatSecret lookup failed for {name}: {e}")
+            logger.debug(f"fatsecret lookup failed for {name}: {e}")
 
         # Fallback to AI estimate (values from Gemini prompt, already per-serving)
         item["data_source"] = "ai_estimate"
@@ -73810,9 +73810,9 @@ def get_open_food_facts_service_instance():
     return get_open_food_facts_service()
 
 
-# FatSecret Service
+# fatsecret Service
 def get_fat_secret_service_instance():
-    """Get the FatSecret service instance."""
+    """Get the fatsecret service instance."""
     from src.infra.adapters.fat_secret_service import get_fat_secret_service
     return get_fat_secret_service()
 

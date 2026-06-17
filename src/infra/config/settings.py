@@ -115,10 +115,10 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     FATSECRET_CLIENT_ID: str | None = Field(
-        default=None, description="FatSecret OAuth 2.0 client ID"
+        default=None, description="fatsecret OAuth 2.0 client ID"
     )
     FATSECRET_CLIENT_SECRET: str | None = Field(
-        default=None, description="FatSecret OAuth 2.0 client secret"
+        default=None, description="fatsecret OAuth 2.0 client secret"
     )
     BRAVE_SEARCH_API_KEY: str | None = Field(
         default=None, description="Brave Search API key (free tier: 2K/mo)"

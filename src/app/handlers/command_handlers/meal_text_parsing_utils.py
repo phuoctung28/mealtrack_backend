@@ -91,9 +91,9 @@ def extract_usda_nutrition(nutrients: list[dict[str, Any]]) -> dict[str, float]:
 
 
 def parse_fatsecret_nutrition(food: dict[str, Any]) -> dict[str, float]:
-    """Parse per-100g nutrition from FatSecret food_description field.
+    """Parse per-100g nutrition from fatsecret food_description field.
 
-    FatSecret format: 'Per 100g - Calories: 155kcal | Fat: 11g | Carbs: 1.1g | Protein: 13g'
+    fatsecret format: 'Per 100g - Calories: 155kcal | Fat: 11g | Carbs: 1.1g | Protein: 13g'
     """
     desc = food.get("food_description", "")
     if not desc:
@@ -119,6 +119,6 @@ def parse_fatsecret_nutrition(food: dict[str, Any]) -> dict[str, float]:
                 if val:
                     result["protein"] = float(val.group(1))
     except Exception as e:
-        logger.debug(f"Could not parse FatSecret nutrition: {e}")
+        logger.debug(f"Could not parse fatsecret nutrition: {e}")
         return {}
     return result if result else {}

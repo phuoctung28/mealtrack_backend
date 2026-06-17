@@ -1,7 +1,7 @@
 """
 Food reference database model — canonical food catalog.
 Evolved from barcode_products to serve as the single source of truth
-for per-100g nutrition data across barcode scans, USDA, and FatSecret.
+for per-100g nutrition data across barcode scans, USDA, and fatsecret.
 """
 
 from sqlalchemy import (

@@ -48,10 +48,10 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
 class FoodMappingService(FoodMappingServicePort):
     def map_search_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        # Handle FatSecret results with embedded nutrition
+        # Handle fatsecret results with embedded nutrition
         if item.get("source") == "fatsecret":
             return {
-                "fdc_id": None,  # FatSecret doesn't use FDC IDs
+                "fdc_id": None,  # fatsecret doesn't use FDC IDs
                 "food_id": item.get("food_id"),
                 "name": item.get("description"),
                 "brand": item.get("brand"),
