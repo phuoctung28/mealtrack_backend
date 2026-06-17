@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
-**Last Updated:** June 13, 2026
-**Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry
+**Last Updated:** June 17, 2026
+**Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Cloudflare Workers AI, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
@@ -56,8 +56,7 @@
 |---------|-------|---------|
 | General / Recipe / Barcode | `gemini-2.5-flash` | `GEMINI_MODEL` |
 | Meal names | `gemini-2.5-flash-lite` | `GEMINI_MODEL_NAMES` |
-| Recipe primary | `gemini-2.5-flash` | `GEMINI_MODEL_RECIPE_PRIMARY` |
-| Recipe secondary | `gemini-2.5-flash` | `GEMINI_MODEL_RECIPE_SECONDARY` |
+| Recipe generation | `gemini-2.5-flash-lite` | `GEMINI_MODEL_RECIPE` |
 
 ### Vision AI (Meal Analysis)
 - 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context, combined
@@ -123,7 +122,7 @@
 
 - **Default posture:** Do not cache unless the value passes the cache admission checklist in `docs/superpowers/specs/2026-05-21-redis-optimize-design.md`.
 - **Pattern:** Cache-aside only for optional read caches where DB/API fallback is correct.
-- **Connection Pool:** 50 connections | **Default TTL:** 1 hour
+- **Connection Pool:** 10 connections by default (`REDIS_MAX_CONNECTIONS`) | **Default TTL:** 1 hour
 - **Error Handling:** Optional caches degrade by bypassing Redis. Required Redis-backed state must be documented and health-checked separately.
 
 **Config:** `REDIS_URL=redis://host:port/db`
@@ -228,7 +227,7 @@ event types, environment, durations, sizes, counts, and error class names.
 
 See `database-guide.md` for schema, connection pool, and migration details.
 
-**Config:** `DATABASE_URL=postgresql+asyncpg://user:pass@host/db`
+**Config:** `APP_DATABASE_URL=postgresql://user:pass@host/db` for app runtime; `DATABASE_URL_DIRECT` is migration/admin only.
 
 ---
 
@@ -236,9 +235,9 @@ See `database-guide.md` for schema, connection pool, and migration details.
 
 ```
 GET /health                    # Basic health (200 if running)
-GET /health/db-pool            # DB pool metrics
-GET /health/db-connections     # PostgreSQL connection stats
-GET /health/notifications      # FCM health
+GET /v1/health/db-pool         # DB pool metrics
+GET /v1/health/db-connections  # PostgreSQL connection stats
+GET /v1/health/notifications   # FCM health
 ```
 
 ---

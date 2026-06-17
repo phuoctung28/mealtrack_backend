@@ -1,9 +1,9 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 13, 2026
+**Last Updated:** June 17, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 430 files, ~38.5K LOC across 4 layers
+**Codebase:** 620 Python files, ~52.6K LOC in `src/`
 
 ---
 
@@ -11,22 +11,22 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (76 files)                    │
+│                      API Layer (89 files)                    │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (140 files)                   │
+│              Application Layer (208 files)                   │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (133 files)                      │
+│                Domain Layer (160 files)                      │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
 ┌────────────────────────▼────────────────────────────────────┐
-│            Infrastructure Layer (80 files)                   │
+│            Infrastructure Layer (154 files)                  │
 │  DB │ Cache │ External APIs │ Event Bus │ Config             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -37,11 +37,11 @@
 
 | Layer | Files | LOC | Key Contents |
 |-------|-------|-----|-------------|
-| API | 76 | ~8,605 | 17 route modules, 34 Pydantic schemas, 8 mappers, 3 middleware |
-| App | 140 | ~6,229 | 30 commands, 31 queries, 19 events, 51+ handlers, 3 app services |
-| Domain | 133 | ~14,556 | 8 bounded contexts, 30+ entities, 50+ services, 17 port interfaces |
-| Infra | 80 | ~8,895 | 13+ DB tables, 10+ repos, Redis, PyMediator, external adapters, push payload builders |
-| **Total** | **430** | **~38,300** | |
+| API | 89 | ~10,361 | 26 router registrations, 83 endpoint decorators, schemas, middleware, dependencies |
+| App | 208 | ~10,984 | 51 command files, 50 query files, 15 event files, 87 handler files |
+| Domain | 160 | ~15,460 | Meal, nutrition, user, hydration, movement, notification, planning, referral-facing policies |
+| Infra | 154 | ~15,041 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
+| **Total** | **611** | **~51,846** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
 
 **Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns.
 
@@ -93,14 +93,15 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 
 | Context | Key Entities |
 |---------|-------------|
-| Meal | Meal (state machine), MealImage, Ingredient |
+| Meal | Meal (state machine), MealImage, Ingredient, image cache projection |
 | Nutrition | Nutrition, FoodItem, Macros, Micros |
-| User | User, UserProfile, Activity, TdeeRequest |
-| Meal Planning | MealPlan, PlannedMeal, DayPlan, UserPreferences |
-| Conversation | Conversation, Message, ConversationState |
-| Notification | UserFcmToken, NotificationPreferences, PushNotification, NotificationSentLog |
+| User | User, UserProfile, Activity, TdeeRequest, weight history |
+| Hydration | Hydration entries, drink catalog, caloric drink logging |
+| Movement | Movement entries, activity catalog, daily movement summaries |
+| Meal Planning | Weekly budget, meal planning, meal suggestion, saved suggestion models |
+| Notification | UserFcmToken, NotificationPreferences, PushNotification, queued notification rows |
 | AI | GPTAnalysisResponse, GPTFoodItem, GPTResponseError |
-| Chat | Thread, Message, ThreadStatus, MessageRole |
+| Commerce | Subscription state, referral code application, promo code redemption |
 
 ---
 
@@ -150,11 +151,11 @@ Nutree mobile ──→ MealTrack (validate/apply code)
 
 ## Known Issues
 
-- CORS `allow_origins=["*"]` wide open in production (security risk)
 - Premium features not restricted on routes (`require_premium` dependency not applied)
 - No API versioning strategy beyond v1
 - `CloudinaryImageStore` instantiated directly in routes (not via DI)
 - Hardcoded constants (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) not in config
+- CORS is configured only when `ALLOWED_ORIGINS` is set; production origin values still need deployment review.
 - `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance will block (by design — use separate instances per handler, enforced by event bus handler cloning)
 - Database runtime is async-only: request paths, cron jobs, and handlers use `config_async.py`, `AsyncSession`, `AsyncUnitOfWork`, and async repositories. Alembic uses its separate migration engine.
 - Manual meal save (`POST /v1/meals/manual`) instruments `db_ms` and `cache_ms` in structured logs so DB commit and Redis cache invalidation latency are independently observable without logging food payload or auth data.

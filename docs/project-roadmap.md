@@ -1,13 +1,18 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.3
-**Last Updated:** June 13, 2026
-**Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
+**Version:** 0.6.4
+**Last Updated:** June 17, 2026
+**Status:** Production-ready. 620 Python files and ~52.6K LOC in `src/` (API: 89, App: 208, Domain: 160, Infra: 154). 291 Python test files with 1,600+ collected tests.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### June 2026: Codebase Documentation Refresh
+- [x] Updated README, project instructions, codebase summary, architecture, API, database, external-service, standards, testing, CQRS, overview, roadmap, and troubleshooting docs against the live source tree.
+- [x] Replaced stale database-engine, legacy vector-service, route-count, layer-count, test-count, Redis-pool, migration-startup, and CORS risk claims in current docs.
+- [x] Documented current hydration, movement, nutrition, referral, promo-code, upload-token, scan-by-url, and health endpoint surfaces.
 
 ### June 2026: Single-Owner Logger System
 - [x] Established log-or-raise rule: one root-cause `ERROR` per unexpected request failure; expected 4xx exceptions produce zero ERROR logs.
@@ -93,7 +98,7 @@
 - [x] Documentation updates: system-architecture, code-standards, project-overview, roadmap
 
 ### February 2026: Documentation Refresh v0.5.0
-- [x] Updated all documentation with latest scout-verified statistics (430 files, ~38K LOC).
+- [x] Updated all documentation with then-current scout-verified statistics.
 - [x] Accurate metrics: 30 commands, 31 queries, 19 events, 54 handlers, 50+ domain services.
 - [x] Fixed metric inconsistencies across all doc files.
 - [x] Updated layer statistics (76/140/133/80 files, ~8.6K/6.2K/14.6K/8.9K LOC).
@@ -110,7 +115,7 @@
 - [x] SuggestionOrchestrationService with 4h TTL (Redis).
 - [x] Portion multipliers (1-4x) and rejection feedback.
 - [x] Generation fallback mechanism.
-- [x] 681+ tests passing.
+- [x] Test suite passing at the time of delivery.
 
 ### Phase 02: Language Prompt Integration (Jan 2026)
 - [x] Language-aware prompt generation with injected instructions.
@@ -122,9 +127,9 @@
 - [x] English fallback for invalid language codes.
 - [x] TranslationService for post-generation translation.
 
-### Phase 05: Pinecone Inference Migration (Jan 2026)
+### Phase 05: Legacy Vector Search Migration (Jan 2026)
 - [x] Recreated indexes with 1024-dim vectors (llama-text-embed-v2).
-- [x] Migrated to serverless Pinecone Inference API.
+- [x] Migrated legacy semantic search infrastructure; current active docs describe PostgreSQL/pgvector-backed vector-capable storage.
 - [x] Updated unit/integration tests with 1024-dim mocks.
 - [x] Semantic ingredient search with 0.35 similarity threshold.
 
@@ -150,8 +155,8 @@
 
 ## Current Priorities (Q2 2026)
 1. **Performance**: Optimize suggestion generation (target <10s from ~45s) — in progress.
-2. **Security**: Restrict CORS in production (`allow_origins=["*"]` currently wide open), add PII redaction to request logging — open.
-3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (discover, generate) — open.
+2. **Security**: Review deployed `ALLOWED_ORIGINS` values and continue log/request PII redaction audits — open.
+3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (`discover`, `recipes`, `save`) — open.
 4. **Testing**: Increase coverage for meal discovery and notification dedup logic — open.
 5. **Premium Gating**: Apply `require_premium` dependency to premium-only routes — open.
 
@@ -176,7 +181,7 @@
 
 ### High Priority
 - [ ] Plan contract migration to remove or secure legacy JSON compatibility fields after production observation window.
-- [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
+- [ ] Verify production `ALLOWED_ORIGINS` is restricted to known app/web origins.
 - [ ] Implement API versioning strategy beyond v1
 - [ ] Apply `require_premium` dependency to premium-only features
 - [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config

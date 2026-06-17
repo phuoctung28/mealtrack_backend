@@ -1,9 +1,9 @@
 # Backend Database Guide
 
-**Last Updated:** June 10, 2026
+**Last Updated:** June 17, 2026
 **Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
-**Migrations:** Alembic with auto-migration on startup
-**Tables:** 30+ (core tables + normalized profile/hydration/recipe/food/referral tables)
+**Migrations:** Alembic via deployment entrypoint/pre-deploy flow
+**Tables:** 36 ORM table declarations across core, normalized tracking, referral, notification, and cache models
 
 ---
 
@@ -65,9 +65,9 @@ DATABASE_URL = "postgresql+asyncpg://user:pass@host/db"
 
 async_engine = create_async_engine(
     DATABASE_URL,
-    pool_size=20,       # Base connections
-    max_overflow=10,    # Additional under load
-    pool_recycle=3600,  # Recycle hourly
+    pool_size=3,        # Default per worker
+    max_overflow=2,     # Default per worker
+    pool_recycle=120,   # Default recycle interval
     pool_pre_ping=True, # Verify before use
 )
 
@@ -162,12 +162,16 @@ alembic revision --autogenerate -m "description"  # Create new
 alembic downgrade -1                              # Rollback one
 ```
 
-Auto-migrate runs on startup with retry logic. Use timestamp naming for new migrations.
+Deployments run migrations before application startup through `docker-entrypoint.sh`
+for non-production environments or through a production pre-deploy job. Use
+timestamp naming for new migrations and keep app runtime URLs separate from
+migration/admin URLs.
 
 **Recent migrations:**
 
 | Version | Changes |
 |---------|---------|
+| 20260610000001 | Add affiliate_event_outbox for cross-service affiliate lifecycle dispatch |
 | 20260609000006 | Add normalized read-path indexes for active FCM tokens, notification reschedule/delete, and stale processing reclaim |
 | 20260609000005 | Add normalized food serving/nutrient tables, payout typed workflow fields, notification context schema version |
 | 20260609000004 | Add normalized saved suggestion ingredients/steps and meal recipe instruction steps |
@@ -205,7 +209,7 @@ concurrent requests.
 
 - Indexes on `firebase_uid`, `status`, date columns, and `user_id` foreign keys
 - `joinedload` / `selectinload` for known relationship paths
-- Connection pool: 20 base + 10 overflow, recycled hourly
+- Direct-pool defaults: 3 base + 2 overflow connections per worker, recycled every 120 seconds
 - Redis cache-aside for frequently read data (see `external-services.md`)
 
 ---

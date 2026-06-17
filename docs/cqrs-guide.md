@@ -1,9 +1,9 @@
 # Backend CQRS Pattern Guide
 
-**Last Updated:** May 6, 2026
+**Last Updated:** June 17, 2026
 **Event Bus:** PyMediator with singleton registry pattern
-**Handlers:** 51+ across commands, queries, and events
-**Domains:** 11 (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
+**Handlers:** 87 handler files across commands, queries, and events
+**Domains:** Activity, Cheat Day, Codes, Daily Meal, Food, Hydration, Ingredient, Meal, Meal Plan, Meal Suggestion, Movement, Notification, Nutrition, Promo Code, Referral, Saved Suggestion, TDEE, User, Weight
 
 ---
 
@@ -109,7 +109,7 @@ await event_bus.publish(MealCreatedEvent(...))          # fire-and-forget
 ### Two Event Buses
 
 1. **Food Search Bus**: Lightweight, food queries only
-2. **Configured Bus**: Full CQRS with 40+ handlers registered
+2. **Configured Bus**: Full CQRS bus registered from `src/api/dependencies/event_bus.py`
 
 ---
 
