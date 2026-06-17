@@ -50,7 +50,7 @@ async def test_partial_localized_result_skips_fallback():
 
     assert (
         fat_secret.search_foods.call_count == 1
-    ), f"Expected 1 FatSecret call (localized only), got {fat_secret.search_foods.call_count}"
+    ), f"Expected 1 fatsecret call (localized only), got {fat_secret.search_foods.call_count}"
 
 
 @pytest.mark.asyncio

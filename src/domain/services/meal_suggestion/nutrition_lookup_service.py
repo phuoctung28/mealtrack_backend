@@ -4,7 +4,7 @@ Three-tier nutrition lookup orchestration service.
 Tier resolution order per ingredient:
   Redis — cached per-100g macros (24-hour TTL)
   T1 — exact match on food_reference.name_normalized (MySQL, no fuzzy)
-  T2 — FatSecret via IngredientNutritionResolver (caches result to T1)
+  T2 — fatsecret via IngredientNutritionResolver (caches result to T1)
   T3 — AI single-ingredient estimate (last resort, logged as WARNING)
 
 Calories are ALWAYS derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
@@ -36,7 +36,7 @@ _cache_metrics = {
 }
 
 NUTRITION_CACHE_TTL = 86400  # 24 hours
-T2_TIMEOUT = 2.0  # FatSecret timeout
+T2_TIMEOUT = 2.0  # fatsecret timeout
 T3_TIMEOUT = 3.0  # AI estimate timeout
 
 # Volume conversions: unit → millilitres
@@ -76,7 +76,7 @@ class MealMacros:
     sugar: float
     ingredients: List[IngredientMacros]
     t1_count: int  # resolved via food_reference
-    t2_count: int  # resolved via FatSecret
+    t2_count: int  # resolved via fatsecret
     t3_count: int  # resolved via AI fallback
 
 
@@ -233,13 +233,13 @@ class NutritionLookupService:
             await self._cache_result(cache_key, result)
             return result
 
-        # T2: FatSecret (resolver handles caching to food_reference)
+        # T2: fatsecret (resolver handles caching to food_reference)
         try:
             per100 = await asyncio.wait_for(
                 self._resolver.resolve(name), timeout=T2_TIMEOUT
             )
         except asyncio.TimeoutError:
-            logger.warning("T2 FatSecret timeout for %s", name)
+            logger.warning("T2 fatsecret timeout for %s", name)
             per100 = None
         if per100 is not None:
             _cache_metrics["t2_hits"] += 1

@@ -1,6 +1,6 @@
 """
 LookupBarcodeQueryHandler - Handle barcode lookup with cascade:
-DB -> FatSecret -> OpenFoodFacts -> Brave+AI -> AI estimate.
+DB -> fatsecret -> OpenFoodFacts -> Brave+AI -> AI estimate.
 """
 
 import logging
@@ -123,7 +123,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         else:
             miss_reasons.append("cache_empty")
 
-        # Step 2: Try FatSecret
+        # Step 2: Try fatsecret
         region = LANGUAGE_TO_REGION.get(query.language, "US")
         fat_secret_result = await self.fat_secret.get_product(
             query.barcode,
@@ -190,10 +190,10 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                 f"[BARCODE-CASCADE] {query.barcode} → step 4 SKIP (brave not configured)"
             )
 
-        # Step 4b: If Brave found a product name, search FatSecret by name for verified nutrition
+        # Step 4b: If Brave found a product name, search fatsecret by name for verified nutrition
         if brave_name:
             logger.debug(
-                f"[BARCODE-CASCADE] {query.barcode} → step 4b FatSecret name search: {brave_name}"
+                f"[BARCODE-CASCADE] {query.barcode} → step 4b fatsecret name search: {brave_name}"
             )
             region = LANGUAGE_TO_REGION.get(query.language, "US")
             try:
@@ -207,7 +207,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                     # Use first result with nutrition and a valid name
                     for fs_item in fs_results:
                         if self._has_nutrition(fs_item):
-                            # Ensure name is set (FatSecret search can return null names)
+                            # Ensure name is set (fatsecret search can return null names)
                             if not fs_item.get("name"):
                                 fs_item["name"] = brave_name
                             logger.debug(
@@ -225,7 +225,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                     miss_reasons.append("fatsecret_name_search_empty")
             except Exception as e:
                 miss_reasons.append("fatsecret_name_search_error")
-                logger.warning(f"FatSecret name search failed for '{brave_name}': {e}")
+                logger.warning(f"fatsecret name search failed for '{brave_name}': {e}")
 
         # Step 4c: Return Brave estimate if available (editable)
         if brave_result and self._has_nutrition(brave_result):

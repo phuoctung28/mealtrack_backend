@@ -1,5 +1,5 @@
 """
-Ingredient nutrition resolver — T2 lookup via FatSecret.
+Ingredient nutrition resolver — T2 lookup via fatsecret.
 
 Wraps FatSecretService to provide per-100g macros for individual
 ingredients. Every cache hit is persisted to food_reference so T1
@@ -31,12 +31,12 @@ class PerHundredGramsMacros:
 
 
 class IngredientNutritionResolver:
-    """Resolve per-100g macros for a named ingredient via FatSecret.
+    """Resolve per-100g macros for a named ingredient via fatsecret.
 
     Lookup strategy:
     1. Call FatSecretService.search_foods(query=name, max_results=5).
     2. Pick the best result, preferring food_type == "Generic" over branded.
-    3. Extract per-100g macros from FatSecret's servings data.
+    3. Extract per-100g macros from fatsecret's servings data.
     4. Upsert into food_reference with source="fatsecret", is_verified=False.
     5. Return PerHundredGramsMacros, or None on any failure / empty result.
     """
@@ -48,7 +48,7 @@ class IngredientNutritionResolver:
     async def resolve(self, name: str) -> Optional[PerHundredGramsMacros]:
         """Resolve per-100g macros for the given ingredient name.
 
-        Returns None if FatSecret returns no results, hits rate limits,
+        Returns None if fatsecret returns no results, hits rate limits,
         or raises any network exception.
         """
         try:
@@ -56,16 +56,16 @@ class IngredientNutritionResolver:
                 query=name, max_results=5
             )
         except Exception as exc:
-            logger.warning("FatSecret search failed for ingredient '%s': %s", name, exc)
+            logger.warning("fatsecret search failed for ingredient '%s': %s", name, exc)
             return None
 
         if not results:
-            logger.debug("FatSecret returned no results for ingredient '%s'", name)
+            logger.debug("fatsecret returned no results for ingredient '%s'", name)
             return None
 
         best = self._pick_generic(results)
         if best is None:
-            logger.debug("No usable result from FatSecret for ingredient '%s'", name)
+            logger.debug("No usable result from fatsecret for ingredient '%s'", name)
             return None
 
         macros = self._extract_macros(best)
@@ -100,7 +100,7 @@ class IngredientNutritionResolver:
 
     @staticmethod
     def _extract_macros(food: Dict[str, Any]) -> Optional[PerHundredGramsMacros]:
-        """Extract per-100g macros from a FatSecret search result dict.
+        """Extract per-100g macros from a fatsecret search result dict.
 
         FatSecretService.search_foods already enriches each result with
         per-100g keys (protein_100g, carbs_100g, fat_100g) via

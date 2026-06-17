@@ -89,7 +89,7 @@ class ParseMealTextHandler(
         else:
             parsed_items = extract_json_from_response(str(raw))
 
-        # Enhance items with USDA/FatSecret cascade lookup
+        # Enhance items with USDA/fatsecret cascade lookup
         enhanced_items = []
         for item in parsed_items:
             enhanced = await self._cascade_lookup(item)
@@ -141,13 +141,13 @@ class ParseMealTextHandler(
             emoji=emoji,
         )
 
-    # Max ratio between FatSecret and AI estimate before rejecting FatSecret
+    # Max ratio between fatsecret and AI estimate before rejecting fatsecret
     _FATSECRET_DIVERGENCE_THRESHOLD = 3.0
 
     async def _cascade_lookup(self, item: dict[str, Any]) -> dict[str, Any]:
         """
-        Cascade lookup: FatSecret -> AI estimate.
-        FatSecret prioritized for precision, but rejected if result diverges
+        Cascade lookup: fatsecret -> AI estimate.
+        fatsecret prioritized for precision, but rejected if result diverges
         >3x from AI estimate (indicates wrong product match).
         Uses english_unit (from AI) for calculation; unit stays localized for display.
         """
@@ -163,7 +163,7 @@ class ParseMealTextHandler(
         # Save AI's original calorie estimate for sanity check
         ai_calories = item.get("calories", 0)
 
-        # Try FatSecret — use English name from parentheses for lookup accuracy
+        # Try fatsecret — use English name from parentheses for lookup accuracy
         lookup_name = self._extract_english_name(name)
         try:
             if not self._fat_secret_service:
@@ -188,13 +188,13 @@ class ParseMealTextHandler(
                     )
                     fs_calories = scaled.get("calories", 0)
 
-                    # Reject FatSecret if it diverges >3x from AI estimate
+                    # Reject fatsecret if it diverges >3x from AI estimate
                     # (indicates wrong product match, e.g. concentrate vs liquid)
                     if ai_calories > 0 and fs_calories > 0:
                         ratio = fs_calories / ai_calories
                         if ratio > self._FATSECRET_DIVERGENCE_THRESHOLD:
                             logger.warning(
-                                f"FatSecret rejected for '{name}': "
+                                f"fatsecret rejected for '{name}': "
                                 f"{fs_calories:.0f} kcal vs AI {ai_calories:.0f} kcal "
                                 f"(ratio {ratio:.1f}x > {self._FATSECRET_DIVERGENCE_THRESHOLD}x)"
                             )
@@ -208,7 +208,7 @@ class ParseMealTextHandler(
                 item["data_source"] = "fatsecret"
                 return item
         except Exception as e:
-            logger.debug(f"FatSecret lookup failed for {name}: {e}")
+            logger.debug(f"fatsecret lookup failed for {name}: {e}")
 
         # Fallback to AI estimate (values from Gemini prompt, already per-serving)
         item["data_source"] = "ai_estimate"
@@ -251,7 +251,7 @@ class ParseMealTextHandler(
 
     @staticmethod
     def _extract_english_name(name: str) -> str:
-        """Extract English name for FatSecret lookup.
+        """Extract English name for fatsecret lookup.
 
         AI may return either format:
         - 'English Name (Local Name)' → extract before parens
