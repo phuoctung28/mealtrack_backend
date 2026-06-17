@@ -3,7 +3,7 @@ title: Workout Calorie Credit in Weekly Budget
 description: >-
   Make weekly budget redistribution use net calories: food calories minus
   included workout calories.
-status: in-progress
+status: completed
 priority: P1
 branch: feat/workout-calorie-credit-weekly-budget
 tags:
@@ -33,7 +33,7 @@ Science basis: when exercise is not already included in the baseline target, log
 |-------|------|--------|
 | 1 | [Regression Tests](./phase-01-regression-tests.md) | Completed |
 | 2 | [Implementation](./phase-02-implementation.md) | Completed |
-| 3 | [Verification and PR](./phase-03-verification-and-pr.md) | In Progress |
+| 3 | [Verification and PR](./phase-03-verification-and-pr.md) | Completed |
 
 ## Dependencies
 

@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: Verification and PR
-status: in-progress
+status: completed
 priority: P1
 effort: 45m
 dependencies:
@@ -48,4 +48,4 @@ Validation stays focused on affected domain/app/repository tests plus Python com
 - [x] Tests pass or any unrelated failures are clearly isolated.
 - [x] `ruff check` passes for touched files.
 - [x] `python -m compileall` passes for touched source/tests.
-- [ ] PR URL is available.
+- [x] PR URL is available: https://github.com/phuoctung28/mealtrack_backend/pull/368
