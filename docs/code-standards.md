@@ -1,7 +1,7 @@
 # Backend Code Standards — Python Style & Conventions
 
-**Last Updated:** May 27, 2026
-**Scope:** All code in `src/` (430 files, ~38.5K LOC)  
+**Last Updated:** June 17, 2026
+**Scope:** All code in `src/` (620 Python files, ~52.6K LOC)
 **Applies To:** Typing, naming, imports, code organization, error handling
 
 ---

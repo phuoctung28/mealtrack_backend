@@ -1,60 +1,50 @@
 # MealTrack Backend
 
-A sophisticated FastAPI-based microservice for meal tracking and nutritional analysis.
+FastAPI backend for meal tracking, nutrition analysis, weekly targets, hydration, movement, and subscription-backed premium features.
 
 ## Quick Links
 
-- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Vision, goals, and requirements.
-- **[System Architecture](./docs/architecture/index.md)** - Multi-layer architecture and data flow.
-- **[Code Standards](./docs/standards/index.md)** - Development guidelines and patterns.
-- **[Codebase Summary](./docs/codebase-summary.md)** - Directory structure and file organization.
-- **[Project Roadmap](./docs/project-roadmap.md)** - Future plans and completed features.
+- [Project Overview & PDR](./docs/project-overview-pdr.md)
+- [System Architecture](./docs/system-architecture.md)
+- [Code Standards](./docs/code-standards.md)
+- [Codebase Summary](./docs/codebase-summary.md)
+- [Project Roadmap](./docs/project-roadmap.md)
 
-## 🚀 Features
+## Highlights
 
-- **AI-Powered Meal Analysis**: Vision-based food recognition with 6 analysis strategies (basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined).
-- **12 REST Route Modules**: 50+ endpoints covering meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks.
-- **CQRS Architecture**: 29 commands, 23 queries, 10+ domain events with PyMediator event bus (singleton pattern).
-- **Intelligent Planning**: AI-generated weekly plans with dietary preferences, cooking time constraints, and ingredient-based generation.
-- **Vector Search**: Pinecone semantic search with 1024-dim embeddings (llama-text-embed-v2).
-- **Real-time Chat**: WebSocket + REST endpoints with streaming AI responses via MessageOrchestrationService.
-- **Multi-Language Support**: 7 languages (en, vi, es, fr, de, ja, zh) with translation service.
-- **Smart Notifications**: FCM push with timezone-aware scheduling and preferences.
+- AI meal analysis with image upload, signed upload tokens, and scan-by-URL analysis.
+- Live API surface: 26 router registrations and 83 endpoint decorators across meals, users, profiles, suggestions, hydration, movement, nutrition, referrals, promo codes, health, monitoring, webhooks, and support routes.
+- CQRS with PyMediator singleton event buses and async SQLAlchemy UoW boundaries.
+- PostgreSQL/Neon async runtime with pgvector-enabled local compose and Redis-backed optional cache-aside paths.
+- Multi-provider integrations for Firebase, Gemini, Cloudinary, RevenueCat, PostHog, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Resend, and image generators.
+- 1,600+ collected tests across the repo.
 
-## 🛠 Technology Stack
+## Technology
 
-- **Core**: FastAPI 0.115+ (Python 3.11+), SQLAlchemy 2.0 async runtime (`AsyncSession`, `AsyncUnitOfWork`).
-- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0, Redis 7.0 for selective optional caching; required state documented separately.
-- **AI**: Google Gemini 2.5 Flash (multi-model for rate distribution), Pinecone Inference API (1024-dim).
-- **Infrastructure**: Firebase (JWT Auth + FCM), Cloudinary (image storage), RevenueCat (subscriptions).
-- **Event Bus**: PyMediator with singleton registry for CQRS.
-- **Testing**: pytest (1,499+ tests), ruff (linting), mypy (type checking).
+- FastAPI 0.115+ on Python 3.11+
+- SQLAlchemy 2.0 async runtime with asyncpg
+- PostgreSQL (Neon) as the primary database
+- Redis 7 for optional caching and AI-cost optimization
+- Alembic migrations
+- PyMediator event bus
 
-## 🏗 Architecture
+## Architecture
 
-Follows a **4-Layer Clean Architecture** with **CQRS** and **Event-Driven Design**:
+The backend follows 4-layer Clean Architecture with CQRS:
 
-1. **API Layer** (74 files, ~8,241 LOC): HTTP routing, Pydantic validation, 8 mappers, 3-layer middleware.
-2. **Application Layer** (136 files, ~5,968 LOC): CQRS - 29 commands, 23 queries, 10+ events, 40+ handlers.
-3. **Domain Layer** (130 files, ~14,079 LOC): 50+ domain services, 8 bounded contexts, 17 port interfaces, 6 analysis strategies.
-4. **Infrastructure Layer** (77 files, ~8,671 LOC): 11 database models, 10+ repositories, external service adapters, Redis cache, PyMediator event bus with singleton registry.
+1. API layer: routing, validation, middleware, dependency injection.
+2. Application layer: commands, queries, handlers, and background event handlers.
+3. Domain layer: business logic, entities, services, ports, and policies.
+4. Infrastructure layer: database, cache, adapters, external services, and observability.
 
-## 🚦 Getting Started
+## Getting Started
 
 ```bash
-# Clone and enter repo
-git clone <repo-url> && cd backend
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Setup environment
-cp .env.example .env # Configure variables
-
-# Run migrations and start server
-python -m alembic upgrade head
+cp .env.example .env
+alembic upgrade head
 uvicorn src.api.main:app --reload
 ```
 
-- **Swagger Docs**: http://localhost:8000/docs
-- **Tests**: `pytest --cov=src`
+- Swagger docs: `http://localhost:8000/docs`
+- Tests: `pytest`

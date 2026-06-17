@@ -1,6 +1,6 @@
 # Backend Troubleshooting Guide
 
-**Last Updated:** June 13, 2026
+**Last Updated:** June 17, 2026
 
 ---
 
@@ -24,18 +24,20 @@ python -c "from src.app.commands.meal import CreateMealCommand"
 
 ### Database Connection Errors
 
-**Problem:** `OperationalError: Can't connect to MySQL server`
+**Problem:** `OperationalError`, `ConnectionDoesNotExistError`, or failure to connect to PostgreSQL/Neon
 
 **Diagnosis:**
 ```bash
 echo $DATABASE_URL
-# Should be: mysql+pymysql://user:pass@host:3306/dbname
+echo $APP_DATABASE_URL
+# App runtime should use a PostgreSQL/Neon URL.
 ```
 
 **Solutions:**
-1. Verify `DATABASE_URL` format (user, pass, host, port, dbname)
-2. Verify MySQL is running and credentials are correct
-3. Check firewall/network access rules
+1. Prefer `APP_DATABASE_URL` for app runtime; keep `DATABASE_URL_DIRECT` for Alembic migration/admin use only.
+2. Verify `DB_CONNECTION_MODE=direct_pool` uses a direct Neon host, or `DB_CONNECTION_MODE=neon_pooler` uses a `-pooler` host.
+3. For local development, verify the `postgres` service from `docker-compose.yml` is running and healthy.
+4. Check firewall/network access rules and Neon connection limits.
 
 ---
 
@@ -205,8 +207,8 @@ curl -i -X OPTIONS "http://localhost:8000/v1/meals"
 ```
 
 **Solutions:**
-1. Development: `allow_origins=["*"]` (already set)
-2. Production: Restrict to known origins via environment config
+1. Set `ALLOWED_ORIGINS` to a comma-separated list, for example `http://localhost:3000,https://app.example.com`.
+2. Production: restrict `ALLOWED_ORIGINS` to known origins only.
 3. Verify preflight (OPTIONS) returns 200
 
 ---
