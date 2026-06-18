@@ -239,7 +239,7 @@ class Settings(BaseSettings):
         default="", description="AI Gateway ID for routing Workers AI requests (optional)"
     )
     CLOUDFLARE_WORKERS_AI_TEXT_MODEL: str = Field(
-        default="@cf/google/gemma-4-26b-a4b-it",
+        default="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         description="Workers AI model for text generation fallback",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES: str = Field(
