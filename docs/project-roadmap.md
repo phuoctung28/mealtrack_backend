@@ -1,7 +1,7 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.4
-**Last Updated:** June 17, 2026
+**Version:** 0.6.5
+**Last Updated:** June 18, 2026
 **Status:** Production-ready. 620 Python files and ~52.6K LOC in `src/` (API: 89, App: 208, Domain: 160, Infra: 154). 291 Python test files with 1,600+ collected tests.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
@@ -61,6 +61,8 @@
 
 ### June 2026: Weekly Budget Resilience
 - [x] Weekly budget meal loading now quarantines malformed legacy `READY` rows without nutrition before domain hydration.
+- [x] Weekly budget adjusted targets now credit `include_in_balance` movement calories using the same net calorie basis as daily and bulk nutrition.
+- [x] Baseline TDEE now excludes planned workouts, so logged movement is the source of workout calorie credit without double-counting.
 
 ### June 2026: iOS Notification Payload Hardening
 - [x] Removed obsolete direct notification service wiring and direct meal/summary helper sends.

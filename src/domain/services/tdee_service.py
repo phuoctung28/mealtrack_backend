@@ -1,12 +1,12 @@
-from src.domain.constants import TDEEConstants, NutritionConstants
+from src.domain.constants import NutritionConstants, TDEEConstants
 from src.domain.model.user import (
+    Goal,
+    JobType,
+    MacroTargets,
+    Sex,
     TdeeRequest,
     TdeeResponse,
-    MacroTargets,
-    JobType,
-    Goal,
     TrainingLevel,
-    Sex,
 )
 from src.domain.services.bmr_calculator import BMRCalculatorFactory
 
@@ -23,12 +23,7 @@ class TdeeCalculationService:
     def calculate_tdee(self, request: TdeeRequest) -> TdeeResponse:
         """Calculate BMR, TDEE and macros based on the request."""
         bmr, formula_name = self._calculate_bmr(request)
-        tdee = self._calculate_tdee_from_activity(
-            bmr,
-            request.job_type,
-            request.training_days_per_week,
-            request.training_minutes_per_session,
-        )
+        tdee = self._calculate_tdee_from_activity(bmr, request.job_type)
         macro_targets = self._calculate_all_macro_targets(
             tdee,
             request.weight_kg,
@@ -67,22 +62,15 @@ class TdeeCalculationService:
 
         return bmr, calculator.get_formula_name()
 
-    def _calculate_tdee_from_activity(
-        self, bmr: float, job_type: JobType, training_days: int, training_minutes: int
-    ) -> float:
-        """Calculate TDEE from BMR using job type and training hours.
+    def _calculate_tdee_from_activity(self, bmr: float, job_type: JobType) -> float:
+        """Calculate baseline TDEE from BMR using non-exercise activity.
 
-        Formula:
-        - base = job_type multiplier (NEAT component)
-        - weekly_hours = training_days * training_minutes / 60
-        - exercise_add = weekly_hours * EXERCISE_MULTIPLIER_PER_HOUR (0.05 per hour)
-        - multiplier = base + exercise_add
+        Logged movement entries credit workout calories separately. Planned
+        training volume stays on the request for compatibility and protein
+        context, but it must not inflate baseline calories.
         """
         base = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(job_type.value, 1.2)
-        weekly_hours = (training_days * training_minutes) / 60.0
-        exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
-        multiplier = base + exercise_add
-        return bmr * multiplier
+        return bmr * base
 
     def _calculate_all_macro_targets(
         self,

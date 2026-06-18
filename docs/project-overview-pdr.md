@@ -1,7 +1,7 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.6.4
-**Last Updated:** June 17, 2026
+**Version:** 0.6.5
+**Last Updated:** June 18, 2026
 **Status:** Production-ready. 620 Python files and ~52.6K LOC in `src/`; current suite has 291 Python test files and 1,600+ collected tests. Latest: async PostgreSQL/Neon runtime alignment, observability connector, normalized database foundation, hydration/movement APIs, affiliate outbox, and refreshed codebase documentation.
 
 ---
@@ -85,6 +85,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 ### 7. Adjusted Daily Target & Weekly Budget
 - Weekly budget stored per user with remaining_days calculation (Mon=7, Sun=1).
 - Adjusted daily target redistributes weekly budget based on previous days' consumption.
+- Baseline TDEE excludes planned workouts; logged movement with `include_in_balance = true` credits workout calories into weekly budget as net calories (`food - movement`).
 - Used by meal suggestions, meal plans, and nutrition tracking features.
 - BMR floor (85% of standard daily, raised from 80%) protects against dangerously low targets. Clinical minimums: 1200 kcal (female), 1500 kcal (male). Cutting deficit: 300 kcal (~0.3 kg/week).
 
@@ -120,6 +121,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.6.5 | Jun 18, 2026 | Weekly budget adjusted targets now credit logged movement calories on a net-calorie basis, and baseline TDEE excludes planned workouts to avoid double-counting exercise. |
 | 0.6.4 | Jun 17, 2026 | Documentation refresh aligned active docs to live code: 620 source files, 83 endpoint decorators, PostgreSQL/Neon async runtime, pgvector-enabled local compose, Redis optional cache posture, hydration/movement/nutrition/referral/promo endpoint inventory, and updated test scale. |
 | 0.6.3 | Jun 13, 2026 | Single-owner logger and provider-neutral observability connector. Sentry direct imports isolated, cron/background boundaries own swallowed exception capture, safe scalar context allowlists documented. |
 | 0.6.2 | May 15, 2026 | Configurable referral commissions (`REFERRAL_COMMISSIONS` env var, per-currency JSON). Custom unit-to-grams fix in nutrition calculation. BMR floor raised to 85% of standard daily; cutting deficit 500→300 kcal; clinical minimums 1200F/1500M. Email Universal Links (apple-app-site-association, /app-download). AsyncUnitOfWork concurrency guard (asyncio.Lock). Variable-length referral codes (3–15 chars). |

@@ -2,9 +2,7 @@
 Unit tests for update user metrics endpoint and handler.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Optional
-from unittest.mock import AsyncMock, Mock, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -19,20 +17,20 @@ from src.domain.model.user.core_user import UserProfileDomainModel
 
 def _make_profile(**overrides) -> UserProfileDomainModel:
     """Create a domain profile with sensible defaults."""
-    defaults = dict(
-        id=str(uuid4()),
-        user_id="test_user",
-        age=30,
-        gender="male",
-        height_cm=175.0,
-        weight_kg=70.0,
-        job_type="desk",
-        training_days_per_week=4,
-        training_minutes_per_session=60,
-        fitness_goal="recomp",
-        meals_per_day=3,
-        is_current=False,
-    )
+    defaults = {
+        "id": str(uuid4()),
+        "user_id": "test_user",
+        "age": 30,
+        "gender": "male",
+        "height_cm": 175.0,
+        "weight_kg": 70.0,
+        "job_type": "desk",
+        "training_days_per_week": 4,
+        "training_minutes_per_session": 60,
+        "fitness_goal": "recomp",
+        "meals_per_day": 3,
+        "is_current": False,
+    }
     defaults.update(overrides)
     return UserProfileDomainModel(**defaults)
 
@@ -124,6 +122,23 @@ class TestUpdateUserMetricsCommandHandler:
         assert profile.training_days_per_week == 5
         assert profile.training_minutes_per_session == 60
         assert profile.is_current is True
+
+    async def test_update_training_days_to_zero(self):
+        """Test zero training days is treated as a provided metric."""
+        profile = _make_profile(training_days_per_week=4)
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(
+            user_id="test_user",
+            training_days_per_week=0,
+        )
+
+        await handler.handle(command)
+
+        assert profile.training_days_per_week == 0
+        assert profile.is_current is True
+        mock_uow.users.update_profile.assert_called_once_with(profile)
 
     async def test_update_fitness_goal_unlimited(self):
         """Test updating fitness goal succeeds without cooldown."""

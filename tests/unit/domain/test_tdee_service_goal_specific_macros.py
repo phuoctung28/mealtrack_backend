@@ -12,12 +12,12 @@ import pytest
 
 from src.domain.constants import TDEEConstants
 from src.domain.model.user import (
-    TdeeRequest,
-    Sex,
-    JobType,
     Goal,
-    UnitSystem,
+    JobType,
+    Sex,
+    TdeeRequest,
     TrainingLevel,
+    UnitSystem,
 )
 from src.domain.services.tdee_service import TdeeCalculationService
 
@@ -50,13 +50,11 @@ class TestTdeeServiceGoalSpecificMacros:
     @pytest.fixture
     def base_tdee(self):
         """Calculate base TDEE for test case."""
-        # 30-year-old male, 80kg, 180cm, moderate activity
+        # 30-year-old male, 80kg, 180cm, desk baseline
         # Mifflin-St Jeor: 10*80 + 6.25*180 - 5*30 + 5 = 800 + 1125 - 150 + 5 = 1780
-        # TDEE with moderate (1.55): 1780 * 1.55 = 2759
-        # BMR (Mifflin-St Jeor): 10*80 + 6.25*180 - 5*30 + 5 = 1780
-        # JobType.DESK (1.2) + training (4 days * 60 min = 4 hrs, 4*0.05=0.2) = 1.4
-        # TDEE = 1780 * 1.4 = 2492
-        return 2492.0
+        # JobType.DESK (1.2), planned training excluded and logged separately.
+        # TDEE = 1780 * 1.2 = 2136
+        return 2136.0
 
     # ===== BULKING TESTS =====
 
@@ -65,8 +63,8 @@ class TestTdeeServiceGoalSpecificMacros:
         base_request.goal = Goal.BULK
         response = service.calculate_tdee(base_request)
 
-        # Expected: TDEE + 300 = 2492 + 300 = 2792
-        expected_calories = 2492.0 + 300
+        # Expected: TDEE + 300 = 2136 + 300 = 2436
+        expected_calories = 2136.0 + 300
         assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
 
     def test_bulking_uses_weight_based_protein(self, service, base_request):
@@ -84,8 +82,8 @@ class TestTdeeServiceGoalSpecificMacros:
         response = service.calculate_tdee(base_request)
 
         # Expected: 80kg * 1.0 g/kg = 80g fat (weight-based)
-        # Dual-gate: max(80g weight, 2792*0.25/9=77.5g percent) = 80g
-        expected_fat = 80.0  # dual-gate: max(80g weight, 77.5g percent)
+        # Dual-gate: max(80g weight, 2436*0.25/9=67.7g percent) = 80g
+        expected_fat = 80.0
         assert response.macros.fat == pytest.approx(expected_fat, abs=1)
 
     def test_bulking_carbs_calculated_as_remainder(self, service, base_request):
@@ -107,8 +105,8 @@ class TestTdeeServiceGoalSpecificMacros:
         base_request.goal = Goal.CUT
         response = service.calculate_tdee(base_request)
 
-        # Expected: TDEE - 300 = 2492 - 300 = 2142
-        expected_calories = 2492.0 - 300
+        # Expected: TDEE - 300 = 2136 - 300 = 1836
+        expected_calories = 2136.0 - 300
         assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
 
     def test_cutting_uses_weight_based_protein(self, service, base_request):
@@ -148,8 +146,8 @@ class TestTdeeServiceGoalSpecificMacros:
         base_request.goal = Goal.RECOMP
         response = service.calculate_tdee(base_request)
 
-        # Expected: TDEE = 2492 (no adjustment)
-        expected_calories = 2492.0
+        # Expected: TDEE = 2136 (no adjustment)
+        expected_calories = 2136.0
         assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
 
     def test_recomp_uses_weight_based_protein(self, service, base_request):
@@ -167,8 +165,8 @@ class TestTdeeServiceGoalSpecificMacros:
         response = service.calculate_tdee(base_request)
 
         # Expected: 80kg * 0.9 g/kg = 72g fat (weight-based)
-        # Dual-gate: max(72g weight, 2492*0.25/9=69.2g percent) = 72g
-        expected_fat = 72.0  # dual-gate: max(72g weight, 69.2g percent)
+        # Dual-gate: max(72g weight, 2136*0.25/9=59.3g percent) = 72g
+        expected_fat = 72.0
         assert response.macros.fat == pytest.approx(expected_fat, abs=1)
 
     def test_recomp_carbs_calculated_as_remainder(self, service, base_request):
