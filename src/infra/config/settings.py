@@ -224,6 +224,35 @@ class Settings(BaseSettings):
     CLIP_DEVICE: str = Field(default="cpu")
     CLIP_EMBEDDING_DIM: int = Field(default=768)
 
+    # Cloudflare Workers AI — text generation / AI fallback
+    CLOUDFLARE_WORKERS_AI_ENABLED: bool = Field(
+        default=False,
+        description="Enable Cloudflare Workers AI as a text-generation fallback provider",
+    )
+    CLOUDFLARE_ACCOUNT_ID: str = Field(
+        default="", description="Cloudflare account ID for Workers AI text API"
+    )
+    CLOUDFLARE_API_TOKEN: str = Field(
+        default="", description="Cloudflare API token with Workers AI permission"
+    )
+    CLOUDFLARE_AI_GATEWAY_ID: str = Field(
+        default="", description="AI Gateway ID for routing Workers AI requests (optional)"
+    )
+    CLOUDFLARE_WORKERS_AI_TEXT_MODEL: str = Field(
+        default="@cf/google/gemma-4-26b-a4b-it",
+        description="Workers AI model for text generation fallback",
+    )
+    CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES: str = Field(
+        default="recipe,general,meal_names,discovery",
+        description="Comma-separated ModelPurpose values where Workers AI fallback is enabled",
+    )
+    CLOUDFLARE_WORKERS_AI_JSON_MODE: bool = Field(
+        default=True, description="Enable Workers AI JSON Mode for structured responses"
+    )
+    CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS: int = Field(
+        default=30, description="HTTP timeout for Workers AI requests"
+    )
+
     # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
     CF_ACCOUNT_ID: str | None = Field(
         default=None,

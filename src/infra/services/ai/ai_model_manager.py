@@ -7,11 +7,12 @@ from typing import Any, Optional
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.ports.ai_provider_port import AICapability
-from src.observability import log_event
-from src.infra.services.ai.provider_circuit_breaker import (
-    ProviderCircuitBreaker,
+from src.infra.services.ai.provider_circuit_breaker import ProviderCircuitBreaker
+from src.infra.services.ai.providers.cloudflare_workers_ai_provider import (
+    CloudflareWorkersAIProvider,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
+from src.observability import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +89,62 @@ class AIModelManager:
         with cls._lock:
             cls._instance = None
 
-    def __init__(self) -> None:
+    def __init__(self, settings=None) -> None:
+        from src.infra.config.settings import get_settings
+
+        _settings = settings if settings is not None else get_settings()
+
         self._cache_manager: Any | None = None
         self._circuit_breaker = ProviderCircuitBreaker()
         self._gemini = GeminiProvider()
-        self._providers = {"gemini": self._gemini}
+        self._providers: dict[str, Any] = {"gemini": self._gemini}
+        self._model_provider_overrides: dict[str, str] = {}
+
+        # Start with a mutable copy of base Gemini-only chains
+        self._fallback_chains: dict[ModelPurpose, list[str]] = {
+            p: list(chain) for p, chain in FALLBACK_CHAINS.items()
+        }
+
+        self._maybe_add_cf_provider(_settings)
+
+    def _maybe_add_cf_provider(self, settings) -> None:
+        """Instantiate and wire Workers AI provider when all required settings are present."""
+        if not (
+            settings.CLOUDFLARE_WORKERS_AI_ENABLED
+            and settings.CLOUDFLARE_ACCOUNT_ID
+            and settings.CLOUDFLARE_API_TOKEN
+            and settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL
+        ):
+            return
+
+        cf = CloudflareWorkersAIProvider(
+            account_id=settings.CLOUDFLARE_ACCOUNT_ID,
+            api_token=settings.CLOUDFLARE_API_TOKEN,
+            text_model=settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL,
+            gateway_id=settings.CLOUDFLARE_AI_GATEWAY_ID or "",
+            json_mode_enabled=settings.CLOUDFLARE_WORKERS_AI_JSON_MODE,
+            timeout_seconds=settings.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS,
+        )
+        self._providers["cloudflare-workers-ai"] = cf
+        self._model_provider_overrides[settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL] = (
+            "cloudflare-workers-ai"
+        )
+        self._append_cf_to_text_chains(
+            cf_model=settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL,
+            text_purposes_csv=settings.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES,
+        )
+        logger.info(
+            "[CF-WORKERS-AI-ENABLED] purposes=%s model=%s",
+            settings.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES,
+            settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL,
+        )
+
+    def _append_cf_to_text_chains(self, cf_model: str, text_purposes_csv: str) -> None:
+        """Append raw CF model id to configured text-purpose chains."""
+        configured = {p.strip().lower() for p in text_purposes_csv.split(",") if p.strip()}
+        for purpose in ModelPurpose:
+            if purpose.value in configured:
+                self._fallback_chains[purpose].append(cf_model)
 
     def set_cache_manager(self, cache_manager) -> None:
         """Wire in GeminiCacheManager after startup warmup."""
@@ -100,12 +152,14 @@ class AIModelManager:
 
     def get_fallback_chain(self, purpose: ModelPurpose) -> list[str]:
         """Get fallback chain for a purpose."""
-        return FALLBACK_CHAINS.get(
-            purpose, FALLBACK_CHAINS[ModelPurpose.GENERAL]
+        return self._fallback_chains.get(
+            purpose, self._fallback_chains[ModelPurpose.GENERAL]
         ).copy()
 
     def _get_provider_for_model(self, model: str):
-        """Get provider that owns a model."""
+        """Get provider that owns a model, checking explicit overrides before prefix heuristics."""
+        if model in self._model_provider_overrides:
+            return self._providers.get(self._model_provider_overrides[model])
         if model.startswith("gemini"):
             return self._gemini
         return None
@@ -167,8 +221,8 @@ class AIModelManager:
                     response_type=response_type,
                     max_tokens=max_tokens,
                     schema=schema,
-                    purpose_hint=purpose.value,  # NEW: pass real purpose to provider
-                    cache_name=cache_name if model.startswith("gemini") else None,
+                    purpose_hint=purpose.value,
+                    cache_name=cache_name if provider is self._gemini else None,
                     **kwargs,
                 )
 
@@ -204,11 +258,11 @@ class AIModelManager:
     async def _get_cache_name_for_model(
         self, cache_type: str | None, model: str
     ) -> str | None:
-        """Return Gemini cache only when cache metadata matches the attempted model."""
+        """Return Gemini cache only when the model is owned by the Gemini provider."""
         if (
             cache_type is None
             or self._cache_manager is None
-            or not model.startswith("gemini")
+            or self._get_provider_for_model(model) is not self._gemini
         ):
             return None
         try:

@@ -6,7 +6,8 @@ pydantic[email]>=2.7.4
 python-multipart>=0.0.19
 
 # AI/LLM dependencies
-langchain-core>=0.1.0
+langchain-core>=0.3.81
+langchain-cloudflare>=0.3.4
 langchain-google-genai
 google-genai
 posthog[otel]>=3.0.0
