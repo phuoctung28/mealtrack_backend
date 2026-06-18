@@ -140,11 +140,11 @@ class AIModelManager:
         )
 
     def _append_cf_to_text_chains(self, cf_model: str, text_purposes_csv: str) -> None:
-        """Append raw CF model id to configured text-purpose chains."""
+        """Prepend raw CF model id to configured text-purpose chains (CF is tried first)."""
         configured = {p.strip().lower() for p in text_purposes_csv.split(",") if p.strip()}
         for purpose in ModelPurpose:
             if purpose.value in configured:
-                self._fallback_chains[purpose].append(cf_model)
+                self._fallback_chains[purpose].insert(0, cf_model)
 
     def set_cache_manager(self, cache_manager) -> None:
         """Wire in GeminiCacheManager after startup warmup."""

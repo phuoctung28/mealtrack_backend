@@ -340,7 +340,7 @@ class TestWorkersAIRouting:
             )
 
     def test_text_purposes_get_cf_model_when_enabled(self, manager_with_cf):
-        """Configured text purposes append the raw CF model id at the end of chain."""
+        """CF model is first in configured text-purpose chains; Gemini models are fallbacks."""
         cf_alias = "@cf/google/gemma-4-26b-a4b-it"
         for purpose in (
             ModelPurpose.RECIPE,
@@ -349,12 +349,12 @@ class TestWorkersAIRouting:
             ModelPurpose.DISCOVERY,
         ):
             chain = manager_with_cf.get_fallback_chain(purpose)
-            assert chain[-1] == cf_alias, (
-                f"{purpose.value} chain should end with {cf_alias}, got {chain}"
+            assert chain[0] == cf_alias, (
+                f"{purpose.value} chain should start with {cf_alias}, got {chain}"
             )
-            # Gemini models still lead
-            assert chain[0] == "gemini-2.5-flash-lite"
-            assert chain[1] == "gemini-2.5-flash"
+            # Gemini models are fallbacks
+            assert chain[1] == "gemini-2.5-flash-lite"
+            assert chain[2] == "gemini-2.5-flash"
 
     def test_vision_purposes_stay_gemini_only_when_cf_enabled(self, manager_with_cf):
         """MEAL_SCAN and INGREDIENT_SCAN chains never include Workers AI."""
@@ -397,14 +397,11 @@ class TestWorkersAIRouting:
 
 class TestWorkersAIFallback:
     @pytest.mark.asyncio
-    async def test_falls_through_to_cf_when_both_gemini_fail(
+    async def test_cf_used_first_for_text_purposes(
         self, manager_with_cf, mock_gemini_provider, mock_circuit_breaker, mock_cf_provider
     ):
-        """When both Gemini models fail, Workers AI is tried and succeeds."""
-        mock_gemini_provider.generate = AsyncMock(side_effect=Exception("503 UNAVAILABLE"))
-        mock_circuit_breaker.filter_available = Mock(
-            side_effect=lambda models: models
-        )
+        """CF is the first model tried for configured text purposes."""
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
 
         result = await manager_with_cf.generate(
             purpose=ModelPurpose.RECIPE,
@@ -414,6 +411,25 @@ class TestWorkersAIFallback:
 
         assert result == {"result": "cf_success"}
         mock_cf_provider.generate.assert_awaited_once()
+        mock_gemini_provider.generate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_gemini_when_cf_fails(
+        self, manager_with_cf, mock_gemini_provider, mock_circuit_breaker, mock_cf_provider
+    ):
+        """When CF fails, Gemini is tried as fallback."""
+        mock_cf_provider.generate = AsyncMock(side_effect=Exception("CF unavailable"))
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+
+        result = await manager_with_cf.generate(
+            purpose=ModelPurpose.RECIPE,
+            prompt="test",
+            system_message="system",
+        )
+
+        assert result == {"result": "success"}
+        mock_cf_provider.generate.assert_awaited_once()
+        mock_gemini_provider.generate.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_cf_not_tried_for_vision_purpose(
