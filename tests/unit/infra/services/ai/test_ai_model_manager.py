@@ -268,7 +268,7 @@ def _make_cf_settings():
     s.CLOUDFLARE_API_TOKEN = "fake_api_token"
     s.CLOUDFLARE_AI_GATEWAY_ID = "fake_gateway"
     s.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
-    s.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = "recipe,general,meal_names,discovery"
+    s.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = "recipe,general,meal_names,discovery,parse_text"
     s.CLOUDFLARE_WORKERS_AI_JSON_MODE = True
     s.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS = 30
     return s
@@ -364,10 +364,10 @@ class TestWorkersAIRouting:
                 f"{purpose.value} must remain Gemini-only even when CF is enabled"
             )
 
-    def test_parse_text_stays_gemini_only_by_default(self, manager_with_cf):
-        """PARSE_TEXT is not in the default CF text purposes; chain stays Gemini-only."""
+    def test_parse_text_uses_cf_first_when_enabled(self, manager_with_cf):
+        """PARSE_TEXT uses CF as primary; Gemini remains as fallback."""
         chain = manager_with_cf.get_fallback_chain(ModelPurpose.PARSE_TEXT)
-        assert not any("@cf/" in m for m in chain)
+        assert chain[0] == "@cf/google/gemma-4-26b-a4b-it"
 
     def test_barcode_stays_gemini_only_by_default(self, manager_with_cf):
         """BARCODE is not in the default CF text purposes; chain stays Gemini-only."""

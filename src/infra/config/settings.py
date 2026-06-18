@@ -243,8 +243,8 @@ class Settings(BaseSettings):
         description="Workers AI model for text generation fallback",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES: str = Field(
-        default="recipe,general,meal_names,discovery",
-        description="Comma-separated ModelPurpose values where Workers AI fallback is enabled",
+        default="recipe,general,meal_names,discovery,parse_text",
+        description="Comma-separated ModelPurpose values where Workers AI is used as primary",
     )
     CLOUDFLARE_WORKERS_AI_JSON_MODE: bool = Field(
         default=True, description="Enable Workers AI JSON Mode for structured responses"
