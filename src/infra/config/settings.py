@@ -250,7 +250,7 @@ class Settings(BaseSettings):
         default=True, description="Enable Workers AI JSON Mode for structured responses"
     )
     CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS: int = Field(
-        default=30, description="HTTP timeout for Workers AI requests"
+        default=60, description="HTTP timeout for Workers AI requests (thinking models need ≥60s)"
     )
 
     # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
