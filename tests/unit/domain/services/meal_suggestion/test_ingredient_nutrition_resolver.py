@@ -1,7 +1,7 @@
 """
 Unit tests for IngredientNutritionResolver.
 
-All FatSecret interactions are mocked — no real API calls.
+All fatsecret interactions are mocked — no real API calls.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -25,7 +25,7 @@ def _make_generic_result(
     carbs: float = 0.0,
     fat: float = 2.6,
 ) -> dict:
-    """Build a minimal FatSecret search result dict."""
+    """Build a minimal fatsecret search result dict."""
     return {
         "food_id": food_id,
         "description": "Chicken Breast",
@@ -148,7 +148,7 @@ async def test_resolve_passes_normalized_name_to_upsert(
 async def test_resolve_returns_none_on_empty_results(
     resolver, mock_fatsecret, mock_repo
 ):
-    """resolve() returns None when FatSecret finds nothing."""
+    """resolve() returns None when fatsecret finds nothing."""
     mock_fatsecret.search_foods.return_value = []
 
     result = await resolver.resolve("exotic_unknown_food_xyzzy")
@@ -166,7 +166,7 @@ async def test_resolve_returns_none_on_empty_results(
 async def test_resolve_returns_none_on_fatsecret_exception(
     resolver, mock_fatsecret, mock_repo
 ):
-    """FatSecret exception (network/rate-limit) returns None gracefully."""
+    """fatsecret exception (network/rate-limit) returns None gracefully."""
     mock_fatsecret.search_foods.side_effect = Exception("429 Too Many Requests")
 
     result = await resolver.resolve("chicken breast")
@@ -179,7 +179,7 @@ async def test_resolve_returns_none_on_fatsecret_exception(
 async def test_resolve_logs_warning_on_fatsecret_exception(
     resolver, mock_fatsecret, mock_repo, caplog
 ):
-    """A warning is logged when FatSecret raises an exception."""
+    """A warning is logged when fatsecret raises an exception."""
     import logging
 
     mock_fatsecret.search_foods.side_effect = Exception("429 Too Many Requests")
@@ -191,7 +191,7 @@ async def test_resolve_logs_warning_on_fatsecret_exception(
 
 
 # ---------------------------------------------------------------------------
-# resolve() — missing macro fields in FatSecret result
+# resolve() — missing macro fields in fatsecret result
 # ---------------------------------------------------------------------------
 
 
@@ -199,7 +199,7 @@ async def test_resolve_logs_warning_on_fatsecret_exception(
 async def test_resolve_returns_none_when_macros_missing(
     resolver, mock_fatsecret, mock_repo
 ):
-    """If FatSecret result is missing required macro fields, returns None."""
+    """If fatsecret result is missing required macro fields, returns None."""
     incomplete = {
         "food_id": "fs-2",
         "food_type": "Generic",

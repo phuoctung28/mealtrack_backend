@@ -19,6 +19,25 @@ _VALID_FITNESS_GOALS = {e.value for e in FitnessGoal}
 _VALID_TRAINING_LEVELS = {e.value for e in TrainingLevel}
 
 
+def _has_metric_update(command: UpdateUserMetricsCommand) -> bool:
+    return any(
+        value is not None
+        for value in [
+            command.weight_kg,
+            command.job_type,
+            command.training_days_per_week,
+            command.training_minutes_per_session,
+            command.body_fat_percent,
+            command.fitness_goal,
+            command.training_level,
+            command.target_weight_kg,
+            command.goal_start_weight_kg,
+            command.goal_started_at,
+            command.daily_water_goal_ml,
+        ]
+    ) or command.reset_water_goal
+
+
 @handles(UpdateUserMetricsCommand)
 class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, None]):
     """Handle updating user metrics (weight, job type, training, body fat)."""
@@ -29,22 +48,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
         # Validate at least one field is provided
-        if not any(
-            [
-                command.weight_kg,
-                command.job_type,
-                command.training_days_per_week,
-                command.training_minutes_per_session,
-                command.body_fat_percent,
-                command.fitness_goal,
-                command.training_level,
-                command.target_weight_kg,
-                command.goal_start_weight_kg,
-                command.goal_started_at,
-                command.daily_water_goal_ml,
-                command.reset_water_goal,
-            ]
-        ):
+        if not _has_metric_update(command):
             raise ValidationException("At least one metric must be provided")
 
         async with self.uow as uow:

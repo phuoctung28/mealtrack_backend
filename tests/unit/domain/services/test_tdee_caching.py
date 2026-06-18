@@ -68,7 +68,11 @@ class TestGetAdjustedDailyTarget:
     async def test_returns_adjusted_when_budget_exists(self, mock_tdee_service, mock_profile):
         """Should return adjusted calories when weekly budget exists."""
         from datetime import date
-        from src.domain.services.weekly_budget_service import EffectiveAdjustedResult, AdjustedDailyTargets
+
+        from src.domain.services.weekly_budget_service import (
+            AdjustedDailyTargets,
+            EffectiveAdjustedResult,
+        )
 
         mock_budget = Mock()
         mock_adjusted = AdjustedDailyTargets(
@@ -136,7 +140,7 @@ class TestCacheKeyGeneration:
         """TDEE cache key should have correct format."""
         key, ttl = CacheKeys.user_tdee("user123")
 
-        assert key == "user:tdee:user123"
+        assert key == "user:tdee_v2:user123"
         assert ttl == CacheKeys.TTL_1_DAY
 
     def test_user_tdee_key_unique_per_user(self):

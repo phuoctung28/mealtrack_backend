@@ -1,5 +1,5 @@
 """
-FatSecret API HTTP client.
+fatsecret API HTTP client.
 Provides product lookup by barcode and food search using OAuth 2.0.
 """
 
@@ -16,14 +16,14 @@ from src.infra.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# FatSecret API endpoints
+# fatsecret API endpoints
 FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token"
 FATSECRET_API_BASE = "https://platform.fatsecret.com/rest/v1"
 
 # Barcode validation pattern (8-14 digits)
 BARCODE_PATTERN = re.compile(r"^\d{8,14}$")
 
-# Map language code to FatSecret region for localized search
+# Map language code to fatsecret region for localized search
 LANGUAGE_TO_REGION = {
     "vi": "VN",
     "en": "US",
@@ -36,7 +36,7 @@ LANGUAGE_TO_REGION = {
 
 
 class FatSecretService:
-    """HTTP client for FatSecret API with OAuth 2.0."""
+    """HTTP client for fatsecret API with OAuth 2.0."""
 
     def __init__(self, client_id: str, client_secret: str):
         self.client_id = client_id
@@ -82,7 +82,7 @@ class FatSecretService:
 
             if response.status_code != 200:
                 logger.warning(
-                    f"FatSecret token request failed: {response.status_code} - {response.text[:200]}"
+                    f"fatsecret token request failed: {response.status_code} - {response.text[:200]}"
                 )
                 return None
 
@@ -93,7 +93,7 @@ class FatSecretService:
 
             return self._access_token
         except Exception as e:
-            logger.warning(f"FatSecret OAuth error: {e}")
+            logger.warning(f"fatsecret OAuth error: {e}")
             return None
 
     async def _api_request(
@@ -119,13 +119,13 @@ class FatSecretService:
 
             if response.status_code != 200:
                 logger.warning(
-                    f"FatSecret API error: {response.status_code} - {response.text[:200]}"
+                    f"fatsecret API error: {response.status_code} - {response.text[:200]}"
                 )
                 return None
 
             return response.json()
         except httpx.HTTPError as e:
-            logger.warning(f"FatSecret request error: {e}")
+            logger.warning(f"fatsecret request error: {e}")
             return None
 
     async def get_product(
@@ -134,7 +134,7 @@ class FatSecretService:
         region: str = "US",
         language: str = "en",
     ) -> Optional[Dict[str, Any]]:
-        """Fetch product by barcode from FatSecret."""
+        """Fetch product by barcode from fatsecret."""
         # Validate barcode format
         if not BARCODE_PATTERN.match(barcode):
             logger.warning(f"Invalid barcode format: {barcode}")
@@ -171,7 +171,7 @@ class FatSecretService:
 
             return self._map_product(food_details, normalized_barcode)
         except Exception as e:
-            logger.warning(f"FatSecret API error for barcode {barcode}: {e}")
+            logger.warning(f"fatsecret API error for barcode {barcode}: {e}")
             return None
 
     async def search_foods(
@@ -207,10 +207,10 @@ class FatSecretService:
                 # Log error details if present
                 error = result.get("error")
                 if error:
-                    logger.warning(f"FatSecret API error for '{query}': {error}")
+                    logger.warning(f"fatsecret API error for '{query}': {error}")
                 else:
                     logger.warning(
-                        f"FatSecret returned no foods for '{query}'. "
+                        f"fatsecret returned no foods for '{query}'. "
                         f"Response keys: {list(result.keys())}"
                     )
                 return []
@@ -248,11 +248,11 @@ class FatSecretService:
             processed = await asyncio.gather(*[_process(food) for food in foods])
             return list(processed)
         except Exception as e:
-            logger.warning(f"FatSecret search error for query '{query}': {e}")
+            logger.warning(f"fatsecret search error for query '{query}': {e}")
             return []
 
     def _extract_serving_units(self, food: Dict) -> List[Dict]:
-        """Extract all serving units from FatSecret food details."""
+        """Extract all serving units from fatsecret food details."""
         servings = food.get("servings", {}).get("serving", [])
         if not servings:
             return []
@@ -280,7 +280,7 @@ class FatSecretService:
         return units
 
     def _extract_nutrition_from_details(self, food: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract per-100g nutrition from FatSecret food details."""
+        """Extract per-100g nutrition from fatsecret food details."""
         servings = food.get("servings", {}).get("serving", [])
         serving = None
         if isinstance(servings, list) and servings:
@@ -312,7 +312,7 @@ class FatSecretService:
         return [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
     def _map_product(self, food: Dict[str, Any], barcode: str) -> Dict[str, Any]:
-        """Map FatSecret response to clean dict."""
+        """Map fatsecret response to clean dict."""
         servings = food.get("servings", {}).get("serving", [])
         serving = None
         if isinstance(servings, list) and servings:
@@ -363,7 +363,7 @@ class FatSecretService:
         return (raw_value / metric_amount) * 100
 
     def _map_search_result(self, food: Dict[str, Any]) -> Dict[str, Any]:
-        """Map FatSecret search result to clean dict."""
+        """Map fatsecret search result to clean dict."""
         return {
             "description": food.get("food_name", ""),
             "brand": food.get("brand_name"),
@@ -371,7 +371,7 @@ class FatSecretService:
             "source": "fatsecret",
             "food_id": food.get(
                 "food_id"
-            ),  # FatSecret's internal ID for getting details
+            ),  # fatsecret's internal ID for getting details
             "allowed_units": self._default_allowed_units(),  # Will be enriched with details
         }
 
@@ -399,7 +399,7 @@ def get_fat_secret_service() -> FatSecretService:
         if not client_id or not client_secret:
             # Fall back to OAuth 1.0 (legacy)
             logger.warning(
-                "FatSecret OAuth 2.0 credentials not configured, OAuth 1.0 not supported"
+                "fatsecret OAuth 2.0 credentials not configured, OAuth 1.0 not supported"
             )
             raise ValueError(
                 "FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET must be set for OAuth 2.0"

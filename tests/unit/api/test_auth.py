@@ -13,10 +13,11 @@ from fastapi.security import HTTPAuthorizationCredentials
 from firebase_admin import auth as firebase_auth
 
 from src.api.dependencies.auth import (
-    verify_firebase_token,
-    get_current_user_id,
     get_current_user_email,
+    get_current_user_id,
     optional_authentication,
+    resolve_current_user_id,
+    verify_firebase_token,
 )
 
 
@@ -207,6 +208,15 @@ def _make_async_db(user):
     return mock_async_db
 
 
+def _make_async_session_context(user):
+    """Return an async session context manager mock that yields *user*."""
+    mock_async_db = _make_async_db(user)
+    mock_context = Mock()
+    mock_context.__aenter__ = AsyncMock(return_value=mock_async_db)
+    mock_context.__aexit__ = AsyncMock(return_value=None)
+    return mock_context, mock_async_db
+
+
 class TestGetCurrentUserId:
     """Tests for get_current_user_id dependency."""
 
@@ -226,7 +236,7 @@ class TestGetCurrentUserId:
         mock_async_db = _make_async_db(mock_user)
 
         # Act
-        result = await get_current_user_id(mock_token, async_db=mock_async_db)
+        result = await resolve_current_user_id(mock_token, async_db=mock_async_db)
 
         # Assert
         assert result == "user_db_id_123"
@@ -275,7 +285,7 @@ class TestGetCurrentUserId:
         mock_async_db = _make_async_db(None)  # User not found
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user_id(mock_token, async_db=mock_async_db)
+            await resolve_current_user_id(mock_token, async_db=mock_async_db)
 
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
         assert "detail" in dir(exc_info.value)
@@ -298,7 +308,7 @@ class TestGetCurrentUserId:
         mock_async_db = _make_async_db(mock_user1)
 
         # Act
-        result = await get_current_user_id(mock_token, async_db=mock_async_db)
+        result = await resolve_current_user_id(mock_token, async_db=mock_async_db)
 
         # Assert
         # Should return the first user's ID
@@ -318,7 +328,7 @@ class TestGetCurrentUserId:
             mock_async_db = _make_async_db(None)
             mock_token = {"uid": "firebase_uid_123"}
 
-            result = await get_current_user_id(
+            result = await resolve_current_user_id(
                 mock_token, async_db=mock_async_db, cache_service=None
             )
 
@@ -341,7 +351,7 @@ class TestGetCurrentUserId:
         # Ensure no stale entry
         cache_module._uid_cache.pop("firebase_uid_456", None)
         try:
-            result = await get_current_user_id(
+            result = await resolve_current_user_id(
                 {"uid": "firebase_uid_456"},
                 async_db=mock_async_db,
                 cache_service=None,
@@ -354,6 +364,34 @@ class TestGetCurrentUserId:
             assert cached["user_id"] == "user_db_id_123"
         finally:
             cache_module._uid_cache.pop("firebase_uid_456", None)
+
+    @pytest.mark.asyncio
+    async def test_get_user_id_closes_internal_session_on_cache_miss(self):
+        """Auth lookup should not hold a DB session for the full route lifetime."""
+        from src.api.dependencies import auth_cache as cache_module
+
+        mock_user = Mock()
+        mock_user.id = "short_lived_user_id"
+        firebase_uid = "firebase_uid_short_lived"
+        mock_context, mock_async_db = _make_async_session_context(mock_user)
+
+        cache_module._uid_cache.pop(firebase_uid, None)
+        try:
+            with patch(
+                "src.api.dependencies.auth.AsyncSessionLocal",
+                return_value=mock_context,
+            ):
+                result = await get_current_user_id(
+                    {"uid": firebase_uid},
+                    cache_service=None,
+                )
+
+            assert result == "short_lived_user_id"
+            mock_async_db.execute.assert_awaited_once()
+            mock_context.__aenter__.assert_awaited_once()
+            mock_context.__aexit__.assert_awaited_once()
+        finally:
+            cache_module._uid_cache.pop(firebase_uid, None)
 
 
 class TestGetCurrentUserEmail:
@@ -569,7 +607,7 @@ class TestAuthenticationIntegration:
             assert token["email"] == "test@example.com"
 
             # Act - Step 2: Get user ID
-            user_id = await get_current_user_id(token, async_db=mock_async_db)
+            user_id = await resolve_current_user_id(token, async_db=mock_async_db)
 
             # Assert - User ID extracted
             assert user_id == "user_db_id_123"
@@ -607,7 +645,7 @@ class TestAuthenticationIntegration:
             mock_request = Mock()
             mock_request.state = Mock()
             token = await verify_firebase_token(mock_request, mock_credentials)
-            user_id = await get_current_user_id(token, async_db=mock_async_db)
+            user_id = await resolve_current_user_id(token, async_db=mock_async_db)
 
             # Assert - Should still work
             assert token["email_verified"] is False
@@ -639,7 +677,7 @@ class TestAuthenticationIntegration:
             mock_request = Mock()
             mock_request.state = Mock()
             token = await verify_firebase_token(mock_request, mock_credentials)
-            user_id = await get_current_user_id(token, async_db=mock_async_db)
+            user_id = await resolve_current_user_id(token, async_db=mock_async_db)
             email = await get_current_user_email(token)
 
             # Assert
@@ -664,7 +702,7 @@ class TestAuthenticationEdgeCases:
         mock_token = {"uid": special_firebase_uid}
 
         # Act
-        result = await get_current_user_id(mock_token, async_db=mock_async_db)
+        result = await resolve_current_user_id(mock_token, async_db=mock_async_db)
 
         # Assert
         assert result == "special_user_id"
@@ -683,7 +721,7 @@ class TestAuthenticationEdgeCases:
         mock_token = {"uid": long_firebase_uid}
 
         # Act
-        result = await get_current_user_id(mock_token, async_db=mock_async_db)
+        result = await resolve_current_user_id(mock_token, async_db=mock_async_db)
 
         # Assert
         assert result == "long_user_id"

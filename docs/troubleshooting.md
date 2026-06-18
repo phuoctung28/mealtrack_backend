@@ -1,6 +1,6 @@
 # Backend Troubleshooting Guide
 
-**Last Updated:** June 13, 2026
+**Last Updated:** June 17, 2026
 
 ---
 
@@ -24,18 +24,20 @@ python -c "from src.app.commands.meal import CreateMealCommand"
 
 ### Database Connection Errors
 
-**Problem:** `OperationalError: Can't connect to MySQL server`
+**Problem:** `OperationalError`, `ConnectionDoesNotExistError`, or failure to connect to PostgreSQL/Neon
 
 **Diagnosis:**
 ```bash
 echo $DATABASE_URL
-# Should be: mysql+pymysql://user:pass@host:3306/dbname
+echo $APP_DATABASE_URL
+# App runtime should use a PostgreSQL/Neon URL.
 ```
 
 **Solutions:**
-1. Verify `DATABASE_URL` format (user, pass, host, port, dbname)
-2. Verify MySQL is running and credentials are correct
-3. Check firewall/network access rules
+1. Prefer `APP_DATABASE_URL` for app runtime; keep `DATABASE_URL_DIRECT` for Alembic migration/admin use only.
+2. Verify `DB_CONNECTION_MODE=direct_pool` uses a direct Neon host, or `DB_CONNECTION_MODE=neon_pooler` uses a `-pooler` host.
+3. For local development, verify the `postgres` service from `docker-compose.yml` is running and healthy.
+4. Check firewall/network access rules and Neon connection limits.
 
 ---
 
@@ -205,8 +207,8 @@ curl -i -X OPTIONS "http://localhost:8000/v1/meals"
 ```
 
 **Solutions:**
-1. Development: `allow_origins=["*"]` (already set)
-2. Production: Restrict to known origins via environment config
+1. Set `ALLOWED_ORIGINS` to a comma-separated list, for example `http://localhost:3000,https://app.example.com`.
+2. Production: restrict `ALLOWED_ORIGINS` to known origins only.
 3. Verify preflight (OPTIONS) returns 200
 
 ---
@@ -243,8 +245,8 @@ See related: `code-standards.md`, `testing-standards.md`, `system-architecture.m
 **Fix:** Either change `APP_DATABASE_URL` to a direct endpoint, or set `DB_CONNECTION_MODE=neon_pooler`.
 
 ### DB connection exhaustion (direct_pool)
-**Symptom:** Connection timeouts, Neon `max_connections` limit hit.  
-**Fix:** Reduce pool size: lower `ASYNC_POOL_SIZE_PER_WORKER` or `UVICORN_WORKERS`. Monitor `/v1/health/db-pool` for utilization. Consider switching to `neon_pooler` mode.
+**Symptom:** `QueuePool limit ... connection timed out`, request latency spikes, or Neon `max_connections` limit hit.
+**Fix:** If SQLAlchemy pool utilization is high but Neon has spare capacity, increase `ASYNC_POOL_SIZE_PER_WORKER` or `ASYNC_POOL_MAX_OVERFLOW` and keep DB work in short unit-of-work scopes. If Neon `max_connections` is the bottleneck, reduce `UVICORN_WORKERS` or per-worker pool settings, then consider switching to `neon_pooler` mode. Monitor `/v1/health/db-pool` for checked-out connections and total capacity.
 
 ### Migration fails but app works (or vice versa)
 **Symptom:** `alembic upgrade head` fails / succeeds independently of the app.  

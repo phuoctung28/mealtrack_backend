@@ -30,7 +30,7 @@ Migrated meal suggestion image-cache request-path dependencies to async DB acces
 - `src/api/dependencies/event_bus.py`
   - Wires `LookupBarcodeQueryHandler` with `AsyncUnitOfWork` instead of the sync food-reference singleton.
 - `tests/unit/handlers/query_handlers/test_lookup_barcode_query_handler_async.py`
-  - Covers async UoW cache hit and FatSecret cache-write paths.
+  - Covers async UoW cache hit and fatsecret cache-write paths.
 - `src/infra/repositories/food_reference_uow_adapter.py`
   - Adds singleton-safe async food-reference access through fresh UoW scopes.
 - `src/api/base_dependencies.py`
