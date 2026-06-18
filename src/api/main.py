@@ -35,12 +35,12 @@ from src.api.base_dependencies import (
     initialize_cache_layer,
     shutdown_cache_layer,
 )
-from src.api.exception_handlers import register_exception_handlers
 from src.api.dependencies.task_manager import (
     clear_task_manager,
     create_task_manager,
     set_task_manager,
 )
+from src.api.exception_handlers import register_exception_handlers
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.rate_limit import limiter
@@ -49,7 +49,6 @@ from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.codes import router as codes_router
-from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import root_router as root_health_router
 from src.api.routes.v1.health import router as health_router
@@ -339,7 +338,6 @@ app.include_router(meals_router)
 app.include_router(meal_upload_token_router)
 app.include_router(meal_scan_by_url_router)
 app.include_router(activities_router)
-app.include_router(feature_flags_router)
 app.include_router(meal_suggestions_router)
 app.include_router(user_profiles_router)
 app.include_router(users_router)

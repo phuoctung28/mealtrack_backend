@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.5
+**Version:** 0.6.6
 **Last Updated:** June 18, 2026
-**Status:** Production-ready. 620 Python files and ~52.6K LOC in `src/` (API: 89, App: 208, Domain: 160, Infra: 154). 291 Python test files with 1,600+ collected tests.
+**Status:** Production-ready. 616 Python files and ~52.5K LOC in `src/` (API: 86, App: 208, Domain: 160, Infra: 153). 294 Python test files with 1,600+ collected tests.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---

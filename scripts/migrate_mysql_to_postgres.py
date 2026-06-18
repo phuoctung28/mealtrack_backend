@@ -46,7 +46,7 @@ TABLE_NAME_MAP = {
 # Use MySQL table names here.
 #
 # Expected schema (both MySQL and Postgres) from production:
-# ['cheat_days','feature_flags','food_item','food_item_translation','food_reference','meal',
+# ['cheat_days','food_item','food_item_translation','food_reference','meal',
 #  'meal_translation','mealimage','notification_preferences','nutrition','saved_suggestions',
 #  'subscriptions','user_fcm_tokens','user_profiles','users','weekly_macro_budgets', 'alembic_version']
 #
@@ -67,7 +67,6 @@ TABLES = [
     "cheat_days",
     "weekly_macro_budgets",
     "saved_suggestions",
-    "feature_flags",
 ]
 
 # ── Imports ───────────────────────────────────────────────────────────────────
@@ -77,8 +76,7 @@ except ImportError:
     print("ERROR: pymysql not installed. Run: pip install pymysql")
     sys.exit(1)
 
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy import Integer
+from sqlalchemy import Integer, create_engine, inspect, text
 from sqlalchemy.types import Boolean
 
 
@@ -179,13 +177,13 @@ def reset_postgres_sequences(engine) -> None:
             # If not empty, set it to MAX(id).
             conn.execute(
                 text(
-                    """
+                    f"""
                     SELECT setval(
                       :seq,
-                      GREATEST((SELECT COALESCE(MAX(id), 0) FROM {tbl}), 1),
-                      (SELECT COALESCE(MAX(id), 0) FROM {tbl}) > 0
+                      GREATEST((SELECT COALESCE(MAX(id), 0) FROM {table}), 1),
+                      (SELECT COALESCE(MAX(id), 0) FROM {table}) > 0
                     )
-                    """.format(tbl=table)
+                    """
                 ),
                 {"seq": seq},
             )
@@ -224,7 +222,7 @@ def main():
             to_migrate.append((mysql_tbl, pg_tbl))
 
     if skipped:
-        print(f"Skipping:\n  " + "\n  ".join(skipped) + "\n")
+        print("Skipping:\n  " + "\n  ".join(skipped) + "\n")
 
     print("Starting migration...\n")
     errors = []

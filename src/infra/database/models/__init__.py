@@ -23,9 +23,6 @@ from .enums import (
     SexEnum,
 )
 
-# Feature flags
-from .feature_flag import FeatureFlag
-
 # Food reference (evolved from barcode_products)
 from .food_reference_model import FoodReferenceModel
 from .food_reference_nutrient import FoodReferenceNutrientModel
@@ -118,8 +115,6 @@ __all__ = [
     "NotificationORM",
     "NotificationPreferencesORM",
     "UserFcmTokenORM",
-    # Feature flags
-    "FeatureFlag",
     # Saved suggestions
     "SavedSuggestionModel",
     "SavedSuggestionItemModel",

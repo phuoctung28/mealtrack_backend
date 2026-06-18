@@ -1,8 +1,8 @@
 # Backend Testing Standards
 
-**Last Updated:** June 17, 2026
+**Last Updated:** June 18, 2026
 **Coverage Target:** 70%+ overall, 100% critical paths, 80%+ new features  
-**Suite Size:** 291 Python files in `tests/`; latest collection reaches 1,600+ tests
+**Suite Size:** 294 Python files in `tests/`; latest collection reaches 1,600+ tests
 
 ---
 

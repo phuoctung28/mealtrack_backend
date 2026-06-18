@@ -26,10 +26,6 @@ class Settings(BaseSettings):
     MIGRATION_RETRY_ATTEMPTS: int = Field(default=3)
     MIGRATION_RETRY_DELAY: float = Field(default=2.0)
 
-    # Admin authorization — comma-separated emails allowed to call privileged
-    # endpoints (e.g. feature-flag mutations). Empty means no admins.
-    ADMIN_EMAILS: str = Field(default="")
-
     # Shared service token for infra monitoring endpoints (health pool/connection
     # stats, cache metrics) — scrapers send it as the X-Monitoring-Token header.
     # Empty = those endpoints are closed to everyone (fail-closed).
@@ -236,7 +232,8 @@ class Settings(BaseSettings):
         default="", description="Cloudflare API token with Workers AI permission"
     )
     CLOUDFLARE_AI_GATEWAY_ID: str = Field(
-        default="", description="AI Gateway ID for routing Workers AI requests (optional)"
+        default="",
+        description="AI Gateway ID for routing Workers AI requests (optional)",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_MODEL: str = Field(
         default="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
@@ -250,7 +247,8 @@ class Settings(BaseSettings):
         default=True, description="Enable Workers AI JSON Mode for structured responses"
     )
     CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS: int = Field(
-        default=60, description="HTTP timeout for Workers AI requests (thinking models need ≥60s)"
+        default=60,
+        description="HTTP timeout for Workers AI requests (thinking models need ≥60s)",
     )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,

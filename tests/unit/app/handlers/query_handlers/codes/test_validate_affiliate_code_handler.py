@@ -2,6 +2,7 @@
 
 MealTrack stores no attribution state — nutree-affiliate owns dedup.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,7 +10,10 @@ import pytest
 from src.app.handlers.query_handlers.codes.validate_code_handler import (
     ValidateCodeQueryHandler,
 )
-from src.app.queries.codes.validate_code_query import CodeValidationError, ValidateCodeQuery
+from src.app.queries.codes.validate_code_query import (
+    CodeValidationError,
+    ValidateCodeQuery,
+)
 from src.domain.ports.affiliate_service_port import AffiliateCodeValidationResult
 
 MODULE = "src.app.handlers.query_handlers.codes.validate_code_handler"
@@ -24,7 +28,9 @@ def _make_uow(*, promo=None, ref_code=None, ref_existing=None):
     uow.promo_codes.get_redemption = AsyncMock(return_value=None)
     uow.referrals.get_code_by_code = AsyncMock(return_value=ref_code)
     uow.referrals.get_conversion_by_referred_user = AsyncMock(return_value=ref_existing)
-    uow.session.execute = AsyncMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+    uow.session.execute = AsyncMock(
+        return_value=MagicMock(first=MagicMock(return_value=None))
+    )
     return uow
 
 
@@ -77,8 +83,11 @@ async def test_affiliate_code_returned_when_integration_enabled():
     """Affiliate fallback returns affiliate_code; no local attribution stored."""
     mock_uow = _make_uow()
     aff_result = AffiliateCodeValidationResult(
-        active=True, affiliate_id="aff-1", code_id="code-1",
-        display_name="Alex", partner_type="pt",
+        active=True,
+        affiliate_id="aff-1",
+        code_id="code-1",
+        display_name="Alex",
+        partner_type="pt",
     )
     with (
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
@@ -97,7 +106,7 @@ async def test_affiliate_code_returned_when_integration_enabled():
 
 @pytest.mark.asyncio
 async def test_affiliate_not_called_when_integration_disabled():
-    """No affiliate call when feature flag is off — 404."""
+    """No affiliate call when the integration gate is off."""
     mock_uow = _make_uow()
     with (
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),

@@ -1,9 +1,9 @@
 # Backend Database Guide
 
-**Last Updated:** June 17, 2026
+**Last Updated:** June 18, 2026
 **Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
 **Migrations:** Alembic via deployment entrypoint/pre-deploy flow
-**Tables:** 36 ORM table declarations across core, normalized tracking, referral, notification, and cache models
+**Tables:** 35 ORM table declarations across core, normalized tracking, referral, notification, and cache models
 
 ---
 

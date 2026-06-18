@@ -100,14 +100,6 @@ class CacheKeys:
         return (f"food:details:{food_id}", CacheKeys.TTL_7_DAYS)
 
     @staticmethod
-    def feature_flag(flag_name: str) -> tuple[str, int]:
-        return (f"feature:flag:{flag_name}", CacheKeys.TTL_10_MIN)
-
-    @staticmethod
-    def feature_flags() -> tuple[str, int]:
-        return ("feature:flags:all", CacheKeys.TTL_10_MIN)
-
-    @staticmethod
     def user_streak(user_id: str) -> tuple[str, int]:
         """Cache key for user streak. 1h TTL."""
         return (f"user:streak:{user_id}", CacheKeys.TTL_1_HOUR)

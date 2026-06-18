@@ -1,4 +1,5 @@
 """Query handler — unified code validation: tries promo_codes first, then referral_codes, then affiliate."""
+
 import logging
 
 from sqlalchemy import select
@@ -48,15 +49,19 @@ class ValidateCodeQueryHandler:
             ref_code = await referral_repo.get_code_by_code(query.code)
             if ref_code:
                 if ref_code.user_id == query.user_id:
-                    raise CodeValidationError(422, "You cannot use your own referral code")
-                existing_conversion = await referral_repo.get_conversion_by_referred_user(
-                    query.user_id
+                    raise CodeValidationError(
+                        422, "You cannot use your own referral code"
+                    )
+                existing_conversion = (
+                    await referral_repo.get_conversion_by_referred_user(query.user_id)
                 )
                 if existing_conversion:
                     raise CodeValidationError(422, "You have already used this code")
 
                 result = await uow.session.execute(
-                    select(User.first_name, User.display_name).where(User.id == ref_code.user_id)
+                    select(User.first_name, User.display_name).where(
+                        User.id == ref_code.user_id
+                    )
                 )
                 row = result.first()
                 referrer_name = "Friend"
@@ -74,7 +79,7 @@ class ValidateCodeQueryHandler:
                     "commission_rewards": settings.REFERRAL_COMMISSIONS,
                 }
 
-            # ── Affiliate code lookup (feature-flagged, last resort) ─────────
+            # ── Affiliate code lookup (env-gated, last resort) ───────────────
             # nutree-affiliate owns duplicate-attribution enforcement; MealTrack
             # stores no attribution state.
             if settings.AFFILIATE_INTEGRATION_ENABLED:

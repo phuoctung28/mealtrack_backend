@@ -1,4 +1,5 @@
 """Command handler — record a referred user's code application as a pending conversion."""
+
 import logging
 import os
 
@@ -19,7 +20,9 @@ class ApplyReferralCodeCommandHandler:
             if code:
                 if code.user_id == command.user_id:
                     raise ValueError("self_referral")
-                existing = await uow.referrals.get_conversion_by_referred_user(command.user_id)
+                existing = await uow.referrals.get_conversion_by_referred_user(
+                    command.user_id
+                )
                 if existing:
                     raise ValueError("already_referred")
                 await uow.referrals.create_conversion(
@@ -36,7 +39,7 @@ class ApplyReferralCodeCommandHandler:
                 )
                 return
 
-            # ── Affiliate path (feature-flagged) ────────────────────────────
+            # ── Affiliate path (env-gated) ──────────────────────────────────
             # nutree-affiliate is the source of truth for attribution state.
             # MealTrack sends an event and lets nutree-affiliate enforce dedup.
             if os.getenv("AFFILIATE_INTEGRATION_ENABLED", "").lower() in ("1", "true"):

@@ -212,17 +212,6 @@ Codes are 3–15 characters. Commission rates set via `REFERRAL_COMMISSIONS` env
 
 ---
 
-## Feature Flags
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/v1/feature-flags/` | List all feature flags |
-| GET | `/v1/feature-flags/{feature_name}` | Get individual flag |
-| POST | `/v1/feature-flags/` | Create feature flag |
-| PUT | `/v1/feature-flags/{feature_name}` | Update feature flag |
-
----
-
 ## Codes
 
 | Method | Endpoint | Purpose |
