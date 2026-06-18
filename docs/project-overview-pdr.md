@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.6.5
+**Version:** 0.6.6
 **Last Updated:** June 18, 2026
-**Status:** Production-ready. 620 Python files and ~52.6K LOC in `src/`; current suite has 291 Python test files and 1,600+ collected tests. Latest: async PostgreSQL/Neon runtime alignment, observability connector, normalized database foundation, hydration/movement APIs, affiliate outbox, and refreshed codebase documentation.
+**Status:** Production-ready. 616 Python files and ~52.5K LOC in `src/`; current suite has 294 Python test files and 1,600+ collected tests. Latest: backend feature flag API retirement, async PostgreSQL/Neon runtime alignment, observability connector, normalized database foundation, hydration/movement APIs, affiliate outbox, and refreshed codebase documentation.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI service powering meal tracking, nutritional analysis, weekly calorie budgeting, hydration, movement, referrals, promo codes, notifications, and subscription state. It implements Clean Architecture with CQRS across API, application, domain, and infrastructure layers, integrating Gemini-based AI meal analysis, PostgreSQL/pgvector storage, Redis-backed optional cache-aside paths, and operational observability. The current HTTP surface has 26 router registrations and 83 endpoint decorators across meals, users, profiles, suggestions, hydration, movement, nutrition, referrals, promo codes, health, monitoring, webhooks, and support routes.
+MealTrack Backend is a FastAPI service powering meal tracking, nutritional analysis, weekly calorie budgeting, hydration, movement, referrals, promo codes, notifications, and subscription state. It implements Clean Architecture with CQRS across API, application, domain, and infrastructure layers, integrating Gemini-based AI meal analysis, PostgreSQL/pgvector storage, Redis-backed optional cache-aside paths, and operational observability. The current HTTP surface has 26 router registrations and 79 endpoint decorators across meals, users, profiles, suggestions, hydration, movement, nutrition, referrals, promo codes, health, monitoring, webhooks, and support routes.
 
 ---
 
@@ -33,7 +33,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - Gemini 2.5 Flash with strategy pattern for flexible context handling.
 - Returns results in <3 seconds through state machine (PROCESSING → ANALYZING → READY/FAILED).
 
-### 2. RESTful API (83 Endpoint Decorators across 26 Router Registrations)
+### 2. RESTful API (79 Endpoint Decorators across 26 Router Registrations)
 - **Meals**: image/analyze, upload-token, scan-by-url, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
 - **User Profiles**: create, metrics (GET/POST), TDEE, custom-macros.
 - **Users**: sync, Firebase UID lookups, onboarding completion, timezone, language, delete.
@@ -51,7 +51,6 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - **Referrals**: validate, apply, my-code, stats, payout.
 - **Promo Codes / Codes**: validate/redeem promo codes and validate purchase codes.
 - **Cheat Days**: list, mark, delete.
-- **Feature Flags**: CRUD for feature toggles.
 - **Webhooks**: RevenueCat subscription sync.
 - **Monitoring**: cache metrics.
 - **Health**: health, db-pool, db-connections, notifications.
@@ -121,6 +120,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.6.6 | Jun 18, 2026 | Retired backend feature flag API, models, schemas, and cache keys after app feature availability moved to Firebase Remote Config. |
 | 0.6.5 | Jun 18, 2026 | Weekly budget adjusted targets now credit logged movement calories on a net-calorie basis, and baseline TDEE excludes planned workouts to avoid double-counting exercise. |
 | 0.6.4 | Jun 17, 2026 | Documentation refresh aligned active docs to live code: 620 source files, 83 endpoint decorators, PostgreSQL/Neon async runtime, pgvector-enabled local compose, Redis optional cache posture, hydration/movement/nutrition/referral/promo endpoint inventory, and updated test scale. |
 | 0.6.3 | Jun 13, 2026 | Single-owner logger and provider-neutral observability connector. Sentry direct imports isolated, cron/background boundaries own swallowed exception capture, safe scalar context allowlists documented. |

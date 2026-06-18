@@ -13,7 +13,7 @@ FastAPI backend for meal tracking, nutrition analysis, weekly targets, hydration
 ## Highlights
 
 - AI meal analysis with image upload, signed upload tokens, and scan-by-URL analysis.
-- Live API surface: 26 router registrations and 83 endpoint decorators across meals, users, profiles, suggestions, hydration, movement, nutrition, referrals, promo codes, health, monitoring, webhooks, and support routes.
+- Live API surface: 26 router registrations and 79 endpoint decorators across meals, users, profiles, suggestions, hydration, movement, nutrition, referrals, promo codes, health, monitoring, webhooks, and support routes.
 - CQRS with PyMediator singleton event buses and async SQLAlchemy UoW boundaries.
 - PostgreSQL/Neon async runtime with pgvector-enabled local compose and Redis-backed optional cache-aside paths.
 - Multi-provider integrations for Firebase, Gemini, Cloudinary, RevenueCat, PostHog, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Resend, and image generators.

@@ -280,34 +280,6 @@ async def get_current_user_email(
     return token.get("email")
 
 
-async def require_admin(
-    email: str | None = Depends(get_current_user_email),
-) -> str:
-    """Authorize privileged endpoints against the ADMIN_EMAILS allowlist.
-
-    Raises 401 when unauthenticated (via get_current_user_email →
-    verify_firebase_token) and 403 when the caller's email is not on the
-    configured allowlist.
-    """
-    allowlist = {
-        e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()
-    }
-    if not email:
-        # Authenticated (token verified) but no email claim — e.g. a phone-only
-        # account. Denied, but logged so an admin who loses email is visible.
-        logger.warning("Admin check denied: verified token has no email claim")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required",
-        )
-    if email.strip().lower() not in allowlist:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required",
-        )
-    return email
-
-
 async def require_monitoring_access(request: Request) -> None:
     """Authorize infra monitoring endpoints via a shared service token.
 

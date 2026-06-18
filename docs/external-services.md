@@ -408,7 +408,7 @@ Permanent failures (5 attempts exhausted) capture a Sentry error. Cron: `src/cro
 1. Create nutree-affiliate Neon database and run `npx ts-node api/migrate.ts`
 2. Set `AFFILIATE_INTERNAL_SECRET` in both nutree-affiliate and MealTrack (same value)
 3. Set `AFFILIATE_API_BASE_URL` in MealTrack (e.g. `https://nutree-affiliate.vercel.app`)
-4. Deploy nutree-affiliate **before** enabling MealTrack feature flag
+4. Deploy nutree-affiliate **before** enabling the MealTrack affiliate integration
 5. Set `AFFILIATE_INTEGRATION_ENABLED=true` in MealTrack
 6. Add Render cron job: `python -m src.cron.affiliate_outbox` — every 5 min
 7. Monitor `affiliate_event_outbox` for `status=failed` rows and Sentry alerts
