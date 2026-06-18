@@ -48,6 +48,9 @@ def _make_no_cf_settings():
     s.CLOUDFLARE_ACCOUNT_ID = ""
     s.CLOUDFLARE_API_TOKEN = ""
     s.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = ""
+    s.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = False
+    s.CLOUDFLARE_WORKERS_AI_VISION_MODEL = ""
+    s.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = ""
     return s
 
 
@@ -280,6 +283,7 @@ class TestVision:
 # ---------------------------------------------------------------------------
 
 def _make_cf_settings():
+    """Text-only CF settings; vision stays Gemini-only."""
     s = Mock()
     s.CLOUDFLARE_WORKERS_AI_ENABLED = True
     s.CLOUDFLARE_ACCOUNT_ID = "fake_account_id"
@@ -289,6 +293,18 @@ def _make_cf_settings():
     s.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = "recipe,general,meal_names,discovery,parse_text"
     s.CLOUDFLARE_WORKERS_AI_JSON_MODE = True
     s.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS = 30
+    s.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = False
+    s.CLOUDFLARE_WORKERS_AI_VISION_MODEL = ""
+    s.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = ""
+    return s
+
+
+def _make_cf_vision_settings():
+    """CF settings with vision enabled for meal_scan and ingredient_scan."""
+    s = _make_cf_settings()
+    s.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = True
+    s.CLOUDFLARE_WORKERS_AI_VISION_MODEL = "@cf/google/gemma-4-26b-a4b-it"
+    s.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = "meal_scan,ingredient_scan"
     return s
 
 
@@ -302,6 +318,9 @@ def _make_disabled_cf_settings():
     s.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = ""
     s.CLOUDFLARE_WORKERS_AI_JSON_MODE = False
     s.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS = 30
+    s.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = False
+    s.CLOUDFLARE_WORKERS_AI_VISION_MODEL = ""
+    s.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = ""
     return s
 
 
@@ -319,8 +338,30 @@ def mock_cf_provider():
 
 
 @pytest.fixture
+def mock_cf_vision_provider():
+    """CF provider with vision capability enabled."""
+    from src.domain.ports.ai_provider_port import AICapability
+
+    p = Mock()
+    p.provider_name = "cloudflare-workers-ai"
+    p.get_available_models.return_value = [
+        "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "@cf/google/gemma-4-26b-a4b-it",
+    ]
+    p.supported_capabilities = {
+        AICapability.TEXT_GENERATION,
+        AICapability.STRUCTURED_OUTPUT,
+        AICapability.VISION,
+    }
+    p.generate = AsyncMock(return_value={"result": "cf_success"})
+    p.generate_with_vision = AsyncMock(return_value={"result": "cf_vision_success"})
+    p.extract_error_code = Mock(return_value=None)
+    return p
+
+
+@pytest.fixture
 def manager_with_cf(mock_gemini_provider, mock_circuit_breaker, mock_cf_provider):
-    """Manager with Cloudflare Workers AI enabled via settings injection."""
+    """Manager with Cloudflare Workers AI text enabled; vision stays Gemini-only."""
     with patch(
         "src.infra.services.ai.ai_model_manager.GeminiProvider",
         return_value=mock_gemini_provider,
@@ -333,6 +374,23 @@ def manager_with_cf(mock_gemini_provider, mock_circuit_breaker, mock_cf_provider
         return_value=mock_cf_provider,
     ):
         return AIModelManager(settings=_make_cf_settings())
+
+
+@pytest.fixture
+def manager_with_cf_vision(mock_gemini_provider, mock_circuit_breaker, mock_cf_vision_provider):
+    """Manager with Cloudflare Workers AI vision enabled for meal/ingredient scan."""
+    with patch(
+        "src.infra.services.ai.ai_model_manager.GeminiProvider",
+        return_value=mock_gemini_provider,
+    ), patch(
+        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+        return_value=mock_circuit_breaker,
+    ), patch(
+        "src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider",
+        create=True,
+        return_value=mock_cf_vision_provider,
+    ):
+        return AIModelManager(settings=_make_cf_vision_settings())
 
 
 @pytest.fixture
@@ -374,8 +432,8 @@ class TestWorkersAIRouting:
             assert chain[1] == "gemini-2.5-flash-lite"
             assert chain[2] == "gemini-2.5-flash"
 
-    def test_vision_purposes_stay_gemini_only_when_cf_enabled(self, manager_with_cf):
-        """MEAL_SCAN and INGREDIENT_SCAN chains never include Workers AI."""
+    def test_vision_purposes_stay_gemini_only_when_cf_text_only_enabled(self, manager_with_cf):
+        """MEAL_SCAN and INGREDIENT_SCAN must be Gemini-only when only CF text is enabled."""
         for purpose in (ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN):
             chain = manager_with_cf.get_fallback_chain(purpose)
             assert chain == [
@@ -383,7 +441,7 @@ class TestWorkersAIRouting:
                 "gemini-3.5-flash",
                 "gemini-2.5-flash",
             ], (
-                f"{purpose.value} must remain Gemini-only even when CF is enabled"
+                f"{purpose.value} must remain Gemini-only when CF vision is not configured"
             )
 
     def test_parse_text_uses_cf_first_when_enabled(self, manager_with_cf):
@@ -454,10 +512,10 @@ class TestWorkersAIFallback:
         mock_gemini_provider.generate.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_cf_not_tried_for_vision_purpose(
+    async def test_cf_not_tried_for_vision_purpose_when_text_only_cf(
         self, manager_with_cf, mock_gemini_provider, mock_cf_provider
     ):
-        """Workers AI must not be attempted for MEAL_SCAN even when Gemini fails."""
+        """When only text CF is enabled, Workers AI is not in vision chains."""
         mock_gemini_provider.generate_with_vision = AsyncMock(
             side_effect=Exception("503 UNAVAILABLE")
         )
@@ -472,5 +530,88 @@ class TestWorkersAIFallback:
             )
 
         mock_cf_provider.generate.assert_not_awaited()
-        mock_cf_provider.generate_with_vision = AsyncMock()
-        mock_cf_provider.generate_with_vision.assert_not_awaited()
+
+
+class TestWorkersAIVisionRouting:
+    """Tests for CF-first vision routing (Phase 3)."""
+
+    def test_cf_vision_model_is_first_in_meal_scan_chain(self, manager_with_cf_vision):
+        """CF vision model is prepended to MEAL_SCAN chain when enabled."""
+        chain = manager_with_cf_vision.get_fallback_chain(ModelPurpose.MEAL_SCAN)
+        assert chain[0] == "@cf/google/gemma-4-26b-a4b-it"
+        assert "gemini-3.1-flash-lite" in chain
+
+    def test_cf_vision_model_is_first_in_ingredient_scan_chain(self, manager_with_cf_vision):
+        """CF vision model is prepended to INGREDIENT_SCAN chain when enabled."""
+        chain = manager_with_cf_vision.get_fallback_chain(ModelPurpose.INGREDIENT_SCAN)
+        assert chain[0] == "@cf/google/gemma-4-26b-a4b-it"
+        assert "gemini-3.1-flash-lite" in chain
+
+    def test_gemini_vision_models_remain_as_fallback(self, manager_with_cf_vision):
+        """Full Gemini fallback chain remains after the CF vision model."""
+        for purpose in (ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN):
+            chain = manager_with_cf_vision.get_fallback_chain(purpose)
+            assert "gemini-3.1-flash-lite" in chain
+            assert "gemini-3.5-flash" in chain
+            assert "gemini-2.5-flash" in chain
+
+    def test_vision_chain_disabled_falls_back_to_gemini_only(self, manager_with_cf):
+        """When CF vision is not configured, vision chains are Gemini-only."""
+        for purpose in (ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN):
+            chain = manager_with_cf.get_fallback_chain(purpose)
+            assert not any("@cf/" in m for m in chain)
+
+    def test_text_chains_unaffected_by_vision_config(self, manager_with_cf_vision):
+        """Vision routing must not alter text-purpose chains."""
+        for purpose in (ModelPurpose.RECIPE, ModelPurpose.GENERAL, ModelPurpose.MEAL_NAMES):
+            chain = manager_with_cf_vision.get_fallback_chain(purpose)
+            # CF text model is first (from text routing)
+            assert chain[0] == "@cf/google/gemma-4-26b-a4b-it"
+
+    def test_barcode_stays_gemini_only_even_with_cf_vision(self, manager_with_cf_vision):
+        """BARCODE is never in vision purposes; chain stays Gemini-only."""
+        chain = manager_with_cf_vision.get_fallback_chain(ModelPurpose.BARCODE)
+        assert not any("@cf/" in m for m in chain)
+
+    def test_cf_vision_model_registered_as_provider_override(self, manager_with_cf_vision):
+        """Vision model ID maps to cloudflare-workers-ai in provider overrides."""
+        assert manager_with_cf_vision._model_provider_overrides.get(
+            "@cf/google/gemma-4-26b-a4b-it"
+        ) == "cloudflare-workers-ai"
+
+    @pytest.mark.asyncio
+    async def test_cf_vision_called_first_for_meal_scan(
+        self, manager_with_cf_vision, mock_gemini_provider, mock_circuit_breaker, mock_cf_vision_provider
+    ):
+        """CF vision is called first for MEAL_SCAN; Gemini is not tried when CF succeeds."""
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+
+        result = await manager_with_cf_vision.generate_with_vision(
+            purpose=ModelPurpose.MEAL_SCAN,
+            prompt="test",
+            image_data=b"fake_image",
+        )
+
+        assert result == {"result": "cf_vision_success"}
+        mock_cf_vision_provider.generate_with_vision.assert_awaited_once()
+        mock_gemini_provider.generate_with_vision.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_gemini_when_cf_vision_fails(
+        self, manager_with_cf_vision, mock_gemini_provider, mock_circuit_breaker, mock_cf_vision_provider
+    ):
+        """When CF vision fails, Gemini is tried as fallback."""
+        mock_cf_vision_provider.generate_with_vision = AsyncMock(
+            side_effect=Exception("CF 503")
+        )
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+
+        result = await manager_with_cf_vision.generate_with_vision(
+            purpose=ModelPurpose.MEAL_SCAN,
+            prompt="test",
+            image_data=b"fake_image",
+        )
+
+        assert result == {"result": "vision_success"}
+        mock_cf_vision_provider.generate_with_vision.assert_awaited_once()
+        mock_gemini_provider.generate_with_vision.assert_awaited()

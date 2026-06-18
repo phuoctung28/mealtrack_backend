@@ -125,6 +125,10 @@ class AIModelManager:
         ):
             return
 
+        vision_enabled = getattr(settings, "CLOUDFLARE_WORKERS_AI_VISION_ENABLED", False)
+        vision_model = getattr(settings, "CLOUDFLARE_WORKERS_AI_VISION_MODEL", "")
+        vision_purposes = getattr(settings, "CLOUDFLARE_WORKERS_AI_VISION_PURPOSES", "")
+
         cf = CloudflareWorkersAIProvider(
             account_id=settings.CLOUDFLARE_ACCOUNT_ID,
             api_token=settings.CLOUDFLARE_API_TOKEN,
@@ -132,6 +136,8 @@ class AIModelManager:
             gateway_id=settings.CLOUDFLARE_AI_GATEWAY_ID or "",
             json_mode_enabled=settings.CLOUDFLARE_WORKERS_AI_JSON_MODE,
             timeout_seconds=settings.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS,
+            vision_model=vision_model,
+            vision_enabled=vision_enabled,
         )
         self._providers["cloudflare-workers-ai"] = cf
         self._model_provider_overrides[settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL] = (
@@ -141,6 +147,19 @@ class AIModelManager:
             cf_model=settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL,
             text_purposes_csv=settings.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES,
         )
+
+        if vision_enabled and vision_model:
+            self._model_provider_overrides[vision_model] = "cloudflare-workers-ai"
+            self._prepend_cf_to_vision_chains(
+                cf_model=vision_model,
+                vision_purposes_csv=vision_purposes,
+            )
+            logger.info(
+                "[CF-WORKERS-AI-VISION-ENABLED] purposes=%s model=%s",
+                vision_purposes,
+                vision_model,
+            )
+
         logger.info(
             "[CF-WORKERS-AI-ENABLED] purposes=%s model=%s",
             settings.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES,
@@ -150,6 +169,20 @@ class AIModelManager:
     def _append_cf_to_text_chains(self, cf_model: str, text_purposes_csv: str) -> None:
         """Prepend raw CF model id to configured text-purpose chains (CF is tried first)."""
         configured = {p.strip().lower() for p in text_purposes_csv.split(",") if p.strip()}
+        for purpose in ModelPurpose:
+            if purpose.value in configured:
+                self._fallback_chains[purpose].insert(0, cf_model)
+
+    def _prepend_cf_to_vision_chains(self, cf_model: str, vision_purposes_csv: str) -> None:
+        """Prepend CF vision model to configured vision-purpose chains (CF is tried first)."""
+        configured = {p.strip().lower() for p in vision_purposes_csv.split(",") if p.strip()}
+        valid_values = {mp.value for mp in ModelPurpose}
+        unknown = configured - valid_values
+        if unknown:
+            logger.warning(
+                "[CF-WORKERS-AI-VISION] unknown purposes ignored: %s",
+                ", ".join(sorted(unknown)),
+            )
         for purpose in ModelPurpose:
             if purpose.value in configured:
                 self._fallback_chains[purpose].insert(0, cf_model)

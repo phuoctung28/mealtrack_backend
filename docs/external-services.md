@@ -63,15 +63,16 @@
 
 `AIModelManager` orchestrates providers through `AIProviderPort`. Each purpose has a fallback chain; models are tried in order until one succeeds. The circuit breaker opens after 5 failures within 60s and allows retry after 30s.
 
-**Default text chain (e.g. RECIPE):**
+**Default text chain (e.g. RECIPE) when CF text enabled:**
 ```
-gemini-2.5-flash-lite  →  gemini-2.5-flash  →  @cf/google/gemma-4-26b-a4b-it  (if CF enabled)
+@cf/google/gemma-4-26b-a4b-it  →  gemini-2.5-flash-lite  →  gemini-2.5-flash
 ```
 
-**Vision chains (always Gemini-only in v1):**
+**Vision chains (CF-first when `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true`, Gemini fallback):**
 ```
-gemini-3.1-flash-lite  →  gemini-3.5-flash  →  gemini-2.5-flash
+@cf/google/gemma-4-26b-a4b-it  →  gemini-3.1-flash-lite  →  gemini-3.5-flash  →  gemini-2.5-flash
 ```
+When CF vision is disabled, vision chains are Gemini-only: `gemini-3.1-flash-lite → gemini-3.5-flash → gemini-2.5-flash`
 
 **Gemini-only parse/barcode fallback unless explicitly routed through Cloudflare:**
 ```
@@ -98,47 +99,61 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 
 ---
 
-## Cloudflare Workers AI (Text Fallback)
+## Cloudflare Workers AI (Text + Vision)
 
-**Purpose:** Optional fallback AI provider for text-only purposes when Gemini is degraded. Disabled by default.
+**Purpose:** Optional primary AI provider for text and vision tasks. Gemini is fallback for all cases.
 
-**Not supported by the current FastAPI adapter:** vision/image analysis. `MEAL_SCAN` and `INGREDIENT_SCAN` remain Gemini-only. Parse and barcode require explicit opt-in via `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES`.
+**Two independent routing paths:**
+- **Text path:** LangChain adapter (`ChatCloudflareWorkersAI`) for text-generation purposes.
+- **Vision path:** Direct Workers AI REST (`/ai/run/{model}`) with `httpx` for image analysis.
 
 ### How It Works
 
-- Uses LangChain's `ChatCloudflareWorkersAI` (`langchain-cloudflare>=0.3.4`) — this is LangChain inside FastAPI, not the app running on Cloudflare Workers runtime.
+- Text: Uses LangChain's `ChatCloudflareWorkersAI` (`langchain-cloudflare>=0.3.4`) — this is LangChain inside FastAPI, not the app running on Cloudflare Workers runtime.
+- Vision: Posts `messages[].content[].image_url` (base64 data URL) directly to the Workers AI REST endpoint. Response is normalized from `result.response` or `result.choices[0].message.content`.
 - Cloudflare model IDs stored raw (`@cf/...`) in fallback chains; `AIModelManager` routes to the CF provider via an explicit ownership map.
 - If `CLOUDFLARE_AI_GATEWAY_ID` is set, LangChain passes it as the `ai_gateway` field to Workers AI.
 - Returns the same `dict` shape as `GeminiProvider` — handlers are provider-agnostic.
 - Circuit breaker trips on 429/5xx/timeout, same as Gemini.
+- Vision model: `@cf/google/gemma-4-26b-a4b-it` (Vision=Yes, messages/image_url contract). Deprecated model `@cf/unum/uform-gen2-qwen-500m` must not be used.
 
 ### Env Vars
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `CLOUDFLARE_WORKERS_AI_ENABLED` | `false` | Master switch — Workers AI is inactive unless this is `true` |
+| `CLOUDFLARE_WORKERS_AI_ENABLED` | `true` | Master switch — text path inactive unless this is `true` |
 | `CLOUDFLARE_ACCOUNT_ID` | `` | Cloudflare account ID |
 | `CLOUDFLARE_API_TOKEN` | `` | API token with Workers AI permission |
 | `CLOUDFLARE_AI_GATEWAY_ID` | `` | Optional AI Gateway ID; leave blank for direct Workers AI |
-| `CLOUDFLARE_WORKERS_AI_TEXT_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Model for text generation |
-| `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery` | Purposes that include CF in fallback chain |
+| `CLOUDFLARE_WORKERS_AI_TEXT_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Model for text generation |
+| `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery,parse_text` | Purposes that include CF text in fallback chain |
 | `CLOUDFLARE_WORKERS_AI_JSON_MODE` | `true` | Reserved; currently unused by LangChain adapter |
-| `CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS` | `30` | HTTP timeout per request |
+| `CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS` | `60` | HTTP timeout per request |
+| `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision for image analysis (Gemini is fallback) |
+| `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
+| `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Purposes that use CF vision as primary |
 
-### Production Rollout Order
+### Production Rollout (Vision)
+
+Set these env vars in Render (no redeployment needed, env var change restarts the service):
 
 ```
-1. Deploy code — Cloudflare disabled by default; zero behavior change.
-2. In Render: set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
-3. Leave CLOUDFLARE_AI_GATEWAY_ID blank for direct Workers AI.
-4. Set CLOUDFLARE_WORKERS_AI_ENABLED=true, TEXT_PURPOSES=recipe,general.
-5. Observe app logs and Cloudflare Workers AI usage for several days.
-6. Extend TEXT_PURPOSES to include meal_names,discovery after basic observation passes.
-7. Keep parse_text, barcode, meal_scan, ingredient_scan Gemini-only until separate schema eval.
+CLOUDFLARE_WORKERS_AI_ENABLED=true
+CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true
+CLOUDFLARE_WORKERS_AI_VISION_MODEL=@cf/google/gemma-4-26b-a4b-it
+CLOUDFLARE_WORKERS_AI_VISION_PURPOSES=meal_scan,ingredient_scan
 ```
+
+Keep `GOOGLE_API_KEY` configured — Gemini remains the fallback on any CF vision failure.
 
 ### Rollback
 
+Disable vision without redeploying:
+```
+CLOUDFLARE_WORKERS_AI_VISION_ENABLED=false
+```
+
+Disable all CF:
 ```
 CLOUDFLARE_WORKERS_AI_ENABLED=false
 ```
@@ -147,7 +162,7 @@ CLOUDFLARE_WORKERS_AI_ENABLED=false
 
 - API token is loaded from env/settings and never logged.
 - Logs include only: provider name, model alias, purpose value, HTTP status code, and error class.
-- Prompts, food payloads, raw AI responses, and account IDs are never logged.
+- Prompts, food payloads, raw AI responses, base64 image bytes, and account IDs are never logged.
 
 ---
 

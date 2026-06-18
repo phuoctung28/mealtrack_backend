@@ -32,6 +32,20 @@ def provider_no_gateway():
     )
 
 
+@pytest.fixture
+def provider_with_vision():
+    return CloudflareWorkersAIProvider(
+        account_id="fake_account_id",
+        api_token="fake_api_token",
+        text_model="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        gateway_id="fake_gateway",
+        timeout_seconds=30,
+        json_mode_enabled=True,
+        vision_model="@cf/google/gemma-4-26b-a4b-it",
+        vision_enabled=True,
+    )
+
+
 class TestProviderInterface:
     def test_provider_name(self, provider):
         assert provider.provider_name == "cloudflare-workers-ai"
@@ -42,8 +56,22 @@ class TestProviderInterface:
         assert AICapability.STRUCTURED_OUTPUT in caps
         assert AICapability.VISION not in caps
 
+    def test_supported_capabilities_includes_vision_when_enabled(self, provider_with_vision):
+        caps = provider_with_vision.supported_capabilities
+        assert AICapability.VISION in caps
+
     def test_get_available_models_returns_configured_model(self, provider):
         assert "@cf/google/gemma-4-26b-a4b-it" in provider.get_available_models()
+
+    def test_get_available_models_includes_both_when_vision_configured(self, provider_with_vision):
+        models = provider_with_vision.get_available_models()
+        assert "@cf/meta/llama-3.3-70b-instruct-fp8-fast" in models
+        assert "@cf/google/gemma-4-26b-a4b-it" in models
+        assert len(set(models)) == len(models), "no duplicates"
+
+    def test_vision_capability_absent_when_vision_disabled(self, provider):
+        """Provider without vision_enabled must never expose VISION capability."""
+        assert AICapability.VISION not in provider.supported_capabilities
 
 
 def _mock_llm(provider, return_value=None, side_effect=None):
@@ -259,14 +287,181 @@ class TestGenerate:
 
 class TestGenerateWithVision:
     @pytest.mark.asyncio
-    async def test_generate_with_vision_raises_not_implemented(self, provider):
-        """Vision is not supported in v1; must raise."""
-        with pytest.raises((NotImplementedError, Exception)):
+    async def test_generate_with_vision_raises_not_implemented_when_disabled(self, provider):
+        """Provider without vision_model must raise NotImplementedError."""
+        with pytest.raises(NotImplementedError):
             await provider.generate_with_vision(
                 model="@cf/google/gemma-4-26b-a4b-it",
                 prompt="What is in this image?",
                 image_data=b"fake_image_bytes",
             )
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_success(self, provider_with_vision):
+        """Vision-enabled provider calls REST and returns parsed dict."""
+        from unittest.mock import AsyncMock, Mock, patch
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = {"result": {"response": '{"meal": "salad", "calories": 100}'}}
+        mock_resp.raise_for_status = Mock()
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.post = AsyncMock(return_value=mock_resp)
+            mock_client_cls.return_value = mock_client
+
+            result = await provider_with_vision.generate_with_vision(
+                model="@cf/google/gemma-4-26b-a4b-it",
+                prompt="Analyze this meal",
+                image_data=b"fake_image_bytes",
+                system_message="You are a nutrition expert",
+            )
+
+        assert isinstance(result, dict)
+        assert result.get("meal") == "salad"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_empty_response_raises(self, provider_with_vision):
+        """Empty response text raises ValueError."""
+        from unittest.mock import AsyncMock, Mock, patch
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = {"result": {"response": ""}}
+        mock_resp.raise_for_status = Mock()
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.post = AsyncMock(return_value=mock_resp)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(ValueError, match="empty response"):
+                await provider_with_vision.generate_with_vision(
+                    model="@cf/google/gemma-4-26b-a4b-it",
+                    prompt="test",
+                    image_data=b"img",
+                )
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_propagates_429(self, provider_with_vision):
+        """HTTP 429 from REST endpoint propagates as HTTPStatusError."""
+        from unittest.mock import AsyncMock, patch
+
+        mock_resp = AsyncMock()
+        mock_resp.status_code = 429
+        err = httpx.HTTPStatusError("429", request=AsyncMock(), response=mock_resp)
+
+        def raise_for_status():
+            raise err
+
+        mock_resp.raise_for_status = raise_for_status
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.post = AsyncMock(return_value=mock_resp)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await provider_with_vision.generate_with_vision(
+                    model="@cf/google/gemma-4-26b-a4b-it",
+                    prompt="test",
+                    image_data=b"img",
+                )
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_propagates_timeout(self, provider_with_vision):
+        """Timeout from REST endpoint propagates as TimeoutException."""
+        from unittest.mock import AsyncMock, patch
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(httpx.TimeoutException):
+                await provider_with_vision.generate_with_vision(
+                    model="@cf/google/gemma-4-26b-a4b-it",
+                    prompt="test",
+                    image_data=b"img",
+                )
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_malformed_json_raises(self, provider_with_vision):
+        """Malformed JSON in response raises ValueError."""
+        from unittest.mock import AsyncMock, Mock, patch
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = {"result": {"response": "not valid json {{{"}}
+        mock_resp.raise_for_status = Mock()
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.post = AsyncMock(return_value=mock_resp)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(ValueError):
+                await provider_with_vision.generate_with_vision(
+                    model="@cf/google/gemma-4-26b-a4b-it",
+                    prompt="test",
+                    image_data=b"img",
+                )
+
+    def test_build_vision_payload_shape(self, provider_with_vision):
+        """Vision payload has expected structure with image_url content."""
+        payload = provider_with_vision._build_vision_payload(
+            prompt="analyze meal",
+            image_data=b"fake",
+            system_message="system",
+            max_tokens=1024,
+        )
+        assert payload["max_tokens"] == 1024
+        assert payload["temperature"] == 0.2
+        messages = payload["messages"]
+        assert messages[0]["role"] == "system"
+        user_msg = messages[1]
+        assert user_msg["role"] == "user"
+        content = user_msg["content"]
+        assert any(c["type"] == "image_url" for c in content)
+        img_part = next(c for c in content if c["type"] == "image_url")
+        assert img_part["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+    def test_extract_response_text_handles_choices_format(self, provider_with_vision):
+        """Normalizes choices[0].message.content format."""
+        raw = {"result": {"choices": [{"message": {"content": "hello"}}]}}
+        assert provider_with_vision._extract_response_text(raw) == "hello"
+
+    def test_extract_response_text_handles_response_field(self, provider_with_vision):
+        """Normalizes result.response format."""
+        raw = {"result": {"response": "hello"}}
+        assert provider_with_vision._extract_response_text(raw) == "hello"
+
+    def test_no_secrets_in_vision_error_messages(self, provider_with_vision):
+        """generate_with_vision NotImplementedError must not expose the api token."""
+        default_provider = CloudflareWorkersAIProvider(
+            account_id="secret_account",
+            api_token="secret_token_abc",
+            text_model="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        )
+        import asyncio
+        try:
+            asyncio.get_event_loop().run_until_complete(
+                default_provider.generate_with_vision(
+                    model="test", prompt="test", image_data=b"x"
+                )
+            )
+        except NotImplementedError as e:
+            assert "secret_token_abc" not in str(e)
+        except Exception:
+            pass
 
 
 class TestGatewayConfig:
