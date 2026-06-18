@@ -191,6 +191,19 @@ class TestGenerate:
             )
 
     @pytest.mark.asyncio
+    async def test_generate_raises_on_empty_response(self, provider):
+        """Empty content raises ValueError so circuit breaker gets a clear signal."""
+        _mock_llm(provider, return_value=AIMessage(content=""))
+
+        with pytest.raises(ValueError, match="empty response"):
+            await provider.generate(
+                model="@cf/google/gemma-4-26b-a4b-it",
+                prompt="test",
+                system_message="system",
+                response_type="json",
+            )
+
+    @pytest.mark.asyncio
     async def test_generate_raises_on_malformed_json(self, provider):
         """Malformed JSON content raises ValueError."""
         _mock_llm(provider, return_value=AIMessage(content="not valid json {{{"))

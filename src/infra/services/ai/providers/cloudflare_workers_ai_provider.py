@@ -86,6 +86,11 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         else:
             text = raw
 
+        if not text.strip():
+            raise ValueError(
+                f"[CF-WORKERS-AI] Model returned empty response for model={model}"
+            )
+
         logger.debug(
             "[CF-WORKERS-AI-SUCCESS] model=%s response_type=%s",
             model,

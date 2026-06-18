@@ -39,6 +39,16 @@ def mock_circuit_breaker():
     return breaker
 
 
+def _make_no_cf_settings():
+    """Settings with CF disabled — isolates the manager fixture from local .env."""
+    s = Mock()
+    s.CLOUDFLARE_WORKERS_AI_ENABLED = False
+    s.CLOUDFLARE_ACCOUNT_ID = ""
+    s.CLOUDFLARE_API_TOKEN = ""
+    s.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = ""
+    return s
+
+
 @pytest.fixture
 def manager(mock_gemini_provider, mock_circuit_breaker):
     with patch(
@@ -48,7 +58,7 @@ def manager(mock_gemini_provider, mock_circuit_breaker):
         "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
         return_value=mock_circuit_breaker,
     ):
-        return AIModelManager()
+        return AIModelManager(settings=_make_no_cf_settings())
 
 
 class TestModelSelection:
