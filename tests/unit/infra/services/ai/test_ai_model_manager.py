@@ -39,6 +39,16 @@ def mock_circuit_breaker():
     return breaker
 
 
+def _make_no_cf_settings():
+    """Settings with CF disabled — isolates the manager fixture from local .env."""
+    s = Mock()
+    s.CLOUDFLARE_WORKERS_AI_ENABLED = False
+    s.CLOUDFLARE_ACCOUNT_ID = ""
+    s.CLOUDFLARE_API_TOKEN = ""
+    s.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = ""
+    return s
+
+
 @pytest.fixture
 def manager(mock_gemini_provider, mock_circuit_breaker):
     with patch(
@@ -48,7 +58,7 @@ def manager(mock_gemini_provider, mock_circuit_breaker):
         "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
         return_value=mock_circuit_breaker,
     ):
-        return AIModelManager()
+        return AIModelManager(settings=_make_no_cf_settings())
 
 
 class TestModelSelection:
@@ -255,3 +265,200 @@ class TestVision:
             image_data=b"fake_image",
         )
         assert result == {"result": "vision_success"}
+
+
+# ---------------------------------------------------------------------------
+# Workers AI routing (TDD — fail until Phase 3 is implemented)
+# ---------------------------------------------------------------------------
+
+def _make_cf_settings():
+    s = Mock()
+    s.CLOUDFLARE_WORKERS_AI_ENABLED = True
+    s.CLOUDFLARE_ACCOUNT_ID = "fake_account_id"
+    s.CLOUDFLARE_API_TOKEN = "fake_api_token"
+    s.CLOUDFLARE_AI_GATEWAY_ID = "fake_gateway"
+    s.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
+    s.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = "recipe,general,meal_names,discovery,parse_text"
+    s.CLOUDFLARE_WORKERS_AI_JSON_MODE = True
+    s.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS = 30
+    return s
+
+
+def _make_disabled_cf_settings():
+    s = Mock()
+    s.CLOUDFLARE_WORKERS_AI_ENABLED = False
+    s.CLOUDFLARE_ACCOUNT_ID = ""
+    s.CLOUDFLARE_API_TOKEN = ""
+    s.CLOUDFLARE_AI_GATEWAY_ID = ""
+    s.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = ""
+    s.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = ""
+    s.CLOUDFLARE_WORKERS_AI_JSON_MODE = False
+    s.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS = 30
+    return s
+
+
+@pytest.fixture
+def mock_cf_provider():
+    from src.domain.ports.ai_provider_port import AICapability
+
+    p = Mock()
+    p.provider_name = "cloudflare-workers-ai"
+    p.get_available_models.return_value = ["@cf/google/gemma-4-26b-a4b-it"]
+    p.supported_capabilities = {AICapability.TEXT_GENERATION, AICapability.STRUCTURED_OUTPUT}
+    p.generate = AsyncMock(return_value={"result": "cf_success"})
+    p.extract_error_code = Mock(return_value=None)
+    return p
+
+
+@pytest.fixture
+def manager_with_cf(mock_gemini_provider, mock_circuit_breaker, mock_cf_provider):
+    """Manager with Cloudflare Workers AI enabled via settings injection."""
+    with patch(
+        "src.infra.services.ai.ai_model_manager.GeminiProvider",
+        return_value=mock_gemini_provider,
+    ), patch(
+        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+        return_value=mock_circuit_breaker,
+    ), patch(
+        "src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider",
+        create=True,
+        return_value=mock_cf_provider,
+    ):
+        return AIModelManager(settings=_make_cf_settings())
+
+
+@pytest.fixture
+def manager_cf_disabled(mock_gemini_provider, mock_circuit_breaker):
+    """Manager with Cloudflare explicitly disabled via settings injection."""
+    with patch(
+        "src.infra.services.ai.ai_model_manager.GeminiProvider",
+        return_value=mock_gemini_provider,
+    ), patch(
+        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+        return_value=mock_circuit_breaker,
+    ):
+        return AIModelManager(settings=_make_disabled_cf_settings())
+
+
+class TestWorkersAIRouting:
+    def test_workers_ai_absent_when_disabled(self, manager_cf_disabled):
+        """All fallback chains are Gemini-only when CF is disabled."""
+        for purpose in ModelPurpose:
+            chain = manager_cf_disabled.get_fallback_chain(purpose)
+            assert not any("@cf/" in m for m in chain), (
+                f"{purpose.value} chain must not contain CF models when CF is disabled"
+            )
+
+    def test_text_purposes_get_cf_model_when_enabled(self, manager_with_cf):
+        """CF model is first in configured text-purpose chains; Gemini models are fallbacks."""
+        cf_alias = "@cf/google/gemma-4-26b-a4b-it"
+        for purpose in (
+            ModelPurpose.RECIPE,
+            ModelPurpose.GENERAL,
+            ModelPurpose.MEAL_NAMES,
+            ModelPurpose.DISCOVERY,
+        ):
+            chain = manager_with_cf.get_fallback_chain(purpose)
+            assert chain[0] == cf_alias, (
+                f"{purpose.value} chain should start with {cf_alias}, got {chain}"
+            )
+            # Gemini models are fallbacks
+            assert chain[1] == "gemini-2.5-flash-lite"
+            assert chain[2] == "gemini-2.5-flash"
+
+    def test_vision_purposes_stay_gemini_only_when_cf_enabled(self, manager_with_cf):
+        """MEAL_SCAN and INGREDIENT_SCAN chains never include Workers AI."""
+        for purpose in (ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN):
+            chain = manager_with_cf.get_fallback_chain(purpose)
+            assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"], (
+                f"{purpose.value} must remain Gemini-only even when CF is enabled"
+            )
+
+    def test_parse_text_uses_cf_first_when_enabled(self, manager_with_cf):
+        """PARSE_TEXT uses CF as primary; Gemini remains as fallback."""
+        chain = manager_with_cf.get_fallback_chain(ModelPurpose.PARSE_TEXT)
+        assert chain[0] == "@cf/google/gemma-4-26b-a4b-it"
+
+    def test_barcode_stays_gemini_only_by_default(self, manager_with_cf):
+        """BARCODE is not in the default CF text purposes; chain stays Gemini-only."""
+        chain = manager_with_cf.get_fallback_chain(ModelPurpose.BARCODE)
+        assert not any("@cf/" in m for m in chain)
+
+    def test_cf_provider_registered_in_providers_when_enabled(self, manager_with_cf):
+        """CloudflareWorkersAIProvider is wired into manager._providers when enabled."""
+        assert "cloudflare-workers-ai" in manager_with_cf._providers
+
+    def test_cf_provider_absent_from_providers_when_disabled(self, manager_cf_disabled):
+        """No cloudflare-workers-ai key in _providers when CF is disabled."""
+        assert "cloudflare-workers-ai" not in manager_cf_disabled._providers
+
+    @pytest.mark.asyncio
+    async def test_get_cache_name_returns_none_for_cf_model(self, manager_with_cf):
+        """Gemini context cache must never be returned for a raw CF model id."""
+        cache_mgr = Mock()
+        cache_mgr.get_cache_name_for_model = AsyncMock(return_value="cachedContents/x")
+        manager_with_cf.set_cache_manager(cache_mgr)
+
+        result = await manager_with_cf._get_cache_name_for_model(
+            "recipe", "@cf/google/gemma-4-26b-a4b-it"
+        )
+        assert result is None
+
+
+class TestWorkersAIFallback:
+    @pytest.mark.asyncio
+    async def test_cf_used_first_for_text_purposes(
+        self, manager_with_cf, mock_gemini_provider, mock_circuit_breaker, mock_cf_provider
+    ):
+        """CF is the first model tried for configured text purposes."""
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+
+        result = await manager_with_cf.generate(
+            purpose=ModelPurpose.RECIPE,
+            prompt="test",
+            system_message="system",
+        )
+
+        assert result == {"result": "cf_success"}
+        mock_cf_provider.generate.assert_awaited_once()
+        mock_gemini_provider.generate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_gemini_when_cf_fails(
+        self, manager_with_cf, mock_gemini_provider, mock_circuit_breaker, mock_cf_provider
+    ):
+        """When CF fails, Gemini is tried as fallback."""
+        mock_cf_provider.generate = AsyncMock(side_effect=Exception("CF unavailable"))
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+
+        result = await manager_with_cf.generate(
+            purpose=ModelPurpose.RECIPE,
+            prompt="test",
+            system_message="system",
+        )
+
+        assert result == {"result": "success"}
+        mock_cf_provider.generate.assert_awaited_once()
+        mock_gemini_provider.generate.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cf_not_tried_for_vision_purpose(
+        self, manager_with_cf, mock_gemini_provider, mock_cf_provider
+    ):
+        """Workers AI must not be attempted for MEAL_SCAN even when Gemini fails."""
+        mock_gemini_provider.generate_with_vision = AsyncMock(
+            side_effect=Exception("503 UNAVAILABLE")
+        )
+
+        from src.domain.exceptions.ai_exceptions import AIUnavailableError
+
+        with pytest.raises(AIUnavailableError):
+            await manager_with_cf.generate_with_vision(
+                purpose=ModelPurpose.MEAL_SCAN,
+                prompt="test",
+                image_data=b"fake_image",
+            )
+
+        mock_cf_provider.generate.assert_not_awaited()
+        mock_cf_provider.generate_with_vision = AsyncMock()
+        mock_cf_provider.generate_with_vision.assert_not_awaited()
