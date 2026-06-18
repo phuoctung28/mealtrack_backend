@@ -55,6 +55,7 @@
 | Purpose | Model | Env Key |
 |---------|-------|---------|
 | General / Recipe / Barcode | `gemini-2.5-flash` | `GEMINI_MODEL` |
+| Meal / ingredient image scan | `gemini-3.1-flash-lite` → `gemini-3.5-flash` → `gemini-2.5-flash` | code fallback chain |
 | Meal names | `gemini-2.5-flash-lite` | `GEMINI_MODEL_NAMES` |
 | Recipe generation | `gemini-2.5-flash-lite` | `GEMINI_MODEL_RECIPE` |
 
@@ -67,7 +68,12 @@
 gemini-2.5-flash-lite  →  gemini-2.5-flash  →  @cf/google/gemma-4-26b-a4b-it  (if CF enabled)
 ```
 
-**Vision / parse chains (always Gemini-only in v1):**
+**Vision chains (always Gemini-only in v1):**
+```
+gemini-3.1-flash-lite  →  gemini-3.5-flash  →  gemini-2.5-flash
+```
+
+**Gemini-only parse/barcode fallback unless explicitly routed through Cloudflare:**
 ```
 gemini-2.5-flash-lite  →  gemini-2.5-flash
 ```
@@ -96,7 +102,7 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 
 **Purpose:** Optional fallback AI provider for text-only purposes when Gemini is degraded. Disabled by default.
 
-**Not supported in v1:** vision/image analysis. `MEAL_SCAN` and `INGREDIENT_SCAN` remain Gemini-only. Parse and barcode require explicit opt-in via `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES`.
+**Not supported by the current FastAPI adapter:** vision/image analysis. `MEAL_SCAN` and `INGREDIENT_SCAN` remain Gemini-only. Parse and barcode require explicit opt-in via `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES`.
 
 ### How It Works
 

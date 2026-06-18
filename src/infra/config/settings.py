@@ -226,8 +226,8 @@ class Settings(BaseSettings):
 
     # Cloudflare Workers AI — text generation / AI fallback
     CLOUDFLARE_WORKERS_AI_ENABLED: bool = Field(
-        default=False,
-        description="Enable Cloudflare Workers AI as a text-generation fallback provider",
+        default=True,
+        description="Enable Cloudflare Workers AI as the primary text-generation provider (Gemini is fallback)",
     )
     CLOUDFLARE_ACCOUNT_ID: str = Field(
         default="", description="Cloudflare account ID for Workers AI text API"

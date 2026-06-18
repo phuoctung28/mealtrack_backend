@@ -14,6 +14,8 @@ def mock_gemini_provider():
     provider = Mock()
     provider.provider_name = "gemini"
     provider.get_available_models.return_value = [
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
     ]
@@ -63,14 +65,22 @@ def manager(mock_gemini_provider, mock_circuit_breaker):
 
 class TestModelSelection:
     def test_get_fallback_chain_for_meal_scan(self, manager):
-        """Vision tasks use Gemini Flash-Lite first, Flash as fallback."""
+        """Meal scan uses Gemini 3.1 Flash-Lite first, then stronger fallbacks."""
         chain = manager.get_fallback_chain(ModelPurpose.MEAL_SCAN)
-        assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+        assert chain == [
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-2.5-flash",
+        ]
 
     def test_get_fallback_chain_for_ingredient_scan(self, manager):
-        """Ingredient scan uses Gemini Flash-Lite first, Flash as fallback."""
+        """Ingredient scan uses the same Gemini-only vision fallback chain."""
         chain = manager.get_fallback_chain(ModelPurpose.INGREDIENT_SCAN)
-        assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+        assert chain == [
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-2.5-flash",
+        ]
 
     def test_get_fallback_chain_for_barcode(self, manager):
         """Barcode uses Flash-Lite (cheaper) first, Flash as fallback."""
@@ -96,11 +106,9 @@ class TestModelSelection:
         assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
         assert "mistral" not in " ".join(chain)
 
-    def test_gemini_lite_prioritized_for_all_purposes(self, manager):
-        """All model purposes use Gemini Flash-Lite first, Flash as fallback."""
+    def test_gemini_lite_prioritized_for_text_purposes(self, manager):
+        """Text purposes keep Gemini 2.5 Flash-Lite first, Flash as fallback."""
         for purpose in (
-            ModelPurpose.MEAL_SCAN,
-            ModelPurpose.INGREDIENT_SCAN,
             ModelPurpose.BARCODE,
             ModelPurpose.PARSE_TEXT,
             ModelPurpose.MEAL_NAMES,
@@ -221,15 +229,15 @@ class TestGenerate:
                 system_message="system",
             )
 
+        assert "gemini-3.1-flash-lite" in exc_info.value.attempted_models
+        assert "gemini-3.5-flash" in exc_info.value.attempted_models
         assert "gemini-2.5-flash" in exc_info.value.attempted_models
 
     @pytest.mark.asyncio
     async def test_generate_skips_open_circuits(
         self, manager, mock_gemini_provider, mock_circuit_breaker
     ):
-        mock_circuit_breaker.filter_available = Mock(
-            return_value=["gemini-2.5-flash-lite"]
-        )
+        mock_circuit_breaker.filter_available = Mock(return_value=["gemini-3.1-flash-lite"])
 
         await manager.generate(
             purpose=ModelPurpose.MEAL_SCAN,
@@ -238,7 +246,7 @@ class TestGenerate:
         )
 
         call_args = mock_gemini_provider.generate.call_args
-        assert call_args[1]["model"] == "gemini-2.5-flash-lite"
+        assert call_args[1]["model"] == "gemini-3.1-flash-lite"
 
     @pytest.mark.asyncio
     async def test_generate_uses_gemini_lite_first_for_parse_text(
@@ -370,7 +378,11 @@ class TestWorkersAIRouting:
         """MEAL_SCAN and INGREDIENT_SCAN chains never include Workers AI."""
         for purpose in (ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN):
             chain = manager_with_cf.get_fallback_chain(purpose)
-            assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"], (
+            assert chain == [
+                "gemini-3.1-flash-lite",
+                "gemini-3.5-flash",
+                "gemini-2.5-flash",
+            ], (
                 f"{purpose.value} must remain Gemini-only even when CF is enabled"
             )
 

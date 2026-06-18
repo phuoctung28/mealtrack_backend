@@ -35,6 +35,8 @@ class TestProviderInterface:
 
     def test_get_available_models(self, provider):
         models = provider.get_available_models()
+        assert "gemini-3.5-flash" in models
+        assert "gemini-3.1-flash-lite" in models
         assert "gemini-2.5-flash" in models
         assert "gemini-2.5-flash-lite" in models
 
@@ -137,7 +139,7 @@ class TestGenerateWithVision:
         mock_model_manager.get_model_for_purpose.return_value = mock_llm
 
         await provider.generate_with_vision(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.1-flash-lite",
             prompt="test",
             image_data=b"fake-image",
             system_message="system",
@@ -145,7 +147,7 @@ class TestGenerateWithVision:
         )
 
         call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
-        assert call_kwargs["model_name"] == "gemini-2.5-flash-lite"
+        assert call_kwargs["model_name"] == "gemini-3.1-flash-lite"
 
 
 class TestErrorExtraction:

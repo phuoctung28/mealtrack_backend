@@ -16,6 +16,8 @@ from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 logger = logging.getLogger(__name__)
 
 MODEL_PURPOSE_MAP = {
+    "gemini-3.5-flash": GeminiModelPurpose.GENERAL,
+    "gemini-3.1-flash-lite": GeminiModelPurpose.GENERAL,
     "gemini-2.5-flash": GeminiModelPurpose.GENERAL,
     "gemini-2.5-flash-lite": GeminiModelPurpose.MEAL_NAMES,
 }
@@ -35,7 +37,12 @@ _PURPOSE_HINT_MAP: dict[str, GeminiModelPurpose] = {
 class GeminiProvider(AIProviderPort):
     """Gemini implementation using existing GeminiModelManager."""
 
-    AVAILABLE_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+    AVAILABLE_MODELS = [
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+    ]
 
     def __init__(self) -> None:
         self._model_manager = GeminiModelManager.get_instance()

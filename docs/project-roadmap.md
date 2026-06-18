@@ -9,6 +9,10 @@
 
 ## Completed Phases
 
+### June 2026: Gemini 3 Vision Fallback
+- [x] `MEAL_SCAN` and `INGREDIENT_SCAN` now try `gemini-3.1-flash-lite`, then `gemini-3.5-flash`, then `gemini-2.5-flash`.
+- [x] Cloudflare Workers AI remains scoped to text-generation chains; image analysis stays Gemini-only until the vision adapter is evaluated separately.
+
 ### June 2026: Codebase Documentation Refresh
 - [x] Updated README, project instructions, codebase summary, architecture, API, database, external-service, standards, testing, CQRS, overview, roadmap, and troubleshooting docs against the live source tree.
 - [x] Replaced stale database-engine, legacy vector-service, route-count, layer-count, test-count, Redis-pool, migration-startup, and CORS risk claims in current docs.
@@ -21,6 +25,7 @@
 - [x] `handle_exception()` in `src/api/exceptions.py` — pure conversion helper, no ERROR log before re-raise.
 - [x] All command/query handlers — removed `logger.error` before re-raise patterns.
 - [x] `src/infra/services/ai/ai_model_manager.py` — emits `log_event("warning", "ai.provider.failure")` before raising `AIUnavailableError`.
+- [x] `src/infra/event_bus/pymediator_event_bus.py` — treats `AIUnavailableError` as a controlled degraded-provider exception so exhausted Gemini fallbacks do not create duplicate ERROR logs.
 - [x] Cron entrypoints — emit `log_event("info", "cron.phase.completed")` per phase; `capture_exception` + `flush_observability` on failure.
 - [x] `src/infra/services/affiliate_outbox_dispatch_service.py` — emits `increment_metric("affiliate.outbox.failure")` for permanent failures.
 - [x] Architecture guardrails: `tests/unit/architecture/test_logging_ownership_guardrails.py` and `tests/unit/api/test_single_owner_exception_logging.py`.
