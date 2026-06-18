@@ -296,7 +296,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
             target_fat = daily_macros.get("fat", 70) * 7
         except Exception as e:
             # Fallback to defaults if TDEE calculation fails
-            logger.warning(f"TDEE calc failed for user {user_id}, using defaults: {e}")
+            logger.warning("TDEE calc failed, using defaults: %s", type(e).__name__)
             target_calories = 14000  # 2000 * 7
             target_protein = 490  # 70 * 7
             target_carbs = 1400  # 200 * 7
@@ -364,14 +364,9 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
                 weekly_budget.target_carbs = expected_targets["target_carbs"]
                 weekly_budget.target_fat = expected_targets["target_fat"]
                 await uow.weekly_budgets.update(weekly_budget)
-                logger.info(
-                    "Updated stale weekly nutrition targets for user %s: %s to %s",
-                    user_id,
-                    current_targets,
-                    expected_targets,
-                )
+                logger.info("Updated stale weekly nutrition targets for user")
 
             return weekly_budget, bmr
         except Exception as e:
-            logger.warning(f"Staleness check failed: {e}")
+            logger.warning("Staleness check failed: %s", type(e).__name__)
             return weekly_budget, 1800
