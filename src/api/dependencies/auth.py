@@ -20,7 +20,7 @@ from src.api.base_dependencies import get_cache_service
 from src.api.dependencies.auth_cache import get_cached_user_id, set_cached_user_id
 from src.domain.ports.cache_port import CachePort
 from src.infra.config.settings import settings
-from src.infra.database.config_async import get_async_db
+from src.infra.database.config_async import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,6 @@ async def verify_firebase_uid_ownership(
 
 async def get_current_user_id(
     token: dict = Depends(verify_firebase_token),
-    async_db: AsyncSession = Depends(get_async_db),
     cache_service: CachePort | None = Depends(get_cache_service),
 ) -> str:
     """
@@ -166,7 +165,8 @@ async def get_current_user_id(
 
     This ensures that the user_id matches what's expected by all database queries.
 
-    Uses FastAPI's request-scoped async DB session when injected.
+    Uses a short-lived DB session for cache misses so auth lookup does not
+    keep a pooled connection checked out during slow route work.
 
     Args:
         token: Verified Firebase token (injected by verify_firebase_token)
@@ -183,6 +183,20 @@ async def get_current_user_id(
             user_id: str = Depends(get_current_user_id)
         ):
             return {"user_id": user_id}
+    """
+    return await resolve_current_user_id(token, cache_service=cache_service)
+
+
+async def resolve_current_user_id(
+    token: dict,
+    async_db: AsyncSession | None = None,
+    cache_service: CachePort | None = None,
+) -> str:
+    """Resolve the active app user ID for a verified Firebase token.
+
+    When no session is supplied, this helper opens and closes one inside the
+    lookup. That keeps FastAPI route dependencies from holding a database
+    connection for the entire request lifetime.
     """
     firebase_uid = token.get("uid")
     if not firebase_uid:
@@ -204,6 +218,26 @@ async def get_current_user_id(
     if cached_user_id:
         return cached_user_id
 
+    if async_db is None:
+        if AsyncSessionLocal is None:
+            raise RuntimeError(
+                "AsyncSessionLocal is not initialized. Async engine setup failed; "
+                "check async DB configuration."
+            )
+        async with AsyncSessionLocal() as scoped_db:
+            user_id = await _fetch_active_user_id(scoped_db, firebase_uid)
+    else:
+        user_id = await _fetch_active_user_id(async_db, firebase_uid)
+
+    await set_cached_user_id(active_cache, firebase_uid, user_id, True)
+    return user_id
+
+
+async def _fetch_active_user_id(
+    async_db: AsyncSession,
+    firebase_uid: str,
+) -> str:
+    """Fetch an active user ID by Firebase UID."""
     from src.infra.database.models.user.user import User
 
     # Look up user in database by firebase_uid (only active users)
@@ -228,8 +262,7 @@ async def get_current_user_id(
                 },
             },
         )
-    await set_cached_user_id(active_cache, firebase_uid, str(user.id), True)
-    return user.id
+    return str(user.id)
 
 
 async def get_current_user_email(

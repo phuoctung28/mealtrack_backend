@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
-**Last Updated:** June 13, 2026
-**Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry
+**Last Updated:** June 18, 2026
+**Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Cloudflare Workers AI, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
@@ -48,16 +48,38 @@
 
 ## Google Gemini
 
-**Purpose:** AI Meal Analysis + Content Generation
+**Purpose:** AI Meal Analysis + Content Generation (primary AI provider)
 
 ### Multi-Model Strategy (Rate Distribution)
 
 | Purpose | Model | Env Key |
 |---------|-------|---------|
 | General / Recipe / Barcode | `gemini-2.5-flash` | `GEMINI_MODEL` |
+| Meal / ingredient image scan | `gemini-3.1-flash-lite` → `gemini-3.5-flash` → `gemini-2.5-flash` | code fallback chain |
 | Meal names | `gemini-2.5-flash-lite` | `GEMINI_MODEL_NAMES` |
-| Recipe primary | `gemini-2.5-flash` | `GEMINI_MODEL_RECIPE_PRIMARY` |
-| Recipe secondary | `gemini-2.5-flash` | `GEMINI_MODEL_RECIPE_SECONDARY` |
+| Recipe generation | `gemini-2.5-flash-lite` | `GEMINI_MODEL_RECIPE` |
+
+### Provider Fallback Architecture
+
+`AIModelManager` orchestrates providers through `AIProviderPort`. Each purpose has a fallback chain; models are tried in order until one succeeds. The circuit breaker opens after 5 failures within 60s and allows retry after 30s.
+
+**Default text chain (e.g. RECIPE) when CF text enabled:**
+```
+@cf/google/gemma-4-26b-a4b-it  →  gemini-2.5-flash-lite  →  gemini-2.5-flash
+```
+
+**Vision chains (CF-first when `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true`, Gemini fallback):**
+```
+@cf/google/gemma-4-26b-a4b-it  →  gemini-3.1-flash-lite  →  gemini-3.5-flash  →  gemini-2.5-flash
+```
+When CF vision is disabled, vision chains are Gemini-only: `gemini-3.1-flash-lite → gemini-3.5-flash → gemini-2.5-flash`
+
+**Gemini-only parse/barcode fallback unless explicitly routed through Cloudflare:**
+```
+gemini-2.5-flash-lite  →  gemini-2.5-flash
+```
+
+Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Never log prompt content, food payloads, or raw AI output.
 
 ### Vision AI (Meal Analysis)
 - 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context, combined
@@ -74,6 +96,73 @@
 | Single meal | 1500 |
 
 **Config:** `GOOGLE_API_KEY`
+
+---
+
+## Cloudflare Workers AI (Text + Vision)
+
+**Purpose:** Optional primary AI provider for text and vision tasks. Gemini is fallback for all cases.
+
+**Two independent routing paths:**
+- **Text path:** LangChain adapter (`ChatCloudflareWorkersAI`) for text-generation purposes.
+- **Vision path:** Direct Workers AI REST (`/ai/run/{model}`) with `httpx` for image analysis.
+
+### How It Works
+
+- Text: Uses LangChain's `ChatCloudflareWorkersAI` (`langchain-cloudflare>=0.3.4`) — this is LangChain inside FastAPI, not the app running on Cloudflare Workers runtime.
+- Vision: Posts `messages[].content[].image_url` (base64 data URL) directly to the Workers AI REST endpoint. Response is normalized from `result.response` or `result.choices[0].message.content`.
+- Cloudflare model IDs stored raw (`@cf/...`) in fallback chains; `AIModelManager` routes to the CF provider via an explicit ownership map.
+- If `CLOUDFLARE_AI_GATEWAY_ID` is set, LangChain passes it as the `ai_gateway` field to Workers AI.
+- Returns the same `dict` shape as `GeminiProvider` — handlers are provider-agnostic.
+- Circuit breaker trips on 429/5xx/timeout, same as Gemini.
+- Vision model: `@cf/google/gemma-4-26b-a4b-it` (Vision=Yes, messages/image_url contract). Deprecated model `@cf/unum/uform-gen2-qwen-500m` must not be used.
+
+### Env Vars
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `CLOUDFLARE_WORKERS_AI_ENABLED` | `true` | Master switch — text path inactive unless this is `true` |
+| `CLOUDFLARE_ACCOUNT_ID` | `` | Cloudflare account ID |
+| `CLOUDFLARE_API_TOKEN` | `` | API token with Workers AI permission |
+| `CLOUDFLARE_AI_GATEWAY_ID` | `` | Optional AI Gateway ID; leave blank for direct Workers AI |
+| `CLOUDFLARE_WORKERS_AI_TEXT_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Model for text generation |
+| `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery,parse_text` | Purposes that include CF text in fallback chain |
+| `CLOUDFLARE_WORKERS_AI_JSON_MODE` | `true` | Reserved; currently unused by LangChain adapter |
+| `CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS` | `60` | HTTP timeout per request |
+| `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision for image analysis (Gemini is fallback) |
+| `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
+| `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Purposes that use CF vision as primary |
+
+### Production Rollout (Vision)
+
+Set these env vars in Render (no redeployment needed, env var change restarts the service):
+
+```
+CLOUDFLARE_WORKERS_AI_ENABLED=true
+CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true
+CLOUDFLARE_WORKERS_AI_VISION_MODEL=@cf/google/gemma-4-26b-a4b-it
+CLOUDFLARE_WORKERS_AI_VISION_PURPOSES=meal_scan,ingredient_scan
+```
+
+Keep `GOOGLE_API_KEY` configured — Gemini remains the fallback on any CF vision failure.
+
+### Rollback
+
+Disable vision without redeploying:
+```
+CLOUDFLARE_WORKERS_AI_VISION_ENABLED=false
+```
+
+Disable all CF:
+```
+CLOUDFLARE_WORKERS_AI_ENABLED=false
+```
+
+### Privacy Notes
+
+- API token is loaded from env/settings and never logged.
+- Logs include only: provider name, model alias, purpose value, HTTP status code, and error class.
+- Prompts, food payloads, raw AI responses, base64 image bytes, and account IDs are never logged.
 
 ---
 
@@ -123,7 +212,7 @@
 
 - **Default posture:** Do not cache unless the value passes the cache admission checklist in `docs/superpowers/specs/2026-05-21-redis-optimize-design.md`.
 - **Pattern:** Cache-aside only for optional read caches where DB/API fallback is correct.
-- **Connection Pool:** 50 connections | **Default TTL:** 1 hour
+- **Connection Pool:** 10 connections by default (`REDIS_MAX_CONNECTIONS`) | **Default TTL:** 1 hour
 - **Error Handling:** Optional caches degrade by bypassing Redis. Required Redis-backed state must be documented and health-checked separately.
 
 **Config:** `REDIS_URL=redis://host:port/db`
@@ -228,7 +317,7 @@ event types, environment, durations, sizes, counts, and error class names.
 
 See `database-guide.md` for schema, connection pool, and migration details.
 
-**Config:** `DATABASE_URL=postgresql+asyncpg://user:pass@host/db`
+**Config:** `APP_DATABASE_URL=postgresql://user:pass@host/db` for app runtime; `DATABASE_URL_DIRECT` is migration/admin only.
 
 ---
 
@@ -236,9 +325,9 @@ See `database-guide.md` for schema, connection pool, and migration details.
 
 ```
 GET /health                    # Basic health (200 if running)
-GET /health/db-pool            # DB pool metrics
-GET /health/db-connections     # PostgreSQL connection stats
-GET /health/notifications      # FCM health
+GET /v1/health/db-pool         # DB pool metrics
+GET /v1/health/db-connections  # PostgreSQL connection stats
+GET /v1/health/notifications   # FCM health
 ```
 
 ---
@@ -249,7 +338,8 @@ GET /health/notifications      # FCM health
 |---------|--------------|----------|
 | Firebase Auth | Fail fast (401) | Requests rejected |
 | PostgreSQL | Fail fast (503) | Requests rejected |
-| Gemini | Fail fast (503) | Return error to client |
+| Gemini | Circuit breaker → try fallback | Falls through to next model in chain |
+| Workers AI | Circuit breaker (429/5xx/timeout) | Trips same circuit breaker; chain exhausted → AIUnavailableError |
 | Cloudinary | Degrade (fallback URL) | Continue with best-effort image |
 | RevenueCat | Degrade (assume premium from cache) | Continue with last-known status |
 | PostHog | Degrade (log warning) | Continue without analytics |

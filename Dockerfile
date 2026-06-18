@@ -58,7 +58,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
 
-# Default worker count. Override with WEB_CONCURRENCY on Render.
+# Default worker count. Override with UVICORN_WORKERS on Render.
 ENV UVICORN_WORKERS=1
 
 # Health check uses PORT at runtime. The entrypoint defaults to 8000 locally

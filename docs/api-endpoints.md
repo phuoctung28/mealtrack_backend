@@ -1,6 +1,6 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** May 27, 2026
+**Last Updated:** June 17, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
@@ -13,9 +13,10 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | GET | `/health` | Basic health check |
-| GET | `/health/db-pool` | DB pool metrics |
-| GET | `/health/db-connections` | DB connection stats |
-| GET | `/health/notifications` | FCM health |
+| GET | `/v1/health` | Versioned health check |
+| GET | `/v1/health/db-pool` | DB pool metrics |
+| GET | `/v1/health/db-connections` | DB connection stats |
+| GET | `/v1/health/notifications` | FCM health |
 | GET | `/v1/monitoring/cache/metrics` | Redis cache metrics |
 
 ## App & Universal Links
@@ -32,6 +33,8 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/v1/meals/image/analyze` | Analyze meal from image (immediate upload) |
+| GET | `/v1/meals/upload-token` | Create signed direct-upload token |
+| POST | `/v1/meals/scan-by-url` | Analyze meal from an existing image URL |
 | POST | `/v1/meals/manual` | Create meal from USDA foods |
 | POST | `/v1/meals/parse-text` | Parse meal from text description |
 | GET | `/v1/meals/streak` | Get meal logging streak |
@@ -64,7 +67,7 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/users/firebase/{firebase_uid}` | Get user profile by Firebase UID |
 | GET | `/v1/users/firebase/{firebase_uid}/status` | Get user status |
 | PUT | `/v1/users/firebase/{firebase_uid}/last-accessed` | Update last accessed |
-| PUT | `/v1/users/metrics` | Update user metrics |
+| PUT | `/v1/users/firebase/{firebase_uid}/onboarding/complete` | Complete onboarding |
 | PUT | `/v1/users/timezone` | Update user timezone |
 | PATCH | `/v1/users/language` | Update user language |
 | DELETE | `/v1/users/firebase/{firebase_uid}` | Delete user account |
@@ -75,7 +78,6 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/v1/meal-suggestions/generate` | Generate 3 personalized suggestions |
 | POST | `/v1/meal-suggestions/discover` | Meal discovery (6 meals/batch with images) |
 | POST | `/v1/meal-suggestions/recipes` | Generate recipe batch |
 | POST | `/v1/meal-suggestions/save` | Save a meal suggestion |
@@ -100,6 +102,41 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/foods/{fdc_id}/details` | Get food details by FDC ID |
 | GET | `/v1/foods/barcode/{barcode}` | Barcode lookup (6-step cascade) |
 | POST | `/v1/ingredients/recognize` | Recognize ingredients from image |
+| GET | `/v1/ingredients/health` | Ingredient recognition health |
+
+---
+
+## Hydration
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/v1/hydration/catalog` | Get drink catalog |
+| POST | `/v1/hydration/log` | Log water intake |
+| POST | `/v1/hydration/log/drink` | Log caloric drink intake |
+| GET | `/v1/hydration/daily` | Daily hydration summary |
+| GET | `/v1/hydration/weekly` | Weekly hydration summary |
+| DELETE | `/v1/hydration/{entry_id}` | Delete hydration entry |
+
+---
+
+## Movement
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/v1/movement/catalog` | Get movement activity catalog |
+| POST | `/v1/movement/log` | Log movement entry |
+| GET | `/v1/movement/daily` | Daily movement summary |
+| PATCH | `/v1/movement/{entry_id}` | Update movement entry |
+| DELETE | `/v1/movement/{entry_id}` | Delete movement entry |
+
+---
+
+## Nutrition
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/v1/nutrition/bulk` | Bulk nutrition lookup |
+| GET | `/v1/nutrition/presence` | Get activity/nutrition presence |
 
 ---
 
@@ -127,6 +164,7 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | GET | `/v1/activities/daily` | Get daily activities |
+| GET | `/v1/activities/bulk` | Get activities for multiple days |
 
 ---
 
@@ -152,6 +190,15 @@ Codes are 3–15 characters. Commission rates set via `REFERRAL_COMMISSIONS` env
 | GET | `/v1/referrals/my-code` | Get user's referral code |
 | GET | `/v1/referrals/stats` | Get referral stats |
 | POST | `/v1/referrals/payout` | Request referral payout |
+
+---
+
+## Promo Codes
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/v1/promo-codes/validate` | Validate promo code |
+| POST | `/v1/promo-codes/redeem` | Redeem promo code |
 
 ---
 

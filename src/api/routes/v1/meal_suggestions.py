@@ -9,7 +9,6 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -31,7 +30,7 @@ from src.app.commands.meal_suggestion import (
     IngredientItem,
     SaveMealSuggestionCommand,
 )
-from src.infra.database.config_async import get_async_db
+from src.infra.database.config_async import AsyncSessionLocal
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -64,7 +63,6 @@ async def discover_meals(
     body: DiscoverMealsRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
-    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Lightweight discovery: single AI call → 6 meals with names + macros.
@@ -104,9 +102,15 @@ async def discover_meals(
     )
 
     image_service = get_food_image_service()
-    cache_svc = await get_meal_image_cache_service(session=db)
     english_names = [m["english_name"] for m in meals]
-    cache_hits = await cache_svc.lookup_batch(english_names)
+    if AsyncSessionLocal is None:
+        raise RuntimeError(
+            "AsyncSessionLocal is not initialized. Async engine setup failed; "
+            "check async DB configuration."
+        )
+    async with AsyncSessionLocal() as image_cache_db:
+        cache_svc = await get_meal_image_cache_service(session=image_cache_db)
+        cache_hits = await cache_svc.lookup_batch(english_names)
 
     # Separate cache hits from misses
     images_list: list = [None] * len(meals)
@@ -333,14 +337,12 @@ async def save_meal_suggestion(
 
     # Unsplash API compliance: trigger download event (fire-and-forget, managed)
     if request.unsplash_download_location:
-        from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
         from src.api.dependencies.task_manager import get_task_manager
+        from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
 
         get_task_manager().spawn(
             "unsplash_download",
-            UnsplashImageAdapter.trigger_download(
-                request.unsplash_download_location
-            ),
+            UnsplashImageAdapter.trigger_download(request.unsplash_download_location),
         )
 
     return SaveMealSuggestionResponse(

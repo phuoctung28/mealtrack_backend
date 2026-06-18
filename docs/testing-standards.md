@@ -1,8 +1,8 @@
 # Backend Testing Standards
 
-**Last Updated:** April 17, 2026  
+**Last Updated:** June 17, 2026
 **Coverage Target:** 70%+ overall, 100% critical paths, 80%+ new features  
-**Total Tests:** 681+ tests in 92 test files
+**Suite Size:** 291 Python files in `tests/`; latest collection reaches 1,600+ tests
 
 ---
 
@@ -10,14 +10,18 @@
 
 ```
 tests/
+├── architecture/       # Import boundaries and async-runtime guardrails
 ├── unit/
-│   ├── domain/          # Domain services, entities
-│   ├── app/             # Handlers, commands, queries
-│   └── conftest.py      # Shared fixtures
-└── integration/
-    ├── api/             # Route endpoints
-    ├── infra/           # Repository, external services
-    └── conftest.py      # DB/event bus fixtures
+│   ├── api/            # Routes, dependencies, middleware, mappers
+│   ├── app/            # Handlers, commands, queries, services
+│   ├── domain/         # Domain services, entities, policies
+│   └── infra/          # Adapters, repositories, event bus, external services
+├── integration/
+│   ├── api/            # Route endpoints
+│   ├── infra/          # Repository, external services
+│   └── routes/         # Route-level integration coverage
+├── fixtures/           # Factories, fakes, DB fixtures
+└── migrations/         # Alembic migration validation
 ```
 
 ---

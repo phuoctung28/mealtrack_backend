@@ -66,7 +66,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
                     if processed_raw:
                         await self.cache_service.cache_search(cache_key, processed_raw)
                 except Exception:
-                    logger.warning("FatSecret search failed", exc_info=True)
+                    logger.warning("fatsecret search failed", exc_info=True)
 
         mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
         return {"results": mapped, "query": event.query, "total": len(mapped)}
@@ -79,7 +79,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
 
         region = LANGUAGE_TO_REGION.get(language, "US")
 
-        # Step 1: Try FatSecret with localized region — cache and return immediately if anything found
+        # Step 1: Try fatsecret with localized region — cache and return immediately if anything found
         try:
             results = await self.fat_secret_service.search_foods(
                 query,
@@ -89,12 +89,12 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
             )
             if results:
                 logger.debug(
-                    f"FatSecret region={region} returned {len(results)} results"
+                    f"fatsecret region={region} returned {len(results)} results"
                 )
                 await self.cache_service.cache_search(cache_key, results)
                 return results
         except Exception:
-            logger.warning(f"FatSecret region={region} failed", exc_info=True)
+            logger.warning(f"fatsecret region={region} failed", exc_info=True)
 
         # Step 2: Translation fallback — only on true empty response from localized search
         if not self.translation_service:
@@ -120,7 +120,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
                 translated_query, max_results=limit
             )
         except Exception:
-            logger.warning("FatSecret EN fallback failed", exc_info=True)
+            logger.warning("fatsecret EN fallback failed", exc_info=True)
             return []
 
         if not results:

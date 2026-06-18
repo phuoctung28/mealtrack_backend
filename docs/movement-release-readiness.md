@@ -26,6 +26,8 @@ These were checked against the mobile contract and are correct:
 | **`/movement/daily` shape** | Returns `{date, goal_kcal, entries[]}`; entries use `_movement_response`. Matches mobile `MovementDailyResponse`. |
 | **Net-calorie math** | `get_daily_macros_query_handler` returns `total_calories = food_calories − movement_kcal_burned` (net), plus `food_calories` and `movement_kcal_burned`. Burn correctly frees up the calorie budget. |
 | **Bulk consistency** | `get_nutrition_bulk_query_handler` applies the same `net = food − movement` per day → weekly budget stays consistent with daily. |
+| **Weekly budget consistency** | `WeeklyBudgetService.get_effective_adjusted_daily_async` applies the same net calorie balance (`food − included movement`) to adjusted daily targets, remaining calories, weekly context, and tomorrow preview. Macro gram totals stay food-only. |
+| **TDEE baseline boundary** | Planned training volume does not inflate baseline TDEE. Logged movement is the only workout calorie credit, which avoids double-counting exercise. |
 | **`include_in_balance` filter** | `sum_included_kcal_for_range` filters `include_in_balance IS TRUE`. The feed (`find_by_user_and_logged_range`) returns all entries (so excluded ones still render but don't affect calories). Correct. |
 | **Cache invalidation** | Log **and** update **and** delete all call `_flush_movement_caches` → invalidates `daily_macros`, `weekly_budget`, and `activities:{date}:*`. No stale dashboard after mutations. |
 | **DB indexes** | Migration creates composite `idx_movement_entries_user_logged_at (user_id, logged_at)` — matches the daily range query. FK to `users` with `ON DELETE CASCADE`. |
@@ -98,6 +100,7 @@ Custom activities send `activity_id = null` (no `custom` id on the backend — s
 ### Response fields mobile parses
 - Feed entry & `_movement_response`: `id, activity_name, duration_min, kcal_burned, intensity, source, include_in_balance, logged_at` (+ `activity_id`, `type`, `timestamp` in the feed). Extra fields are ignored safely.
 - `daily-macros`: mobile reads `target_calories`, `target_macros`, and the consumed/macros values. `total_calories` is net (food − burn); mobile recomputes consumed locally and does **not** double-subtract.
+- `weekly-budget`: `consumed_calories`, `remaining_calories`, `adjusted_daily_calories`, and preview fields use net calories. `consumed_protein`, `consumed_carbs`, and `consumed_fat` remain food macro grams. Baseline TDEE excludes planned workouts, so logged movement is not a second credit for exercise already included in targets.
 
 ---
 
@@ -109,5 +112,7 @@ Custom activities send `activity_id = null` (no `custom` id on the backend — s
 - [x] `WorkoutActivityResponse` removed from `activity_responses.py` (§3.1).
 - [x] Catalog ownership: `/movement/catalog` is source of truth; mobile must fetch + cache (§3.2).
 - [x] Day-boundary parity: UTC window test added — HCM 23:30 in May 29 window, 00:30 outside (§3.3).
+- [x] Weekly budget movement credit: adjusted daily targets use `food − included movement`, matching daily and bulk nutrition.
+- [x] TDEE baseline boundary: planned training does not increase baseline TDEE; workout credit comes from logged movement.
 - [ ] Load/peek: daily range query uses `idx_movement_entries_user_logged_at` (confirm via `EXPLAIN`).
 - [ ] Apple Health documented as not-yet-released (§4).

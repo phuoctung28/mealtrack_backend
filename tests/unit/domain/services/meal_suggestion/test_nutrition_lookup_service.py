@@ -3,7 +3,7 @@ Unit tests for NutritionLookupService — all external I/O mocked.
 
 Covers:
 - T1 hit (food_reference exact match)
-- T1 miss → T2 hit (FatSecret resolver)
+- T1 miss → T2 hit (fatsecret resolver)
 - T1+T2 miss → T3 AI fallback (with logging)
 - T3 AI failure → zero macros, no exception
 - T3 uses asyncio.to_thread + wait_for (C2/C3: non-blocking, 10s timeout)
@@ -133,7 +133,7 @@ async def test_t1_hit_returns_correct_macros():
 
 @pytest.mark.asyncio
 async def test_t1_miss_t2_hit_returns_fatsecret_macros():
-    """T1 miss → T2 (FatSecret resolver) hit → correct macros, tier T2."""
+    """T1 miss → T2 (fatsecret resolver) hit → correct macros, tier T2."""
     per100 = PerHundredGramsMacros(
         protein=25.0, carbs=0.0, fat=3.0, fiber=0.0, sugar=0.0
     )

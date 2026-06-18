@@ -174,9 +174,9 @@ def get_open_food_facts_service_instance():
     return get_open_food_facts_service()
 
 
-# FatSecret Service
+# fatsecret Service
 def get_fat_secret_service_instance():
-    """Get the FatSecret service instance."""
+    """Get the fatsecret service instance."""
     from src.infra.adapters.fat_secret_service import get_fat_secret_service
 
     return get_fat_secret_service()
@@ -401,7 +401,7 @@ def get_deepl_text_translation_service():
     return _deepl_text_translation_service
 
 
-# IngredientNutritionResolver singleton reuses FatSecret and food references.
+# IngredientNutritionResolver singleton reuses fatsecret and food references.
 _ingredient_nutrition_resolver = None
 
 

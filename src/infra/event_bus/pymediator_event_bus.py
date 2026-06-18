@@ -13,6 +13,7 @@ from pymediator import SingletonRegistry
 
 from src.api.exceptions import MealTrackException
 from src.domain.events.base import DomainEvent, Event, EventHandler
+from src.domain.exceptions.ai_exceptions import AIUnavailableError
 
 from .background_task_manager import BackgroundTaskManager
 from .event_bus import EventBus
@@ -173,11 +174,10 @@ class PyMediatorEventBus(EventBus):
                         await self.publish(domain_event)
             return result
 
-        except MealTrackException as e:
-            # Controlled application exceptions (not-found, validation, etc.) are
-            # converted to proper HTTP responses and logged by the API layer. Keep
-            # this at debug so routine 4xx control flow doesn't spam WARNING. The
-            # re-raise preserves all existing handling.
+        except (MealTrackException, AIUnavailableError) as e:
+            # Controlled application exceptions and degraded AI-provider failures
+            # are converted to proper HTTP responses by the API layer. Keep this
+            # at debug so routine control flow does not produce duplicate ERRORs.
             logger.debug(f"Application exception handling {event_type.__name__}: {str(e)}")
             raise
         except Exception as e:

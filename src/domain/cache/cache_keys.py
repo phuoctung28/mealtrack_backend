@@ -30,7 +30,7 @@ class CacheKeys:
     @staticmethod
     def user_tdee(user_id: str) -> tuple[str, int]:
         """Cache key for user TDEE calculation. 24h TTL."""
-        return (f"user:tdee:{user_id}", CacheKeys.TTL_1_DAY)
+        return (f"user:tdee_v2:{user_id}", CacheKeys.TTL_1_DAY)
 
     @staticmethod
     def daily_macros(user_id: str, target_date: date) -> tuple[str, int]:
@@ -61,17 +61,17 @@ class CacheKeys:
             else f"{week_start_date.isoformat()}:{target_date.isoformat()}"
         )
         return (
-            f"user:{user_id}:weekly_budget_v3:{date_suffix}",
+            f"user:{user_id}:weekly_budget_v4:{date_suffix}",
             CacheKeys.TTL_30_MIN,
         )
 
     @staticmethod
     def weekly_budget_pattern(user_id: str, week_start_date: date) -> str:
-        return f"user:{user_id}:weekly_budget_v3:{week_start_date.isoformat()}:*"
+        return f"user:{user_id}:weekly_budget_v4:{week_start_date.isoformat()}:*"
 
     @staticmethod
     def weekly_budget_user_pattern(user_id: str) -> str:
-        return f"user:{user_id}:weekly_budget_v3:*"
+        return f"user:{user_id}:weekly_budget_v4:*"
 
     @staticmethod
     def nutrition_bulk(

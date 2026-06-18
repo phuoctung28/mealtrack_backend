@@ -8,11 +8,12 @@ Single source of truth for adjusted daily targets — used by:
 
 import logging
 from dataclasses import dataclass, replace
-from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 
 from src.domain.constants import WeeklyBudgetConstants
 from src.domain.model.meal import MealStatus
+from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.utils.timezone_utils import ensure_utc, get_zone_info
 
 logger = logging.getLogger(__name__)
@@ -35,8 +36,8 @@ class EffectiveAdjustedResult:
     """Rich result from get_effective_adjusted_daily with context for UI."""
 
     adjusted: AdjustedDailyTargets
-    consumed_before_today: Dict[str, float]
-    consumed_total: Dict[str, float]
+    consumed_before_today: dict[str, float]
+    consumed_total: dict[str, float]
     logged_past_days: int
     skipped_days: int
     show_logging_prompt: bool
@@ -50,11 +51,11 @@ class WeeklyBudgetService:
         uow: Any,
         user_id: str,
         week_start: date,
-        end_date: Optional[date] = None,
-        exclude_date: Optional[date] = None,
-        exclude_dates: Optional[List[date]] = None,
-        user_timezone: Optional[str] = None,
-    ) -> Dict[str, float]:
+        end_date: date | None = None,
+        exclude_date: date | None = None,
+        exclude_dates: list[date] | None = None,
+        user_timezone: str | None = None,
+    ) -> dict[str, float]:
         """Calculate consumed macros from actual meals this week.
 
         Recalculates from meal records (not stale DB budget values).
@@ -116,11 +117,11 @@ class WeeklyBudgetService:
         uow: Any,
         user_id: str,
         week_start: date,
-        end_date: Optional[date] = None,
-        exclude_date: Optional[date] = None,
-        exclude_dates: Optional[List[date]] = None,
-        user_timezone: Optional[str] = None,
-    ) -> Dict[str, float]:
+        end_date: date | None = None,
+        exclude_date: date | None = None,
+        exclude_dates: list[date] | None = None,
+        user_timezone: str | None = None,
+    ) -> dict[str, float]:
         """Async version of calculate_weekly_consumed for AsyncUnitOfWork."""
         week_end = end_date or week_start + timedelta(days=6)
         tz = get_zone_info(user_timezone) if user_timezone else None
@@ -157,12 +158,80 @@ class WeeklyBudgetService:
                 total_fat += macros.fat or 0
                 total_calories += WeeklyBudgetService._derive_macro_calories(macros)
 
+        movement_kcal = await WeeklyBudgetService._calculate_movement_kcal_async(
+            uow=uow,
+            user_id=user_id,
+            week_start=week_start,
+            end_date=week_end,
+            exclude_date=exclude_date,
+            exclude_dates=exclude_dates,
+            user_timezone=user_timezone,
+        )
+        total_calories -= movement_kcal
+
         return {
             "calories": total_calories,
             "protein": total_protein,
             "carbs": total_carbs,
             "fat": total_fat,
         }
+
+    @staticmethod
+    async def _calculate_movement_kcal_async(
+        uow: Any,
+        user_id: str,
+        week_start: date,
+        end_date: date,
+        exclude_date: date | None = None,
+        exclude_dates: list[date] | None = None,
+        user_timezone: str | None = None,
+    ) -> float:
+        """Sum included movement kcal for local dates in the weekly window."""
+        if end_date < week_start:
+            return 0.0
+
+        movement_repo = vars(uow).get("movement_entries")
+        if movement_repo is None:
+            return 0.0
+
+        sum_range = getattr(movement_repo, "sum_included_kcal_for_range", None)
+        if sum_range is None:
+            return 0.0
+
+        excluded = set(exclude_dates) if exclude_dates else set()
+        if exclude_date:
+            excluded.add(exclude_date)
+
+        if not excluded:
+            start_utc, end_utc = WeeklyBudgetService._local_date_range_to_utc(
+                week_start, end_date, user_timezone
+            )
+            return float(await sum_range(user_id, start_utc, end_utc) or 0.0)
+
+        total = 0.0
+        current = week_start
+        while current <= end_date:
+            if current not in excluded:
+                start_utc, end_utc = WeeklyBudgetService._local_date_range_to_utc(
+                    current, current, user_timezone
+                )
+                total += float(await sum_range(user_id, start_utc, end_utc) or 0.0)
+            current += timedelta(days=1)
+        return total
+
+    @staticmethod
+    def _local_date_range_to_utc(
+        start_date: date,
+        end_date: date,
+        user_timezone: str | None = None,
+    ) -> tuple[datetime, datetime]:
+        tz = get_zone_info(user_timezone or "UTC")
+        start_local = datetime.combine(start_date, time.min, tzinfo=tz)
+        end_local = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=tz)
+        return (
+            start_local.astimezone(UTC),
+            end_local.astimezone(UTC),
+        )
 
     @staticmethod
     def get_effective_adjusted_daily(
@@ -177,7 +246,7 @@ class WeeklyBudgetService:
         base_daily_fat: float,
         bmr: float,
         user_timezone: str = "UTC",
-        cheat_dates: Optional[List[date]] = None,
+        cheat_dates: list[date] | None = None,
     ) -> EffectiveAdjustedResult:
         """Single source of truth for adjusted daily target with Skip & Redistribute.
 
@@ -362,7 +431,7 @@ class WeeklyBudgetService:
         base_daily_fat: float,
         bmr: float,
         user_timezone: str = "UTC",
-        cheat_dates: Optional[List[date]] = None,
+        cheat_dates: list[date] | None = None,
     ) -> EffectiveAdjustedResult:
         """Async version of get_effective_adjusted_daily for AsyncUnitOfWork."""
         calc = WeeklyBudgetService
@@ -508,7 +577,7 @@ class WeeklyBudgetService:
 
     @staticmethod
     def calculate_adjusted_daily(
-        weekly_budget: "WeeklyMacroBudget",
+        weekly_budget: WeeklyMacroBudget,
         standard_daily_calories: float,
         standard_daily_carbs: float,
         standard_daily_fat: float,
