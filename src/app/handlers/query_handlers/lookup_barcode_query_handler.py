@@ -250,7 +250,10 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
 
         # Step 5: AI estimation (last resort — don't cache unreliable data)
         logger.debug(
-            f"[BARCODE-CASCADE] {query.barcode} → step 5 AI estimation (partial_name={partial_name})"
+            "[BARCODE-CASCADE] step 5 AI estimation "
+            "barcode_present=%s partial_name_present=%s",
+            bool(query.barcode),
+            bool(partial_name),
         )
         estimate = await self._ai_estimate(query.barcode, query.language, partial_name)
         if estimate:
