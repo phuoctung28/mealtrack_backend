@@ -332,24 +332,43 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
             tdee_result = await tdee_handler.handle(GetUserTdeeQuery(user_id=user_id))
 
             daily_calories = tdee_result.get("target_calories")
+            daily_macros = tdee_result.get("macros", {})
             bmr = tdee_result.get("bmr", 1800)
 
             if daily_calories is None:
                 return weekly_budget, bmr
 
-            expected_weekly = round(daily_calories * 7, 1)
-            current_weekly = round(weekly_budget.target_calories, 1)
+            expected_targets = {
+                "target_calories": daily_calories * 7,
+                "target_protein": daily_macros.get("protein", 70) * 7,
+                "target_carbs": daily_macros.get("carbs", 200) * 7,
+                "target_fat": daily_macros.get("fat", 70) * 7,
+            }
+            current_targets = {
+                "target_calories": weekly_budget.target_calories,
+                "target_protein": weekly_budget.target_protein,
+                "target_carbs": weekly_budget.target_carbs,
+                "target_fat": weekly_budget.target_fat,
+            }
 
-            # Only update if >1% difference (avoid floating point noise)
-            if abs(expected_weekly - current_weekly) / max(current_weekly, 1) > 0.01:
-                daily_macros = tdee_result.get("macros", {})
-                weekly_budget.target_calories = daily_calories * 7
-                weekly_budget.target_protein = daily_macros.get("protein", 70) * 7
-                weekly_budget.target_carbs = daily_macros.get("carbs", 200) * 7
-                weekly_budget.target_fat = daily_macros.get("fat", 70) * 7
+            targets_changed = any(
+                abs(expected_targets[key] - current_targets[key])
+                / max(abs(current_targets[key]), 1)
+                > 0.01
+                for key in expected_targets
+            )
+
+            if targets_changed:
+                weekly_budget.target_calories = expected_targets["target_calories"]
+                weekly_budget.target_protein = expected_targets["target_protein"]
+                weekly_budget.target_carbs = expected_targets["target_carbs"]
+                weekly_budget.target_fat = expected_targets["target_fat"]
                 await uow.weekly_budgets.update(weekly_budget)
                 logger.info(
-                    f"Updated stale weekly budget for user {user_id}: {current_weekly} → {expected_weekly}"
+                    "Updated stale weekly nutrition targets for user %s: %s to %s",
+                    user_id,
+                    current_targets,
+                    expected_targets,
                 )
 
             return weekly_budget, bmr

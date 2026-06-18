@@ -1,5 +1,5 @@
 from datetime import date
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -110,3 +110,47 @@ async def test_weekly_budget_response_uses_movement_adjusted_calories():
     assert weekly_budget.consumed_protein == 100.0
     assert weekly_budget.consumed_carbs == 250.0
     assert weekly_budget.consumed_fat == 100.0
+
+
+@pytest.mark.asyncio
+async def test_sync_targets_refreshes_macro_only_changes():
+    weekly_budget = WeeklyMacroBudget(
+        weekly_budget_id="budget-1",
+        user_id="u1",
+        week_start_date=date(2026, 3, 9),
+        target_calories=14000.0,
+        target_protein=1008.0,
+        target_carbs=1750.0,
+        target_fat=466.7,
+    )
+    mock_uow = MagicMock()
+    mock_uow.weekly_budgets.update = AsyncMock()
+    handler = GetWeeklyBudgetQueryHandler()
+
+    with patch(
+        "src.app.handlers.query_handlers.get_user_tdee_query_handler."
+        "GetUserTdeeQueryHandler.handle",
+        new_callable=AsyncMock,
+        return_value={
+            "target_calories": 2000.0,
+            "macros": {
+                "protein": 160.0,
+                "carbs": 230.0,
+                "fat": 71.1,
+            },
+            "bmr": 1600.0,
+        },
+    ):
+        updated_budget, bmr = await handler._sync_targets_if_stale(
+            mock_uow,
+            weekly_budget,
+            "u1",
+        )
+
+    assert updated_budget is weekly_budget
+    assert bmr == 1600.0
+    assert weekly_budget.target_calories == 14000.0
+    assert weekly_budget.target_protein == 1120.0
+    assert weekly_budget.target_carbs == 1610.0
+    assert weekly_budget.target_fat == pytest.approx(497.7)
+    mock_uow.weekly_budgets.update.assert_awaited_once_with(weekly_budget)
