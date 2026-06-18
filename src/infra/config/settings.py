@@ -252,6 +252,18 @@ class Settings(BaseSettings):
     CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS: int = Field(
         default=60, description="HTTP timeout for Workers AI requests (thinking models need ≥60s)"
     )
+    CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
+        default=True,
+        description="Enable Cloudflare Workers AI for vision tasks (Gemini is fallback)",
+    )
+    CLOUDFLARE_WORKERS_AI_VISION_MODEL: str = Field(
+        default="@cf/google/gemma-4-26b-a4b-it",
+        description="Workers AI model for image analysis (must support vision input)",
+    )
+    CLOUDFLARE_WORKERS_AI_VISION_PURPOSES: str = Field(
+        default="meal_scan,ingredient_scan",
+        description="Comma-separated ModelPurpose values where Workers AI vision is tried first",
+    )
 
     # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
     CF_ACCOUNT_ID: str | None = Field(

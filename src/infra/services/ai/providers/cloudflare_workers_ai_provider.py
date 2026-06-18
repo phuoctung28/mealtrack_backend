@@ -1,4 +1,5 @@
 """Cloudflare Workers AI implementation of AIProviderPort using LangChain."""
+import base64
 import logging
 from typing import Any
 
@@ -12,12 +13,15 @@ from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
 
 logger = logging.getLogger(__name__)
 
+_CF_REST_BASE = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+
 
 class CloudflareWorkersAIProvider(AIProviderPort):
     """
     Cloudflare Workers AI provider via LangChain's ChatCloudflareWorkersAI.
 
-    Vision is not supported. generate_with_vision raises NotImplementedError.
+    Text path: LangChain adapter.
+    Vision path: direct Workers AI REST call with httpx (when vision_model configured).
     """
 
     def __init__(
@@ -28,9 +32,16 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         gateway_id: str = "",
         timeout_seconds: int = 30,
         json_mode_enabled: bool = True,
+        vision_model: str = "",
+        vision_enabled: bool = False,
     ) -> None:
         self._text_model = text_model
         self._json_mode_enabled = json_mode_enabled
+        self._account_id = account_id
+        self._api_token = api_token
+        self._timeout_seconds = timeout_seconds
+        self._vision_model = vision_model
+        self._vision_enabled = vision_enabled and bool(vision_model)
 
         kwargs: dict[str, Any] = {
             "model": text_model,
@@ -49,10 +60,16 @@ class CloudflareWorkersAIProvider(AIProviderPort):
 
     @property
     def supported_capabilities(self) -> set[AICapability]:
-        return {AICapability.TEXT_GENERATION, AICapability.STRUCTURED_OUTPUT}
+        caps = {AICapability.TEXT_GENERATION, AICapability.STRUCTURED_OUTPUT}
+        if self._vision_enabled:
+            caps.add(AICapability.VISION)
+        return caps
 
     def get_available_models(self) -> list[str]:
-        return [self._text_model] if self._text_model else []
+        models = [self._text_model] if self._text_model else []
+        if self._vision_enabled and self._vision_model and self._vision_model != self._text_model:
+            models.append(self._vision_model)
+        return models
 
     async def generate(
         self,
@@ -112,6 +129,47 @@ class CloudflareWorkersAIProvider(AIProviderPort):
 
         return {"raw_content": text}
 
+    def _build_vision_payload(
+        self,
+        prompt: str,
+        image_data: bytes,
+        system_message: str | None,
+        max_tokens: int,
+    ) -> dict[str, Any]:
+        b64 = base64.b64encode(image_data).decode("ascii")
+        user_content: list[dict] = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+        ]
+        messages: list[dict] = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": user_content})
+        return {"messages": messages, "max_tokens": max_tokens, "temperature": 0.2}
+
+    async def _post_workers_ai(self, model: str, payload: dict) -> dict:
+        url = _CF_REST_BASE.format(account_id=self._account_id, model=model)
+        headers = {
+            "Authorization": f"Bearer {self._api_token}",
+            "Content-Type": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    def _extract_response_text(self, raw: dict) -> str:
+        result = raw.get("result", {})
+        if isinstance(result, dict):
+            if "response" in result:
+                return str(result["response"])
+            choices = result.get("choices", [])
+            if choices:
+                return choices[0].get("message", {}).get("content", "")
+        if isinstance(result, str):
+            return result
+        return ""
+
     async def generate_with_vision(
         self,
         model: str,
@@ -120,11 +178,25 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         system_message: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Not supported in v1."""
-        raise NotImplementedError(
-            "CloudflareWorkersAIProvider does not support vision in v1. "
-            "Use GeminiProvider for image-based tasks."
-        )
+        """Send image to Workers AI REST endpoint and return parsed dict."""
+        if not self._vision_enabled:
+            raise NotImplementedError(
+                "CloudflareWorkersAIProvider: vision not configured. "
+                "Set CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true and a vision model."
+            )
+
+        max_tokens: int = kwargs.get("max_tokens", 4096)
+        payload = self._build_vision_payload(prompt, image_data, system_message, max_tokens)
+        raw = await self._post_workers_ai(model, payload)
+        text = self._extract_response_text(raw)
+
+        if not text.strip():
+            raise ValueError(
+                f"[CF-WORKERS-AI-VISION] Model returned empty response for model={model}"
+            )
+
+        logger.debug("[CF-WORKERS-AI-VISION-SUCCESS] model=%s", model)
+        return extract_ai_json(text)
 
     def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract HTTP status code or 'timeout' from httpx exceptions bubbled through LangChain."""
