@@ -9,7 +9,7 @@ from src.domain.services.meal_analysis.fast_path_policy import (
 )
 from src.infra.adapters.vision_ai_service import VisionAIService
 
-_MGR_PATCH = "src.infra.adapters.vision_ai_service.GeminiService"
+_MGR_PATCH = "src.infra.adapters.vision_ai_service.AIModelManager"
 
 
 def _make_jpeg(width: int, height: int, quality: int = 95) -> bytes:
@@ -36,7 +36,7 @@ def _valid_vision_response() -> dict:
 def _make_service(max_output_tokens: int | None = None) -> VisionAIService:
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
-        mock_manager.vision = AsyncMock(return_value=_valid_vision_response())
+        mock_manager.generate_with_vision = AsyncMock(return_value=_valid_vision_response())
         mock_cls.get_instance.return_value = mock_manager
         return VisionAIService(max_output_tokens=max_output_tokens)
 
@@ -44,7 +44,7 @@ def _make_service(max_output_tokens: int | None = None) -> VisionAIService:
 def test_vision_service_uses_gemini_service():
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
-        mock_manager.vision = AsyncMock(return_value={})
+        mock_manager.generate_with_vision = AsyncMock(return_value={})
         mock_cls.get_instance.return_value = mock_manager
 
         VisionAIService()
@@ -108,8 +108,8 @@ async def test_analyze_with_strategy_compresses_before_sending():
     await service.analyze_with_strategy(large_bytes, strategy)
 
     # Verify vision() was called with compressed image bytes
-    call_kwargs = service._ai_manager.vision.call_args
-    image_data = call_kwargs.kwargs["image_bytes"]
+    call_kwargs = service._ai_manager.generate_with_vision.call_args
+    image_data = call_kwargs.kwargs["image_data"]
 
     # The image should be compressed (smaller than 2000x1500)
     img = Image.open(BytesIO(image_data))
@@ -127,7 +127,7 @@ async def test_analyze_with_strategy_passes_meal_analyze_max_tokens():
     image = _make_jpeg(400, 300)
     await service.analyze_with_strategy(image, strategy)
 
-    call_kwargs = service._ai_manager.vision.call_args.kwargs
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
     assert call_kwargs.get("max_tokens") == MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
 
 
@@ -141,7 +141,7 @@ async def test_analyze_with_strategy_allows_max_token_override():
     image = _make_jpeg(400, 300)
     await service.analyze_with_strategy(image, strategy)
 
-    call_kwargs = service._ai_manager.vision.call_args.kwargs
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
     assert call_kwargs.get("max_tokens") == 4096
 
 
@@ -166,9 +166,9 @@ async def test_analyze_by_url_passes_meal_analyze_max_tokens():
             "http://example.com/food.jpg", strategy
         )
 
-    call_kwargs = service._ai_manager.vision.call_args.kwargs
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
     assert call_kwargs.get("max_tokens") == MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
-    assert call_kwargs["image_bytes"] == image_bytes
+    assert call_kwargs["image_data"] == image_bytes
 
 
 @pytest.mark.asyncio

@@ -201,6 +201,12 @@ class Settings(BaseSettings):
     DEV_USER_EMAIL: str = Field(default="dev@example.com")
     DEV_USER_USERNAME: str = Field(default="dev_user")
 
+    # Guest trial quota
+    GUEST_INSTALL_HASH_SECRET: str = Field(
+        default="",
+        description="HMAC-SHA256 secret for hashing guest install IDs before Redis key creation. Must be set in production.",
+    )
+
     # Additional fields from actual .env
     UPLOADS_DIR: str | None = Field(default=None)
     FCM_CREDENTIALS_PATH: str | None = Field(default=None)

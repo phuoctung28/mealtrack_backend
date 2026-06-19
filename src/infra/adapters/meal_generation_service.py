@@ -1,13 +1,12 @@
 """
-Meal generation service implementation using GeminiService.
-Provides resilient AI calls with automatic fallback.
+Meal generation service implementation using AI Model Manager.
+Provides resilient AI calls with automatic fallback across CF Workers AI and Gemini.
 """
 
 import logging
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.infra.ai.gemini_service import GeminiService
-from src.infra.ai.model_config import ModelPurpose
+from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +22,13 @@ PURPOSE_MAP = {
 
 class MealGenerationService(MealGenerationServicePort):
     """
-    Unified meal generation service using GeminiService.
-    Provides automatic fallback on provider failures.
+    Unified meal generation service using AIModelManager.
+    Provides automatic fallback on provider failures (CF Workers AI → Gemini).
     """
 
     def __init__(self):
-        """Initialize with GeminiService."""
-        self._ai_manager = GeminiService.get_instance()
+        """Initialize with AI model manager."""
+        self._ai_manager = AIModelManager.get_instance()
 
     async def generate_meal_plan_async(
         self,
@@ -43,10 +42,11 @@ class MealGenerationService(MealGenerationServicePort):
     ):
         """Generate meal plan — runs directly on the caller's event loop."""
         purpose = PURPOSE_MAP.get(model_purpose, ModelPurpose.GENERAL)
-        return await self._ai_manager.text_json(
+        return await self._ai_manager.generate(
             purpose=purpose,
-            user_prompt=prompt,
-            system_prompt=system_message,
+            prompt=prompt,
+            system_message=system_message,
+            response_type=response_type,
             max_tokens=max_tokens,
             schema=schema,
         )

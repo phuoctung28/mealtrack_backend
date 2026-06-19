@@ -995,6 +995,24 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-cloudflare"
+version = "0.3.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "langchain-core" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "sqlalchemy" },
+    { name = "sqlalchemy-cloudflare-d1" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/74/e5/dcd852f555e7dba1a789aa0e608ffac403ec32647851c617f0b9bff8e654/langchain_cloudflare-0.3.4.tar.gz", hash = "sha256:78030361b30c1279572a9779e9f0527c5d58b59a1805700b2bd4e8fba1ba85cf", size = 89814, upload-time = "2026-04-21T18:56:49.83Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/56/86217da9f096dded46e756e4b9d97a0ce7020a123993b64aa0a15355a936/langchain_cloudflare-0.3.4-py3-none-any.whl", hash = "sha256:1115547ea33634586dfca390c95ff3f5afe5fbba9e86ea3dac0b01bcb6440160", size = 47921, upload-time = "2026-04-21T18:56:48.559Z" },
+]
+
+[[package]]
 name = "langchain-core"
 version = "1.4.7"
 source = { registry = "https://pypi.org/simple" }
@@ -1185,6 +1203,7 @@ dependencies = [
     { name = "greenlet" },
     { name = "httpx" },
     { name = "jinja2" },
+    { name = "langchain-cloudflare" },
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
     { name = "opentelemetry-instrumentation-langchain" },
@@ -1248,6 +1267,7 @@ requires-dist = [
     { name = "httpx", specifier = "==0.28.1" },
     { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "jinja2", specifier = "==3.1.6" },
+    { name = "langchain-cloudflare", specifier = ">=0.3.4" },
     { name = "langchain-core", specifier = "==1.4.7" },
     { name = "langchain-google-genai", specifier = "==4.2.5" },
     { name = "opentelemetry-instrumentation-langchain", specifier = "==0.61.0" },
@@ -2252,6 +2272,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/48/84/278a811ef4e07be9c89dc5cdd7be833268509a66a68c4897cf585e67428f/sqlalchemy-2.0.50-cp313-cp313-win32.whl", hash = "sha256:60922d6599065ddca2c6f376b9aa2f41a6b85a271725e0909490bbc50b1998a5", size = 2117229, upload-time = "2026-05-24T19:50:08.215Z" },
     { url = "https://files.pythonhosted.org/packages/f6/1c/067cc6187ed32d2ec222fe6d2643acc1659a6d0659f8a7cbc5ad3ae83280/sqlalchemy-2.0.50-cp313-cp313-win_amd64.whl", hash = "sha256:287086e67275a212c4582d166a6fb03a65ccc5551d80866270ce0dd9f34eccd3", size = 2143126, upload-time = "2026-05-24T19:50:09.691Z" },
     { url = "https://files.pythonhosted.org/packages/d0/10/f7220e9b784d295d241c86ed99aeb537f92afcd469a64861f2717e9bb077/sqlalchemy-2.0.50-py3-none-any.whl", hash = "sha256:92064363517a3ff8212b5a93b8c62876579d8dfd1ca5b561335f30152d884fa9", size = 1943861, upload-time = "2026-05-24T19:59:01.119Z" },
+]
+
+[[package]]
+name = "sqlalchemy-cloudflare-d1"
+version = "0.3.10"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/93/db/b3b08fb78d56c42439d050bca1cd71811af732c332d965c2ac84feaa3a03/sqlalchemy_cloudflare_d1-0.3.10.tar.gz", hash = "sha256:7660182dd12224042d7a3eecb502107ef3979900c0459edfd77be81665be54a6", size = 420132, upload-time = "2026-05-05T20:31:55.564Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/56/437b3622d54a7a4aed3d26ee0eba590ae3e918387a3607a8509e7f30effd/sqlalchemy_cloudflare_d1-0.3.10-py3-none-any.whl", hash = "sha256:c29abda17c755bfe18a9246a67e29785d852610d0cc73bfce0ead90c4d75b274", size = 28145, upload-time = "2026-05-05T20:31:54.354Z" },
 ]
 
 [[package]]
