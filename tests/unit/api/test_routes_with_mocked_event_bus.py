@@ -161,6 +161,116 @@ def test_user_profiles_get_tdee(monkeypatch, client: TestClient):
     assert r.json()["tdee"] == 2400.0
 
 
+def test_user_profiles_update_metrics_accepts_my_plan_payload(
+    monkeypatch, client: TestClient
+):
+    import src.api.main as main
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.app.commands.user.update_user_metrics_command import (
+        UpdateUserMetricsCommand,
+    )
+
+    sent = []
+
+    async def send(msg):
+        sent.append(msg)
+        if isinstance(msg, UpdateUserMetricsCommand):
+            return None
+        return {
+            "bmr": 1700.0,
+            "tdee": 2400.0,
+            "profile_data": {"fitness_goal": "bulk"},
+            "macros": {
+                "calories": 2400.0,
+                "protein": 120.0,
+                "carbs": 250.0,
+                "fat": 70.0,
+            },
+            "activity_multiplier": 1.4,
+            "formula_used": "Mifflin-St Jeor",
+            "is_custom": False,
+        }
+
+    main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(send)
+
+    r = client.post(
+        "/v1/user-profiles/metrics",
+        json={
+            "age": 25,
+            "height_cm": 177.0,
+            "weight_kg": 86.5,
+            "biological_sex": "male",
+            "weekly_weight_change_kg": None,
+            "job_type": "desk",
+            "training_days_per_week": 5,
+            "training_minutes_per_session": 52,
+            "body_fat_percentage": 20.0,
+            "fitness_goal": "bulk",
+            "training_level": "intermediate",
+            "target_weight_kg": None,
+            "goal_start_weight_kg": None,
+            "goal_started_at": None,
+        },
+    )
+
+    assert r.status_code == 200
+    command = next(msg for msg in sent if isinstance(msg, UpdateUserMetricsCommand))
+    assert command.age == 25
+    assert command.height_cm == 177.0
+    assert command.weight_kg == 86.5
+    assert command.biological_sex == "male"
+    assert command.body_fat_percent == 20.0
+    assert command.body_fat_percent_provided is True
+    assert command.training_level == "intermediate"
+
+
+def test_user_profiles_update_metrics_null_body_fat_does_not_clear_by_default(
+    monkeypatch, client: TestClient
+):
+    import src.api.main as main
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.app.commands.user.update_user_metrics_command import (
+        UpdateUserMetricsCommand,
+    )
+
+    sent = []
+
+    async def send(msg):
+        sent.append(msg)
+        if isinstance(msg, UpdateUserMetricsCommand):
+            return None
+        return {
+            "bmr": 1700.0,
+            "tdee": 2400.0,
+            "profile_data": {"fitness_goal": "bulk"},
+            "macros": {
+                "calories": 2400.0,
+                "protein": 120.0,
+                "carbs": 250.0,
+                "fat": 70.0,
+            },
+            "activity_multiplier": 1.4,
+            "formula_used": "Mifflin-St Jeor",
+            "is_custom": False,
+        }
+
+    main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(send)
+
+    r = client.post(
+        "/v1/user-profiles/metrics",
+        json={
+            "weight_kg": 86.5,
+            "fitness_goal": "bulk",
+            "body_fat_percentage": None,
+        },
+    )
+
+    assert r.status_code == 200
+    command = next(msg for msg in sent if isinstance(msg, UpdateUserMetricsCommand))
+    assert command.body_fat_percent is None
+    assert command.body_fat_percent_provided is False
+
+
 def test_meals_parse_text_happy_path(monkeypatch, client: TestClient):
     import src.api.main as main
     from src.api.dependencies.event_bus import get_configured_event_bus

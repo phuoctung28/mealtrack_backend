@@ -17,32 +17,42 @@ logger = logging.getLogger(__name__)
 _VALID_JOB_TYPES = {e.value for e in JobType}
 _VALID_FITNESS_GOALS = {e.value for e in FitnessGoal}
 _VALID_TRAINING_LEVELS = {e.value for e in TrainingLevel}
+_VALID_BIOLOGICAL_SEXES = {"male", "female"}
 
 
 def _has_metric_update(command: UpdateUserMetricsCommand) -> bool:
-    return any(
-        value is not None
-        for value in [
-            command.weight_kg,
-            command.job_type,
-            command.training_days_per_week,
-            command.training_minutes_per_session,
-            command.body_fat_percent,
-            command.fitness_goal,
-            command.training_level,
-            command.target_weight_kg,
-            command.goal_start_weight_kg,
-            command.goal_started_at,
-            command.daily_water_goal_ml,
-        ]
-    ) or command.reset_water_goal
+    return (
+        any(
+            value is not None
+            for value in [
+                command.weight_kg,
+                command.height_cm,
+                command.age,
+                command.biological_sex,
+                command.job_type,
+                command.training_days_per_week,
+                command.training_minutes_per_session,
+                command.body_fat_percent,
+                command.fitness_goal,
+                command.training_level,
+                command.target_weight_kg,
+                command.goal_start_weight_kg,
+                command.goal_started_at,
+                command.daily_water_goal_ml,
+            ]
+        )
+        or command.body_fat_percent_provided
+        or command.reset_water_goal
+    )
 
 
 @handles(UpdateUserMetricsCommand)
 class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, None]):
     """Handle updating user metrics (weight, job type, training, body fat)."""
 
-    def __init__(self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None):
+    def __init__(
+        self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None
+    ):
         self.uow = uow
         self.cache_service = cache_service
 
@@ -60,10 +70,25 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 )
 
             # Update provided fields only
+            if command.age is not None:
+                if command.age < 13 or command.age > 120:
+                    raise ValidationException("Age must be between 13 and 120")
+                profile.age = command.age
+
+            if command.height_cm is not None:
+                if command.height_cm < 100 or command.height_cm > 272:
+                    raise ValidationException("Height must be between 100 and 272 cm")
+                profile.height_cm = command.height_cm
+
             if command.weight_kg is not None:
                 if command.weight_kg <= 0:
                     raise ValidationException("Weight must be greater than 0")
                 profile.weight_kg = command.weight_kg
+
+            if command.biological_sex is not None:
+                if command.biological_sex not in _VALID_BIOLOGICAL_SEXES:
+                    raise ValidationException("Biological sex must be male or female")
+                profile.gender = command.biological_sex
 
             if command.job_type is not None:
                 if command.job_type not in _VALID_JOB_TYPES:
@@ -94,8 +119,13 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     command.training_minutes_per_session
                 )
 
-            if command.body_fat_percent is not None:
-                if command.body_fat_percent < 0 or command.body_fat_percent > 70:
+            if (
+                command.body_fat_percent is not None
+                or command.body_fat_percent_provided
+            ):
+                if command.body_fat_percent is not None and (
+                    command.body_fat_percent < 0 or command.body_fat_percent > 70
+                ):
                     raise ValidationException(
                         "Body fat percentage must be between 0 and 70"
                     )
@@ -192,7 +222,9 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         try:
             await self.cache_service.invalidate_pattern(macros_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate macros pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate macros pattern for user {user_id}: {e}"
+            )
 
         # Invalidate ALL weekly budgets for this user
         # TDEE changes affect weekly targets
@@ -200,16 +232,22 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         try:
             await self.cache_service.invalidate_pattern(weekly_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate weekly budget pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate weekly budget pattern for user {user_id}: {e}"
+            )
 
         hydration_pattern = f"user:{user_id}:hydration:*"
         try:
             await self.cache_service.invalidate_pattern(hydration_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate hydration pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate hydration pattern for user {user_id}: {e}"
+            )
 
         weekly_hydration_pattern = f"user:{user_id}:hydration_weekly:*"
         try:
             await self.cache_service.invalidate_pattern(weekly_hydration_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate weekly hydration pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate weekly hydration pattern for user {user_id}: {e}"
+            )
