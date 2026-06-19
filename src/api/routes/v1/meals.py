@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, Query, Request, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, Query, Request, status
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -47,6 +47,14 @@ from src.app.queries.meal import (
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.event_bus import EventBus
+from src.api.dependencies.guest_quota import get_guest_quota_service
+from src.api.services.guest_parse_quota import (
+    GuestParseQuotaService,
+    QuotaAlreadyUsedError,
+    QuotaUnavailableError,
+    QuotaInFlightError,
+    validate_install_id,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
@@ -307,6 +315,103 @@ async def parse_meal_text(
         )
     except Exception as e:
         raise handle_exception(e) from e
+
+
+@router.post("/parse-text/guest-trial", response_model=ParseMealTextResponse)
+@limiter.limit("5/minute")
+async def parse_meal_text_guest_trial(
+    request: Request,
+    payload: ParseMealTextRequest,
+    x_guest_install_id: str = Header(..., alias="X-Guest-Install-Id"),
+    quota: GuestParseQuotaService = Depends(get_guest_quota_service),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+) -> ParseMealTextResponse:
+    """
+    One-shot guest parse_text trial for AI Handshake pre-login flow.
+    No meal is saved. One successful parse per guest install id (Postgres quota).
+    """
+    if not validate_install_id(x_guest_install_id):
+        raise ValidationException(
+            message="Invalid guest install id.",
+            error_code="INVALID_GUEST_INSTALL_ID",
+        )
+
+    sanitized_text = sanitize_user_description(payload.text)
+    if not sanitized_text:
+        raise ValidationException(
+            message="Invalid or empty meal description.",
+            error_code="INVALID_MEAL_TEXT",
+        )
+
+    try:
+        id_hash = await quota.reserve(x_guest_install_id)
+    except QuotaAlreadyUsedError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "AI_HANDSHAKE_TRIAL_USED",
+                "message": "Your guest trial has already been used.",
+                "details": {},
+            },
+        )
+    except (QuotaUnavailableError, QuotaInFlightError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error_code": "AI_HANDSHAKE_SERVICE_UNAVAILABLE",
+                "message": "The guest trial is temporarily unavailable. Please try again later.",
+                "details": {},
+            },
+        )
+
+    language = get_request_language(request)
+    command = ParseMealTextCommand(
+        text=sanitized_text,
+        language=language,
+        user_id=None,
+        current_items=payload.current_items,
+    )
+
+    try:
+        app_response = await event_bus.send(command)
+    except Exception as exc:
+        await quota.release_reservation(id_hash)
+        raise handle_exception(exc) from exc
+
+    await quota.mark_completed(id_hash)
+
+    from src.api.schemas.response.meal_responses import ParsedFoodItem
+    from src.domain.model.nutrition.macros import Macros as MacrosModel
+
+    api_items = [
+        ParsedFoodItem(
+            name=item.name,
+            quantity=item.quantity,
+            unit=item.unit,
+            calories=MacrosModel(
+                protein=item.protein,
+                carbs=item.carbs,
+                fat=item.fat,
+                fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
+            ).total_calories,
+            protein=item.protein,
+            carbs=item.carbs,
+            fat=item.fat,
+            data_source=item.data_source,
+            fdc_id=item.fdc_id,
+        )
+        for item in app_response.items
+    ]
+    total_calories = sum(i.calories for i in api_items)
+
+    return ParseMealTextResponse(
+        items=api_items,
+        total_calories=total_calories,
+        total_protein=app_response.total_protein,
+        total_carbs=app_response.total_carbs,
+        total_fat=app_response.total_fat,
+        emoji=app_response.emoji,
+    )
 
 
 @router.get("/streak", response_model=StreakResponse)

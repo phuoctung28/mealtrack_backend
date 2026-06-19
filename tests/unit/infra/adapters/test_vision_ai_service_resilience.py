@@ -31,7 +31,7 @@ def _valid_vision_response():
 @pytest.fixture
 def mock_ai_manager():
     manager = Mock()
-    manager.vision = AsyncMock(return_value=_valid_vision_response())
+    manager.generate_with_vision = AsyncMock(return_value=_valid_vision_response())
     return manager
 
 
@@ -46,7 +46,7 @@ def mock_strategy():
 
 @pytest.fixture
 def service(mock_ai_manager):
-    with patch("src.infra.adapters.vision_ai_service.GeminiService") as mock_cls:
+    with patch("src.infra.adapters.vision_ai_service.AIModelManager") as mock_cls:
         mock_cls.get_instance.return_value = mock_ai_manager
         return VisionAIService()
 
@@ -55,7 +55,7 @@ def service(mock_ai_manager):
 async def test_analyze_uses_ai_manager(service, mock_ai_manager):
     result = await service.analyze(b"fake_image_bytes")
 
-    mock_ai_manager.vision.assert_called_once()
+    mock_ai_manager.generate_with_vision.assert_called_once()
     assert "structured_data" in result
 
 
@@ -82,7 +82,7 @@ async def test_analyze_with_strategy_returns_structured_data(
 async def test_analyze_with_strategy_preserves_non_food_guard(
     service, mock_ai_manager, mock_strategy
 ):
-    mock_ai_manager.vision = AsyncMock(
+    mock_ai_manager.generate_with_vision = AsyncMock(
         return_value={
             "is_food": False,
             "dish_name": None,
@@ -105,11 +105,11 @@ async def test_analyze_with_strategy_preserves_non_food_guard(
 async def test_analyze_with_strategy_calls_correct_purpose(
     service, mock_ai_manager, mock_strategy
 ):
-    from src.infra.ai.model_config import ModelPurpose
+    from src.infra.services.ai.ai_model_manager import ModelPurpose
 
     await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
-    call_kwargs = mock_ai_manager.vision.call_args
+    call_kwargs = mock_ai_manager.generate_with_vision.call_args
     assert call_kwargs.kwargs["purpose"] == ModelPurpose.MEAL_SCAN
 
 
@@ -119,16 +119,16 @@ async def test_analyze_with_strategy_passes_prompt_from_strategy(
 ):
     await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
-    call_kwargs = mock_ai_manager.vision.call_args
+    call_kwargs = mock_ai_manager.generate_with_vision.call_args
     assert call_kwargs.kwargs["prompt"] == "What food is this?"
-    assert call_kwargs.kwargs["system_prompt"] == "Analyze this food"
+    assert call_kwargs.kwargs["system_message"] == "Analyze this food"
 
 
 @pytest.mark.asyncio
 async def test_analyze_with_strategy_raises_runtime_error_on_failure(
     service, mock_ai_manager, mock_strategy
 ):
-    mock_ai_manager.vision = AsyncMock(side_effect=Exception("AI failure"))
+    mock_ai_manager.generate_with_vision = AsyncMock(side_effect=Exception("AI failure"))
 
     with pytest.raises(RuntimeError, match="Failed to analyze image"):
         await service.analyze_with_strategy(b"fake_image", mock_strategy)
@@ -143,7 +143,7 @@ async def test_analyze_with_strategy_preserves_ai_unavailable(
         attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
         last_error="503 UNAVAILABLE",
     )
-    mock_ai_manager.vision = AsyncMock(side_effect=unavailable)
+    mock_ai_manager.generate_with_vision = AsyncMock(side_effect=unavailable)
 
     with pytest.raises(AIUnavailableError) as exc_info:
         await service.analyze_with_strategy(b"fake_image", mock_strategy)
@@ -152,14 +152,14 @@ async def test_analyze_with_strategy_preserves_ai_unavailable(
         "gemini-2.5-flash-lite",
         "gemini-2.5-flash",
     ]
-    assert mock_ai_manager.vision.await_count == 1
+    assert mock_ai_manager.generate_with_vision.await_count == 1
 
 
 @pytest.mark.asyncio
 async def test_analyze_with_strategy_retries_invalid_structured_output_once(
     service, mock_ai_manager, mock_strategy
 ):
-    mock_ai_manager.vision = AsyncMock(
+    mock_ai_manager.generate_with_vision = AsyncMock(
         side_effect=[
             {
                 "dish_name": "Rice bowl",
@@ -187,11 +187,8 @@ async def test_analyze_with_strategy_retries_invalid_structured_output_once(
 
     result = await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
-    assert mock_ai_manager.vision.await_count == 2
-    first_call = mock_ai_manager.vision.await_args_list[0].kwargs
-    second_call = mock_ai_manager.vision.await_args_list[1].kwargs
-    assert first_call["schema"] is VisionNutritionResponse
-    assert second_call["schema"] is VisionNutritionResponse
+    assert mock_ai_manager.generate_with_vision.await_count == 2
+    second_call = mock_ai_manager.generate_with_vision.await_args_list[1].kwargs
     assert "Return the full corrected response" in second_call["prompt"]
     assert "foods.0.quantity_g" in second_call["prompt"]
     assert result["structured_data"]["foods"][0]["quantity"] == 180
@@ -217,12 +214,12 @@ async def test_analyze_with_strategy_raises_controlled_error_after_retry_failure
             }
         ],
     }
-    mock_ai_manager.vision = AsyncMock(side_effect=[invalid, invalid])
+    mock_ai_manager.generate_with_vision = AsyncMock(side_effect=[invalid, invalid])
 
     with pytest.raises(AIOutputValidationError) as exc_info:
         await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
-    assert mock_ai_manager.vision.await_count == 2
+    assert mock_ai_manager.generate_with_vision.await_count == 2
     assert exc_info.value.purpose == "meal_scan"
     assert exc_info.value.attempt_count == 2
     assert "foods.0.quantity_g" in exc_info.value.validation_details[0]
@@ -232,7 +229,7 @@ async def test_analyze_with_strategy_raises_controlled_error_after_retry_failure
 async def test_ingredient_identification_keeps_unstructured_contract(
     service, mock_ai_manager
 ):
-    mock_ai_manager.vision = AsyncMock(
+    mock_ai_manager.generate_with_vision = AsyncMock(
         return_value={
             "name": "broccoli",
             "confidence": 0.94,
@@ -243,9 +240,9 @@ async def test_ingredient_identification_keeps_unstructured_contract(
 
     result = await service.analyze_with_strategy(b"fake_image", strategy)
 
-    call_kwargs = mock_ai_manager.vision.await_args.kwargs
+    call_kwargs = mock_ai_manager.generate_with_vision.await_args.kwargs
     assert "schema" not in call_kwargs
-    assert mock_ai_manager.vision.await_count == 1
+    assert mock_ai_manager.generate_with_vision.await_count == 1
     assert result["strategy_used"] == "IngredientIdentification"
     assert result["structured_data"] == {
         "name": "broccoli",

@@ -230,11 +230,6 @@ def get_daily_context_precompute_service():
 
 
 # Phase 06: Meal Suggestion Dependencies
-def get_redis_client() -> RedisClient | None:
-    """Return Redis client used by optional caches and required session stores."""
-    return _redis_client
-
-
 def get_raw_redis_client():
     """Return the underlying async Redis client (None if not initialized)."""
     return _redis_client.client if _redis_client and _redis_client.client else None

@@ -252,3 +252,6 @@ ignore_imports =
     src.api.routes.v1.webhooks -> src.infra.repositories.referral_repository
     src.api.routes.v1.webhooks -> src.infra.services.email_template_renderer
     src.api.routes.v1.weight_entries -> src.infra.event_bus
+    src.api.dependencies.guest_quota -> src.infra.config.settings
+    src.api.dependencies.guest_quota -> src.infra.database.config_async
+    src.api.services.guest_parse_quota -> src.infra.database.models.ai_handshake_guest_trial_quota

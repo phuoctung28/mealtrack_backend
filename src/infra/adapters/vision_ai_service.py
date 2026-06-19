@@ -23,9 +23,8 @@ from src.domain.strategies.meal_analysis_strategy import (
     IngredientIdentificationStrategy,
     MealAnalysisStrategy,
 )
-from src.infra.ai.gemini_service import GeminiService
-from src.infra.ai.model_config import ModelPurpose
 from src.infra.config.settings import get_settings
+from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class VisionAIService(VisionAIServicePort):
 
     def __init__(self, max_output_tokens: int | None = None):
         """Initialize with AI model manager."""
-        self._ai_manager = GeminiService.get_instance()
+        self._ai_manager = AIModelManager.get_instance()
         self._optimized_prompt_enabled = True
         self._max_output_tokens = (
             max_output_tokens
@@ -105,12 +104,11 @@ class VisionAIService(VisionAIServicePort):
 
         for attempt in range(1, MAX_VALIDATION_ATTEMPTS + 1):
             try:
-                result = await self._ai_manager.vision(
+                result = await self._ai_manager.generate_with_vision(
                     purpose=ModelPurpose.MEAL_SCAN,
-                    image_bytes=image_bytes,
                     prompt=prompt,
-                    system_prompt=strategy.get_analysis_prompt(),
-                    schema=VisionNutritionResponse,
+                    image_data=image_bytes,
+                    system_message=strategy.get_analysis_prompt(),
                     max_tokens=self._max_output_tokens,
                 )
                 validated = validate_ai_output(
@@ -164,11 +162,11 @@ class VisionAIService(VisionAIServicePort):
     ) -> dict[str, Any]:
         """Run non-nutrition vision strategies with their own response contract."""
         try:
-            result = await self._ai_manager.vision(
+            result = await self._ai_manager.generate_with_vision(
                 purpose=ModelPurpose.MEAL_SCAN,
-                image_bytes=image_bytes,
                 prompt=strategy.get_user_message(),
-                system_prompt=strategy.get_analysis_prompt(),
+                image_data=image_bytes,
+                system_message=strategy.get_analysis_prompt(),
                 max_tokens=self._max_output_tokens,
             )
             structured_data = (

@@ -67,6 +67,9 @@ from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 # Backward-compatible alias
 BarcodeProductModel = FoodReferenceModel
 
+# AI Handshake guest trial quota
+from .ai_handshake_guest_trial_quota import AiHandshakeGuestTrialQuota
+
 # Affiliate outbox
 from .affiliate_event_outbox import AffiliateEventOutbox
 
@@ -152,4 +155,6 @@ __all__ = [
     "PromoCodeRedemption",
     # Affiliate outbox
     "AffiliateEventOutbox",
+    # AI Handshake guest trial quota
+    "AiHandshakeGuestTrialQuota",
 ]

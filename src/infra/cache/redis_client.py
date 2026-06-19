@@ -187,3 +187,18 @@ class RedisClient:
             return bool(await client.exists(key))
 
         return await self._with_client("EXISTS", operation, False, key)
+
+    async def set_if_not_exists(self, key: str, value: str, ttl: int) -> bool | None:
+        """
+        SET key value NX EX ttl.
+        Returns True if set, False if key already existed, None if Redis unavailable.
+        """
+
+        async def _op(client: redis.Redis) -> str:
+            result = await client.set(key, value, nx=True, ex=ttl)
+            return "set" if result is not None else "exists"
+
+        raw = await self._with_client("SET_NX", _op, "__nx_unavail__", key)
+        if raw == "__nx_unavail__":
+            return None
+        return raw == "set"
