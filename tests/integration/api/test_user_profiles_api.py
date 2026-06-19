@@ -151,11 +151,14 @@ class TestUserProfilesAPI:
 
         # Arrange: Update request
         payload = {
+            "age": 35,
+            "height_cm": 180.0,
             "weight_kg": 75.0,
+            "biological_sex": "female",
             "job_type": "on_feet",
             "training_days_per_week": 5,
             "training_minutes_per_session": 60,
-            "body_fat_percent": 15.0,
+            "body_fat_percentage": 15.0,
             "fitness_goal": "cut",
         }
 
@@ -170,3 +173,11 @@ class TestUserProfilesAPI:
         data = response.json()
         assert "tdee" in data
         assert "macros" in data
+
+        test_session.refresh(profile)
+        assert profile.age == 35
+        assert profile.height_cm == 180.0
+        assert profile.weight_kg == 75.0
+        assert profile.gender == "female"
+        assert profile.body_fat_percentage == 15.0
+        assert profile.fitness_goal == "cut"
