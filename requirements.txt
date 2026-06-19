@@ -7,6 +7,7 @@ python-multipart==0.0.32
 
 # AI/LLM dependencies
 langchain-core==1.4.7
+langchain-cloudflare==0.3.4
 langchain-google-genai==4.2.5
 google-genai==2.8.0
 posthog[otel]==7.18.3
