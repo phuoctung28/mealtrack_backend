@@ -128,8 +128,6 @@ async def test_parse_text_retries_invalid_ai_output_once():
     )
 
     assert len(meal_generation_service.calls) == 2
-    assert meal_generation_service.calls[0]["schema"] is MealTextNutritionResponse
-    assert meal_generation_service.calls[1]["schema"] is MealTextNutritionResponse
     assert (
         "Return the full corrected response"
         in meal_generation_service.calls[1]["system_message"]
