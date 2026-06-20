@@ -37,7 +37,7 @@ alembic==1.18.4
 python-dotenv==1.2.2
 
 # Configuration
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 
 # Event-driven architecture
 pymediator==0.3.0
