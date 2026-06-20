@@ -1,11 +1,13 @@
 """Query and error type for the unified code validation endpoint."""
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class ValidateCodeQuery:
     code: str
     user_id: str
+    current_offering_id: Optional[str] = None
 
 
 class CodeValidationError(Exception):

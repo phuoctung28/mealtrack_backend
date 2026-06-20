@@ -23,6 +23,7 @@ def _make_promo(code="SUMMER50", max_uses=100, current_uses=0, is_active=True, e
     p.is_active = is_active
     p.expires_at = expires_at
     p.rc_offering_id = "email"
+    p.source_offering_id = None
     return p
 
 
@@ -133,6 +134,62 @@ async def test_validate_raises_422_when_already_redeemed():
 
     assert exc_info.value.status_code == 422
     assert "already used" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_source_offering_guard_rejects_wrong_offering():
+    promo = _make_promo()
+    promo.source_offering_id = "price_49k_399k"
+    mock_uow, mock_repo = _mock_uow(promo=promo)
+
+    with patch(
+        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ):
+        handler = ValidatePromoCodeQueryHandler()
+        with pytest.raises(PromoCodeValidationError) as exc_info:
+            await handler.handle(
+                ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123", current_offering_id="price_89k_899k")
+            )
+
+    assert exc_info.value.status_code == 422
+    assert "not valid for this offering" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_source_offering_guard_accepts_matching_offering():
+    promo = _make_promo()
+    promo.source_offering_id = "price_49k_399k"
+    mock_uow, mock_repo = _mock_uow(promo=promo)
+
+    with patch(
+        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ):
+        handler = ValidatePromoCodeQueryHandler()
+        result = await handler.handle(
+            ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123", current_offering_id="price_49k_399k")
+        )
+
+    assert result["is_valid"] is True
+
+
+@pytest.mark.asyncio
+async def test_source_offering_guard_unrestricted_when_none():
+    promo = _make_promo()
+    promo.source_offering_id = None
+    mock_uow, mock_repo = _mock_uow(promo=promo)
+
+    with patch(
+        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ):
+        handler = ValidatePromoCodeQueryHandler()
+        result = await handler.handle(
+            ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123", current_offering_id="anything")
+        )
+
+    assert result["is_valid"] is True
 
 
 @pytest.mark.asyncio

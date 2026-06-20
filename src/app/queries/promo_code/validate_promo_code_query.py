@@ -1,11 +1,13 @@
 """Query and error type for validating a promo code before purchase."""
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class ValidatePromoCodeQuery:
     code: str
     user_id: str
+    current_offering_id: Optional[str] = None
 
 
 class PromoCodeValidationError(Exception):

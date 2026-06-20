@@ -43,6 +43,14 @@ class ValidatePromoCodeQueryHandler:
                     status_code=422, detail="You've already used this code"
                 )
 
+            if (
+                promo.source_offering_id is not None
+                and query.current_offering_id != promo.source_offering_id
+            ):
+                raise PromoCodeValidationError(
+                    status_code=422, detail="Code is not valid for this offering"
+                )
+
             return {
                 "code": promo.code,
                 "rc_offering_id": promo.rc_offering_id,
