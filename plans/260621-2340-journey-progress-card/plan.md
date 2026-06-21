@@ -3,7 +3,7 @@ title: Journey Progress Card
 description: >-
   Server-derived action-progress snapshot for the dashboard goal journey card
   with strict active-period boundaries.
-status: pending
+status: completed
 priority: P2
 branch: feat/journey-progress-card
 tags:
@@ -33,7 +33,7 @@ Brainstorm source: `plans/reports/260621-2340-journey-progress-card-brainstorm.m
 | 1 | [Backend Contract](./phase-01-backend-contract.md) | Completed |
 | 2 | [Backend Calculation](./phase-02-backend-calculation.md) | Completed |
 | 3 | [Mobile Integration](./phase-03-mobile-integration.md) | Completed |
-| 4 | [Verification and PR](./phase-04-verification-and-pr.md) | Pending |
+| 4 | [Verification and PR](./phase-04-verification-and-pr.md) | Completed |
 
 ## Dependencies
 

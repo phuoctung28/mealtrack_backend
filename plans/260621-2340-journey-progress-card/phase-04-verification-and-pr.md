@@ -1,10 +1,13 @@
 ---
 phase: 4
-title: "Verification and PR"
-status: pending
+title: Verification and PR
+status: completed
 priority: P1
-effort: "3h"
-dependencies: [1, 2, 3]
+effort: 3h
+dependencies:
+  - 1
+  - 2
+  - 3
 ---
 
 # Phase 4: Verification and PR
