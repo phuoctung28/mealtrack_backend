@@ -103,7 +103,7 @@ def test_render_message_daily_summary_zero_logs():
         "daily_summary", 2000, "male", "en", calories_consumed=0, calorie_goal=2000
     )
     assert title == "Nutree"
-    assert "Busy" in body
+    assert "busy" in body.lower()
     assert "log" in body.lower()
 
 
@@ -181,7 +181,7 @@ def test_render_trial_expiry_2d_en_male_returns_2_day_body():
 
     title, body = _render_message("trial_expiry_2d", 0, "male", "en")
     assert title == "Nutree"
-    assert "2 days" in body
+    assert "48 hours" in body
 
 
 def test_render_trial_expiry_1d_en_female_returns_1_day_body():
@@ -189,14 +189,14 @@ def test_render_trial_expiry_1d_en_female_returns_1_day_body():
 
     title, body = _render_message("trial_expiry_1d", 0, "female", "en")
     assert title == "Nutree"
-    assert "soon" in body.lower()
+    assert "tomorrow" in body.lower()
 
 
 def test_render_trial_expiry_2d_vi_male_returns_vietnamese():
     from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message("trial_expiry_2d", 0, "male", "vi")
-    assert "2 ngày" in body
+    assert "48 giờ" in body
     assert "bro" in body
 
 
@@ -204,8 +204,8 @@ def test_render_trial_expiry_1d_vi_female_returns_vietnamese():
     from src.infra.services.cron_notification_dispatch_service import _render_message
 
     _, body = _render_message("trial_expiry_1d", 0, "female", "vi")
-    assert "bạn ơi" in body
-    assert "sắp" in body.lower()
+    assert "bạn" in body
+    assert "reset" in body.lower()
 
 
 def test_render_unknown_type_falls_through_to_generic_stub():

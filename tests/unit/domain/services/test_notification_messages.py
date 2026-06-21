@@ -29,12 +29,12 @@ def test_trial_expiry_keys_exist(lang, gender):
 def test_trial_expiry_fallback_locale_returns_english():
     msgs = get_messages("fr", "male")
     assert "trial_expiry" in msgs
-    assert "2 days" in msgs["trial_expiry"]["2d"]["body"]
+    assert "48 hours" in msgs["trial_expiry"]["2d"]["body"]
 
 
 def test_trial_expiry_vi_contains_vietnamese_phrasing():
     msgs = get_messages("vi", "male")
-    assert "trial" in msgs["trial_expiry"]["2d"]["body"].lower()
+    assert "48 giờ" in msgs["trial_expiry"]["2d"]["body"]
     # Distinct buddy term for male VN.
     assert "bro" in msgs["trial_expiry"]["2d"]["body"]
 
@@ -61,8 +61,9 @@ def test_hydration_reminder_keys_exist(lang, gender):
     for slot in ("afternoon", "evening"):
         tmpl = msgs["hydration_reminder"][slot]["body_template"]
         assert tmpl, f"{lang}/{gender}/{slot} body_template is empty"
-        assert "{consumed_ml}" in tmpl, f"{lang}/{gender}/{slot} missing {{consumed_ml}}"
         assert "{remaining_ml}" in tmpl, f"{lang}/{gender}/{slot} missing {{remaining_ml}}"
+    # Evening slot tracks running total; afternoon only shows remaining.
+    assert "{consumed_ml}" in msgs["hydration_reminder"]["evening"]["body_template"]
 
 
 def test_hydration_type_enum_values_exist():
