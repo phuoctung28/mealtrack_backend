@@ -62,6 +62,7 @@ from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.movement import router as movement_router
 from src.api.routes.v1.notifications import router as notifications_router
+from src.api.routes.v1.retention import router as retention_router
 from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.promo_codes import router as promo_codes_router
 from src.api.routes.v1.referrals import router as referrals_router
@@ -344,6 +345,7 @@ app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
 app.include_router(notifications_router)
+app.include_router(retention_router)
 app.include_router(hydration_router)
 app.include_router(ingredients_router)
 app.include_router(tdee_router)

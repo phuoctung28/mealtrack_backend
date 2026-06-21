@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, bindparam, or_, select, text
 
 from src.domain.services.notification_messages import get_messages
+from src.domain.services.onboarding_retention_messages import get_retention_messages
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.notification.notification import NotificationORM
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -79,8 +80,8 @@ class CronNotificationDispatchService:
                 logger.warning("Failed to fetch hydration data batch: %s", exc)
 
         # Render messages per notification and group by (type, title, body)
-        groups: dict[tuple[str, str, str], dict[str, list]] = defaultdict(
-            lambda: {"tokens": [], "ids": [], "row_ids": []}
+        groups: dict[tuple[str, str, str], dict] = defaultdict(
+            lambda: {"tokens": [], "ids": [], "row_ids": [], "campaign_ctx": None}
         )
         sent_ids = []  # delivered (sent without FCM, or FCM batch confirmed success)
         failed_ids = []  # no usable tokens — give up
@@ -118,11 +119,14 @@ class CronNotificationDispatchService:
                     consumed_ml=consumed_ml,
                     goal_ml=goal_ml,
                     remaining_ml=remaining_ml,
+                    context=ctx,
                 )
                 group = groups[(notif.notification_type, title, body)]
                 group["tokens"].extend(tokens)
                 group["ids"].append(str(notif.id))
                 group["row_ids"].append(notif.id)
+                if ctx.get("campaign") == "onboarding_d1_d3" and group["campaign_ctx"] is None:
+                    group["campaign_ctx"] = ctx
                 continue
             else:
                 # meal_reminder_* — real-time DB data
@@ -136,11 +140,15 @@ class CronNotificationDispatchService:
                 lang,
                 calories_consumed=calories_consumed,
                 calorie_goal=calorie_goal,
+                context=ctx,
             )
             group = groups[(notif.notification_type, title, body)]
             group["tokens"].extend(tokens)
             group["ids"].append(str(notif.id))
             group["row_ids"].append(notif.id)
+            # Preserve campaign context on the group for FCM payload enrichment.
+            if ctx.get("campaign") == "onboarding_d1_d3" and group["campaign_ctx"] is None:
+                group["campaign_ctx"] = ctx
 
         # Batch FCM — 500 tokens per call.
         # DB stores trial_expiry_2d / trial_expiry_1d so the UNIQUE
@@ -154,6 +162,13 @@ class CronNotificationDispatchService:
                 "notification_ids": ",".join(group["ids"]),
                 "notification_count": str(len(group["ids"])),
             }
+            campaign_ctx = group.get("campaign_ctx")
+            if campaign_ctx and campaign_ctx.get("campaign") == "onboarding_d1_d3":
+                data["campaign"] = "onboarding_d1_d3"
+                data["campaign_day"] = str(campaign_ctx.get("campaign_day", ""))
+                data["campaign_step"] = str(campaign_ctx.get("campaign_step", ""))
+                data["deeplink"] = str(campaign_ctx.get("deeplink", ""))
+                data["display_mode"] = str(campaign_ctx.get("display_mode", ""))
             tokens = group["tokens"]
             # A batch is delivered only if every chunk's FCM call succeeds. A
             # wholesale send failure (network/auth) returns success=False with no
@@ -306,6 +321,27 @@ class CronNotificationDispatchService:
 # ── Module-level helpers ───────────────────────────────────────────────────────
 
 
+_CAMPAIGN_TYPE_PREFIXES = ("d1_", "d2_", "d3_")
+
+
+def _is_campaign_type(notification_type: str) -> bool:
+    return any(notification_type.startswith(p) for p in _CAMPAIGN_TYPE_PREFIXES)
+
+
+def _render_campaign_message(
+    notification_type: str,
+    lang: str,
+    gender: str,
+    context: dict,
+) -> tuple[str, str]:
+    """Render title + body for D1-D3 campaign notification types."""
+    msgs = get_retention_messages(lang, gender, context=context)
+    entry = msgs.get(notification_type)
+    if entry is None:
+        return "Nutree", "You have a notification 📬"
+    return entry.get("title", "Nutree"), entry.get("body", "")
+
+
 def _render_message(
     notification_type: str,
     remaining: int,
@@ -316,8 +352,15 @@ def _render_message(
     consumed_ml: int = 0,
     goal_ml: int = 2000,
     remaining_ml: int = 0,
+    context: dict | None = None,
 ) -> tuple[str, str]:
     """Render non-empty title + body for a notification type."""
+    # Route campaign notification types to the retention message catalog.
+    if _is_campaign_type(notification_type):
+        return _render_campaign_message(
+            notification_type, lang, gender, context or {}
+        )
+
     messages = get_messages(lang, gender)
     if notification_type == "meal_reminder_breakfast":
         cfg = messages["meal_reminder"]["breakfast"]

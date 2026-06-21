@@ -4,7 +4,10 @@ Auto-extracted for better maintainability.
 """
 
 import logging
+import uuid
 from typing import Dict, Any, Optional
+
+from sqlalchemy import text
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import CompleteOnboardingCommand
@@ -51,6 +54,27 @@ class CompleteOnboardingCommandHandler(
             user.last_accessed = utc_now()
 
             await uow.users.save(user)
+
+            # Seed the D1-D3 campaign state; ON CONFLICT DO NOTHING guards
+            # against duplicate calls (e.g. mobile retries).
+            now = utc_now()
+            campaign_tz = getattr(user, "timezone", None) or "UTC"
+            await uow.session.execute(
+                text("""
+                    INSERT INTO onboarding_retention_states
+                        (id, user_id, campaign_started_at, campaign_timezone, created_at, updated_at)
+                    VALUES
+                        (:id, :user_id, :started_at, :tz, :now, :now)
+                    ON CONFLICT (user_id) DO NOTHING
+                """),
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user.id,
+                    "started_at": now,
+                    "tz": campaign_tz,
+                    "now": now,
+                },
+            )
             # UoW auto-commits on exit
 
             await self._invalidate_user_profile(user.id)

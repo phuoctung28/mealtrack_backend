@@ -34,6 +34,7 @@ async def test_push_cron_happy_path_runs_all_phases():
         patch("src.cron.push.FirebaseService"),
         patch("src.cron.push.DailyContextPrecomputeService") as mock_precompute_cls,
         patch("src.cron.push.CronTrialPushService") as mock_trial_cls,
+        patch("src.cron.push.OnboardingRetentionCampaignScheduler") as mock_campaign_cls,
         patch("src.cron.push.CronNotificationDispatchService") as mock_svc_cls,
         patch("src.cron.push.flush_observability"),
     ):
@@ -46,6 +47,11 @@ async def test_push_cron_happy_path_runs_all_phases():
         mock_trial = AsyncMock()
         mock_trial.check_and_schedule_pushes = AsyncMock()
         mock_trial_cls.return_value = mock_trial
+
+        # Campaign scheduler (Phase 2.5)
+        mock_campaign = AsyncMock()
+        mock_campaign.schedule = AsyncMock(return_value=0)
+        mock_campaign_cls.return_value = mock_campaign
 
         # FCM dispatch service
         mock_svc = MagicMock()
@@ -60,6 +66,7 @@ async def test_push_cron_happy_path_runs_all_phases():
         # All phases were invoked
         assert mock_precompute.precompute_for_timezone.call_count == 2
         mock_trial.check_and_schedule_pushes.assert_awaited_once()
+        mock_campaign.schedule.assert_awaited_once()
         mock_svc._send_due_notifications.assert_called_once()
         mock_svc.cleanup_expired_notifications.assert_awaited_once()
         mock_engine.dispose.assert_awaited_once()
@@ -100,6 +107,7 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
         patch("src.cron.push.DailyContextPrecomputeService"),
         patch("src.cron.push.CronTrialPushService") as mock_trial_cls,
         patch("src.cron.push.CronNotificationDispatchService") as mock_svc_cls,
+        patch("src.cron.push.OnboardingRetentionCampaignScheduler") as mock_campaign_cls,
         patch("src.cron.push.flush_observability"),
         patch("src.cron.push.capture_exception") as mock_capture_exception,
     ):
@@ -113,6 +121,10 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
         mock_trial = AsyncMock()
         mock_trial.check_and_schedule_pushes = AsyncMock()
         mock_trial_cls.return_value = mock_trial
+
+        mock_campaign = AsyncMock()
+        mock_campaign.schedule = AsyncMock(return_value=0)
+        mock_campaign_cls.return_value = mock_campaign
 
         mock_svc = MagicMock()
         mock_svc._send_due_notifications = AsyncMock()

@@ -36,6 +36,9 @@ from src.infra.services.daily_context_precompute_service import (
     DailyContextPrecomputeService,
 )
 from src.infra.services.firebase_service import FirebaseService
+from src.infra.services.onboarding_retention_campaign_scheduler import (
+    OnboardingRetentionCampaignScheduler,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +109,22 @@ async def run() -> None:
         capture_exception(
             exc,
             context={"component": "cron.push", "operation": "trial_push"},
+        )
+
+    # Phase 2.5 — insert D1-D3 onboarding retention campaign rows
+    # ON CONFLICT DO NOTHING keeps this idempotent across cron runs.
+    try:
+        with start_span(
+            operation="cron.push.campaign", description="D1-D3 retention campaign scheduling"
+        ):
+            campaign = OnboardingRetentionCampaignScheduler()
+            await campaign.schedule(now)
+        log_event("info", "cron.phase.completed", attributes={"phase": "push.campaign", "status": "success"})
+    except Exception as exc:
+        logger.exception("Phase 2.5 (D1-D3 campaign scheduling) failed")
+        capture_exception(
+            exc,
+            context={"component": "cron.push", "operation": "campaign_scheduling"},
         )
 
     dispatch = CronNotificationDispatchService(firebase)
