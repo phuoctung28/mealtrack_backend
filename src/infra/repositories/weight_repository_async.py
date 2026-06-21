@@ -1,17 +1,16 @@
 """Async weight entry repository."""
 
 import logging
-from typing import List, Optional
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.model.weight import WeightEntry
 from src.infra.database.models.weight_entry import WeightEntryORM
 from src.infra.mappers.weight_entry_mapper import (
-    weight_entry_orm_to_domain,
     weight_entry_domain_to_orm,
+    weight_entry_orm_to_domain,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,7 +30,7 @@ class AsyncWeightRepository:
         await self.session.refresh(db)
         return weight_entry_orm_to_domain(db)
 
-    async def find_by_id(self, user_id: str, entry_id: str) -> Optional[WeightEntry]:
+    async def find_by_id(self, user_id: str, entry_id: str) -> WeightEntry | None:
         """Find entry by ID for a specific user."""
         result = await self.session.execute(
             select(WeightEntryORM).where(
@@ -44,7 +43,7 @@ class AsyncWeightRepository:
 
     async def find_by_user(
         self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> List[WeightEntry]:
+    ) -> list[WeightEntry]:
         """Get weight entries for a user, ordered by recorded_at desc."""
         result = await self.session.execute(
             select(WeightEntryORM)
@@ -52,6 +51,24 @@ class AsyncWeightRepository:
             .order_by(WeightEntryORM.recorded_at.desc())
             .limit(limit)
             .offset(offset)
+        )
+        return [weight_entry_orm_to_domain(r) for r in result.scalars().all()]
+
+    async def find_by_recorded_range(
+        self,
+        user_id: str,
+        start_utc,
+        end_utc,
+    ) -> list[WeightEntry]:
+        """Get weight entries in a strict recorded_at UTC range."""
+        result = await self.session.execute(
+            select(WeightEntryORM)
+            .where(
+                WeightEntryORM.user_id == user_id,
+                WeightEntryORM.recorded_at >= start_utc,
+                WeightEntryORM.recorded_at < end_utc,
+            )
+            .order_by(WeightEntryORM.recorded_at.asc())
         )
         return [weight_entry_orm_to_domain(r) for r in result.scalars().all()]
 
@@ -65,7 +82,7 @@ class AsyncWeightRepository:
         )
         return result.rowcount > 0
 
-    async def bulk_upsert(self, user_id: str, entries: List[WeightEntry]) -> int:
+    async def bulk_upsert(self, user_id: str, entries: list[WeightEntry]) -> int:
         """Bulk upsert entries. Returns count of affected rows."""
         if not entries:
             return 0

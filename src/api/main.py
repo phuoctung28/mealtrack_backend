@@ -35,12 +35,12 @@ from src.api.base_dependencies import (
     initialize_cache_layer,
     shutdown_cache_layer,
 )
-from src.api.exception_handlers import register_exception_handlers
 from src.api.dependencies.task_manager import (
     clear_task_manager,
     create_task_manager,
     set_task_manager,
 )
+from src.api.exception_handlers import register_exception_handlers
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.rate_limit import limiter
@@ -63,6 +63,7 @@ from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.movement import router as movement_router
 from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.nutrition import router as nutrition_router
+from src.api.routes.v1.progress import router as progress_router
 from src.api.routes.v1.promo_codes import router as promo_codes_router
 from src.api.routes.v1.referrals import router as referrals_router
 from src.api.routes.v1.saved_suggestions import router as saved_suggestions_router
@@ -353,6 +354,7 @@ app.include_router(referrals_router)
 app.include_router(promo_codes_router)
 app.include_router(codes_router)
 app.include_router(nutrition_router)
+app.include_router(progress_router)
 app.include_router(weight_entries_router)
 app.include_router(movement_router)
 app.include_router(well_known_router)

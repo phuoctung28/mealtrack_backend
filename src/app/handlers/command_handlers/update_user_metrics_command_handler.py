@@ -11,6 +11,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.common.enums import FitnessGoal, JobType, TrainingLevel
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -20,29 +21,34 @@ _VALID_TRAINING_LEVELS = {e.value for e in TrainingLevel}
 
 
 def _has_metric_update(command: UpdateUserMetricsCommand) -> bool:
-    return any(
-        value is not None
-        for value in [
-            command.weight_kg,
-            command.job_type,
-            command.training_days_per_week,
-            command.training_minutes_per_session,
-            command.body_fat_percent,
-            command.fitness_goal,
-            command.training_level,
-            command.target_weight_kg,
-            command.goal_start_weight_kg,
-            command.goal_started_at,
-            command.daily_water_goal_ml,
-        ]
-    ) or command.reset_water_goal
+    return (
+        any(
+            value is not None
+            for value in [
+                command.weight_kg,
+                command.job_type,
+                command.training_days_per_week,
+                command.training_minutes_per_session,
+                command.body_fat_percent,
+                command.fitness_goal,
+                command.training_level,
+                command.target_weight_kg,
+                command.goal_start_weight_kg,
+                command.goal_started_at,
+                command.daily_water_goal_ml,
+            ]
+        )
+        or command.reset_water_goal
+    )
 
 
 @handles(UpdateUserMetricsCommand)
 class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, None]):
     """Handle updating user metrics (weight, job type, training, body fat)."""
 
-    def __init__(self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None):
+    def __init__(
+        self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None
+    ):
         self.uow = uow
         self.cache_service = cache_service
 
@@ -127,9 +133,17 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 profile.training_level = command.training_level
 
             # Handle target weight update
+            target_weight_changed = False
+            should_auto_start_goal = False
             if command.target_weight_kg is not None:
                 if command.target_weight_kg <= 0:
                     raise ValidationException("Target weight must be greater than 0")
+                target_weight_changed = (
+                    profile.target_weight_kg != command.target_weight_kg
+                )
+                should_auto_start_goal = (
+                    target_weight_changed or profile.goal_started_at is None
+                )
                 logger.info(
                     f"Updating target_weight_kg for user {command.user_id}: "
                     f"{profile.target_weight_kg} -> {command.target_weight_kg}"
@@ -147,6 +161,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     f"{profile.goal_start_weight_kg} -> {command.goal_start_weight_kg}"
                 )
                 profile.goal_start_weight_kg = command.goal_start_weight_kg
+            elif should_auto_start_goal:
+                profile.goal_start_weight_kg = profile.weight_kg
 
             if command.goal_started_at is not None:
                 logger.info(
@@ -154,6 +170,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     f"{profile.goal_started_at} -> {command.goal_started_at}"
                 )
                 profile.goal_started_at = command.goal_started_at
+            elif should_auto_start_goal:
+                profile.goal_started_at = utc_now()
 
             if command.reset_water_goal:
                 profile.daily_water_goal_ml = None
@@ -192,7 +210,9 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         try:
             await self.cache_service.invalidate_pattern(macros_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate macros pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate macros pattern for user {user_id}: {e}"
+            )
 
         # Invalidate ALL weekly budgets for this user
         # TDEE changes affect weekly targets
@@ -200,16 +220,22 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         try:
             await self.cache_service.invalidate_pattern(weekly_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate weekly budget pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate weekly budget pattern for user {user_id}: {e}"
+            )
 
         hydration_pattern = f"user:{user_id}:hydration:*"
         try:
             await self.cache_service.invalidate_pattern(hydration_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate hydration pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate hydration pattern for user {user_id}: {e}"
+            )
 
         weekly_hydration_pattern = f"user:{user_id}:hydration_weekly:*"
         try:
             await self.cache_service.invalidate_pattern(weekly_hydration_pattern)
         except Exception as e:
-            logger.warning(f"Failed to invalidate weekly hydration pattern for user {user_id}: {e}")
+            logger.warning(
+                f"Failed to invalidate weekly hydration pattern for user {user_id}: {e}"
+            )

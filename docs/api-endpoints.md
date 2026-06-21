@@ -168,6 +168,14 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 
 ---
 
+## Progress
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/v1/progress/journey` | Action-based journey progress snapshot for the dashboard card |
+
+---
+
 ## Notifications
 
 | Method | Endpoint | Purpose |

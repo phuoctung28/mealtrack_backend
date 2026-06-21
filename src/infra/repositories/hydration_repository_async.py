@@ -181,6 +181,46 @@ class AsyncHydrationRepository:
             totals[day_val] = int(total)
         return totals
 
+    async def fetch_journey_progress_hydration(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[dict]:
+        result = await self.session.execute(
+            select(
+                HydrationEntryORM.logged_at,
+                HydrationEntryORM.drink_name_snapshot,
+                HydrationEntryORM.credited_ml,
+                HydrationEntryORM.protein_g,
+                HydrationEntryORM.carbs_g,
+                HydrationEntryORM.fat_g,
+                HydrationEntryORM.fiber_g,
+            )
+            .where(
+                HydrationEntryORM.user_id == user_id,
+                HydrationEntryORM.logged_at >= start_utc,
+                HydrationEntryORM.logged_at < end_utc,
+            )
+            .order_by(HydrationEntryORM.logged_at.asc())
+        )
+        return [
+            {
+                "logged_at": logged_at,
+                "label": label or "Hydration",
+                "hydration_ml": int(credited_ml or 0),
+                "calories": round(
+                    float(protein_g or 0.0) * 4
+                    + max(0.0, float(carbs_g or 0.0) - float(fiber_g or 0.0)) * 4
+                    + float(fiber_g or 0.0) * 2
+                    + float(fat_g or 0.0) * 9,
+                    1,
+                ),
+                "protein_g": float(protein_g or 0.0),
+            }
+            for logged_at, label, credited_ml, protein_g, carbs_g, fat_g, fiber_g in result.all()
+        ]
+
     async def delete_by_id_or_legacy_meal_id(self, user_id: str, entry_id: str) -> bool:
         result = await self.session.execute(
             delete(HydrationEntryORM).where(
