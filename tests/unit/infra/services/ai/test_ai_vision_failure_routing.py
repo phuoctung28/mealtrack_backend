@@ -79,6 +79,10 @@ def _build_manager(mock_circuit_breaker, mock_gemini_provider, extra_providers=N
     mgr._providers = {"gemini": mock_gemini_provider}
     mgr._model_provider_overrides = {}
 
+    # Set an explicit chain so routing tests can advance through providers,
+    # independent of the production FALLBACK_CHAINS (which has no Gemini for vision).
+    mgr._fallback_chains[ModelPurpose.MEAL_SCAN] = ["gemini-2.5-flash"]
+
     if extra_providers:
         mgr._providers.update(extra_providers)
 
