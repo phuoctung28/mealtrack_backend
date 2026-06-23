@@ -33,18 +33,10 @@ class ModelPurpose(Enum):
 
 FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
     # ==========================================================================
-    # VISION TASKS: Gemini 3.1 Flash-Lite first → stronger Gemini fallbacks
+    # VISION TASKS: CF Workers AI only — no Gemini fallback for vision
     # ==========================================================================
-    ModelPurpose.MEAL_SCAN: [
-        "gemini-3.1-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-2.5-flash",
-    ],
-    ModelPurpose.INGREDIENT_SCAN: [
-        "gemini-3.1-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-2.5-flash",
-    ],
+    ModelPurpose.MEAL_SCAN: [],
+    ModelPurpose.INGREDIENT_SCAN: [],
     # ==========================================================================
     # SHORT STRUCTURED TEXT: Gemini Flash-Lite first → Flash fallback
     # ==========================================================================
