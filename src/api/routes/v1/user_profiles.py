@@ -176,6 +176,7 @@ async def update_user_metrics(
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     import logging
+
     logger = logging.getLogger(__name__)
     # Debug: log incoming request values
     logger.info(
@@ -183,14 +184,24 @@ async def update_user_metrics(
         f"target_weight_kg={request.target_weight_kg}, "
         f"weight_kg={request.weight_kg}"
     )
+    body_fat_provided = (
+        request.body_fat_percentage is not None or request.reset_body_fat
+    )
+
     # Update metrics (including optional fitness goal and target weight)
     command = UpdateUserMetricsCommand(
         user_id=user_id,
+        age=request.age,
+        height_cm=request.height_cm,
         weight_kg=request.weight_kg,
+        biological_sex=request.biological_sex,
         job_type=request.job_type,
         training_days_per_week=request.training_days_per_week,
         training_minutes_per_session=request.training_minutes_per_session,
-        body_fat_percent=request.body_fat_percent,
+        body_fat_percent=(
+            None if request.reset_body_fat else request.body_fat_percentage
+        ),
+        body_fat_percent_provided=body_fat_provided,
         fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
         training_level=(
             request.training_level.value if request.training_level else None

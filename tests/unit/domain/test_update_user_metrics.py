@@ -52,7 +52,10 @@ class TestUpdateUserMetricsCommand:
         """Test creating command with all metrics."""
         command = UpdateUserMetricsCommand(
             user_id="test_user",
+            age=35,
+            height_cm=180.0,
             weight_kg=75.0,
+            biological_sex="female",
             job_type="desk",
             training_days_per_week=4,
             training_minutes_per_session=60,
@@ -62,7 +65,10 @@ class TestUpdateUserMetricsCommand:
         )
 
         assert command.user_id == "test_user"
+        assert command.age == 35
+        assert command.height_cm == 180.0
         assert command.weight_kg == 75.0
+        assert command.biological_sex == "female"
         assert command.job_type == "desk"
         assert command.training_days_per_week == 4
         assert command.training_minutes_per_session == 60
@@ -162,7 +168,10 @@ class TestUpdateUserMetricsCommandHandler:
         handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
+            age=35,
+            height_cm=180.0,
             weight_kg=72.5,
+            biological_sex="female",
             job_type="on_feet",
             training_days_per_week=5,
             training_minutes_per_session=60,
@@ -172,12 +181,32 @@ class TestUpdateUserMetricsCommandHandler:
 
         await handler.handle(command)
 
+        assert profile.age == 35
+        assert profile.height_cm == 180.0
         assert profile.weight_kg == 72.5
+        assert profile.gender == "female"
         assert profile.job_type == "on_feet"
         assert profile.training_days_per_week == 5
         assert profile.training_minutes_per_session == 60
         assert profile.body_fat_percentage == 15.0
         assert profile.fitness_goal == "cut"
+        assert profile.is_current is True
+
+    async def test_clear_body_fat_when_explicitly_requested(self):
+        """Test clearing body fat requires an explicit clear signal."""
+        profile = _make_profile(body_fat_percentage=20.0)
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(
+            user_id="test_user",
+            body_fat_percent=None,
+            body_fat_percent_provided=True,
+        )
+
+        await handler.handle(command)
+
+        assert profile.body_fat_percentage is None
         assert profile.is_current is True
 
     async def test_user_not_found(self):
@@ -216,6 +245,47 @@ class TestUpdateUserMetricsCommandHandler:
             await handler.handle(command)
 
         assert "Weight must be greater than 0" in str(exc_info.value)
+
+    async def test_invalid_age(self):
+        """Test validation for invalid age."""
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", age=12)
+
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
+
+        assert "Age must be between 13 and 120" in str(exc_info.value)
+
+    async def test_invalid_height(self):
+        """Test validation for invalid height."""
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", height_cm=99.0)
+
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
+
+        assert "Height must be between 100 and 272 cm" in str(exc_info.value)
+
+    async def test_invalid_biological_sex(self):
+        """Test validation for invalid biological sex."""
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(
+            user_id="test_user", biological_sex="unknown"
+        )
+
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
+
+        assert "Biological sex must be male or female" in str(exc_info.value)
 
     async def test_invalid_body_fat(self):
         """Test validation for body fat out of range."""
