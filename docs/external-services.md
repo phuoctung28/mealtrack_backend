@@ -132,6 +132,7 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 | `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision for image analysis (Gemini is fallback) |
 | `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
 | `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Purposes that use CF vision as primary |
+| `CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED` | `false` | Route Gemini vision calls through CF AI Gateway (requires `CLOUDFLARE_AI_GATEWAY_ID` + `CLOUDFLARE_ACCOUNT_ID`) |
 
 ### Production Rollout (Vision)
 
@@ -163,6 +164,20 @@ CLOUDFLARE_WORKERS_AI_ENABLED=false
 - API token is loaded from env/settings and never logged.
 - Logs include only: provider name, model alias, purpose value, HTTP status code, and error class.
 - Prompts, food payloads, raw AI responses, base64 image bytes, and account IDs are never logged.
+
+### Cloudflare AI Gateway
+
+Vision calls for both Workers AI and Gemini route through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) when `CLOUDFLARE_AI_GATEWAY_ID` is set (Workers AI) or `CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED=true` (Gemini).
+
+Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
+
+**Privacy:** `cf-aig-collect-log-payload: false` is sent on every vision call — no food images, prompts, or AI responses are stored in CF logs. Request metadata only (model, tokens, latency, cost).
+
+**Cache:** disabled for vision (`cf-aig-skip-cache: true`). Images are always unique; caching adds overhead with zero hit rate.
+
+**Workers AI gateway routing** (Pattern B): the existing REST URL (`api.cloudflare.com`) is unchanged — CF routes internally when `cf-aig-gateway-id` header is present. No URL changes needed.
+
+**Gemini gateway routing:** uses `google-genai` SDK (`genai.Client` with `HttpOptions(base_url=...)`) — NOT LangChain. Gemini text calls with `cached_content` bypass the gateway (Google-side cache objects break when proxied).
 
 ---
 
