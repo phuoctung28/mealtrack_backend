@@ -286,3 +286,70 @@ def test_all_zero_quantity_foods_fails_validation():
 
     with pytest.raises(ValidationError):
         VisionAnalyzeResponse.model_validate(payload)
+
+
+def test_full_prompt_response_with_emoji_and_calories():
+    """Complete response including all prompt-required fields."""
+    payload = {
+        "dish_name": "Pho Bo",
+        "emoji": "🍜",
+        "total_calories": 520,
+        "foods": [
+            {
+                "name": "Rice noodles",
+                "quantity": 200,
+                "unit": "g",
+                "calories": 210,
+                "macros": {"protein": 4, "carbs": 48, "fat": 1},
+            },
+            {
+                "name": "Beef slices",
+                "quantity": 100,
+                "unit": "g",
+                "calories": 200,
+                "macros": {"protein": 26, "carbs": 0, "fat": 10},
+            },
+        ],
+        "confidence": 0.88,
+    }
+    result = VisionAnalyzeResponse.model_validate(payload)
+    assert result.emoji == "🍜"
+    assert result.total_calories == pytest.approx(520)
+    assert result.foods[0].calories == pytest.approx(210)
+    assert result.foods[1].calories == pytest.approx(200)
+
+
+def test_legacy_payload_without_emoji_or_total_calories():
+    """Existing responses without new optional fields must still validate."""
+    payload = {
+        "dish_name": "Rice",
+        "foods": [{"name": "Rice", "quantity": 100, "unit": "g", "macros": {"protein": 3, "carbs": 28, "fat": 0}}],
+        "confidence": 0.9,
+    }
+    result = VisionAnalyzeResponse.model_validate(payload)
+    assert result.emoji is None
+    assert result.total_calories is None
+    assert result.foods[0].calories is None
+
+
+def test_schema_is_json_serializable():
+    """model_json_schema() must return a dict with all prompt-required fields."""
+    schema = VisionAnalyzeResponse.model_json_schema()
+    assert isinstance(schema, dict)
+    assert "dish_name" in schema.get("properties", {})
+    assert "emoji" in schema.get("properties", {})
+    assert "total_calories" in schema.get("properties", {})
+    assert "confidence" in schema.get("properties", {})
+
+
+def test_food_item_calories_is_optional():
+    """calories field on FoodItemResponse is optional."""
+    payload = {
+        "name": "Apple",
+        "quantity": 150,
+        "unit": "g",
+        "macros": {"protein": 0, "carbs": 20, "fat": 0},
+    }
+    from src.domain.parsers.vision_response_models import FoodItemResponse
+    item = FoodItemResponse.model_validate(payload)
+    assert item.calories is None

@@ -416,4 +416,44 @@ Permanent failures (5 attempts exhausted) capture a Sentry error. Cron: `src/cro
 
 ---
 
+## AI Observability (Sentry + PostHog)
+
+### Operational metrics (Sentry)
+Primary dashboard for incident response and alerting.
+
+Metrics emitted via `src.observability`:
+- `ai.vision.request.count` — total image analysis requests (tags: status, ai_purpose)
+- `ai.vision.request.duration_ms` — end-to-end duration (distribution)
+- `ai.vision.provider.attempt.count` — per-provider attempt count
+- `ai.vision.provider.failure.count` — transient provider failures
+- `ai.vision.fallback.count` — provider fallbacks triggered
+- `ai.vision.parse_failure.count` — JSON parse failures
+- `ai.vision.schema_validation_failure.count` — schema validation failures
+- `ai.vision.request.failure.count` — all providers exhausted
+
+Recommended Sentry dashboard panels:
+- Success rate = `request.count{status=success}` / `request.count`
+- 503 rate = `request.failure.count` / `request.count`
+- p95 duration = `request.duration_ms` distribution p95
+- Parse/schema failure rate per provider
+
+Alert thresholds (starting points, tune after baseline):
+- 503 rate > 5% over 5 min → P1 alert
+- Parse/schema failure count > 10/min → investigate provider
+- p95 duration > 20s → latency regression
+
+### Cloudflare canary rollout gates
+Before making Cloudflare vision primary:
+1. Enable via env: `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true`
+2. Monitor `schema_validation_failure.count{ai_provider=cloudflare-workers-ai}` vs Gemini baseline
+3. Compare `request.duration_ms` p95 vs Gemini
+4. Rollback: set `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=false` — zero-downtime via env
+
+### LLM traces (PostHog)
+PostHog AI observability is wired via `src/api/main.py` LangChain OpenTelemetry integration.
+Use for: model latency trends, token costs, product funnel correlation.
+Do NOT use PostHog for operational failure alerts — use Sentry metrics.
+
+---
+
 See related: `system-architecture.md`, `database-guide.md`, `cqrs-guide.md`

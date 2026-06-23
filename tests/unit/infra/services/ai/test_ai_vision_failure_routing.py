@@ -1,0 +1,183 @@
+"""Tests for AIModelManager vision failure-kind routing.
+
+Phase 3: verifies that schema/parse failures advance to next provider without
+tripping the circuit breaker, while transient failures DO trip it.
+"""
+
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
+from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
+from src.domain.ports.ai_provider_port import AICapability
+
+
+def _fake_settings(cf_enabled=False):
+    s = Mock()
+    s.CLOUDFLARE_WORKERS_AI_ENABLED = cf_enabled
+    s.CLOUDFLARE_ACCOUNT_ID = ""
+    s.CLOUDFLARE_API_TOKEN = ""
+    s.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = ""
+    s.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = ""
+    s.CLOUDFLARE_WORKERS_AI_JSON_MODE = False
+    s.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS = 30
+    s.CLOUDFLARE_AI_GATEWAY_ID = ""
+    s.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = False
+    s.CLOUDFLARE_WORKERS_AI_VISION_MODEL = ""
+    s.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = ""
+    return s
+
+
+@pytest.fixture(autouse=True)
+def reset_manager():
+    AIModelManager.reset_instance()
+    yield
+    AIModelManager.reset_instance()
+
+
+@pytest.fixture
+def mock_circuit_breaker():
+    breaker = Mock()
+    breaker.filter_available = Mock(side_effect=lambda models: models)
+    breaker.record_failure = Mock()
+    breaker.record_success = Mock()
+    breaker.should_trip = Mock(return_value=True)
+    return breaker
+
+
+@pytest.fixture
+def mock_gemini_provider():
+    provider = Mock()
+    provider.provider_name = "gemini"
+    provider.supported_capabilities = {AICapability.VISION, AICapability.TEXT_GENERATION}
+    provider.generate_with_vision = AsyncMock(return_value={"result": "vision_success"})
+    provider.extract_error_code = Mock(return_value=503)
+    return provider
+
+
+@pytest.fixture
+def mock_cf_vision_provider():
+    provider = Mock()
+    provider.provider_name = "cloudflare-workers-ai"
+    provider.supported_capabilities = {AICapability.VISION}
+    provider.generate_with_vision = AsyncMock(return_value={"result": "cf_vision_success"})
+    provider.extract_error_code = Mock(return_value=503)
+    return provider
+
+
+def _build_manager(mock_circuit_breaker, mock_gemini_provider, extra_providers=None, cf_vision_model=None):
+    """Construct AIModelManager with injected mocks bypassing real provider init."""
+    with patch("src.infra.services.ai.ai_model_manager.GeminiProvider", return_value=mock_gemini_provider):
+        with patch("src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker", return_value=mock_circuit_breaker):
+            mgr = AIModelManager(settings=_fake_settings())
+
+    # Replace internals with mocks
+    mgr._gemini = mock_gemini_provider
+    mgr._circuit_breaker = mock_circuit_breaker
+    mgr._providers = {"gemini": mock_gemini_provider}
+    mgr._model_provider_overrides = {}
+
+    if extra_providers:
+        mgr._providers.update(extra_providers)
+
+    if cf_vision_model:
+        model_name, provider = cf_vision_model
+        mgr._model_provider_overrides[model_name] = "cloudflare-workers-ai"
+        mgr._fallback_chains[ModelPurpose.MEAL_SCAN].insert(0, model_name)
+
+    return mgr
+
+
+@pytest.fixture
+def manager(mock_circuit_breaker, mock_gemini_provider):
+    return _build_manager(mock_circuit_breaker, mock_gemini_provider)
+
+
+@pytest.fixture
+def manager_with_cf_vision(mock_circuit_breaker, mock_gemini_provider, mock_cf_vision_provider):
+    return _build_manager(
+        mock_circuit_breaker,
+        mock_gemini_provider,
+        extra_providers={"cloudflare-workers-ai": mock_cf_vision_provider},
+        cf_vision_model=("cf-vision-model", mock_cf_vision_provider),
+    )
+
+
+class TestVisionFailureKindRouting:
+    @pytest.mark.asyncio
+    async def test_schema_fail_advances_without_circuit_break(
+        self, manager_with_cf_vision, mock_gemini_provider, mock_circuit_breaker, mock_cf_vision_provider
+    ):
+        """Schema validation failure must advance to next provider without tripping circuit breaker."""
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+        mock_cf_vision_provider.generate_with_vision = AsyncMock(
+            side_effect=AIVisionError(
+                "[CF-WORKERS-AI-VISION-SCHEMA-FAIL] provider=cloudflare-workers-ai model=test-model",
+                kind=AIVisionFailureKind.schema_validation,
+                provider="cloudflare-workers-ai",
+                model="test-model",
+            )
+        )
+        mock_gemini_provider.generate_with_vision = AsyncMock(
+            return_value={"result": "gemini_vision_success"}
+        )
+
+        result = await manager_with_cf_vision.generate_with_vision(
+            purpose=ModelPurpose.MEAL_SCAN,
+            prompt="analyze food",
+            image_data=b"fake_image",
+        )
+
+        assert result == {"result": "gemini_vision_success"}
+        mock_gemini_provider.generate_with_vision.assert_awaited()
+        mock_circuit_breaker.record_failure.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_json_parse_fail_advances_without_circuit_break(
+        self, manager_with_cf_vision, mock_gemini_provider, mock_circuit_breaker, mock_cf_vision_provider
+    ):
+        """JSON parse failure must advance to next provider without tripping circuit breaker."""
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+        mock_cf_vision_provider.generate_with_vision = AsyncMock(
+            side_effect=AIVisionError(
+                "[CF-WORKERS-AI-VISION-PARSE-FAIL]",
+                kind=AIVisionFailureKind.json_parse,
+                provider="cloudflare-workers-ai",
+                model="test-model",
+            )
+        )
+        mock_gemini_provider.generate_with_vision = AsyncMock(
+            return_value={"result": "gemini_fallback"}
+        )
+
+        result = await manager_with_cf_vision.generate_with_vision(
+            purpose=ModelPurpose.MEAL_SCAN,
+            prompt="analyze food",
+            image_data=b"fake_image",
+        )
+
+        assert result == {"result": "gemini_fallback"}
+        mock_circuit_breaker.record_failure.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_transient_fail_records_circuit_breaker(
+        self, manager, mock_gemini_provider, mock_circuit_breaker
+    ):
+        """Transient (non-AIVisionError) failures must record failure in circuit breaker."""
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+        mock_gemini_provider.generate_with_vision = AsyncMock(
+            side_effect=Exception("503 Service Unavailable")
+        )
+        mock_gemini_provider.extract_error_code = Mock(return_value=503)
+        mock_circuit_breaker.should_trip = Mock(return_value=True)
+
+        with pytest.raises(AIUnavailableError):
+            await manager.generate_with_vision(
+                purpose=ModelPurpose.MEAL_SCAN,
+                prompt="analyze food",
+                image_data=b"fake_image",
+            )
+
+        mock_circuit_breaker.record_failure.assert_called()
