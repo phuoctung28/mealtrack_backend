@@ -136,6 +136,7 @@ class TestGenerateWithVision:
     ):
         mock_llm = Mock()
         mock_llm.invoke = Mock(return_value=Mock(content='{"result": "ok"}'))
+        mock_llm.with_structured_output = Mock(side_effect=NotImplementedError)
         mock_model_manager.get_model_for_purpose.return_value = mock_llm
 
         await provider.generate_with_vision(
@@ -148,6 +149,73 @@ class TestGenerateWithVision:
 
         call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
         assert call_kwargs["model_name"] == "gemini-3.1-flash-lite"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_uses_structured_output_first(
+        self, provider, mock_model_manager
+    ):
+        from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
+
+        parsed_instance = VisionAnalyzeResponse(dish_name="Bowl", foods=[], confidence=0.9)
+        structured_chain = Mock()
+        structured_chain.invoke = Mock(return_value={"parsed": parsed_instance})
+
+        mock_llm = Mock()
+        mock_llm.with_structured_output = Mock(return_value=structured_chain)
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash",
+            prompt="analyze this",
+            image_data=b"fake-image",
+        )
+
+        assert isinstance(result, dict)
+        assert result["dish_name"] == "Bowl"
+        # raw llm.invoke should NOT have been called
+        mock_llm.invoke.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_falls_back_to_raw_parse(
+        self, provider, mock_model_manager
+    ):
+        mock_llm = Mock()
+        mock_llm.with_structured_output = Mock(side_effect=NotImplementedError("unsupported"))
+        mock_llm.invoke = Mock(return_value=Mock(content='{"dish_name": "Rice", "confidence": 0.8}'))
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash",
+            prompt="analyze",
+            image_data=b"fake-image",
+        )
+
+        mock_llm.invoke.assert_called_once()
+        assert isinstance(result, dict)
+        assert result["dish_name"] == "Rice"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_handles_none_parsed(
+        self, provider, mock_model_manager
+    ):
+        structured_chain = Mock()
+        structured_chain.invoke = Mock(return_value={"parsed": None})
+
+        mock_llm = Mock()
+        mock_llm.with_structured_output = Mock(return_value=structured_chain)
+        mock_llm.invoke = Mock(return_value=Mock(content='{"dish_name": "Soup", "confidence": 0.7}'))
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash",
+            prompt="analyze",
+            image_data=b"fake-image",
+        )
+
+        # parsed=None triggers fallback to llm.invoke
+        mock_llm.invoke.assert_called_once()
+        assert isinstance(result, dict)
+        assert result["dish_name"] == "Soup"
 
 
 class TestErrorExtraction:

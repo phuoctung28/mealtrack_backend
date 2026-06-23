@@ -22,6 +22,9 @@ class FoodItemResponse(BaseModel):
     )
     unit: str = Field(..., description="Unit of measurement")
     macros: MacrosResponse = Field(..., description="Macronutrient breakdown")
+    calories: float | None = Field(
+        None, ge=0, description="Calories for this food item (advisory; backend derives from macros)"
+    )
 
 
 class VisionAnalyzeResponse(BaseModel):
@@ -32,6 +35,10 @@ class VisionAnalyzeResponse(BaseModel):
     """
 
     dish_name: str | None = Field(None, description="Dish name")
+    emoji: str | None = Field(None, description="Dish emoji identifier")
+    total_calories: float | None = Field(
+        None, ge=0, description="Total calories for the meal (advisory; backend re-derives from macros)"
+    )
     is_food: bool = Field(True, description="Whether the image contains edible food")
     foods: list[FoodItemResponse] | None = Field(
         None, max_length=8, description="List of foods"

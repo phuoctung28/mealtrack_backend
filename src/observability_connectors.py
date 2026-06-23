@@ -27,6 +27,17 @@ SAFE_CONTEXT_KEYS = frozenset(
         "result",
         "phase",
         "provider",
+        # AI observability — low-cardinality provider/model routing attributes
+        "ai_provider",       # e.g. "gemini", "cloudflare-workers-ai"
+        "ai_model",          # e.g. "gemini-3.1-flash-lite"
+        "ai_purpose",        # e.g. "meal_scan"
+        "ai_stage",          # e.g. "structured_output", "raw_parse", "schema_validation"
+        "failure_kind",      # AIVisionFailureKind.value
+        "attempt_index",     # int: which attempt in the chain
+        "fallback_from",     # model that failed before fallback
+        "fallback_to",       # model now being tried
+        "content_len_bucket",  # e.g. "0-100", "100-500", "500-2000", "2000+"
+        "error_code",        # numeric/string error code (context only, not a tag)
     }
 )
 
@@ -45,6 +56,14 @@ SAFE_TAG_KEYS = frozenset(
         "status",
         "result",
         "provider",
+        # AI observability — suitable as low-cardinality provider tags
+        "ai_provider",
+        "ai_model",
+        "ai_purpose",
+        "ai_stage",
+        "failure_kind",
+        "fallback_from",
+        "fallback_to",
     }
 )
 
