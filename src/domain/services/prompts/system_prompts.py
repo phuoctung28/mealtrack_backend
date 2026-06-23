@@ -166,8 +166,7 @@ RESPONSE FORMAT — return exactly this structure:
   "foods": [
     {
       "name": "Food name in English",
-      "quantity": 150.0,
-      "unit": "g",
+      "quantity_g": 150.0,
       "calories": 248,
       "macros": {"protein": 46.0, "carbs": 0.0, "fat": 5.5}
     }
@@ -238,10 +237,10 @@ WORKED EXAMPLE 1 — Chicken rice bowl image:
   "dish_name": "Grilled Chicken Rice Bowl",
   "emoji": "🍚",
   "foods": [
-    {"name": "cooked white rice", "quantity": 180.0, "unit": "g", "calories": 234, "macros": {"protein": 4.3, "carbs": 51.0, "fat": 0.4}},
-    {"name": "grilled chicken breast", "quantity": 150.0, "unit": "g", "calories": 248, "macros": {"protein": 46.5, "carbs": 0.0, "fat": 5.4}},
-    {"name": "steamed broccoli", "quantity": 80.0, "unit": "g", "calories": 27, "macros": {"protein": 2.8, "carbs": 5.6, "fat": 0.3}},
-    {"name": "soy sauce", "quantity": 10.0, "unit": "g", "calories": 6, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}}
+    {"name": "cooked white rice", "quantity_g": 180.0, "calories": 234, "macros": {"protein": 4.3, "carbs": 51.0, "fat": 0.4}},
+    {"name": "grilled chicken breast", "quantity_g": 150.0, "calories": 248, "macros": {"protein": 46.5, "carbs": 0.0, "fat": 5.4}},
+    {"name": "steamed broccoli", "quantity_g": 80.0, "calories": 27, "macros": {"protein": 2.8, "carbs": 5.6, "fat": 0.3}},
+    {"name": "soy sauce", "quantity_g": 10.0, "calories": 6, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}}
   ],
   "total_calories": 515,
   "confidence": 0.88,

@@ -78,7 +78,12 @@ class VisionFoodEstimate(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str = Field(..., min_length=1, max_length=200)
-    quantity_g: float = Field(..., gt=0, le=MAX_FOOD_ITEM_QUANTITY)
+    quantity_g: float = Field(
+        ...,
+        gt=0,
+        le=MAX_FOOD_ITEM_QUANTITY,
+        validation_alias=AliasChoices("quantity_g", "quantity"),
+    )
     macros: AINutritionMacros
     confidence: float = Field(1.0, ge=0, le=1)
 
