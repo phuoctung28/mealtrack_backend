@@ -1,8 +1,8 @@
 # Backend Codebase Summary
 
-**Generated:** June 13, 2026
-**Status:** Production-ready (430 files, ~38.5K LOC, 681+ tests, 70%+ coverage)
-**Language:** Python 3.13 | **Framework:** FastAPI 0.115+ + SQLAlchemy 2.0
+**Generated:** June 22, 2026
+**Status:** Production-ready snapshot of the live backend codebase
+**Runtime:** FastAPI 0.115+ on Python 3.11+ with async SQLAlchemy 2.0
 
 ---
 
@@ -10,28 +10,52 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Source Files | 430 Python files |
-| API Layer | 76 files, ~8,605 LOC |
-| Application Layer | 140 files, ~6,229 LOC |
-| Domain Layer | 133 files, ~14,556 LOC |
-| Infrastructure Layer | 80 files, ~8,895 LOC |
-| Total LOC (src/) | ~38,300 LOC |
-| Test Files | 92 files |
-| Total Test Cases | 681+ tests |
-| Test Coverage | 70%+ maintained |
-| API Endpoints | 60+ REST endpoints across 17 route modules |
-| CQRS Commands | 30 commands across 11 domains |
-| CQRS Queries | 31 query definitions |
-| Domain Events | 19 event definitions |
-| Handlers | 51 handlers with @handles decorator (28+ cmd, 24+ query, 1 event) |
-| Application Services | 3 (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService) |
-| Domain Services | 50+ service files |
-| Bounded Contexts | 8 contexts (Meal, Nutrition, User, Planning, Conversation, Notification, AI, Chat) |
-| Analysis Strategies | 6 strategies (basic, portion, ingredient, weight, user-context, combined) |
-| Database Tables | 13+ (core + notification_sent_log for dedup) |
-| Repositories | 10+ with smart sync and eager loading |
-| Port Interfaces | 17 port interfaces for dependency inversion |
-| External Integrations | 9 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, PostHog, Redis, MySQL, Sentry) |
+| Source files | 620 Python files in `src/` |
+| Source LOC | ~52.6K LOC in `src/` |
+| Test files | 291 Python files in `tests/` |
+| Collected tests | 1,600+ collected tests |
+| API routers | 26 router registrations in `src/api/main.py` |
+| API endpoints | 83 endpoint decorators under `src/api/routes/` |
+| CQRS command files | 51 |
+| CQRS query files | 50 |
+| CQRS event files | 15 |
+| CQRS handler files | 87 |
+| Domain service files | 50 |
+| Port files | 26 |
+| Database model files | 47 |
+| ORM table declarations | 36 |
+
+---
+
+## Layer Snapshot
+
+| Layer | Files | LOC | Notes |
+|-------|-------|-----|-------|
+| API | 89 | ~10.4K | Routes, middleware, schemas, dependency wiring, and API mappers |
+| Application | 208 | ~11.0K | Commands, queries, handlers, and orchestration services |
+| Domain | 160 | ~15.5K | Entities, services, ports, policies, and bounded contexts |
+| Infrastructure | 154 | ~15.0K | Database, cache, adapters, observability, and service integrations |
+
+---
+
+## Live API Surface
+
+The current HTTP surface includes:
+
+- Meal logging and analysis: image upload, upload-token, scan-by-url, manual meals, parse-text, streak, weekly budget, and daily macros.
+- User and profile management: Firebase sync, onboarding completion, metrics, TDEE, language, timezone, and account deletion.
+- Discovery and planning: meal suggestions discover, recipes, and save.
+- Nutrition and activity tracking: nutrition bulk/presence, activities daily/bulk, hydration, movement, and the journey progress snapshot.
+- Support routes: foods, ingredients, notifications, feature flags, saved suggestions, cheat days, referrals, promo codes, unified code validation, monitoring, health, app download, and well-known links.
+
+---
+
+## Core Runtime Notes
+
+- Runtime DB access uses PostgreSQL/Neon via `src/infra/database/config_async.py` and `asyncpg`.
+- Redis is optional and used for cache-aside and AI-context caching, not as the source of truth.
+- Database migrations are Alembic-managed and run before app startup through the entrypoint/pre-deploy flow.
+- The event bus is a singleton PyMediator registry wired from `src/api/dependencies/event_bus.py`.
 
 ---
 

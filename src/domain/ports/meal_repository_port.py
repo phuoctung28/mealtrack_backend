@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from src.domain.model.meal import Meal, MealStatus
@@ -124,3 +124,12 @@ class MealRepositoryPort(ABC):
     ) -> dict[date, int]:
         """Return {date: meal_count} for each day in range with at least 1 meal."""
         return {}
+
+    async def fetch_journey_progress_meals(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[dict]:
+        """Return meal action rows in a strict UTC range for journey progress."""
+        return []

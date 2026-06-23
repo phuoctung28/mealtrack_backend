@@ -17,6 +17,11 @@
 - [x] Upgraded pytest tooling to 9.x to clear the test dependency audit finding.
 - [x] Verified `requirements.txt` and `requirements-test.txt` with `pip-audit`; ML-only `torch` remains isolated in `requirements-ml.txt` pending an upstream CVE fix.
 
+### June 2026: Journey Progress Card
+- [x] Added canonical `GET /v1/progress/journey` for the dashboard progress card.
+- [x] Strict active-period filtering keeps only `period_start <= action_time < period_end`; existing users without `goal_started_at` fall back to the stable 2026-06-21 feature start in their local timezone.
+- [x] Onboarding and target-weight updates now set the journey baseline fields that anchor the active period.
+
 ### June 2026: Single-Owner Logger System
 - [x] Established log-or-raise rule: one root-cause `ERROR` per unexpected request failure; expected 4xx exceptions produce zero ERROR logs.
 - [x] `src/api/exception_handlers.py` — new central exception boundary with `register_exception_handlers(app)`; owns single ERROR for unexpected exceptions.

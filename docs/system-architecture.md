@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 17, 2026
+**Last Updated:** June 22, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 620 Python files, ~52.6K LOC in `src/`
@@ -39,7 +39,7 @@
 |-------|-------|-----|-------------|
 | API | 89 | ~10,361 | 26 router registrations, 83 endpoint decorators, schemas, middleware, dependencies |
 | App | 208 | ~10,984 | 51 command files, 50 query files, 15 event files, 87 handler files |
-| Domain | 160 | ~15,460 | Meal, nutrition, user, hydration, movement, notification, planning, referral-facing policies |
+| Domain | 160 | ~15,460 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
 | Infra | 154 | ~15,041 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
 | **Total** | **611** | **~51,846** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
 
@@ -98,6 +98,7 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 | User | User, UserProfile, Activity, TdeeRequest, weight history |
 | Hydration | Hydration entries, drink catalog, caloric drink logging |
 | Movement | Movement entries, activity catalog, daily movement summaries |
+| Progress | Journey progress snapshot, active-period filtering, action scoring |
 | Meal Planning | Weekly budget, meal planning, meal suggestion, saved suggestion models |
 | Notification | UserFcmToken, NotificationPreferences, PushNotification, queued notification rows |
 | AI | GPTAnalysisResponse, GPTFoodItem, GPTResponseError |

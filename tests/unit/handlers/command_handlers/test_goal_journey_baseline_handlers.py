@@ -1,0 +1,73 @@
+from datetime import UTC, datetime
+from uuid import UUID
+
+import pytest
+
+from src.app.commands.user import SaveUserOnboardingCommand
+from src.app.handlers.command_handlers.save_user_onboarding_command_handler import (
+    SaveUserOnboardingCommandHandler,
+)
+
+
+class _FakeUsers:
+    def __init__(self):
+        self.saved_profile = None
+
+    async def find_by_id(self, user_id):
+        return object()
+
+    async def get_profile(self, user_id):
+        return None
+
+    async def update_profile(self, profile):
+        self.saved_profile = profile
+
+
+class _FakeUow:
+    def __init__(self):
+        self.users = _FakeUsers()
+        self.committed = False
+        self.rolled_back = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+    async def commit(self):
+        self.committed = True
+
+    async def rollback(self):
+        self.rolled_back = True
+
+
+@pytest.mark.asyncio
+async def test_onboarding_sets_goal_journey_baseline(monkeypatch):
+    fixed_now = datetime(2026, 6, 21, 1, 2, 3, tzinfo=UTC)
+    monkeypatch.setattr(
+        "src.app.handlers.command_handlers.save_user_onboarding_command_handler.utc_now",
+        lambda: fixed_now,
+    )
+    uow = _FakeUow()
+    handler = SaveUserOnboardingCommandHandler(uow=uow)
+    user_id = str(UUID("11111111-1111-1111-1111-111111111111"))
+
+    await handler.handle(
+        SaveUserOnboardingCommand(
+            user_id=user_id,
+            age=30,
+            gender="male",
+            height_cm=180,
+            weight_kg=80,
+            target_weight_kg=75,
+            job_type="desk",
+            training_days_per_week=3,
+            training_minutes_per_session=45,
+            fitness_goal="cut",
+        )
+    )
+
+    assert uow.committed is True
+    assert uow.users.saved_profile.goal_start_weight_kg == 80
+    assert uow.users.saved_profile.goal_started_at == fixed_now

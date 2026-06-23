@@ -432,6 +432,50 @@ class AsyncMealRepository(MealRepositoryPort):
             out[day_val] = count
         return out
 
+    async def fetch_journey_progress_meals(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[dict]:
+        result = await self.session.execute(
+            select(
+                MealORM.created_at,
+                MealORM.dish_name,
+                NutritionORM.protein,
+                NutritionORM.carbs,
+                NutritionORM.fat,
+                NutritionORM.fiber,
+            )
+            .join(NutritionORM, NutritionORM.meal_id == MealORM.meal_id, isouter=True)
+            .where(
+                MealORM.user_id == user_id,
+                MealORM.created_at >= start_utc,
+                MealORM.created_at < end_utc,
+                or_(MealORM.meal_type.is_(None), MealORM.meal_type != "hydration"),
+                _domain_hydratable_active_meal_filter(),
+            )
+            .order_by(MealORM.created_at.asc())
+        )
+        rows = []
+        for logged_at, label, protein, carbs, fat, fiber in result.all():
+            protein = float(protein or 0.0)
+            carbs = float(carbs or 0.0)
+            fat = float(fat or 0.0)
+            fiber = float(fiber or 0.0)
+            net_carbs = max(0.0, carbs - fiber)
+            rows.append(
+                {
+                    "logged_at": logged_at,
+                    "label": label or "Meal",
+                    "calories": round(
+                        protein * 4 + net_carbs * 4 + fiber * 2 + fat * 9, 1
+                    ),
+                    "protein_g": protein,
+                }
+            )
+        return rows
+
     async def get_dates_with_meals(
         self, user_id: str, user_timezone: str | None = None
     ) -> list[date]:

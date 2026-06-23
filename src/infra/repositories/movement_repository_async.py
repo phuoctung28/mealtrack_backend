@@ -89,6 +89,29 @@ class AsyncMovementRepository:
         )
         return [(row.logged_at, float(row.kcal_burned)) for row in result.all()]
 
+    async def fetch_journey_progress_movements(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[dict]:
+        result = await self.session.execute(
+            select(MovementEntryORM.logged_at, MovementEntryORM.activity_name)
+            .where(
+                MovementEntryORM.user_id == user_id,
+                MovementEntryORM.logged_at >= start_utc,
+                MovementEntryORM.logged_at < end_utc,
+            )
+            .order_by(MovementEntryORM.logged_at.asc())
+        )
+        return [
+            {
+                "logged_at": logged_at,
+                "label": activity_name or "Activity",
+            }
+            for logged_at, activity_name in result.all()
+        ]
+
     async def update(
         self,
         user_id: str,
