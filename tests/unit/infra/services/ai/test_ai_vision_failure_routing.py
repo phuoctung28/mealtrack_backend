@@ -10,7 +10,7 @@ import pytest
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
-from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
+from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.domain.ports.ai_provider_port import AICapability
 
 

@@ -36,7 +36,7 @@ from src.domain.utils.timezone_utils import (
     utc_now,
 )
 from src.infra.config.settings import get_settings
-from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
+from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.observability import distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
