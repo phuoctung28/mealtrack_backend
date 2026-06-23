@@ -10,6 +10,7 @@ from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 from src.infra.adapters.ai_json_utils import (
     extract_json as extract_ai_json,
 )
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.gemini_model_config import GeminiModelPurpose
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
@@ -128,11 +129,12 @@ class GeminiProvider(AIProviderPort):
         prompt: str,
         image_data: bytes,
         system_message: str | None = None,
-        purpose_hint: str | None = None,   # NEW
+        purpose_hint: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Generate with image input."""
+        """Generate with image input, using structured output first."""
         import base64
+        from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 
         if purpose_hint is not None:
             purpose = _PURPOSE_HINT_MAP.get(purpose_hint, GeminiModelPurpose.GENERAL)
@@ -151,7 +153,6 @@ class GeminiProvider(AIProviderPort):
         messages = []
         if system_message:
             messages.append(SystemMessage(content=system_message))
-
         messages.append(
             HumanMessage(
                 content=[
@@ -161,8 +162,34 @@ class GeminiProvider(AIProviderPort):
             )
         )
 
+        # Try structured output first
+        try:
+            structured_llm = llm.with_structured_output(
+                VisionAnalyzeResponse.model_json_schema(),
+                method="json_schema",
+                include_raw=True,
+            )
+            result = await asyncio.to_thread(structured_llm.invoke, messages)
+            parsed = result.get("parsed") if isinstance(result, dict) else result
+            if parsed is not None:
+                if hasattr(parsed, "model_dump"):
+                    return parsed.model_dump()
+                if isinstance(parsed, dict):
+                    return parsed
+        except Exception:
+            logger.debug("[GEMINI-VISION-STRUCTURED-FALLBACK] model=%s", model)
+
+        # Fallback to raw text parse
         response = await asyncio.to_thread(llm.invoke, messages)
-        return self._extract_json(response.content)
+        try:
+            return self._extract_json(response.content)
+        except ValueError as exc:
+            raise AIVisionError(
+                f"[GEMINI-VISION-PARSE-FAIL] provider=gemini model={model}",
+                kind=AIVisionFailureKind.json_parse,
+                provider="gemini",
+                model=model,
+            ) from exc
 
     def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract status code or error type from exception."""

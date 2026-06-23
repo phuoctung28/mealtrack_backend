@@ -36,6 +36,8 @@ from src.domain.utils.timezone_utils import (
     utc_now,
 )
 from src.infra.config.settings import get_settings
+from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
+from src.observability import distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,18 @@ class UploadMealImageImmediatelyHandler(
                 return await self.vision_service.analyze(command.file_contents)
             except Exception as e:
                 last_error = e
+                # Deterministic failures (schema/parse/no-food) cannot be fixed by retrying
+                # the same provider chain — skip outer retry and surface immediately
+                if isinstance(e, AIVisionError) and e.kind in (
+                    AIVisionFailureKind.schema_validation,
+                    AIVisionFailureKind.json_parse,
+                    AIVisionFailureKind.no_food,
+                ):
+                    logger.warning(
+                        "[PHASE-1-NO-RETRY] meal=%s kind=%s attempt=%d/%d",
+                        meal_id, e.kind.value, attempt, max_attempts,
+                    )
+                    raise
                 logger.warning(
                     f"[PHASE-1-RETRY] meal={meal_id} | "
                     f"attempt={attempt}/{max_attempts} failed: {e}"
@@ -156,9 +170,23 @@ class UploadMealImageImmediatelyHandler(
             analysis_result = await self._run_vision_analysis(command, image_id)
         except Exception:
             # Image uploaded but analysis failed - acceptable orphan in Cloudinary
+            increment_metric(
+                "ai.vision.request.count",
+                attributes={"status": "failure", "ai_purpose": "meal_scan"},
+            )
             raise
 
         analysis_elapsed = time.time() - analysis_start
+        increment_metric(
+            "ai.vision.request.count",
+            attributes={"status": "success", "ai_purpose": "meal_scan"},
+        )
+        distribution_metric(
+            "ai.vision.request.duration_ms",
+            analysis_elapsed * 1000,
+            unit="millisecond",
+            attributes={"ai_purpose": "meal_scan", "status": "success"},
+        )
         logger.info(
             f"[ANALYSIS-COMPLETE] image_id={image_id} | elapsed={analysis_elapsed:.2f}s"
         )

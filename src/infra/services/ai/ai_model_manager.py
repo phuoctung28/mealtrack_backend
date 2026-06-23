@@ -7,12 +7,13 @@ from typing import Any, Optional
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.ports.ai_provider_port import AICapability
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.provider_circuit_breaker import ProviderCircuitBreaker
 from src.infra.services.ai.providers.cloudflare_workers_ai_provider import (
     CloudflareWorkersAIProvider,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
-from src.observability import log_event
+from src.observability import distribution_metric, increment_metric, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +344,14 @@ class AIModelManager:
                 continue
 
             attempted.append(model)
+            increment_metric(
+                "ai.vision.provider.attempt.count",
+                attributes={
+                    "ai_provider": provider.provider_name,
+                    "ai_model": model,
+                    "ai_purpose": purpose.value,
+                },
+            )
 
             try:
                 result = await provider.generate_with_vision(
@@ -355,15 +364,81 @@ class AIModelManager:
                 )
 
                 self._circuit_breaker.record_success(model)
+
+                if len(attempted) >= 2:
+                    # This model is not the first in the chain — a fallback occurred
+                    increment_metric(
+                        "ai.vision.fallback.count",
+                        attributes={
+                            "ai_purpose": purpose.value,
+                            "fallback_from": attempted[-2],
+                            "fallback_to": model,
+                        },
+                    )
+
                 return result
 
             except Exception as e:
                 last_error = str(e)
-                error_code = provider.extract_error_code(e)
 
+                if isinstance(e, AIVisionError) and e.kind in (
+                    AIVisionFailureKind.schema_validation,
+                    AIVisionFailureKind.json_parse,
+                ):
+                    # Deterministic failure — schema/parse errors won't fix with same model;
+                    # skip circuit breaker recording and advance to next provider
+                    logger.warning(
+                        "[AI-VISION-SCHEMA-FAIL] purpose=%s model=%s kind=%s",
+                        purpose.value, model, e.kind.value,
+                    )
+                    metric_name = (
+                        "ai.vision.schema_validation_failure.count"
+                        if e.kind == AIVisionFailureKind.schema_validation
+                        else "ai.vision.parse_failure.count"
+                    )
+                    increment_metric(
+                        metric_name,
+                        attributes={
+                            "ai_provider": e.provider,
+                            "ai_model": model,
+                            "ai_purpose": purpose.value,
+                            "failure_kind": e.kind.value,
+                        },
+                    )
+                    log_event(
+                        "warning",
+                        "ai.vision.classified_failure",
+                        attributes={
+                            "ai_provider": e.provider,
+                            "ai_model": model,
+                            "ai_purpose": purpose.value,
+                            "ai_stage": "provider_call",
+                            "failure_kind": e.kind.value,
+                        },
+                    )
+                    continue
+
+                # Transient/unknown — use circuit breaker as before
+                error_code = provider.extract_error_code(e)
                 if self._circuit_breaker.should_trip(error_code):
                     self._circuit_breaker.record_failure(model)
+                increment_metric(
+                    "ai.vision.provider.failure.count",
+                    attributes={
+                        "ai_provider": provider.provider_name,
+                        "ai_model": model,
+                        "ai_purpose": purpose.value,
+                    },
+                )
+                logger.warning(
+                    "[AI-ATTEMPT-FAILED] purpose=%s model=%s error=%s",
+                    purpose.value, model, last_error[:100],
+                )
 
+        increment_metric(
+            "ai.vision.request.failure.count",
+            attributes={"ai_purpose": purpose.value, "attempt_count": len(attempted)},
+        )
         log_event("warning", "ai.provider.failure", attributes={"component": "ai_model_manager", "attempt_count": len(attempted)})
         raise AIUnavailableError(
             f"All vision models failed for {purpose.value}",

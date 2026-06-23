@@ -1,6 +1,39 @@
 """AI-related exception classes for resilience layer."""
 
+from enum import Enum
 from typing import Any
+
+
+class AIVisionFailureKind(Enum):
+    """Classified failure reason for a vision provider call."""
+
+    transient = "transient"
+    timeout = "timeout"
+    rate_limit = "rate_limit"
+    schema_validation = "schema_validation"
+    json_parse = "json_parse"
+    no_food = "no_food"
+    unknown = "unknown"
+
+
+class AIVisionError(Exception):
+    """Raised by vision providers with a classified failure kind.
+
+    Schema/parse kinds must NOT trip the circuit breaker — they are deterministic
+    failures that retrying on the same model cannot fix.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        kind: AIVisionFailureKind,
+        provider: str = "",
+        model: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.provider = provider
+        self.model = model
 
 
 class AIError(Exception):

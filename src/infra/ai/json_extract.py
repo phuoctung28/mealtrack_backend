@@ -97,6 +97,11 @@ def extract_json(content: str) -> dict[str, Any]:
     logger.error(
         "[JSON-EXTRACT-FAILED] all attempts failed content_len=%d", len(content)
     )
+    from src.observability import increment_metric  # noqa: PLC0415
+    increment_metric(
+        "ai.vision.parse_failure.count",
+        attributes={"content_len_bucket": _content_len_bucket(len(content))},
+    )
     raise ValueError(
         "Could not extract valid JSON from AI response. "
         "Please try again or use a clearer image."
@@ -106,6 +111,17 @@ def extract_json(content: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Internal helpers (not part of public API)
 # ---------------------------------------------------------------------------
+
+
+def _content_len_bucket(n: int) -> str:
+    """Map content byte length to a low-cardinality bucket label for metrics."""
+    if n < 100:
+        return "0-100"
+    if n < 500:
+        return "100-500"
+    if n < 2000:
+        return "500-2000"
+    return "2000+"
 
 
 def _clean_json(content: str) -> str:

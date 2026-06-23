@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,10 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         system_message: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Send image to Workers AI REST endpoint and return parsed dict."""
+        """Send image to Workers AI REST endpoint and return schema-validated dict."""
+        from pydantic import ValidationError as PydanticValidationError
+        from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
+
         if not self._vision_enabled:
             raise NotImplementedError(
                 "CloudflareWorkersAIProvider: vision not configured. "
@@ -196,7 +200,28 @@ class CloudflareWorkersAIProvider(AIProviderPort):
             )
 
         logger.debug("[CF-WORKERS-AI-VISION-SUCCESS] model=%s", model)
-        return extract_ai_json(text)
+
+        try:
+            parsed = extract_ai_json(text)
+        except ValueError as exc:
+            raise AIVisionError(
+                f"[CF-WORKERS-AI-VISION-PARSE-FAIL] provider=cloudflare-workers-ai model={model}",
+                kind=AIVisionFailureKind.json_parse,
+                provider="cloudflare-workers-ai",
+                model=model,
+            ) from exc
+
+        # Validate against schema — return normalized dict or raise classified error
+        try:
+            validated = VisionAnalyzeResponse.model_validate(parsed)
+            return validated.model_dump()
+        except PydanticValidationError as exc:
+            raise AIVisionError(
+                f"[CF-WORKERS-AI-VISION-SCHEMA-FAIL] provider=cloudflare-workers-ai model={model}",
+                kind=AIVisionFailureKind.schema_validation,
+                provider="cloudflare-workers-ai",
+                model=model,
+            ) from exc
 
     def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract HTTP status code or 'timeout' from httpx exceptions bubbled through LangChain."""
