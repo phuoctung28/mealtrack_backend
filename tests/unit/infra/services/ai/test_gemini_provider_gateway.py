@@ -30,7 +30,9 @@ def test_gateway_client_built_when_setting_enabled():
                 mock_client.assert_called_once()
                 call_kwargs = mock_client.call_args.kwargs
                 http_opts = call_kwargs.get("http_options")
-                assert "gateway.ai.cloudflare.com" in str(http_opts)
+                assert http_opts is not None
+                expected_url = "https://gateway.ai.cloudflare.com/v1/acct/gw/google-ai-studio"
+                assert http_opts.base_url == expected_url
 
 
 def test_gateway_client_none_when_setting_disabled():
