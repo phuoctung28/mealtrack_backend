@@ -13,7 +13,7 @@ from src.infra.services.ai.providers.cloudflare_workers_ai_provider import (
     CloudflareWorkersAIProvider,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
-from src.observability import distribution_metric, increment_metric, log_event
+from src.observability import increment_metric, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,16 @@ class ModelPurpose(Enum):
 
 FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
     # ==========================================================================
-    # VISION TASKS: CF Workers AI only — no Gemini fallback for vision
+    # VISION TASKS: CF Workers AI first → Gemini fallback
     # ==========================================================================
-    ModelPurpose.MEAL_SCAN: [],
-    ModelPurpose.INGREDIENT_SCAN: [],
+    ModelPurpose.MEAL_SCAN: [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ],
+    ModelPurpose.INGREDIENT_SCAN: [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ],
     # ==========================================================================
     # SHORT STRUCTURED TEXT: Gemini Flash-Lite first → Flash fallback
     # ==========================================================================
