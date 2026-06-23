@@ -298,7 +298,7 @@ class TestGenerateWithVision:
 
     @pytest.mark.asyncio
     async def test_generate_with_vision_success(self, provider_with_vision):
-        """Vision-enabled provider calls REST and returns schema-validated dict."""
+        """Vision-enabled provider calls REST and returns parsed dict."""
         from unittest.mock import AsyncMock, Mock, patch
 
         valid_json = (
@@ -455,7 +455,7 @@ class TestGenerateWithVision:
 
     @pytest.mark.asyncio
     async def test_generate_with_vision_returns_schema_valid_dict(self, provider_with_vision):
-        """Valid JSON response is validated against VisionAnalyzeResponse and returned as dict."""
+        """Valid JSON response is parsed and returned as dict."""
         from unittest.mock import AsyncMock, patch
 
         valid_json = (
@@ -480,32 +480,38 @@ class TestGenerateWithVision:
         assert result["confidence"] == 0.95
 
     @pytest.mark.asyncio
-    async def test_generate_with_vision_raises_on_schema_failure(self, provider_with_vision):
-        """Response that fails VisionAnalyzeResponse validation raises AIVisionError with schema_validation kind."""
+    async def test_generate_with_vision_returns_parsed_dict_without_schema_enforcement(
+        self, provider_with_vision
+    ):
+        """Provider returns parsed dict as-is; schema enforcement is the application layer's job.
+
+        Previously the provider validated against VisionAnalyzeResponse (legacy schema requiring
+        quantity+unit), but the system prompt returns quantity_g with no unit — causing a
+        deterministic 100% schema failure. Schema validation was moved to VisionAIService which
+        uses VisionNutritionResponse (accepts quantity_g via AliasChoices).
+        """
         from unittest.mock import AsyncMock, patch
 
-        from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
-
-        # macros is required per schema — missing it triggers PydanticValidationError
-        invalid_json = (
+        # Response missing macros — provider must pass it through without raising
+        partial_json = (
             '{"dish_name": "Salad", "confidence": 0.9, "foods": ['
-            '{"name": "Lettuce", "quantity": 100, "unit": "g"}]}'
+            '{"name": "Lettuce", "quantity_g": 100}]}'
         )
 
         with patch.object(
             provider_with_vision,
             "_post_workers_ai",
-            new=AsyncMock(return_value={"result": {"response": invalid_json}}),
+            new=AsyncMock(return_value={"result": {"response": partial_json}}),
         ):
-            with pytest.raises(AIVisionError) as exc_info:
-                await provider_with_vision.generate_with_vision(
-                    model="@cf/google/gemma-4-26b-a4b-it",
-                    prompt="analyze",
-                    image_data=b"fake",
-                )
-            assert exc_info.value.kind == AIVisionFailureKind.schema_validation
-            assert "SCHEMA-FAIL" in str(exc_info.value)
-            assert exc_info.value.provider == "cloudflare-workers-ai"
+            result = await provider_with_vision.generate_with_vision(
+                model="@cf/google/gemma-4-26b-a4b-it",
+                prompt="analyze",
+                image_data=b"fake",
+            )
+
+        assert isinstance(result, dict)
+        assert result["dish_name"] == "Salad"
+        assert result["foods"][0]["quantity_g"] == 100
 
     def test_no_secrets_in_vision_error_messages(self, provider_with_vision):
         """generate_with_vision NotImplementedError must not expose the api token."""
