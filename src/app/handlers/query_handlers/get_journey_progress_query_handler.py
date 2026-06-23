@@ -27,7 +27,6 @@ from src.domain.utils.timezone_utils import (
     resolve_user_timezone_async,
     utc_now,
 )
-from src.infra.database.uow_async import AsyncUnitOfWork
 
 TargetLoader = Callable[[str], Awaitable[tuple[float, float]]]
 
@@ -40,7 +39,7 @@ class GetJourneyProgressQueryHandler(
 
     def __init__(
         self,
-        uow: AsyncUnitOfWorkPort | None = None,
+        uow: AsyncUnitOfWorkPort,
         cache_service: CachePort | None = None,
         now_fn: Callable[[], Any] = utc_now,
         target_loader: TargetLoader | None = None,
@@ -52,7 +51,7 @@ class GetJourneyProgressQueryHandler(
 
     async def handle(self, query: GetJourneyProgressQuery) -> dict[str, Any]:
         now = ensure_utc(self.now_fn())
-        uow = self.uow or AsyncUnitOfWork()
+        uow = self.uow
 
         async with uow:
             user_tz_str = await resolve_user_timezone_async(

@@ -4,7 +4,6 @@ Command to update user metrics (weight, job type, training, body fat).
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 
 @dataclass
@@ -12,15 +11,19 @@ class UpdateUserMetricsCommand:
     """Update user metrics (including fitness goal and target weight) and trigger TDEE recalculation."""
 
     user_id: str
-    weight_kg: Optional[float] = None
-    job_type: Optional[str] = None
-    training_days_per_week: Optional[int] = None
-    training_minutes_per_session: Optional[int] = None
-    body_fat_percent: Optional[float] = None
-    fitness_goal: Optional[str] = None
-    training_level: Optional[str] = None
-    target_weight_kg: Optional[float] = None
-    goal_start_weight_kg: Optional[float] = None
-    goal_started_at: Optional[datetime] = None
-    daily_water_goal_ml: Optional[int] = None
+    age: int | None = None
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    biological_sex: str | None = None
+    job_type: str | None = None
+    training_days_per_week: int | None = None
+    training_minutes_per_session: int | None = None
+    body_fat_percent: float | None = None
+    body_fat_percent_provided: bool = False
+    fitness_goal: str | None = None
+    training_level: str | None = None
+    target_weight_kg: float | None = None
+    goal_start_weight_kg: float | None = None
+    goal_started_at: datetime | None = None
+    daily_water_goal_ml: int | None = None
     reset_water_goal: bool = False

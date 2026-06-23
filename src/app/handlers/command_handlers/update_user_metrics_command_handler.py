@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 _VALID_JOB_TYPES = {e.value for e in JobType}
 _VALID_FITNESS_GOALS = {e.value for e in FitnessGoal}
 _VALID_TRAINING_LEVELS = {e.value for e in TrainingLevel}
+_VALID_BIOLOGICAL_SEXES = {"male", "female"}
 
 
 def _has_metric_update(command: UpdateUserMetricsCommand) -> bool:
@@ -26,6 +27,9 @@ def _has_metric_update(command: UpdateUserMetricsCommand) -> bool:
             value is not None
             for value in [
                 command.weight_kg,
+                command.height_cm,
+                command.age,
+                command.biological_sex,
                 command.job_type,
                 command.training_days_per_week,
                 command.training_minutes_per_session,
@@ -38,6 +42,7 @@ def _has_metric_update(command: UpdateUserMetricsCommand) -> bool:
                 command.daily_water_goal_ml,
             ]
         )
+        or command.body_fat_percent_provided
         or command.reset_water_goal
     )
 
@@ -66,10 +71,25 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 )
 
             # Update provided fields only
+            if command.age is not None:
+                if command.age < 13 or command.age > 120:
+                    raise ValidationException("Age must be between 13 and 120")
+                profile.age = command.age
+
+            if command.height_cm is not None:
+                if command.height_cm < 100 or command.height_cm > 272:
+                    raise ValidationException("Height must be between 100 and 272 cm")
+                profile.height_cm = command.height_cm
+
             if command.weight_kg is not None:
                 if command.weight_kg <= 0:
                     raise ValidationException("Weight must be greater than 0")
                 profile.weight_kg = command.weight_kg
+
+            if command.biological_sex is not None:
+                if command.biological_sex not in _VALID_BIOLOGICAL_SEXES:
+                    raise ValidationException("Biological sex must be male or female")
+                profile.gender = command.biological_sex
 
             if command.job_type is not None:
                 if command.job_type not in _VALID_JOB_TYPES:
@@ -100,8 +120,13 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     command.training_minutes_per_session
                 )
 
-            if command.body_fat_percent is not None:
-                if command.body_fat_percent < 0 or command.body_fat_percent > 70:
+            if (
+                command.body_fat_percent is not None
+                or command.body_fat_percent_provided
+            ):
+                if command.body_fat_percent is not None and (
+                    command.body_fat_percent < 0 or command.body_fat_percent > 70
+                ):
                     raise ValidationException(
                         "Body fat percentage must be between 0 and 70"
                     )

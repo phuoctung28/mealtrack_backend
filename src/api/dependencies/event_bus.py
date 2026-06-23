@@ -585,7 +585,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(GetWeightEntriesQuery, GetWeightEntriesQueryHandler())
     event_bus.register_handler(
         GetJourneyProgressQuery,
-        GetJourneyProgressQueryHandler(cache_service=cache_service),
+        GetJourneyProgressQueryHandler(
+            uow=AsyncUnitOfWork(),
+            cache_service=cache_service,
+        ),
     )
 
     # Register hydration handlers
