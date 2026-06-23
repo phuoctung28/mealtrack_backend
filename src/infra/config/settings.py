@@ -270,6 +270,13 @@ class Settings(BaseSettings):
         default="meal_scan,ingredient_scan",
         description="Comma-separated ModelPurpose values where Workers AI vision is tried first",
     )
+    CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED: bool = Field(
+        default=False,
+        description=(
+            "Route Gemini vision calls through Cloudflare AI Gateway. "
+            "Requires CLOUDFLARE_AI_GATEWAY_ID and CLOUDFLARE_ACCOUNT_ID to be set."
+        ),
+    )
 
     # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
     CF_ACCOUNT_ID: str | None = Field(
