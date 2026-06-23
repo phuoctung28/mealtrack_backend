@@ -195,10 +195,7 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         system_message: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Send image to Workers AI REST endpoint and return schema-validated dict."""
-        from pydantic import ValidationError as PydanticValidationError
-        from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
-
+        """Send image to Workers AI REST endpoint and return parsed dict."""
         if not self._vision_enabled:
             raise NotImplementedError(
                 "CloudflareWorkersAIProvider: vision not configured. "
@@ -228,17 +225,7 @@ class CloudflareWorkersAIProvider(AIProviderPort):
                 model=model,
             ) from exc
 
-        # Validate against schema — return normalized dict or raise classified error
-        try:
-            validated = VisionAnalyzeResponse.model_validate(parsed)
-            return validated.model_dump()
-        except PydanticValidationError as exc:
-            raise AIVisionError(
-                f"[CF-WORKERS-AI-VISION-SCHEMA-FAIL] provider=cloudflare-workers-ai model={model}",
-                kind=AIVisionFailureKind.schema_validation,
-                provider="cloudflare-workers-ai",
-                model=model,
-            ) from exc
+        return parsed
 
     def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract HTTP status code or 'timeout' from httpx exceptions bubbled through LangChain."""
