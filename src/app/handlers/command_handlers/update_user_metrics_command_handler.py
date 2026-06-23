@@ -11,6 +11,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.common.enums import FitnessGoal, JobType, TrainingLevel
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -157,9 +158,17 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 profile.training_level = command.training_level
 
             # Handle target weight update
+            target_weight_changed = False
+            should_auto_start_goal = False
             if command.target_weight_kg is not None:
                 if command.target_weight_kg <= 0:
                     raise ValidationException("Target weight must be greater than 0")
+                target_weight_changed = (
+                    profile.target_weight_kg != command.target_weight_kg
+                )
+                should_auto_start_goal = (
+                    target_weight_changed or profile.goal_started_at is None
+                )
                 logger.info(
                     f"Updating target_weight_kg for user {command.user_id}: "
                     f"{profile.target_weight_kg} -> {command.target_weight_kg}"
@@ -177,6 +186,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     f"{profile.goal_start_weight_kg} -> {command.goal_start_weight_kg}"
                 )
                 profile.goal_start_weight_kg = command.goal_start_weight_kg
+            elif should_auto_start_goal:
+                profile.goal_start_weight_kg = profile.weight_kg
 
             if command.goal_started_at is not None:
                 logger.info(
@@ -184,6 +195,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     f"{profile.goal_started_at} -> {command.goal_started_at}"
                 )
                 profile.goal_started_at = command.goal_started_at
+            elif should_auto_start_goal:
+                profile.goal_started_at = utc_now()
 
             if command.reset_water_goal:
                 profile.daily_water_goal_ml = None

@@ -13,6 +13,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.user import UserProfileDomainModel
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                 profile = await uow.users.get_profile(UUID(command.user_id))
 
                 if not profile:
+                    goal_started_at = utc_now() if command.target_weight_kg else None
                     # Create new profile
                     profile = UserProfileDomainModel(
                         user_id=UUID(command.user_id),
@@ -68,6 +70,10 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         body_fat_percentage=command.body_fat_percentage,
                         date_of_birth=command.date_of_birth,
                         target_weight_kg=command.target_weight_kg,
+                        goal_start_weight_kg=(
+                            command.weight_kg if command.target_weight_kg else None
+                        ),
+                        goal_started_at=goal_started_at,
                         job_type=command.job_type,
                         training_days_per_week=command.training_days_per_week,
                         training_minutes_per_session=command.training_minutes_per_session,
@@ -81,6 +87,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         training_types=command.training_types,
                     )
                 else:
+                    previous_target = profile.target_weight_kg
                     # Update existing profile
                     profile.age = command.age
                     profile.gender = command.gender
@@ -101,6 +108,12 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.training_level = command.training_level
                     profile.date_of_birth = command.date_of_birth
                     profile.target_weight_kg = command.target_weight_kg
+                    if command.target_weight_kg and (
+                        profile.goal_started_at is None
+                        or previous_target != command.target_weight_kg
+                    ):
+                        profile.goal_start_weight_kg = command.weight_kg
+                        profile.goal_started_at = utc_now()
                     # Write-once — don't overwrite if already set
                     if command.referral_sources and not profile.referral_sources:
                         profile.referral_sources = command.referral_sources
@@ -123,7 +136,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                 await uow.commit()
                 await self._invalidate_user_profile(command.user_id)
 
-            except Exception as e:
+            except Exception:
                 await uow.rollback()
                 raise
 

@@ -178,6 +178,21 @@ _DRINKS: list[Drink] = [
 # Module-level constant — dict keyed by drink id for O(1) lookup.
 DRINK_CATALOG: dict[str, Drink] = {drink.id: drink for drink in _DRINKS}
 
+# Virtual entry for AI-scanned beverages; excluded from get_all() so it doesn't
+# appear in the catalog list but is resolvable via find_by_id("scanned").
+DRINK_CATALOG["scanned"] = Drink(
+    id="scanned",
+    name="Scanned drink",
+    sub="Beverage",
+    emoji="🥤",
+    default_ml=330,
+    kcal_per_100ml=0.0,
+    sugar_per_100ml=0.0,
+    hydration_weight=0.7,
+    brand_color="#6B7280",
+    category=DrinkCategory.CALORIC,
+)
+
 _DRINK_TRANSLATIONS: dict[str, dict[str, dict[str, str | None]]] = {
     "vi": {
         "water": {"name": "Nước lọc", "sub": None},

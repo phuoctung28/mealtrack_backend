@@ -175,10 +175,11 @@ class TestUserSpecificActivities:
         """Cache misses should not hold one DB checkout across all daily reads."""
 
         class _UowScope:
-            def __init__(self, *, users=None, meals=None, movement_entries=None):
+            def __init__(self, *, users=None, meals=None, movement_entries=None, hydration_entries=None):
                 self.users = users or AsyncMock()
                 self.meals = meals or AsyncMock()
                 self.movement_entries = movement_entries or AsyncMock()
+                self.hydration_entries = hydration_entries or AsyncMock()
                 self.enter = AsyncMock()
                 self.exit = AsyncMock()
 
@@ -196,12 +197,15 @@ class TestUserSpecificActivities:
         meals_repo = AsyncMock()
         meals_repo.find_by_date.return_value = []
 
+        hydration_entries_repo = AsyncMock()
+        hydration_entries_repo.find_by_date.return_value = []
+
         movement_repo = AsyncMock()
         movement_repo.find_by_user_and_logged_range.return_value = []
 
         scopes = [
             _UowScope(users=users_repo),
-            _UowScope(meals=meals_repo),
+            _UowScope(meals=meals_repo, hydration_entries=hydration_entries_repo),
             _UowScope(movement_entries=movement_repo),
         ]
         uow_factory = MagicMock(side_effect=scopes)

@@ -34,6 +34,7 @@ class HydrationEntryORM(Base, BaseMixin):
         nullable=True,
         unique=True,
     )
+    image_url = Column(String(512), nullable=True)
 
     __table_args__ = (
         Index("idx_hydration_entries_user_logged_at", "user_id", "logged_at"),

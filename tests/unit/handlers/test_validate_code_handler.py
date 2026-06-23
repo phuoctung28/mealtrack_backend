@@ -34,6 +34,7 @@ def _make_promo(
     p.current_uses = current_uses
     p.rc_offering_id = rc_offering_id
     p.description = description
+    p.source_offering_id = None
     return p
 
 
@@ -300,6 +301,59 @@ async def test_referral_falls_back_to_friend_when_no_name():
         )
 
     assert result["referrer_name"] == "Friend"
+
+
+@pytest.mark.asyncio
+async def test_source_offering_guard_rejects_wrong_offering():
+    promo = _make_promo()
+    promo.source_offering_id = "price_49k_399k"
+    mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
+
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
+        with pytest.raises(CodeValidationError) as exc_info:
+            await ValidateCodeQueryHandler().handle(
+                ValidateCodeQuery(code="SUMMER30", user_id="user-abc", current_offering_id="price_89k_899k")
+            )
+
+    assert exc_info.value.status_code == 422
+    assert "not valid for this offering" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_source_offering_guard_accepts_matching_offering():
+    promo = _make_promo()
+    promo.source_offering_id = "price_49k_399k"
+    mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
+
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
+        result = await ValidateCodeQueryHandler().handle(
+            ValidateCodeQuery(code="SUMMER30", user_id="user-abc", current_offering_id="price_49k_399k")
+        )
+
+    assert result["is_valid"] is True
+
+
+@pytest.mark.asyncio
+async def test_source_offering_guard_unrestricted_when_none():
+    promo = _make_promo()
+    promo.source_offering_id = None
+    mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
+
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
+        result = await ValidateCodeQueryHandler().handle(
+            ValidateCodeQuery(code="SUMMER30", user_id="user-abc", current_offering_id="anything")
+        )
+
+    assert result["is_valid"] is True
 
 
 @pytest.mark.asyncio

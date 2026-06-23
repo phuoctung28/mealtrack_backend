@@ -48,6 +48,7 @@ def _orm_to_domain(row: HydrationEntryORM | None) -> HydrationEntry | None:
         legacy_meal_id=row.legacy_meal_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        image_url=row.image_url,
     )
 
 
@@ -68,6 +69,7 @@ def _domain_to_orm(entry: HydrationEntry) -> HydrationEntryORM:
         logged_at=entry.logged_at,
         source=entry.source,
         legacy_meal_id=entry.legacy_meal_id,
+        image_url=entry.image_url,
     )
 
 
@@ -105,6 +107,26 @@ class AsyncHydrationRepository:
         user_timezone: str | None = None,
     ) -> list[HydrationEntry]:
         start_dt, end_dt = _local_day_range(date_obj, user_timezone)
+        result = await self.session.execute(
+            select(HydrationEntryORM)
+            .where(
+                HydrationEntryORM.user_id == user_id,
+                HydrationEntryORM.logged_at >= start_dt,
+                HydrationEntryORM.logged_at < end_dt,
+            )
+            .order_by(HydrationEntryORM.logged_at.desc())
+        )
+        return [_orm_to_domain(row) for row in result.scalars().all()]
+
+    async def find_by_date_range(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        user_timezone: str | None = None,
+    ) -> list[HydrationEntry]:
+        start_dt, _ = _local_day_range(start_date, user_timezone)
+        _, end_dt = _local_day_range(end_date, user_timezone)
         result = await self.session.execute(
             select(HydrationEntryORM)
             .where(
@@ -158,6 +180,46 @@ class AsyncHydrationRepository:
                 day_val = date.fromisoformat(day_val)
             totals[day_val] = int(total)
         return totals
+
+    async def fetch_journey_progress_hydration(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[dict]:
+        result = await self.session.execute(
+            select(
+                HydrationEntryORM.logged_at,
+                HydrationEntryORM.drink_name_snapshot,
+                HydrationEntryORM.credited_ml,
+                HydrationEntryORM.protein_g,
+                HydrationEntryORM.carbs_g,
+                HydrationEntryORM.fat_g,
+                HydrationEntryORM.fiber_g,
+            )
+            .where(
+                HydrationEntryORM.user_id == user_id,
+                HydrationEntryORM.logged_at >= start_utc,
+                HydrationEntryORM.logged_at < end_utc,
+            )
+            .order_by(HydrationEntryORM.logged_at.asc())
+        )
+        return [
+            {
+                "logged_at": logged_at,
+                "label": label or "Hydration",
+                "hydration_ml": int(credited_ml or 0),
+                "calories": round(
+                    float(protein_g or 0.0) * 4
+                    + max(0.0, float(carbs_g or 0.0) - float(fiber_g or 0.0)) * 4
+                    + float(fiber_g or 0.0) * 2
+                    + float(fat_g or 0.0) * 9,
+                    1,
+                ),
+                "protein_g": float(protein_g or 0.0),
+            }
+            for logged_at, label, credited_ml, protein_g, carbs_g, fat_g, fiber_g in result.all()
+        ]
 
     async def delete_by_id_or_legacy_meal_id(self, user_id: str, entry_id: str) -> bool:
         result = await self.session.execute(

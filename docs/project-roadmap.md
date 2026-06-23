@@ -1,22 +1,26 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.5
-**Last Updated:** June 18, 2026
-**Status:** Production-ready. 620 Python files and ~52.6K LOC in `src/` (API: 89, App: 208, Domain: 160, Infra: 154). 291 Python test files with 1,600+ collected tests.
+**Last Updated:** June 16, 2026
+**Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 1649+ unit tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
 
-### June 2026: Gemini 3 Vision Fallback
-- [x] `MEAL_SCAN` and `INGREDIENT_SCAN` now try `gemini-3.1-flash-lite`, then `gemini-3.5-flash`, then `gemini-2.5-flash`.
-- [x] Cloudflare Workers AI remains scoped to text-generation chains; image analysis stays Gemini-only until the vision adapter is evaluated separately.
+### June 2026: Python 3.13 and Dependency Standardization
+- [x] Upgraded runtime, Docker, CI, and documented backend baseline to Python 3.13.
+- [x] Upgraded FastAPI and core production libraries to current Python 3.13-compatible releases.
+- [x] Pinned direct production and test dependencies for reproducible local, CI, and Docker installs.
+- [x] Removed unused `fatsecret` package dependency; runtime FatSecret integration uses the in-repo HTTP adapter.
+- [x] Upgraded pytest tooling to 9.x to clear the test dependency audit finding.
+- [x] Verified `requirements.txt` and `requirements-test.txt` with `pip-audit`; ML-only `torch` remains isolated in `requirements-ml.txt` pending an upstream CVE fix.
 
-### June 2026: Codebase Documentation Refresh
-- [x] Updated README, project instructions, codebase summary, architecture, API, database, external-service, standards, testing, CQRS, overview, roadmap, and troubleshooting docs against the live source tree.
-- [x] Replaced stale database-engine, legacy vector-service, route-count, layer-count, test-count, Redis-pool, migration-startup, and CORS risk claims in current docs.
-- [x] Documented current hydration, movement, nutrition, referral, promo-code, upload-token, scan-by-url, and health endpoint surfaces.
+### June 2026: Journey Progress Card
+- [x] Added canonical `GET /v1/progress/journey` for the dashboard progress card.
+- [x] Strict active-period filtering keeps only `period_start <= action_time < period_end`; existing users without `goal_started_at` fall back to the stable 2026-06-21 feature start in their local timezone.
+- [x] Onboarding and target-weight updates now set the journey baseline fields that anchor the active period.
 
 ### June 2026: Single-Owner Logger System
 - [x] Established log-or-raise rule: one root-cause `ERROR` per unexpected request failure; expected 4xx exceptions produce zero ERROR logs.
@@ -25,7 +29,6 @@
 - [x] `handle_exception()` in `src/api/exceptions.py` — pure conversion helper, no ERROR log before re-raise.
 - [x] All command/query handlers — removed `logger.error` before re-raise patterns.
 - [x] `src/infra/services/ai/ai_model_manager.py` — emits `log_event("warning", "ai.provider.failure")` before raising `AIUnavailableError`.
-- [x] `src/infra/event_bus/pymediator_event_bus.py` — treats `AIUnavailableError` as a controlled degraded-provider exception so exhausted Gemini fallbacks do not create duplicate ERROR logs.
 - [x] Cron entrypoints — emit `log_event("info", "cron.phase.completed")` per phase; `capture_exception` + `flush_observability` on failure.
 - [x] `src/infra/services/affiliate_outbox_dispatch_service.py` — emits `increment_metric("affiliate.outbox.failure")` for permanent failures.
 - [x] Architecture guardrails: `tests/unit/architecture/test_logging_ownership_guardrails.py` and `tests/unit/api/test_single_owner_exception_logging.py`.
@@ -41,6 +44,12 @@
       image URL, email, and webhook provider identifiers from representative
       application logs.
 
+### June 2026: Vision Parser Resilience
+- [x] Canonical AI nutrition contracts now reject impossible over-limit food quantities before domain hydration, invalid AI items now fail instead of being silently repaired, and structured meal image/text output retries exactly once before raising controlled `AIOutputValidationError`.
+- [x] Meal image analysis now carries an explicit `is_food` guard through Gemini schema validation, adapter mapping, parsers, command handlers, and API error mapping so explicit non-food images reject before nutrition parsing without changing successful meal response shape.
+- [x] LLM nutrition output contracts: Structured Pydantic contracts for all AI meal-analysis flows; bounded validation retry; parser becomes deterministic mapping; `quantity=150000` and similar impossible AI outputs are rejected before persistence. Background event handler sanitizes `AIOutputValidationError` into a user-friendly failure message. `PromptEvalLoop` tracks schema `validation_success_rate` as a separate observable metric alongside `parse_success_rate`.
+- [x] Beverage image scans now persist only normalized `hydration_entries` rows, with no compatibility meal row, while preserving the existing meal-shaped scan response.
+
 ### June 2026: Normalized Database Foundation
 - [x] Added normalized profile preferences, hydration entries, saved suggestion items/steps, meal instruction steps, food serving sizes, and food nutrient tables.
 - [x] Added typed payout workflow fields while retaining raw payout details pending a later security/contract pass.
@@ -49,7 +58,7 @@
 - [x] Local Postgres upgrade verified to Alembic head `20260609000006`.
 
 ### June 2026: Neon Direct Pool + Async Library Alignment
-- [x] Explicit DB connection mode resolver: `direct_pool` uses `AsyncAdaptedQueuePool` against direct Neon URL; `neon_pooler` uses `NullPool` with PgBouncer-safe asyncpg settings.
+- [x] Explicit DB connection mode resolver: `direct_pool` uses a dedicated async queue pool against the direct Neon URL; `neon_pooler` uses `NullPool` with PgBouncer-safe asyncpg settings.
 - [x] `APP_DATABASE_URL` is the app runtime URL; `DATABASE_URL_DIRECT` is migration/admin only — no silent priority drift.
 - [x] `FoodDataService` converted from `requests` to `httpx.AsyncClient`.
 - [x] Cloudinary blocking SDK calls wrapped with `asyncio.to_thread` off-loop boundary.
@@ -60,14 +69,12 @@
 
 ### June 2026: Async Repository Consolidation
 - [x] Runtime database access consolidated to async SQLAlchemy: FastAPI dependencies, cron jobs, handlers, repositories, and UoW use `AsyncSession`.
-- [x] Deleted sync `UnitOfWork`, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
+- [x] Deleted the sync unit-of-work runtime, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
 - [x] Architecture guard now expects zero sync DB runtime imports in `src` and no broad sync repository transition allowlist.
 - [x] Default validation: `pytest -q` passes (`1499 passed, 3 skipped`).
 
 ### June 2026: Weekly Budget Resilience
 - [x] Weekly budget meal loading now quarantines malformed legacy `READY` rows without nutrition before domain hydration.
-- [x] Weekly budget adjusted targets now credit `include_in_balance` movement calories using the same net calorie basis as daily and bulk nutrition.
-- [x] Baseline TDEE now excludes planned workouts, so logged movement is the source of workout calorie credit without double-counting.
 
 ### June 2026: iOS Notification Payload Hardening
 - [x] Removed obsolete direct notification service wiring and direct meal/summary helper sends.
@@ -105,7 +112,7 @@
 - [x] Documentation updates: system-architecture, code-standards, project-overview, roadmap
 
 ### February 2026: Documentation Refresh v0.5.0
-- [x] Updated all documentation with then-current scout-verified statistics.
+- [x] Updated all documentation with latest scout-verified statistics (430 files, ~38K LOC).
 - [x] Accurate metrics: 30 commands, 31 queries, 19 events, 54 handlers, 50+ domain services.
 - [x] Fixed metric inconsistencies across all doc files.
 - [x] Updated layer statistics (76/140/133/80 files, ~8.6K/6.2K/14.6K/8.9K LOC).
@@ -122,7 +129,7 @@
 - [x] SuggestionOrchestrationService with 4h TTL (Redis).
 - [x] Portion multipliers (1-4x) and rejection feedback.
 - [x] Generation fallback mechanism.
-- [x] Test suite passing at the time of delivery.
+- [x] 681+ tests passing.
 
 ### Phase 02: Language Prompt Integration (Jan 2026)
 - [x] Language-aware prompt generation with injected instructions.
@@ -134,9 +141,9 @@
 - [x] English fallback for invalid language codes.
 - [x] TranslationService for post-generation translation.
 
-### Phase 05: Legacy Vector Search Migration (Jan 2026)
+### Phase 05: Pinecone Inference Migration (Jan 2026)
 - [x] Recreated indexes with 1024-dim vectors (llama-text-embed-v2).
-- [x] Migrated legacy semantic search infrastructure; current active docs describe PostgreSQL/pgvector-backed vector-capable storage.
+- [x] Migrated to serverless Pinecone Inference API.
 - [x] Updated unit/integration tests with 1024-dim mocks.
 - [x] Semantic ingredient search with 0.35 similarity threshold.
 
@@ -162,8 +169,8 @@
 
 ## Current Priorities (Q2 2026)
 1. **Performance**: Optimize suggestion generation (target <10s from ~45s) — in progress.
-2. **Security**: Review deployed `ALLOWED_ORIGINS` values and continue log/request PII redaction audits — open.
-3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (`discover`, `recipes`, `save`) — open.
+2. **Security**: Restrict CORS in production (`allow_origins=["*"]` currently wide open), add PII redaction to request logging — open.
+3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (discover, generate) — open.
 4. **Testing**: Increase coverage for meal discovery and notification dedup logic — open.
 5. **Premium Gating**: Apply `require_premium` dependency to premium-only routes — open.
 
@@ -188,7 +195,7 @@
 
 ### High Priority
 - [ ] Plan contract migration to remove or secure legacy JSON compatibility fields after production observation window.
-- [ ] Verify production `ALLOWED_ORIGINS` is restricted to known app/web origins.
+- [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
 - [ ] Implement API versioning strategy beyond v1
 - [ ] Apply `require_premium` dependency to premium-only features
 - [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config

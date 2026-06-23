@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
 **Version:** 0.6.5
-**Last Updated:** June 18, 2026
-**Status:** Production-ready. 620 Python files and ~52.6K LOC in `src/`; current suite has 291 Python test files and 1,600+ collected tests. Latest: async PostgreSQL/Neon runtime alignment, observability connector, normalized database foundation, hydration/movement APIs, affiliate outbox, and refreshed codebase documentation.
+**Last Updated:** June 13, 2026
+**Status:** Production-ready. 430 Python files, ~38.5K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: configurable referral commissions, BMR floor protection, custom unit normalization, email Universal Links, AsyncUnitOfWork concurrency guard, AI nutrition validation retries.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI service powering meal tracking, nutritional analysis, weekly calorie budgeting, hydration, movement, referrals, promo codes, notifications, and subscription state. It implements Clean Architecture with CQRS across API, application, domain, and infrastructure layers, integrating Gemini-based AI meal analysis, PostgreSQL/pgvector storage, Redis-backed optional cache-aside paths, and operational observability. The current HTTP surface has 26 router registrations and 83 endpoint decorators across meals, users, profiles, suggestions, hydration, movement, nutrition, referrals, promo codes, health, monitoring, webhooks, and support routes.
+MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It implements Clean Architecture with CQRS pattern across 4 layers (430 files, ~38K LOC), integrating AI vision (Gemini 2.5 Flash with 6 analysis strategies) and chat (streaming responses via MessageOrchestrationService, AIResponseCoordinator) for real-time food recognition and personalized nutrition planning. The system handles 50+ REST endpoints across 12 route modules, supports 7 languages, and maintains 70%+ test coverage with 681+ tests. Latest stats: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC).
 
 ---
 
@@ -33,23 +33,19 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - Gemini 2.5 Flash with strategy pattern for flexible context handling.
 - Returns results in <3 seconds through state machine (PROCESSING → ANALYZING → READY/FAILED).
 
-### 2. RESTful API (83 Endpoint Decorators across 26 Router Registrations)
-- **Meals**: image/analyze, upload-token, scan-by-url, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
+### 2. RESTful API (60+ Endpoints across 17 Route Modules)
+- **Meals**: image/analyze, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
 - **User Profiles**: create, metrics (GET/POST), TDEE, custom-macros.
-- **Users**: sync, Firebase UID lookups, onboarding completion, timezone, language, delete.
-- **Meal Suggestions**: discover (6 meals + images), recipes, save.
+- **Users**: sync, Firebase UID lookups, metrics, timezone, language, delete.
+- **Meal Suggestions**: generate (3/session, 4h TTL), discover (6 meals + images), recipes, save.
 - **Saved Suggestions**: list, save, delete.
 - **Foods**: USDA FDC search, details by FDC ID, barcode lookup (6-step cascade).
-- **Ingredients**: image-based recognition, health.
+- **Ingredients**: image-based recognition.
 - **TDEE**: preview calculation.
 - **Weight Entries**: list, log, delete, sync.
-- **Activities**: daily and bulk activities.
-- **Hydration**: drink catalog, water logging, caloric drink logging, daily/weekly summaries, delete.
-- **Movement**: activity catalog, log, daily summary, update, delete.
-- **Nutrition**: bulk nutrition lookup and activity presence.
+- **Activities**: daily activities.
 - **Notifications**: FCM token management, deduplication (notification_sent_log), preferences.
 - **Referrals**: validate, apply, my-code, stats, payout.
-- **Promo Codes / Codes**: validate/redeem promo codes and validate purchase codes.
 - **Cheat Days**: list, mark, delete.
 - **Feature Flags**: CRUD for feature toggles.
 - **Webhooks**: RevenueCat subscription sync.
@@ -69,9 +65,9 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - Cooking time constraints (weekday 30min, weekend 60min).
 - Min 3 days before meal repetition, max 2 same-cuisine per week.
 
-### 5. Food Discovery & Vector-Backed Image Cache
-- PostgreSQL/pgvector-backed local runtime for vector-capable storage.
-- Meal image cache uses SigLIP embeddings and configurable cosine thresholds for image reuse.
+### 5. Vector Search & Food Discovery
+- Pinecone Inference API with llama-text-embed-v2 (1024-dim embeddings).
+- Semantic ingredient search with 0.35 similarity threshold.
 - Nutrition scaling by portion with unit conversion (g, kg, oz, lb, ml, cup, etc.).
 - Aggregated nutrition calculation across multiple ingredients.
 
@@ -85,17 +81,19 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 ### 7. Adjusted Daily Target & Weekly Budget
 - Weekly budget stored per user with remaining_days calculation (Mon=7, Sun=1).
 - Adjusted daily target redistributes weekly budget based on previous days' consumption.
-- Baseline TDEE excludes planned workouts; logged movement with `include_in_balance = true` credits workout calories into weekly budget as net calories (`food - movement`).
 - Used by meal suggestions, meal plans, and nutrition tracking features.
 - BMR floor (85% of standard daily, raised from 80%) protects against dangerously low targets. Clinical minimums: 1200 kcal (female), 1500 kcal (male). Cutting deficit: 300 kcal (~0.3 kg/week).
 
 ---
 
 ## 3. Technical Stack
-- **Framework**: FastAPI 0.115+ (Python 3.11+)
-- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0 async runtime, asyncpg, Alembic, and pgvector-enabled local compose
+- **Framework**: FastAPI 0.115+ (Python 3.13)
+- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0 async runtime, 13+ core tables
 - **Cache**: Redis 7.0 for selective optional caching and AI-cost optimization; required state must be modeled separately
+- **Vector DB**: Pinecone Inference API (1024-dim, llama-text-embed-v2)
 - **AI Services**: Google Gemini 2.5 Flash (multi-model for rate distribution)
+
+**AI Output Validation (2026-06)**: All Gemini vision and text-parse flows now use canonical Pydantic contracts (`VisionNutritionResponse`, `MealTextNutritionResponse`) with bounded retry. Invalid AI output (over-limit quantities, empty foods) is rejected at the contract boundary with one automatic retry. The parser is a deterministic mapper, not a silent repair engine. Calories are always derived from backend macros, never from AI-reported kcal.
 - **Storage**: Cloudinary (image storage with folder organization)
 - **Image Search**: Unsplash + Pexels adapters (meal discovery)
 - **Auth**: Firebase JWT with development bypass middleware
@@ -108,7 +106,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 ## 4. Non-Functional Requirements
 - **Reliability**: 99.9% uptime with graceful degradation for external services.
-- **Test Coverage**: 70%+ overall target, 100% critical paths, 80%+ for new features.
+- **Test Coverage**: 70%+ overall (681+ tests), 100% critical paths.
 - **Maintainability**: <200 LOC per file, 4-Layer Clean Architecture with strict separation.
 - **Security**: Firebase JWT verification, RevenueCat webhook auth, soft deletes, input sanitization.
 - **Performance**: Request-scoped DB sessions, Redis caching with TTL, eager loading for queries.
@@ -121,15 +119,14 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.6.5 | Jun 18, 2026 | Weekly budget adjusted targets now credit logged movement calories on a net-calorie basis, and baseline TDEE excludes planned workouts to avoid double-counting exercise. |
-| 0.6.4 | Jun 17, 2026 | Documentation refresh aligned active docs to live code: 620 source files, 83 endpoint decorators, PostgreSQL/Neon async runtime, pgvector-enabled local compose, Redis optional cache posture, hydration/movement/nutrition/referral/promo endpoint inventory, and updated test scale. |
-| 0.6.3 | Jun 13, 2026 | Single-owner logger and provider-neutral observability connector. Sentry direct imports isolated, cron/background boundaries own swallowed exception capture, safe scalar context allowlists documented. |
+| 0.6.5 | Jun 13, 2026 | Added validation retry orchestration for structured AI nutrition output, with exactly one repair attempt for meal image scan and text parse flows, controlled `AIOutputValidationError` handling, preserved ingredient-recognition's unstructured contract, and kept calorie divergence checks anchored to backend-derived macro calories. |
+| 0.6.4 | Jun 13, 2026 | Added canonical AI nutrition contracts for image and text flows, rejected impossible over-limit food quantities at validation time, preserved current text-parse macro compatibility, and removed silent invalid-food filtering from the legacy parser. |
 | 0.6.2 | May 15, 2026 | Configurable referral commissions (`REFERRAL_COMMISSIONS` env var, per-currency JSON). Custom unit-to-grams fix in nutrition calculation. BMR floor raised to 85% of standard daily; cutting deficit 500→300 kcal; clinical minimums 1200F/1500M. Email Universal Links (apple-app-site-association, /app-download). AsyncUnitOfWork concurrency guard (asyncio.Lock). Variable-length referral codes (3–15 chars). |
 | 0.6.0 | Mar 14, 2026 | Nutrition accuracy (5-phase implementation): fiber-aware calories, food density conversion, macro validation, food reference evolution, meal decomposition. Custom macro targets per profile. Date of birth tracking. Adjusted daily target from weekly budget in suggestions. 3 new services, 3 new migrations (034-037), 28+ modified/new files. |
-| 0.5.0 | Feb 3, 2026 | Historical documentation metric refresh for the then-current layer layout. Superseded by the June 2026 live-code snapshot above. |
+| 0.5.0 | Feb 3, 2026 | Updated metrics across all layers: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC). Total: 430 files, ~38K LOC. Fixed metric inconsistencies from previous documentation. |
 | 0.4.9 | Jan 19, 2026 | Documentation refresh with updated dates. Verified CQRS patterns, domain services, and API endpoints against actual codebase. Weight-based macro calculation confirmed in TDEE service. |
 | 0.4.7 | Jan 16, 2026 | Documentation refresh with scout-verified statistics (408 files, ~37K LOC). |
 | 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
-| 0.4.5 | Jan 7, 2026 | Legacy vector-search migration work. Documentation split for modularity. |
+| 0.4.5 | Jan 7, 2026 | Phase 05 Pinecone Migration (1024-dim). Documentation split for modularity. |
 | 0.4.4 | Jan 4, 2026 | Phase 03 Cleanup: Unified fitness goal enums to 3 canonical values. |
 | 0.4.0 | Jan 3, 2026 | Phase 06: Session-based suggestions with 4h TTL. |

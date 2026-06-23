@@ -3,9 +3,11 @@ BraveSearchNutritionService - Search barcode nutrition via Brave Search + Gemini
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 import httpx
+
+from src.domain.services.prompts.system_prompts import SystemPrompts
 
 logger = logging.getLogger(__name__)
 
@@ -100,20 +102,7 @@ class BraveSearchNutritionService:
     ) -> Optional[Dict[str, Any]]:
         """Use Gemini to extract structured nutrition from search snippets."""
         try:
-            system_prompt = (
-                "You are a nutrition data extraction expert. "
-                "Extract nutrition information per 100g from web search snippets about a food product. "
-                "If snippets mention nutrition values per serving, convert to per 100g. "
-                "If snippets identify the product but lack exact macros, estimate based on "
-                "your knowledge of similar products and set confidence to medium. "
-                "Return ONLY valid JSON with these fields: "
-                '{"name": "product name", "brand": "brand or null", '
-                '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
-                '"fiber_100g": float, "sugar_100g": float, "serving_size": "description or null", '
-                '"confidence": "high|medium|low"} '
-                "Return null ONLY if you cannot identify the product at all from the snippets."
-            )
-
+            system_prompt = SystemPrompts.BARCODE_BRAVE_EXTRACT
             user_prompt = f"Barcode: {barcode}\nLanguage: {language}\n\nWeb search snippets:\n{snippets}"
 
             result = await self._meal_gen.generate_meal_plan_async(

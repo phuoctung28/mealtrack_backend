@@ -201,6 +201,12 @@ class Settings(BaseSettings):
     DEV_USER_EMAIL: str = Field(default="dev@example.com")
     DEV_USER_USERNAME: str = Field(default="dev_user")
 
+    # Guest trial quota
+    GUEST_INSTALL_HASH_SECRET: str = Field(
+        default="",
+        description="HMAC-SHA256 secret for hashing guest install IDs before Redis key creation. Must be set in production.",
+    )
+
     # Additional fields from actual .env
     UPLOADS_DIR: str | None = Field(default=None)
     FCM_CREDENTIALS_PATH: str | None = Field(default=None)
@@ -263,6 +269,13 @@ class Settings(BaseSettings):
     CLOUDFLARE_WORKERS_AI_VISION_PURPOSES: str = Field(
         default="meal_scan,ingredient_scan",
         description="Comma-separated ModelPurpose values where Workers AI vision is tried first",
+    )
+    CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED: bool = Field(
+        default=False,
+        description=(
+            "Route Gemini vision calls through Cloudflare AI Gateway. "
+            "Requires CLOUDFLARE_AI_GATEWAY_ID and CLOUDFLARE_ACCOUNT_ID to be set."
+        ),
     )
 
     # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)

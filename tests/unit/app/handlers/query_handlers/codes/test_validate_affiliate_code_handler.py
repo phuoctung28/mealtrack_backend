@@ -39,6 +39,7 @@ async def test_promo_code_wins_before_affiliate():
     promo.code = "AFFCODE1"
     promo.rc_offering_id = None
     promo.description = None
+    promo.source_offering_id = None
 
     mock_uow = _make_uow(promo=promo)
     with (

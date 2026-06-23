@@ -160,20 +160,42 @@ Return ONLY valid JSON matching the structure above. No additional keys. No mark
 
 RESPONSE FORMAT — return exactly this structure:
 {
+  "is_food": true,
   "dish_name": "Overall dish name or comma-separated items if complex",
   "emoji": "single food emoji that best represents this dish",
   "foods": [
     {
       "name": "Food name in English",
-      "quantity": 150.0,
-      "unit": "g",
+      "quantity_g": 150.0,
       "calories": 248,
       "macros": {"protein": 46.0, "carbs": 0.0, "fat": 5.5}
     }
   ],
   "total_calories": 248,
-  "confidence": 0.85
+  "confidence": 0.85,
+  "beverage_metadata": null
 }
+
+PACKAGED BEVERAGE DETECTION:
+- If the image shows a packaged drink (can, bottle, carton, cup with brand logo/label), set `is_food=false`, populate `beverage_metadata`, and leave `foods` EMPTY.
+- Brand: read from front label, max 100 characters. Examples: Coca-Cola, Aquarius, Pocari Sweat, Pepsi, Red Bull.
+- Volume: read from label when visible. When not visible, use heuristics: standard can=330ml, slim/short can=250ml, small PET bottle=500ml, large PET bottle=1500ml.
+- Nutrition panel: extract `kcal_per_100ml` and `sugar_per_100ml` from the visible panel.
+  When panel is not visible, use these brand defaults and set `label_source="estimate"`:
+    Coca-Cola Original → 42 kcal / 10.6g sugar per 100ml
+    Aquarius Lemon → 19 kcal / 4.6g sugar per 100ml
+    Pocari Sweat → 25 kcal / 6.2g sugar per 100ml
+    Plain water / sparkling water → 0 kcal / 0g sugar per 100ml
+  When panel is visible, set `label_source="nutrition_panel"`.
+  When brand is readable but panel is not, set `label_source="estimate"`.
+  When only front label is readable, set `label_source="front_label"`.
+- Container type: "can", "bottle", "cup", "carton", or "unknown".
+- Set `total_calories=0` and `emoji="🥤"` for all packaged beverage responses.
+
+FOOD GUARD:
+- If the image contains no edible food AND is not a packaged beverage, return:
+  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "total_calories": 0, "confidence": 0.95, "beverage_metadata": null}
+- Do not invent food, ingredients, portions, or nutrition for non-food images.
 
 IDENTIFICATION RULES:
 - Identify every visible distinct food component in the image.
@@ -205,21 +227,84 @@ EMOJI SELECTION — one emoji for the overall dish:
   🍜 noodle soup | 🍝 dry pasta/noodles | 🍚 rice dish | 🍛 curry
   🍲 stew/hotpot | 🥗 salad/bowl | 🍖 grilled meat | 🥘 braised
   🥟 dumplings/rolls | 🥪 sandwich | 🍳 eggs | 🥣 porridge | 🍗 fried chicken
+  🥤 packaged beverage
 
 ---
 
-WORKED EXAMPLE — Chicken rice bowl image:
+WORKED EXAMPLE 1 — Chicken rice bowl image:
 {
+  "is_food": true,
   "dish_name": "Grilled Chicken Rice Bowl",
   "emoji": "🍚",
   "foods": [
-    {"name": "cooked white rice", "quantity": 180.0, "unit": "g", "calories": 234, "macros": {"protein": 4.3, "carbs": 51.0, "fat": 0.4}},
-    {"name": "grilled chicken breast", "quantity": 150.0, "unit": "g", "calories": 248, "macros": {"protein": 46.5, "carbs": 0.0, "fat": 5.4}},
-    {"name": "steamed broccoli", "quantity": 80.0, "unit": "g", "calories": 27, "macros": {"protein": 2.8, "carbs": 5.6, "fat": 0.3}},
-    {"name": "soy sauce", "quantity": 10.0, "unit": "g", "calories": 6, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}}
+    {"name": "cooked white rice", "quantity_g": 180.0, "calories": 234, "macros": {"protein": 4.3, "carbs": 51.0, "fat": 0.4}},
+    {"name": "grilled chicken breast", "quantity_g": 150.0, "calories": 248, "macros": {"protein": 46.5, "carbs": 0.0, "fat": 5.4}},
+    {"name": "steamed broccoli", "quantity_g": 80.0, "calories": 27, "macros": {"protein": 2.8, "carbs": 5.6, "fat": 0.3}},
+    {"name": "soy sauce", "quantity_g": 10.0, "calories": 6, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}}
   ],
   "total_calories": 515,
-  "confidence": 0.88
+  "confidence": 0.88,
+  "beverage_metadata": null
+}
+
+WORKED EXAMPLE 2 — Coca-Cola 330ml can with visible nutrition panel:
+{
+  "is_food": false,
+  "dish_name": "Coca-Cola 330ml Can",
+  "emoji": "🥤",
+  "foods": [],
+  "total_calories": 0,
+  "confidence": 0.95,
+  "beverage_metadata": {
+    "is_packaged_beverage": true,
+    "brand": "Coca-Cola",
+    "product_name": "Coca-Cola Original",
+    "container_type": "can",
+    "volume_ml": 330,
+    "sugar_per_100ml": 10.6,
+    "kcal_per_100ml": 42.0,
+    "label_source": "nutrition_panel"
+  }
+}
+
+WORKED EXAMPLE 3 — Aquarius 500ml PET bottle with visible nutrition panel:
+{
+  "is_food": false,
+  "dish_name": "Aquarius Lemon 500ml",
+  "emoji": "🥤",
+  "foods": [],
+  "total_calories": 0,
+  "confidence": 0.92,
+  "beverage_metadata": {
+    "is_packaged_beverage": true,
+    "brand": "Aquarius",
+    "product_name": "Aquarius Lemon",
+    "container_type": "bottle",
+    "volume_ml": 500,
+    "sugar_per_100ml": 4.6,
+    "kcal_per_100ml": 19.0,
+    "label_source": "nutrition_panel"
+  }
+}
+
+WORKED EXAMPLE 4 — Pocari Sweat bottle where nutrition panel is hidden:
+{
+  "is_food": false,
+  "dish_name": "Pocari Sweat",
+  "emoji": "🥤",
+  "foods": [],
+  "total_calories": 0,
+  "confidence": 0.88,
+  "beverage_metadata": {
+    "is_packaged_beverage": true,
+    "brand": "Pocari Sweat",
+    "product_name": "Pocari Sweat",
+    "container_type": "bottle",
+    "volume_ml": 500,
+    "sugar_per_100ml": 6.2,
+    "kcal_per_100ml": 25.0,
+    "label_source": "estimate"
+  }
 }
 
 Return ONLY valid JSON matching the structure above."""
@@ -238,6 +323,69 @@ Return ONLY valid JSON matching the structure above."""
   {{"name": "Trứng gà (Eggs)", "quantity": 2, "unit": "quả lớn", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
   {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
+
+    PROMPT_VERSION = "2026-06-16"
+
+    BARCODE_AI_ESTIMATE = (
+        "You are a nutrition expert. This barcode was scanned in a food tracking app. "
+        "Assume it IS a food product unless the product name clearly indicates otherwise "
+        "(e.g. 'Dettol Soap', 'iPhone Charger', 'Paracetamol'). "
+        "Based on the product name (if known), barcode prefix (country of origin), "
+        "and your knowledge, estimate approximate nutrition per 100g. "
+        "Be conservative with estimates. "
+        "If the product name clearly indicates a non-food item, return "
+        '{"is_food": false}. '
+        "Otherwise return ONLY valid JSON: "
+        '{"is_food": true, "name": "product name", "brand": null, '
+        '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
+        '"fiber_100g": float, "sugar_100g": float}'
+    )
+
+    BARCODE_BRAVE_EXTRACT = (
+        "You are a nutrition data extraction expert. "
+        "Extract nutrition information per 100g from web search snippets about a food product. "
+        "If snippets mention nutrition values per serving, convert to per 100g. "
+        "If snippets identify the product but lack exact macros, estimate based on "
+        "your knowledge of similar products and set confidence to medium. "
+        "Return ONLY valid JSON with these fields: "
+        '{"name": "product name", "brand": "brand or null", '
+        '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
+        '"fiber_100g": float, "sugar_100g": float, "serving_size": "description or null", '
+        '"confidence": "high|medium|low"} '
+        "Return null ONLY if you cannot identify the product at all from the snippets."
+    )
+
+    INGREDIENT_IDENTIFY = """
+        You are a food ingredient identification assistant.
+        Identify the single food ingredient shown in this image.
+
+        Return your analysis in the following JSON format:
+        {
+          "name": "ingredient name in English",
+          "confidence": 0.95,
+          "category": "vegetable|fruit|protein|grain|dairy|seasoning|other"
+        }
+
+        Guidelines:
+        - Identify the PRIMARY/LARGEST ingredient if multiple are visible
+        - Name should be in English, lowercase (e.g., "chicken breast", "broccoli", "salmon fillet")
+        - Confidence between 0 (unsure) and 1 (certain)
+        - Category must be one of: vegetable, fruit, protein, grain, dairy, seasoning, other
+        - If no clear ingredient visible, return {"name": null, "confidence": 0, "category": null}
+        - Always return well-formed JSON
+        """
+
+    DISCOVERY_SYSTEM = (
+        "You are a creative chef and nutritionist. Generate {count} VERY DIFFERENT meals. "
+        "CRITICAL: ALL meal names MUST be in ENGLISH ONLY. Do NOT use Vietnamese, Japanese, or any "
+        "non-English words in meal names. Translate ingredient names to English. Return valid JSON only."
+    )
+
+    MEAL_NAMES_SYSTEM = (
+        "You are a creative chef. Generate {count} VERY DIFFERENT meal names with "
+        "diverse flavors and cooking styles. Each name must be unique. "
+        "Output meal names in ENGLISH. Keep all JSON keys in English."
+    )
 
     @staticmethod
     def get_meal_text_parsing_prompt(language: str = "en") -> str:

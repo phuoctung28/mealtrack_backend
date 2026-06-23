@@ -19,17 +19,29 @@ def _make_jpeg(width: int, height: int, quality: int = 95) -> bytes:
     return buf.getvalue()
 
 
+def _valid_vision_response() -> dict:
+    return {
+        "dish_name": "test",
+        "foods": [
+            {
+                "name": "rice",
+                "quantity_g": 180,
+                "macros": {"protein": 4, "carbs": 50, "fat": 1},
+            }
+        ],
+        "confidence": 0.8,
+    }
+
+
 def _make_service(max_output_tokens: int | None = None) -> VisionAIService:
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
-        mock_manager.generate_with_vision = AsyncMock(
-            return_value={"dish_name": "test", "ingredients": []}
-        )
+        mock_manager.generate_with_vision = AsyncMock(return_value=_valid_vision_response())
         mock_cls.get_instance.return_value = mock_manager
         return VisionAIService(max_output_tokens=max_output_tokens)
 
 
-def test_vision_service_uses_ai_model_manager():
+def test_vision_service_uses_gemini_service():
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
         mock_manager.generate_with_vision = AsyncMock(return_value={})
@@ -71,15 +83,16 @@ def test_compress_image_fallback_on_corrupt_bytes():
 
 
 def test_extract_json_failure_does_not_log_raw_ai_response(caplog):
-    service = _make_service()
+    from src.infra.ai.json_extract import extract_json
+
     raw_response = "not json with private meal notes and user@example.com"
 
     with caplog.at_level("ERROR"), pytest.raises(ValueError):
-        service._extract_json_from_response(raw_response)
+        extract_json(raw_response)
 
     assert raw_response not in caplog.text
     assert "user@example.com" not in caplog.text
-    assert "length=" in caplog.text
+    assert "content_len=" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -94,7 +107,7 @@ async def test_analyze_with_strategy_compresses_before_sending():
 
     await service.analyze_with_strategy(large_bytes, strategy)
 
-    # Verify generate_with_vision was called with compressed image data
+    # Verify vision() was called with compressed image bytes
     call_kwargs = service._ai_manager.generate_with_vision.call_args
     image_data = call_kwargs.kwargs["image_data"]
 

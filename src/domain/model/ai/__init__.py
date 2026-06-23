@@ -2,16 +2,26 @@
 AI bounded context - Domain models for GPT/AI interactions.
 """
 
-from .gpt_response import GPTMacros, GPTFoodItem, GPTAnalysisResponse
+from .gpt_response import GPTAnalysisResponse, GPTFoodItem, GPTMacros
 from .gpt_response_errors import (
     GPTResponseError,
     GPTResponseFormatError,
-    GPTResponseValidationError,
-    GPTResponseParsingError,
     GPTResponseIncompleteError,
+    GPTResponseParsingError,
+    GPTResponseValidationError,
+)
+from .nutrition_contracts import (
+    AINutritionMacros,
+    MealTextFoodEstimate,
+    MealTextNutritionResponse,
+    VisionFoodEstimate,
+    VisionNutritionResponse,
 )
 
 __all__ = [
+    "AINutritionMacros",
+    "MealTextFoodEstimate",
+    "MealTextNutritionResponse",
     "GPTMacros",
     "GPTFoodItem",
     "GPTAnalysisResponse",
@@ -20,4 +30,6 @@ __all__ = [
     "GPTResponseValidationError",
     "GPTResponseParsingError",
     "GPTResponseIncompleteError",
+    "VisionFoodEstimate",
+    "VisionNutritionResponse",
 ]

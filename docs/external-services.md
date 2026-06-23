@@ -132,6 +132,7 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 | `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision for image analysis (Gemini is fallback) |
 | `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
 | `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Purposes that use CF vision as primary |
+| `CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED` | `false` | Route Gemini vision calls through CF AI Gateway (requires `CLOUDFLARE_AI_GATEWAY_ID` + `CLOUDFLARE_ACCOUNT_ID`) |
 
 ### Production Rollout (Vision)
 
@@ -163,6 +164,20 @@ CLOUDFLARE_WORKERS_AI_ENABLED=false
 - API token is loaded from env/settings and never logged.
 - Logs include only: provider name, model alias, purpose value, HTTP status code, and error class.
 - Prompts, food payloads, raw AI responses, base64 image bytes, and account IDs are never logged.
+
+### Cloudflare AI Gateway
+
+Vision calls for both Workers AI and Gemini route through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) when `CLOUDFLARE_AI_GATEWAY_ID` is set (Workers AI) or `CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED=true` (Gemini).
+
+Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
+
+**Privacy:** `cf-aig-collect-log-payload: false` is sent on every vision call — no food images, prompts, or AI responses are stored in CF logs. Request metadata only (model, tokens, latency, cost).
+
+**Cache:** disabled for vision (`cf-aig-skip-cache: true`). Images are always unique; caching adds overhead with zero hit rate.
+
+**Workers AI gateway routing** (Pattern B): the existing REST URL (`api.cloudflare.com`) is unchanged — CF routes internally when `cf-aig-gateway-id` header is present. No URL changes needed.
+
+**Gemini gateway routing:** uses `google-genai` SDK (`genai.Client` with `HttpOptions(base_url=...)`) — NOT LangChain. Gemini text calls with `cached_content` bypass the gateway (Google-side cache objects break when proxied).
 
 ---
 
@@ -413,6 +428,46 @@ Permanent failures (5 attempts exhausted) capture a Sentry error. Cron: `src/cro
 6. Add Render cron job: `python -m src.cron.affiliate_outbox` — every 5 min
 7. Monitor `affiliate_event_outbox` for `status=failed` rows and Sentry alerts
 8. Rotate `AFFILIATE_INTERNAL_SECRET` if compromised — update both services simultaneously
+
+---
+
+## AI Observability (Sentry + PostHog)
+
+### Operational metrics (Sentry)
+Primary dashboard for incident response and alerting.
+
+Metrics emitted via `src.observability`:
+- `ai.vision.request.count` — total image analysis requests (tags: status, ai_purpose)
+- `ai.vision.request.duration_ms` — end-to-end duration (distribution)
+- `ai.vision.provider.attempt.count` — per-provider attempt count
+- `ai.vision.provider.failure.count` — transient provider failures
+- `ai.vision.fallback.count` — provider fallbacks triggered
+- `ai.vision.parse_failure.count` — JSON parse failures
+- `ai.vision.schema_validation_failure.count` — schema validation failures
+- `ai.vision.request.failure.count` — all providers exhausted
+
+Recommended Sentry dashboard panels:
+- Success rate = `request.count{status=success}` / `request.count`
+- 503 rate = `request.failure.count` / `request.count`
+- p95 duration = `request.duration_ms` distribution p95
+- Parse/schema failure rate per provider
+
+Alert thresholds (starting points, tune after baseline):
+- 503 rate > 5% over 5 min → P1 alert
+- Parse/schema failure count > 10/min → investigate provider
+- p95 duration > 20s → latency regression
+
+### Cloudflare canary rollout gates
+Before making Cloudflare vision primary:
+1. Enable via env: `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true`
+2. Monitor `schema_validation_failure.count{ai_provider=cloudflare-workers-ai}` vs Gemini baseline
+3. Compare `request.duration_ms` p95 vs Gemini
+4. Rollback: set `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=false` — zero-downtime via env
+
+### LLM traces (PostHog)
+PostHog AI observability is wired via `src/api/main.py` LangChain OpenTelemetry integration.
+Use for: model latency trends, token costs, product funnel correlation.
+Do NOT use PostHog for operational failure alerts — use Sentry metrics.
 
 ---
 

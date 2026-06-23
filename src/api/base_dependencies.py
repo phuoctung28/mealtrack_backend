@@ -2,7 +2,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Optional
 
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.parsers.vision_response_parser import VisionResponseParser
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
@@ -20,7 +20,6 @@ from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
-from src.infra.services.ai.ai_model_manager import AIModelManager
 from src.infra.services.firebase_service import FirebaseService
 
 if TYPE_CHECKING:
@@ -40,7 +39,6 @@ _cache_monitor = CacheMonitor()
 # Singleton service instances (initialized once, reused across requests)
 _image_store: ImageStorePort | None = None
 _vision_service: VisionAIServicePort | None = None
-_ai_model_manager: AIModelManager | None = None
 
 
 async def initialize_cache_layer() -> None:
@@ -112,29 +110,19 @@ def get_vision_service() -> VisionAIServicePort:
     return _vision_service
 
 
-# AI Model Manager (singleton pattern)
-def get_ai_model_manager() -> AIModelManager:
+# Vision Response Parser
+def get_vision_parser() -> VisionResponseParser:
     """
-    Get the AI model manager instance (singleton).
+    Get the vision response parser instance.
 
     Returns:
-        AIModelManager: The AI model manager with circuit breaker and fallback support
+        VisionResponseParser: The parser instance
     """
-    global _ai_model_manager
-    if _ai_model_manager is None:
-        _ai_model_manager = AIModelManager.get_instance()
-    return _ai_model_manager
+    return VisionResponseParser(strict_schema_mode=True)
 
 
-# GPT Parser
-def get_gpt_parser() -> GPTResponseParser:
-    """
-    Get the GPT response parser instance.
-
-    Returns:
-        GPTResponseParser: The parser instance
-    """
-    return GPTResponseParser(strict_schema_mode=True)
+# Backward-compat alias so existing code referring to get_gpt_parser continues to work.
+get_gpt_parser = get_vision_parser
 
 
 # Food Cache Service
@@ -242,11 +230,6 @@ def get_daily_context_precompute_service():
 
 
 # Phase 06: Meal Suggestion Dependencies
-def get_redis_client() -> RedisClient | None:
-    """Return Redis client used by optional caches and required session stores."""
-    return _redis_client
-
-
 def get_raw_redis_client():
     """Return the underlying async Redis client (None if not initialized)."""
     return _redis_client.client if _redis_client and _redis_client.client else None

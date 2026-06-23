@@ -1,9 +1,8 @@
 """Tests for prompt constants, including fallback meal name localization."""
 
-import pytest
 from src.domain.services.prompts.prompt_constants import (
-    get_fallback_meal_name,
     LANGUAGE_NAMES,
+    get_fallback_meal_name,
 )
 from src.domain.strategies.meal_analysis_strategy import BasicAnalysisStrategy
 
@@ -94,7 +93,7 @@ class TestBasicAnalysisPromptConstraints:
 
     def test_basic_analysis_prompt_requires_json_only_and_no_prose(self):
         """Ensure JSON-only output constraints are explicit in VISION_ANALYSIS."""
-        from src.domain.services.prompts.system_prompts import SystemPrompts
+
         prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
 
         assert "json only" in prompt
@@ -104,12 +103,24 @@ class TestBasicAnalysisPromptConstraints:
     def test_basic_analysis_prompt_returns_vision_analysis(self):
         """BasicAnalysisStrategy must return SystemPrompts.VISION_ANALYSIS."""
         from src.domain.services.prompts.system_prompts import SystemPrompts
+
         prompt = BasicAnalysisStrategy().get_analysis_prompt()
         assert prompt == SystemPrompts.VISION_ANALYSIS
 
-    def test_basic_analysis_strategy_optimized_flag_always_returns_vision_analysis(self):
+    def test_basic_analysis_prompt_includes_food_guard_contract(self):
+        """Vision prompt must expose the single-stage food guard field."""
+        prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
+
+        assert '"is_food"' in prompt
+        assert "no edible food" in prompt
+        assert "do not invent" in prompt
+
+    def test_basic_analysis_strategy_optimized_flag_always_returns_vision_analysis(
+        self,
+    ):
         """optimized_prompt_enabled flag is a no-op; always returns VISION_ANALYSIS."""
         from src.domain.services.prompts.system_prompts import SystemPrompts
+
         prompt_default = BasicAnalysisStrategy().get_analysis_prompt()
         prompt_disabled = BasicAnalysisStrategy(
             optimized_prompt_enabled=False

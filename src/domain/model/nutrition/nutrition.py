@@ -1,8 +1,9 @@
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
 
 from .macros import Macros
 from .micros import Micros
+
+MAX_FOOD_ITEM_QUANTITY = 10000.0
 
 
 @dataclass
@@ -14,9 +15,9 @@ class FoodItem:
     quantity: float
     unit: str
     macros: Macros
-    micros: Optional[Micros] = None
+    micros: Micros | None = None
     confidence: float = 1.0  # 0.0-1.0 confidence score from AI or lookup
-    fdc_id: Optional[int] = None  # USDA FDC ID if available
+    fdc_id: int | None = None  # USDA FDC ID if available
     is_custom: bool = False  # Whether this is a custom ingredient
 
     def __post_init__(self):
@@ -27,7 +28,7 @@ class FoodItem:
             raise ValueError(
                 f"Food item name too long (max 200 chars): {len(self.name)}"
             )
-        if self.quantity <= 0 or self.quantity > 10000:
+        if self.quantity <= 0 or self.quantity > MAX_FOOD_ITEM_QUANTITY:
             raise ValueError(f"Quantity must be between 0 and 10000: {self.quantity}")
         if not 0 <= self.confidence <= 1:
             raise ValueError(f"Confidence must be between 0 and 1: {self.confidence}")
@@ -41,7 +42,7 @@ class FoodItem:
         """Derive calories from macros: P*4 + C*4 + F*9."""
         return self.macros.total_calories
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary format."""
         result = {
             "id": self.id,
@@ -65,8 +66,8 @@ class Nutrition:
     """Value object representing full nutritional information for a meal."""
 
     macros: Macros
-    micros: Optional[Micros] = None
-    food_items: Optional[List[FoodItem]] = None
+    micros: Micros | None = None
+    food_items: list[FoodItem] | None = None
     confidence_score: float = 1.0  # 0.0-1.0 overall confidence score
 
     def __post_init__(self):
@@ -88,7 +89,7 @@ class Nutrition:
         """Derive calories from macros: P*4 + C*4 + F*9."""
         return self.macros.total_calories
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary format."""
         result = {
             "calories": self.calories,

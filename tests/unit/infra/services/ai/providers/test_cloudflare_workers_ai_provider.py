@@ -301,8 +301,13 @@ class TestGenerateWithVision:
         """Vision-enabled provider calls REST and returns parsed dict."""
         from unittest.mock import AsyncMock, Mock, patch
 
+        valid_json = (
+            '{"dish_name": "Salad", "confidence": 0.9, "foods": ['
+            '{"name": "Lettuce", "quantity": 100, "unit": "g",'
+            ' "macros": {"protein": 1.0, "carbs": 2.0, "fat": 0.2}}]}'
+        )
         mock_resp = Mock()
-        mock_resp.json.return_value = {"result": {"response": '{"meal": "salad", "calories": 100}'}}
+        mock_resp.json.return_value = {"result": {"response": valid_json}}
         mock_resp.raise_for_status = Mock()
 
         with patch("httpx.AsyncClient") as mock_client_cls:
@@ -320,7 +325,7 @@ class TestGenerateWithVision:
             )
 
         assert isinstance(result, dict)
-        assert result.get("meal") == "salad"
+        assert result.get("dish_name") == "Salad"
 
     @pytest.mark.asyncio
     async def test_generate_with_vision_empty_response_raises(self, provider_with_vision):
@@ -394,8 +399,10 @@ class TestGenerateWithVision:
 
     @pytest.mark.asyncio
     async def test_generate_with_vision_malformed_json_raises(self, provider_with_vision):
-        """Malformed JSON in response raises ValueError."""
+        """Malformed JSON in response raises AIVisionError with json_parse kind."""
         from unittest.mock import AsyncMock, Mock, patch
+
+        from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 
         mock_resp = Mock()
         mock_resp.json.return_value = {"result": {"response": "not valid json {{{"}}
@@ -408,12 +415,14 @@ class TestGenerateWithVision:
             mock_client.post = AsyncMock(return_value=mock_resp)
             mock_client_cls.return_value = mock_client
 
-            with pytest.raises(ValueError):
+            with pytest.raises(AIVisionError) as exc_info:
                 await provider_with_vision.generate_with_vision(
                     model="@cf/google/gemma-4-26b-a4b-it",
                     prompt="test",
                     image_data=b"img",
                 )
+            assert exc_info.value.kind == AIVisionFailureKind.json_parse
+            assert exc_info.value.provider == "cloudflare-workers-ai"
 
     def test_build_vision_payload_shape(self, provider_with_vision):
         """Vision payload has expected structure with image_url content."""
@@ -443,6 +452,66 @@ class TestGenerateWithVision:
         """Normalizes result.response format."""
         raw = {"result": {"response": "hello"}}
         assert provider_with_vision._extract_response_text(raw) == "hello"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_returns_schema_valid_dict(self, provider_with_vision):
+        """Valid JSON response is parsed and returned as dict."""
+        from unittest.mock import AsyncMock, patch
+
+        valid_json = (
+            '{"dish_name": "Salad", "confidence": 0.95, "foods": ['
+            '{"name": "Lettuce", "quantity": 100, "unit": "g",'
+            ' "macros": {"protein": 1.0, "carbs": 2.0, "fat": 0.2}}]}'
+        )
+
+        with patch.object(
+            provider_with_vision,
+            "_post_workers_ai",
+            new=AsyncMock(return_value={"result": {"response": valid_json}}),
+        ):
+            result = await provider_with_vision.generate_with_vision(
+                model="@cf/google/gemma-4-26b-a4b-it",
+                prompt="analyze",
+                image_data=b"fake",
+            )
+
+        assert isinstance(result, dict)
+        assert result["dish_name"] == "Salad"
+        assert result["confidence"] == 0.95
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_returns_parsed_dict_without_schema_enforcement(
+        self, provider_with_vision
+    ):
+        """Provider returns parsed dict as-is; schema enforcement is the application layer's job.
+
+        Previously the provider validated against VisionAnalyzeResponse (legacy schema requiring
+        quantity+unit), but the system prompt returns quantity_g with no unit — causing a
+        deterministic 100% schema failure. Schema validation was moved to VisionAIService which
+        uses VisionNutritionResponse (accepts quantity_g via AliasChoices).
+        """
+        from unittest.mock import AsyncMock, patch
+
+        # Response missing macros — provider must pass it through without raising
+        partial_json = (
+            '{"dish_name": "Salad", "confidence": 0.9, "foods": ['
+            '{"name": "Lettuce", "quantity_g": 100}]}'
+        )
+
+        with patch.object(
+            provider_with_vision,
+            "_post_workers_ai",
+            new=AsyncMock(return_value={"result": {"response": partial_json}}),
+        ):
+            result = await provider_with_vision.generate_with_vision(
+                model="@cf/google/gemma-4-26b-a4b-it",
+                prompt="analyze",
+                image_data=b"fake",
+            )
+
+        assert isinstance(result, dict)
+        assert result["dish_name"] == "Salad"
+        assert result["foods"][0]["quantity_g"] == 100
 
     def test_no_secrets_in_vision_error_messages(self, provider_with_vision):
         """generate_with_vision NotImplementedError must not expose the api token."""

@@ -33,23 +33,52 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
 
     async def handle(self, command: DeleteMealCommand) -> dict[str, Any]:
         """Handle meal deletion with data preservation."""
+        deleted_kind = "meal"
         async with self.uow as uow:
             meal = await uow.meals.find_by_id(command.meal_id)
-            if not meal:
-                return {"meal_id": command.meal_id, "message": "Meal already deleted"}
-
-            if meal.user_id != command.user_id:
-                raise AuthorizationException(
-                    "You do not have permission to delete this meal"
+            if meal is not None:
+                if meal.user_id != command.user_id:
+                    raise AuthorizationException(
+                        "You do not have permission to delete this meal"
+                    )
+                await uow.meals.delete(command.meal_id)
+                log_date = (meal.created_at or utc_now()).date()
+            else:
+                hydration_entries = getattr(uow, "hydration_entries", None)
+                hydration_entry = (
+                    await hydration_entries.find_by_id_or_legacy_meal_id(
+                        command.user_id,
+                        command.meal_id,
+                    )
+                    if hydration_entries is not None
+                    else None
                 )
+                if hydration_entry is not None:
+                    await hydration_entries.delete_by_id_or_legacy_meal_id(
+                        command.user_id,
+                        command.meal_id,
+                    )
+                    deleted_kind = "hydration"
+                    log_date = hydration_entry.logged_at.date()
+                else:
+                    return {
+                        "meal_id": command.meal_id,
+                        "message": "Meal already deleted",
+                    }
 
-            await uow.meals.delete(command.meal_id)
-
-        meal_date = (meal.created_at or utc_now()).date()
         if self.cache_invalidation:
-            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
+            if deleted_kind == "hydration":
+                await self.cache_invalidation.after_hydration_write(
+                    command.user_id, log_date
+                )
+            else:
+                await self.cache_invalidation.after_meal_write(command.user_id, log_date)
 
         return {
             "meal_id": command.meal_id,
-            "message": "Meal deleted, ingredient data preserved",
+            "message": (
+                "Hydration entry deleted"
+                if deleted_kind == "hydration"
+                else "Meal deleted, ingredient data preserved"
+            ),
         }

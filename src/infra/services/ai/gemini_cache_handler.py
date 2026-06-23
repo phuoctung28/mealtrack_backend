@@ -1,5 +1,5 @@
 """
-Cache eviction and memory monitoring utilities for GeminiModelManager.
+Cache eviction and memory monitoring utilities for GeminiService.
 Handles LRU eviction, TTL expiry, and process memory checks.
 """
 

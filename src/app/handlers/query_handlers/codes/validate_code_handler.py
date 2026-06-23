@@ -36,6 +36,11 @@ class ValidateCodeQueryHandler:
                 )
                 if existing:
                     raise CodeValidationError(422, "You have already used this code")
+                if (
+                    promo.source_offering_id is not None
+                    and query.current_offering_id != promo.source_offering_id
+                ):
+                    raise CodeValidationError(422, "Code is not valid for this offering")
                 return {
                     "type": "promo_code",
                     "code": promo.code,

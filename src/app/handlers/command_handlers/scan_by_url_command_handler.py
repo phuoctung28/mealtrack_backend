@@ -11,24 +11,30 @@ import httpx
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.domain.model.hydration import HydrationEntry
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.model.nutrition.macros import Macros
+from src.domain.model.nutrition.nutrition import Nutrition
+from src.domain.parsers.vision_response_parser import (
+    VisionResponseParser as GPTResponseParser,
+)
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.services.hydration_write_service import build_beverage_scan_params
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
 )
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
+from src.domain.utils.image_compression import compress_image
 from src.domain.utils.timezone_utils import (
     get_zone_info,
     is_valid_timezone,
     noon_utc_for_date,
     utc_now,
 )
-from src.domain.utils.image_compression import compress_image
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +75,9 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
             logger.info(
                 "[SCAN-BY-URL] image_id=%s raw=%d compressed=%d bytes",
-                image_id, len(raw_bytes), len(image_bytes),
+                image_id,
+                len(raw_bytes),
+                len(image_bytes),
             )
 
             # Determine timezone-aware datetime
@@ -86,21 +94,120 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 meal_datetime = now
 
             zone_info = get_zone_info(user_timezone)
-            meal_type = determine_meal_type_from_timestamp(meal_datetime.astimezone(zone_info))
+            meal_type = determine_meal_type_from_timestamp(
+                meal_datetime.astimezone(zone_info)
+            )
 
             # Vision analysis via bytes path (never sends URL to Gemini)
             if command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,
                 )
+
                 strategy = AnalysisStrategyFactory.create_user_context_strategy(
                     command.user_description
                 )
-                vision_result = await self.vision_service.analyze_with_strategy(image_bytes, strategy)
+                vision_result = await self.vision_service.analyze_with_strategy(
+                    image_bytes, strategy
+                )
             else:
                 vision_result = await self.vision_service.analyze(image_bytes)
 
             vision_elapsed = time.time() - start
+
+            structured_data = (
+                vision_result.get("structured_data", {})
+                if isinstance(vision_result, dict)
+                else {}
+            )
+            bev_meta = structured_data.get("beverage_metadata") if structured_data else None
+
+            if bev_meta and bev_meta.get("is_packaged_beverage"):
+                params = build_beverage_scan_params(
+                    user_id=command.user_id,
+                    bev_meta=bev_meta,
+                    image_url=command.image_url,
+                )
+                if params.label_source == "estimate":
+                    logger.warning(
+                        "[SCAN-BY-URL-BEVERAGE-KCAL-ESTIMATE] drink=%s kcal_total=%.1f label_source=%s",
+                        params.drink_name,
+                        params.kcal_total,
+                        params.label_source,
+                    )
+
+                fat_g = max(0.0, (params.kcal_total - params.sugar_g_total * 4) / 9)
+                carbs_g = params.sugar_g_total
+                nutrition = Nutrition(
+                    macros=Macros(
+                        protein=0.0,
+                        carbs=round(carbs_g, 1),
+                        fat=round(fat_g, 1),
+                        fiber=0.0,
+                        sugar=round(params.sugar_g_total, 1),
+                    ),
+                    food_items=None,
+                )
+
+                async with self.uow as uow:
+                    hydration_entry = await uow.hydration_entries.add(
+                        HydrationEntry(
+                            id=str(uuid4()),
+                            user_id=command.user_id,
+                            drink_id="scanned",
+                            drink_name_snapshot=params.drink_name,
+                            emoji_snapshot=params.emoji,
+                            volume_ml=params.volume_ml,
+                            credited_ml=params.credited_ml,
+                            carbs_g=nutrition.macros.carbs,
+                            fat_g=nutrition.macros.fat,
+                            sugar_g=nutrition.macros.sugar,
+                            logged_at=meal_datetime,
+                            source="scan_beverage",
+                            legacy_meal_id=None,
+                            image_url=command.image_url,
+                        )
+                    )
+                    await uow.commit()
+
+                logger.info(
+                    "[SCAN-BY-URL-BEVERAGE-COMPLETE] entry=%s vision=%.2fs total=%.2fs",
+                    hydration_entry.id,
+                    vision_elapsed,
+                    time.time() - start,
+                )
+
+                if self.cache_invalidation:
+                    await self.cache_invalidation.after_hydration_write(
+                        command.user_id,
+                        meal_date,
+                    )
+
+                return Meal(
+                    meal_id=hydration_entry.id,
+                    user_id=command.user_id,
+                    status=MealStatus.READY,
+                    created_at=meal_datetime,
+                    meal_type="hydration",
+                    image=MealImage(
+                        image_id=str(uuid4()),
+                        format="jpeg",
+                        size_bytes=len(raw_bytes),
+                        url=command.image_url,
+                    ),
+                    source="scan_beverage",
+                    dish_name=params.drink_name,
+                    emoji=params.emoji,
+                    ready_at=meal_datetime,
+                    nutrition=nutrition,
+                    quantity=params.credited_ml,
+                )
+
+            if not self.gpt_parser.parse_is_food(vision_result):
+                raise ValueError(
+                    "Image does not appear to contain food. "
+                    "Please take a photo of food and try again."
+                )
 
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
@@ -143,7 +250,9 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             logger.info(
                 "[SCAN-BY-URL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",
-                saved_meal.meal_id, vision_elapsed, time.time() - start,
+                saved_meal.meal_id,
+                vision_elapsed,
+                time.time() - start,
             )
 
             if (
@@ -163,7 +272,8 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 except Exception as exc:
                     logger.warning(
                         "[SCAN-BY-URL] translation failed meal=%s: %s",
-                        saved_meal.meal_id, exc,
+                        saved_meal.meal_id,
+                        exc,
                     )
 
             async with self.uow as uow:
@@ -172,9 +282,11 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 )
 
             if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
+                await self.cache_invalidation.after_meal_write(
+                    command.user_id, meal_date
+                )
 
             return final_meal
 
-        except Exception as e:
+        except Exception:
             raise

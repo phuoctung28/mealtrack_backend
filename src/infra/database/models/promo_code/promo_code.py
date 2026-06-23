@@ -16,6 +16,7 @@ class PromoCode(Base, PrimaryEntityMixin):
     expires_at = Column(DateTime(timezone=True), nullable=True)
     description = Column(String(255), nullable=True)
     rc_offering_id = Column(String(50), nullable=False, default="email")
+    source_offering_id = Column(String(50), nullable=True, default=None)
 
     __table_args__ = (
         Index("ix_promo_codes_code", "code", unique=True),

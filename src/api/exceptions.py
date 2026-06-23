@@ -10,11 +10,14 @@ exception_handlers.py owns that log after route try/except blocks are removed.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import HTTPException, status
 
-from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
+    AIUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +28,8 @@ class MealTrackException(Exception):
     def __init__(
         self,
         message: str,
-        error_code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        error_code: str | None = None,
+        details: dict[str, Any] | None = None,
     ):
         self.message = message
         self.error_code = error_code or self.__class__.__name__
@@ -127,6 +130,32 @@ def handle_exception(exc: Exception) -> HTTPException:
                 "error_code": "AI_UNAVAILABLE",
                 "message": "AI meal generation is temporarily unavailable",
                 "details": {"attempted_models": exc.attempted_models},
+            },
+        )
+
+    if isinstance(exc, AIOutputValidationError):
+        logger.warning(
+            "AI output validation failed: %s",
+            exc,
+            extra={
+                "error_code": "AI_OUTPUT_INVALID",
+                "purpose": exc.purpose,
+                "attempt_count": exc.attempt_count,
+                "validation_details": exc.validation_details,
+            },
+        )
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "AI_OUTPUT_INVALID",
+                "message": (
+                    "AI could not produce valid nutrition analysis. "
+                    "Please try a clearer photo or more specific meal description."
+                ),
+                "details": {
+                    "purpose": exc.purpose,
+                    "attempt_count": exc.attempt_count,
+                },
             },
         )
 

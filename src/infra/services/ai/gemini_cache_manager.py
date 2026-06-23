@@ -116,6 +116,15 @@ class GeminiCacheManager:
             )
             return None
 
+    def wire_to_gemini_service(self) -> None:
+        """Inject self into both singletons so all AI flows see the cache."""
+        from src.infra.ai.gemini_service import GeminiService  # infra→infra
+        from src.infra.services.ai.ai_model_manager import AIModelManager  # infra→infra
+
+        GeminiService.get_instance().set_cache_manager(self)
+        AIModelManager.get_instance().set_cache_manager(self)
+        logger.info("GeminiCacheManager wired into GeminiService and AIModelManager")
+
     def start_refresh_loop(self) -> None:
         """Schedule the background refresh loop as a managed asyncio task."""
         self._refresh_task = asyncio.create_task(self.refresh_loop())

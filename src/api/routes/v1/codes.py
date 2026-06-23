@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class CodeValidateRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
+    current_offering_id: Optional[str] = Field(None, max_length=50)
 
     @field_validator("code")
     @classmethod
@@ -60,7 +61,13 @@ async def validate_code(
     """Validate any code (promo or referral) before purchase. Does not redeem."""
     try:
         handler = ValidateCodeQueryHandler()
-        result = await handler.handle(ValidateCodeQuery(code=request.code, user_id=user_id))
+        result = await handler.handle(
+            ValidateCodeQuery(
+                code=request.code,
+                user_id=user_id,
+                current_offering_id=request.current_offering_id,
+            )
+        )
         return result
     except CodeValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

@@ -1,5 +1,6 @@
 """Cloudflare Workers AI implementation of AIProviderPort using LangChain."""
 import base64
+import json
 import logging
 from typing import Any
 
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         self._timeout_seconds = timeout_seconds
         self._vision_model = vision_model
         self._vision_enabled = vision_enabled and bool(vision_model)
+        self._gateway_id = gateway_id  # stored for REST vision path; LangChain text path uses ai_gateway kwarg
 
         kwargs: dict[str, Any] = {
             "model": text_model,
@@ -147,11 +150,25 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         messages.append({"role": "user", "content": user_content})
         return {"messages": messages, "max_tokens": max_tokens, "temperature": 0.2}
 
-    async def _post_workers_ai(self, model: str, payload: dict) -> dict:
+    def _gateway_headers(self, purpose: str = "") -> dict[str, str]:
+        """Return CF AI Gateway headers for REST calls when gateway_id is configured."""
+        if not self._gateway_id:
+            return {}
+        headers: dict[str, str] = {
+            "cf-aig-gateway-id": self._gateway_id,
+            "cf-aig-skip-cache": "true",
+            "cf-aig-collect-log-payload": "false",
+        }
+        if purpose:
+            headers["cf-aig-metadata"] = json.dumps({"purpose": purpose})
+        return headers
+
+    async def _post_workers_ai(self, model: str, payload: dict, purpose: str = "") -> dict:
         url = _CF_REST_BASE.format(account_id=self._account_id, model=model)
         headers = {
             "Authorization": f"Bearer {self._api_token}",
             "Content-Type": "application/json",
+            **self._gateway_headers(purpose),
         }
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             resp = await client.post(url, json=payload, headers=headers)
@@ -186,8 +203,9 @@ class CloudflareWorkersAIProvider(AIProviderPort):
             )
 
         max_tokens: int = kwargs.get("max_tokens", 4096)
+        purpose_hint: str = kwargs.get("purpose_hint", "")
         payload = self._build_vision_payload(prompt, image_data, system_message, max_tokens)
-        raw = await self._post_workers_ai(model, payload)
+        raw = await self._post_workers_ai(model, payload, purpose=purpose_hint)
         text = self._extract_response_text(raw)
 
         if not text.strip():
@@ -196,7 +214,18 @@ class CloudflareWorkersAIProvider(AIProviderPort):
             )
 
         logger.debug("[CF-WORKERS-AI-VISION-SUCCESS] model=%s", model)
-        return extract_ai_json(text)
+
+        try:
+            parsed = extract_ai_json(text)
+        except ValueError as exc:
+            raise AIVisionError(
+                f"[CF-WORKERS-AI-VISION-PARSE-FAIL] provider=cloudflare-workers-ai model={model}",
+                kind=AIVisionFailureKind.json_parse,
+                provider="cloudflare-workers-ai",
+                model=model,
+            ) from exc
+
+        return parsed
 
     def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract HTTP status code or 'timeout' from httpx exceptions bubbled through LangChain."""

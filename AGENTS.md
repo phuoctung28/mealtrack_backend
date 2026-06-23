@@ -6,13 +6,13 @@ Monorepo submodule. 4-layer Clean + CQRS + PyMediator event bus.
 
 | Item | Value |
 |------|-------|
-| **Framework** | FastAPI 0.115+ / Python 3.11+ |
-| **Database** | PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg) |
+| **Framework** | FastAPI 0.115+ / Python 3.13 |
+| **Database** | MySQL 8.0 + SQLAlchemy 2.0 |
 | **Migrations** | Alembic |
 | **Event Bus** | PyMediator (singleton) |
 | **AI** | Google Gemini (multi-model) |
 | **Auth** | Firebase JWT |
-| **Cache** | Redis (optional cache-aside) |
+| **Cache** | Redis (cache-aside) |
 
 ## Critical Commands (Daily Use)
 
@@ -25,7 +25,7 @@ alembic upgrade head
 alembic revision --autogenerate -m "description"
 
 # Code quality (run before commit)
-black src/ tests/ && ruff check src/ && mypy src/ && pytest
+black src/ tests/ && flake8 src/ && mypy src/ && pytest
 ```
 
 ## MUST-Follow Rules (Non-Inferable)
@@ -56,9 +56,9 @@ black src/ tests/ && ruff check src/ && mypy src/ && pytest
 |-------|------|-------|
 | System architecture | `docs/system-architecture.md` | <300 |
 | CQRS patterns | `docs/cqrs-guide.md` | <200 |
-| API endpoints | `docs/api-endpoints.md` | <300 |
+| API endpoints | `docs/api-endpoints.md` | <150 |
 | Database schema | `docs/database-guide.md` | <250 |
-| External services | `docs/external-services.md` | <350 |
+| External services | `docs/external-services.md` | <150 |
 | Code standards | `docs/code-standards.md` | <300 |
 | Testing standards | `docs/testing-standards.md` | <250 |
-| Troubleshooting | `docs/troubleshooting.md` | <300 |
+| Troubleshooting | `docs/troubleshooting.md` | <100 |

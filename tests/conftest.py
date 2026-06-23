@@ -683,22 +683,18 @@ def event_loop():
 
 
 @pytest.fixture(autouse=True)
-def reset_gemini_model_manager():
-    """
-    Reset GeminiModelManager singleton before and after each test.
+def reset_gemini_service():
+    """Reset AI singletons before and after each test to prevent model-pool pollution."""
+    from src.infra.ai.gemini_service import GeminiService
+    from src.infra.services.ai.ai_model_manager import AIModelManager
 
-    This ensures tests don't share state through the singleton,
-    preventing test pollution and ensuring isolation.
-    """
-    from src.infra.services.ai.gemini_model_manager import GeminiModelManager
-
-    # Reset before test
-    GeminiModelManager.reset_instance()
+    GeminiService.reset_instance()
+    AIModelManager.reset_instance()
 
     yield
 
-    # Reset after test
-    GeminiModelManager.reset_instance()
+    GeminiService.reset_instance()
+    AIModelManager.reset_instance()
 
 
 @pytest.fixture(scope="session")

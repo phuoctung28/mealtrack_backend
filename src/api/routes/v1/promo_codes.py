@@ -1,6 +1,8 @@
 """Promo code API routes — validate before purchase, redeem after purchase."""
 import logging
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class PromoCodeRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
+    current_offering_id: Optional[str] = Field(None, max_length=50)
 
     @field_validator("code")
     @classmethod
@@ -45,7 +48,11 @@ async def validate_promo_code(
     try:
         handler = ValidatePromoCodeQueryHandler()
         result = await handler.handle(
-            ValidatePromoCodeQuery(code=request.code, user_id=user_id)
+            ValidatePromoCodeQuery(
+                code=request.code,
+                user_id=user_id,
+                current_offering_id=request.current_offering_id,
+            )
         )
         return ValidatePromoCodeResponse(**result)
     except PromoCodeValidationError as exc:

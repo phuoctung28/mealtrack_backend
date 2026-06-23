@@ -2,18 +2,16 @@
 Event bus dependency for FastAPI with proper type registrations.
 """
 
-from typing import Optional
-
+from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
 from src.app.commands.ingredient import RecognizeIngredientCommand
 
 # Import all commands
 from src.app.commands.meal import (
-    AnalyzeMealImageByUrlCommand,
-    ScanByUrlCommand,
-    UploadMealImageImmediatelyCommand,
-    EditMealCommand,
     AddCustomIngredientCommand,
     DeleteMealCommand,
+    EditMealCommand,
+    ScanByUrlCommand,
+    UploadMealImageImmediatelyCommand,
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
@@ -22,15 +20,24 @@ from src.app.commands.meal_suggestion import (
     GenerateMealRecipesCommand,
     SaveMealSuggestionCommand,
 )
+from src.app.commands.movement import (
+    DeleteMovementEntryCommand,
+    LogMovementCommand,
+    UpdateMovementEntryCommand,
+)
 from src.app.commands.notification import (
-    RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
+    RegisterFcmTokenCommand,
     UpdateNotificationPreferencesCommand,
 )
+from src.app.commands.saved_suggestion import (
+    DeleteSavedSuggestionCommand,
+    SaveSuggestionCommand,
+)
 from src.app.commands.user import (
-    SaveUserOnboardingCommand,
     CompleteOnboardingCommand,
     DeleteUserCommand,
+    SaveUserOnboardingCommand,
     UpdateCustomMacrosCommand,
     UpdateLanguageCommand,
     UpdateTimezoneCommand,
@@ -40,151 +47,132 @@ from src.app.commands.user.sync_user_command import (
     UpdateUserLastAccessedCommand,
 )
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
-from src.app.events.meal import MealImageUploadedEvent
-
-# Import all command handlers from module
-from src.app.handlers.command_handlers import (
-    EditMealCommandHandler,
-    AddCustomIngredientCommandHandler,
-    DeleteMealCommandHandler,
-    SaveUserOnboardingCommandHandler,
-    SyncUserCommandHandler,
-    UpdateUserLastAccessedCommandHandler,
-    CompleteOnboardingCommandHandler,
-    DeleteUserCommandHandler,
-    CreateManualMealCommandHandler,
-    UpdateUserMetricsCommandHandler,
-    AnalyzeMealImageByUrlHandler,
-    ScanByUrlCommandHandler,
-    UpdateCustomMacrosCommandHandler,
-    UploadMealImageImmediatelyHandler,
-    DiscoverMealsCommandHandler,
-    GenerateMealRecipesCommandHandler,
-    SaveMealSuggestionCommandHandler,
-    ParseMealTextHandler,
-)
-
-# Ingredient handlers
-from src.app.handlers.command_handlers import (
-    RecognizeIngredientCommandHandler,
-)
-from src.app.handlers.command_handlers import (
-    RegisterFcmTokenCommandHandler,
-    DeleteFcmTokenCommandHandler,
-    UpdateLanguageCommandHandler,
-    UpdateNotificationPreferencesCommandHandler,
-    UpdateTimezoneCommandHandler,
-)
-
-# Saved suggestion handlers
-from src.app.handlers.command_handlers import (
-    SaveSuggestionCommandHandler,
-    DeleteSavedSuggestionCommandHandler,
-)
-from src.app.commands.saved_suggestion import (
-    SaveSuggestionCommand,
-    DeleteSavedSuggestionCommand,
-)
-from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
-from src.app.handlers.query_handlers import GetSavedSuggestionsQueryHandler
-from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
-from src.app.queries.cheat_day import GetCheatDaysQuery
 from src.app.commands.weight import (
     AddWeightEntryCommand,
     DeleteWeightEntryCommand,
     SyncWeightEntriesCommand,
 )
-from src.app.queries.weight import GetWeightEntriesQuery
+
+# Import all command handlers from module
+# Ingredient handlers
+# Saved suggestion handlers
+from src.app.handlers.command_handlers import (
+    AddCustomIngredientCommandHandler,
+    CompleteOnboardingCommandHandler,
+    CreateManualMealCommandHandler,
+    DeleteFcmTokenCommandHandler,
+    DeleteMealCommandHandler,
+    DeleteMovementEntryCommandHandler,
+    DeleteSavedSuggestionCommandHandler,
+    DeleteUserCommandHandler,
+    DiscoverMealsCommandHandler,
+    EditMealCommandHandler,
+    GenerateMealRecipesCommandHandler,
+    LogMovementCommandHandler,
+    ParseMealTextHandler,
+    RecognizeIngredientCommandHandler,
+    RegisterFcmTokenCommandHandler,
+    SaveMealSuggestionCommandHandler,
+    SaveSuggestionCommandHandler,
+    SaveUserOnboardingCommandHandler,
+    ScanByUrlCommandHandler,
+    SyncUserCommandHandler,
+    UpdateCustomMacrosCommandHandler,
+    UpdateLanguageCommandHandler,
+    UpdateMovementEntryCommandHandler,
+    UpdateNotificationPreferencesCommandHandler,
+    UpdateTimezoneCommandHandler,
+    UpdateUserLastAccessedCommandHandler,
+    UpdateUserMetricsCommandHandler,
+    UploadMealImageImmediatelyHandler,
+)
 from src.app.handlers.command_handlers.add_weight_entry_command_handler import (
     AddWeightEntryCommandHandler,
 )
 from src.app.handlers.command_handlers.delete_weight_entry_command_handler import (
     DeleteWeightEntryCommandHandler,
 )
-from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
-    SyncWeightEntriesCommandHandler,
-)
-from src.app.handlers.query_handlers.get_weight_entries_query_handler import (
-    GetWeightEntriesQueryHandler,
-)
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
     MarkCheatDayCommandHandler,
+)
+from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
+    SyncWeightEntriesCommandHandler,
 )
 from src.app.handlers.command_handlers.unmark_cheat_day_command_handler import (
     UnmarkCheatDayCommandHandler,
 )
-from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
-    GetCheatDaysQueryHandler,
-)
-
-# Import event handlers
-from src.app.handlers.event_handlers.meal_analysis_event_handler import (
-    MealAnalysisEventHandler,
-)
-from src.app.handlers.query_handlers import (
-    GetNotificationPreferencesQueryHandler,
-)
 
 # Import all query handlers from module
 from src.app.handlers.query_handlers import (
+    GetBulkActivitiesQueryHandler,
+    GetDailyActivitiesQueryHandler,
+    GetDailyBreakdownQueryHandler,
+    GetDailyMacrosQueryHandler,
+    GetDailyMovementQueryHandler,
+    GetFoodDetailsQueryHandler,
+    GetJourneyProgressQueryHandler,
+    GetMealByIdQueryHandler,
+    GetMealsByDateQueryHandler,
+    GetMovementCatalogQueryHandler,
+    GetNotificationPreferencesQueryHandler,
+    GetSavedSuggestionsQueryHandler,
+    GetStreakQueryHandler,
+    GetUserByFirebaseUidQueryHandler,
+    GetUserMetricsQueryHandler,
+    GetUserOnboardingStatusQueryHandler,
+    GetUserProfileQueryHandler,
     GetUserTdeeQueryHandler,
+    GetWeeklyBudgetQueryHandler,
+    LookupBarcodeQueryHandler,
     PreviewTdeeQueryHandler,
     SearchFoodsQueryHandler,
-    GetFoodDetailsQueryHandler,
-    LookupBarcodeQueryHandler,
-    GetMealByIdQueryHandler,
-    GetDailyMacrosQueryHandler,
-    GetWeeklyBudgetQueryHandler,
-    GetUserProfileQueryHandler,
-    GetUserByFirebaseUidQueryHandler,
-    GetUserOnboardingStatusQueryHandler,
-    GetDailyActivitiesQueryHandler,
-    GetBulkActivitiesQueryHandler,
-    GetMovementCatalogQueryHandler,
-    GetMealsByDateQueryHandler,
-    GetUserMetricsQueryHandler,
-    GetStreakQueryHandler,
-    GetDailyBreakdownQueryHandler,
-)
-from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
-    GetNutritionBulkQueryHandler,
 )
 from src.app.handlers.query_handlers.get_activities_presence_query_handler import (
     GetActivitiesPresenceQueryHandler,
 )
-from src.app.queries.activity import GetDailyActivitiesQuery, GetBulkActivitiesQuery
+from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
+    GetCheatDaysQueryHandler,
+)
+from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
+    GetNutritionBulkQueryHandler,
+)
+from src.app.handlers.query_handlers.get_weight_entries_query_handler import (
+    GetWeightEntriesQueryHandler,
+)
+from src.app.queries.activity import GetBulkActivitiesQuery, GetDailyActivitiesQuery
+from src.app.queries.cheat_day import GetCheatDaysQuery
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
-from src.app.queries.movement import GetMovementCatalogQuery, GetDailyMovementQuery
-from src.app.commands.movement import LogMovementCommand, DeleteMovementEntryCommand, UpdateMovementEntryCommand
-from src.app.handlers.command_handlers import LogMovementCommandHandler, DeleteMovementEntryCommandHandler, UpdateMovementEntryCommandHandler
-from src.app.handlers.query_handlers import GetDailyMovementQueryHandler
+from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 
 # Import all queries
 from src.app.queries.meal import (
-    GetMealByIdQuery,
+    GetDailyBreakdownQuery,
     GetDailyMacrosQuery,
+    GetMealByIdQuery,
     GetMealsByDateQuery,
     GetStreakQuery,
-    GetDailyBreakdownQuery,
 )
-from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.app.queries.movement import GetDailyMovementQuery, GetMovementCatalogQuery
 from src.app.queries.notification import GetNotificationPreferencesQuery
-from src.app.queries.nutrition import GetNutritionBulkQuery, GetActivitiesPresenceQuery
+from src.app.queries.nutrition import GetActivitiesPresenceQuery, GetNutritionBulkQuery
+from src.app.queries.progress import GetJourneyProgressQuery
+from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.app.queries.tdee import GetUserTdeeQuery, PreviewTdeeQuery
-from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
+from src.app.queries.user import GetUserMetricsQuery, GetUserProfileQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
 )
 from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
-from src.infra.event_bus import PyMediatorEventBus, EventBus
+from src.app.queries.weight import GetWeightEntriesQuery
+from src.infra.event_bus import EventBus, PyMediatorEventBus
 
 # Singleton event buses
-_food_search_event_bus: Optional[EventBus] = None
-_configured_event_bus: Optional[EventBus] = None
+_food_search_event_bus: EventBus | None = None
+_configured_event_bus: EventBus | None = None
 
 
 def get_food_search_event_bus() -> EventBus:
@@ -202,19 +190,18 @@ def get_food_search_event_bus() -> EventBus:
         return _food_search_event_bus
 
     from src.api.base_dependencies import (
+        get_deepl_text_translation_service,
+        get_fat_secret_service_instance,
         get_food_cache_service,
         get_food_data_service,
         get_food_mapping_service,
         get_open_food_facts_service_instance,
-        get_fat_secret_service_instance,
-        get_deepl_text_translation_service,
-    )
-
-    from src.infra.adapters.brave_search_nutrition_service import (
-        get_brave_search_nutrition_service,
     )
     from src.domain.services.meal_suggestion.macro_validation_service import (
         MacroValidationService,
+    )
+    from src.infra.adapters.brave_search_nutrition_service import (
+        get_brave_search_nutrition_service,
     )
     from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -291,18 +278,18 @@ def get_configured_event_bus() -> EventBus:
 
     # Get singleton services (these are safe to reuse)
     from src.api.base_dependencies import (
-        get_image_store,
-        get_vision_service,
-        get_gpt_parser,
+        get_cache_service,
+        get_daily_context_precompute_service,
+        get_deepl_meal_translation_service,
+        get_deepl_text_translation_service,
+        get_fat_secret_service_instance,
         get_food_cache_service,
         get_food_data_service,
         get_food_mapping_service,
-        get_fat_secret_service_instance,
-        get_cache_service,
+        get_gpt_parser,
+        get_image_store,
         get_suggestion_orchestration_service,
-        get_deepl_meal_translation_service,
-        get_deepl_text_translation_service,
-        get_daily_context_precompute_service,
+        get_vision_service,
     )
 
     image_store = get_image_store()
@@ -315,8 +302,8 @@ def get_configured_event_bus() -> EventBus:
     cache_service = get_cache_service()
     suggestion_service = get_suggestion_orchestration_service()
 
-    from src.infra.database.uow_async import AsyncUnitOfWork
     from src.app.services.cache_invalidation_service import CacheInvalidationService
+    from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Synchronous invalidation service — handlers await this before returning,
     # eliminating the fire-and-forget race condition.
@@ -333,17 +320,6 @@ def get_configured_event_bus() -> EventBus:
             uow=AsyncUnitOfWork(),
             event_bus=event_bus,
             image_store=image_store,
-            vision_service=vision_service,
-            gpt_parser=gpt_parser,
-            meal_translation_service=meal_translation_service,
-            cache_invalidation=cache_invalidation_service,
-        ),
-    )
-    event_bus.register_handler(
-        AnalyzeMealImageByUrlCommand,
-        AnalyzeMealImageByUrlHandler(
-            uow=AsyncUnitOfWork(),
-            event_bus=event_bus,
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
@@ -478,15 +454,21 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         LogMovementCommand,
-        LogMovementCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
+        LogMovementCommandHandler(
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
+        ),
     )
     event_bus.register_handler(
         DeleteMovementEntryCommand,
-        DeleteMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
+        DeleteMovementEntryCommandHandler(
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
+        ),
     )
     event_bus.register_handler(
         UpdateMovementEntryCommand,
-        UpdateMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
+        UpdateMovementEntryCommandHandler(
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
+        ),
     )
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
@@ -502,7 +484,9 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
-        SaveMealSuggestionCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
+        SaveMealSuggestionCommandHandler(
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
+        ),
     )
 
     # Register user handlers
@@ -599,19 +583,63 @@ def get_configured_event_bus() -> EventBus:
         SyncWeightEntriesCommand, SyncWeightEntriesCommandHandler()
     )
     event_bus.register_handler(GetWeightEntriesQuery, GetWeightEntriesQueryHandler())
+    event_bus.register_handler(
+        GetJourneyProgressQuery,
+        GetJourneyProgressQueryHandler(
+            uow=AsyncUnitOfWork(),
+            cache_service=cache_service,
+        ),
+    )
 
     # Register hydration handlers
-    from src.app.commands.hydration import LogHydrationCommand, LogCaloricDrinkCommand, DeleteHydrationEntryCommand
-    from src.app.queries.hydration import GetDailyHydrationQuery, GetDrinkCatalogQuery, GetWeeklyHydrationQuery
-    from src.app.handlers.command_handlers import LogHydrationCommandHandler, LogCaloricDrinkCommandHandler, DeleteHydrationEntryCommandHandler
-    from src.app.handlers.query_handlers import GetDailyHydrationQueryHandler, GetDrinkCatalogQueryHandler, GetWeeklyHydrationQueryHandler
+    from src.app.commands.hydration import (
+        DeleteHydrationEntryCommand,
+        LogCaloricDrinkCommand,
+        LogHydrationCommand,
+    )
+    from src.app.handlers.command_handlers import (
+        DeleteHydrationEntryCommandHandler,
+        LogCaloricDrinkCommandHandler,
+        LogHydrationCommandHandler,
+    )
+    from src.app.handlers.query_handlers import (
+        GetDailyHydrationQueryHandler,
+        GetDrinkCatalogQueryHandler,
+        GetWeeklyHydrationQueryHandler,
+    )
+    from src.app.queries.hydration import (
+        GetDailyHydrationQuery,
+        GetDrinkCatalogQuery,
+        GetWeeklyHydrationQuery,
+    )
 
-    event_bus.register_handler(LogHydrationCommand, LogHydrationCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service))
-    event_bus.register_handler(LogCaloricDrinkCommand, LogCaloricDrinkCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service))
-    event_bus.register_handler(DeleteHydrationEntryCommand, DeleteHydrationEntryCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service))
-    event_bus.register_handler(GetDailyHydrationQuery, GetDailyHydrationQueryHandler(cache_service=cache_service))
+    event_bus.register_handler(
+        LogHydrationCommand,
+        LogHydrationCommandHandler(
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
+        ),
+    )
+    event_bus.register_handler(
+        LogCaloricDrinkCommand,
+        LogCaloricDrinkCommandHandler(
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
+        ),
+    )
+    event_bus.register_handler(
+        DeleteHydrationEntryCommand,
+        DeleteHydrationEntryCommandHandler(
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
+        ),
+    )
+    event_bus.register_handler(
+        GetDailyHydrationQuery,
+        GetDailyHydrationQueryHandler(cache_service=cache_service),
+    )
     event_bus.register_handler(GetDrinkCatalogQuery, GetDrinkCatalogQueryHandler())
-    event_bus.register_handler(GetWeeklyHydrationQuery, GetWeeklyHydrationQueryHandler(cache_service=cache_service))
+    event_bus.register_handler(
+        GetWeeklyHydrationQuery,
+        GetWeeklyHydrationQueryHandler(cache_service=cache_service),
+    )
 
     # Register saved suggestion handlers
     event_bus.register_handler(
@@ -628,15 +656,6 @@ def get_configured_event_bus() -> EventBus:
         GetSavedSuggestionsQuery,
         GetSavedSuggestionsQueryHandler(cache_service=cache_service),
     )
-
-    # Register domain event subscribers
-    meal_analysis_handler = MealAnalysisEventHandler(
-        vision_service=vision_service,
-        gpt_parser=gpt_parser,
-        image_store=image_store,
-        meal_translation_service=meal_translation_service,
-    )
-    event_bus.subscribe(MealImageUploadedEvent, meal_analysis_handler.handle)
 
     _configured_event_bus = event_bus
     return _configured_event_bus

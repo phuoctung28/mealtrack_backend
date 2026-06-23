@@ -1,6 +1,6 @@
 """
 Meal generation service implementation using AI Model Manager.
-Provides resilient AI calls with automatic fallback.
+Provides resilient AI calls with automatic fallback across CF Workers AI and Gemini.
 """
 
 import logging
@@ -23,7 +23,7 @@ PURPOSE_MAP = {
 class MealGenerationService(MealGenerationServicePort):
     """
     Unified meal generation service using AIModelManager.
-    Provides automatic fallback on provider failures.
+    Provides automatic fallback on provider failures (CF Workers AI → Gemini).
     """
 
     def __init__(self):
@@ -49,5 +49,4 @@ class MealGenerationService(MealGenerationServicePort):
             response_type=response_type,
             max_tokens=max_tokens,
             schema=schema,
-            thinking_budget=thinking_budget,
         )
