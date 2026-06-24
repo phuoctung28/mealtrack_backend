@@ -63,6 +63,8 @@ class JourneyProgressResponse(BaseModel):
     period_end: str
     as_of: str
     progress_percent: float
+    current_period_progress_percent: float = 0.0
+    journey_progress_seed_percent: float = 0.0
     confirmed_progress_percent: float
     provisional_progress_percent: float
     timeline_days: int

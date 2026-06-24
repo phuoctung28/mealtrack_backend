@@ -132,6 +132,9 @@ class UserMetricsResponse(BaseModel):
     goal_started_at: Optional[datetime] = Field(
         None, description="Timestamp when goal journey started"
     )
+    journey_progress_seed_percent: float = Field(
+        0.0, description="Starting journey percent granted from historical actions"
+    )
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 

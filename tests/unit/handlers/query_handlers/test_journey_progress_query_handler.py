@@ -21,6 +21,7 @@ class _FakeUsers:
             target_weight_kg=75.0,
             goal_start_weight_kg=None,
             goal_started_at=None,
+            journey_progress_seed_percent=25.0,
             challenge_duration="30_days",
             daily_water_goal_ml=2000,
         )
@@ -83,6 +84,8 @@ async def test_handler_uses_stable_existing_user_period_start():
 
     assert result["period_start"] == "2026-06-20T17:00:00+00:00"
     assert result["timeline_days"] == 30
+    assert result["journey_progress_seed_percent"] == 25.0
+    assert result["progress_percent"] > result["current_period_progress_percent"]
     assert result["latest_action"]["label"] == "Launch meal"
     assert uow.meals.args == (
         user_id,
