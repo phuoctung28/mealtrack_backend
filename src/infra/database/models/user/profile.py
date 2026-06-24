@@ -66,6 +66,7 @@ class UserProfile(Base, BaseMixin):
     # Goal progress tracking — tracks when user started current goal journey
     goal_start_weight_kg = Column(Float, nullable=True, default=None)
     goal_started_at = Column(DateTime(timezone=True), nullable=True, default=None)
+    journey_progress_seed_percent = Column(Float, nullable=False, default=0.0)
     daily_water_goal_ml = Column(Integer, nullable=True, default=None)
 
     @property
@@ -105,6 +106,10 @@ class UserProfile(Base, BaseMixin):
         CheckConstraint(
             "daily_water_goal_ml IS NULL OR daily_water_goal_ml > 0",
             name="check_water_goal_positive",
+        ),
+        CheckConstraint(
+            "journey_progress_seed_percent >= 0 AND journey_progress_seed_percent <= 100",
+            name="check_journey_progress_seed_percent_range",
         ),
     )
 

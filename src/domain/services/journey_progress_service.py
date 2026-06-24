@@ -49,6 +49,7 @@ def calculate_journey_progress(
     target_calories: float,
     target_protein_g: float,
     water_goal_ml: int,
+    journey_progress_seed_percent: float = 0.0,
 ) -> dict:
     period_end = period_start + timedelta(days=timeline_days)
     effective_end = min(as_of, period_end)
@@ -78,7 +79,9 @@ def calculate_journey_progress(
         else:
             confirmed += percent
 
-    display = min(100.0, confirmed + provisional)
+    current_period_progress = min(100.0, confirmed + provisional)
+    seed = _clamp_percent(journey_progress_seed_percent)
+    display = seed + ((100.0 - seed) * current_period_progress / 100.0)
     latest = max(
         included, key=lambda action: ensure_utc(action.logged_at), default=None
     )
@@ -87,9 +90,13 @@ def calculate_journey_progress(
         "period_end": period_end.isoformat(),
         "as_of": as_of.isoformat(),
         "progress_percent": round(display, 3),
-        "confirmed_progress_percent": round(min(100.0, confirmed), 3),
+        "current_period_progress_percent": round(current_period_progress, 3),
+        "journey_progress_seed_percent": round(seed, 3),
+        "confirmed_progress_percent": round(
+            _apply_seed(seed, min(100.0, confirmed)), 3
+        ),
         "provisional_progress_percent": round(
-            min(100.0, max(0.0, display - confirmed)), 3
+            max(0.0, display - _apply_seed(seed, min(100.0, confirmed))), 3
         ),
         "timeline_days": timeline_days,
         "daily_progress_budget_percent": round(daily_budget, 3),
@@ -143,6 +150,16 @@ def _day_percent(
     scored = daily_budget * (sum(points.values()) / 100)
     floor = min(daily_budget, action_count * MINIMUM_LOGGED_ACTION_PERCENT)
     return min(daily_budget, max(floor, scored))
+
+
+def _apply_seed(seed: float, progress_percent: float) -> float:
+    return seed + ((100.0 - seed) * _clamp_percent(progress_percent) / 100.0)
+
+
+def _clamp_percent(value: float | None) -> float:
+    if value is None:
+        return 0.0
+    return max(0.0, min(100.0, float(value)))
 
 
 def _calorie_adherence(target: float, consumed: float) -> float:
