@@ -192,15 +192,19 @@ class GeminiProvider(AIProviderPort):
         # Prefer response.parsed when response_schema is set — SDK populates it directly
         if response.parsed is not None:
             if hasattr(response.parsed, "model_dump"):
-                return response.parsed.model_dump()
-            return self._validate_vision_response(response.parsed, model)
+                return self._validate_vision_response(
+                    response.parsed.model_dump(), VisionNutritionResponse, model
+                )
+            return self._validate_vision_response(
+                response.parsed, VisionNutritionResponse, model
+            )
 
         text = response.text
         if not text or not text.strip():
             raise ValueError(f"[GEMINI-GATEWAY-VISION] Empty response for model={model}")
 
         parsed = self._extract_json(text)
-        return self._validate_vision_response(parsed, model)
+        return self._validate_vision_response(parsed, VisionNutritionResponse, model)
 
     async def generate_with_vision(
         self,
@@ -215,6 +219,7 @@ class GeminiProvider(AIProviderPort):
         import base64
 
         max_tokens: int = kwargs.get("max_tokens", 4096)
+        schema = kwargs.get("schema")
 
         # Try CF AI Gateway path first when configured
         if self._gateway_client is not None:
@@ -226,6 +231,17 @@ class GeminiProvider(AIProviderPort):
                     system_message=system_message,
                     max_tokens=max_tokens,
                     purpose_hint=purpose_hint or "",
+                )
+            except AIVisionError as exc:
+                if exc.kind in (
+                    AIVisionFailureKind.schema_validation,
+                    AIVisionFailureKind.json_parse,
+                ):
+                    raise
+                logger.warning("[GEMINI-GATEWAY-VISION-FALLBACK] model=%s error=%s", model, exc)
+                increment_metric(
+                    "ai.vision.gateway.fallback.count",
+                    attributes={"provider": "gemini", "model": model},
                 )
             except Exception as exc:
                 logger.warning("[GEMINI-GATEWAY-VISION-FALLBACK] model=%s error=%s", model, exc)
@@ -260,28 +276,34 @@ class GeminiProvider(AIProviderPort):
             )
         )
 
-        # Try structured output first
-        try:
-            structured_llm = llm.with_structured_output(
-                VisionNutritionResponse.model_json_schema(),
-                method="json_schema",
-                include_raw=True,
-            )
-            result = await asyncio.to_thread(structured_llm.invoke, messages)
-            parsed = result.get("parsed") if isinstance(result, dict) else result
-            if parsed is not None:
-                if hasattr(parsed, "model_dump"):
-                    return parsed.model_dump()
-                if isinstance(parsed, dict):
-                    return self._validate_vision_response(parsed, model)
-        except Exception:
-            logger.debug("[GEMINI-VISION-STRUCTURED-FALLBACK] model=%s", model)
+        if schema is not None:
+            # Try structured output first
+            try:
+                structured_llm = llm.with_structured_output(
+                    schema.model_json_schema(),
+                    method="json_schema",
+                    include_raw=True,
+                )
+                result = await asyncio.to_thread(structured_llm.invoke, messages)
+                parsed = result.get("parsed") if isinstance(result, dict) else result
+                if parsed is not None:
+                    if hasattr(parsed, "model_dump"):
+                        return self._validate_vision_response(
+                            parsed.model_dump(), schema, model
+                        )
+                    if isinstance(parsed, dict):
+                        return self._validate_vision_response(parsed, schema, model)
+            except Exception:
+                logger.debug("[GEMINI-VISION-STRUCTURED-FALLBACK] model=%s", model)
 
         # Fallback to raw text parse
         response = await asyncio.to_thread(llm.invoke, messages)
+        if schema is None:
+            return self._extract_json(response.content)
+
         try:
             parsed = self._extract_json(response.content)
-            return self._validate_vision_response(parsed, model)
+            return self._validate_vision_response(parsed, schema, model)
         except ValueError as exc:
             raise AIVisionError(
                 f"[GEMINI-VISION-PARSE-FAIL] provider=gemini model={model}",
@@ -307,9 +329,11 @@ class GeminiProvider(AIProviderPort):
         """Extract JSON from response content."""
         return extract_ai_json(content)
 
-    def _validate_vision_response(self, data: Any, model: str) -> dict[str, Any]:
+    def _validate_vision_response(
+        self, data: Any, schema: type, model: str
+    ) -> dict[str, Any]:
         try:
-            return VisionNutritionResponse.model_validate(data).model_dump()
+            return schema.model_validate(data).model_dump()
         except ValidationError as exc:
             raise AIVisionError(
                 f"[GEMINI-VISION-SCHEMA-FAIL] provider=gemini model={model}",

@@ -1,5 +1,5 @@
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -153,12 +153,14 @@ class TestGenerateWithVision:
     ):
         mock_llm = Mock()
         mock_llm.invoke = Mock(
-            return_value=Mock(content=json.dumps(_canonical_vision_payload("Rice bowl")))
+            return_value=Mock(
+                content='{"name": "broccoli", "confidence": 0.94, "category": "vegetable"}'
+            )
         )
         mock_llm.with_structured_output = Mock(side_effect=NotImplementedError)
         mock_model_manager.get_model_for_purpose.return_value = mock_llm
 
-        await provider.generate_with_vision(
+        result = await provider.generate_with_vision(
             model="gemini-3.1-flash-lite",
             prompt="test",
             image_data=b"fake-image",
@@ -168,9 +170,33 @@ class TestGenerateWithVision:
 
         call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
         assert call_kwargs["model_name"] == "gemini-3.1-flash-lite"
+        assert result == {"name": "broccoli", "confidence": 0.94, "category": "vegetable"}
+        mock_llm.with_structured_output.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_generate_with_vision_uses_structured_output_first(
+    async def test_generate_with_vision_without_schema_returns_non_nutrition_json(
+        self, provider, mock_model_manager
+    ):
+        mock_llm = Mock()
+        mock_llm.invoke = Mock(
+            return_value=Mock(
+                content='{"name": "tofu", "confidence": 0.88, "category": "protein"}'
+            )
+        )
+        mock_llm.with_structured_output = Mock()
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash",
+            prompt="identify ingredient",
+            image_data=b"fake-image",
+        )
+
+        assert result == {"name": "tofu", "confidence": 0.88, "category": "protein"}
+        mock_llm.with_structured_output.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_uses_structured_output_when_schema_provided(
         self, provider, mock_model_manager
     ):
         parsed_instance = VisionNutritionResponse.model_validate(
@@ -187,6 +213,7 @@ class TestGenerateWithVision:
             model="gemini-2.5-flash",
             prompt="analyze this",
             image_data=b"fake-image",
+            schema=VisionNutritionResponse,
         )
 
         assert isinstance(result, dict)
@@ -211,6 +238,7 @@ class TestGenerateWithVision:
             model="gemini-2.5-flash",
             prompt="analyze this",
             image_data=b"fake-image",
+            schema=VisionNutritionResponse,
         )
 
         schema_arg = mock_llm.with_structured_output.call_args.args[0]
@@ -232,6 +260,7 @@ class TestGenerateWithVision:
             model="gemini-2.5-flash",
             prompt="analyze",
             image_data=b"fake-image",
+            schema=VisionNutritionResponse,
         )
 
         mock_llm.invoke.assert_called_once()
@@ -253,6 +282,7 @@ class TestGenerateWithVision:
                 model="gemini-2.5-flash",
                 prompt="analyze",
                 image_data=b"fake-image",
+                schema=VisionNutritionResponse,
             )
 
         assert exc_info.value.kind == AIVisionFailureKind.schema_validation
@@ -275,12 +305,38 @@ class TestGenerateWithVision:
             model="gemini-2.5-flash",
             prompt="analyze",
             image_data=b"fake-image",
+            schema=VisionNutritionResponse,
         )
 
         # parsed=None triggers fallback to llm.invoke
         mock_llm.invoke.assert_called_once()
         assert isinstance(result, dict)
         assert result["dish_name"] == "Soup"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_reraises_classified_gateway_errors(
+        self, provider, mock_model_manager
+    ):
+        provider._gateway_client = Mock()
+        provider._generate_vision_via_gateway = AsyncMock(
+            side_effect=AIVisionError(
+                "[GEMINI-GATEWAY-VISION-SCHEMA-FAIL]",
+                kind=AIVisionFailureKind.schema_validation,
+                provider="gemini",
+                model="gemini-2.5-flash",
+            )
+        )
+
+        with pytest.raises(AIVisionError) as exc_info:
+            await provider.generate_with_vision(
+                model="gemini-2.5-flash",
+                prompt="analyze",
+                image_data=b"fake-image",
+                schema=VisionNutritionResponse,
+            )
+
+        assert exc_info.value.kind == AIVisionFailureKind.schema_validation
+        mock_model_manager.get_model_for_purpose.assert_not_called()
 
 
 class TestErrorExtraction:
