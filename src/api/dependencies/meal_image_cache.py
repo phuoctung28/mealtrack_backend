@@ -7,13 +7,14 @@ for image-text scoring, which requires vision encoding.
 
 from __future__ import annotations
 
+from importlib import import_module
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.services.meal_image_cache.meal_image_cache_service import (
     MealImageCacheService,
 )
-from src.infra.adapters.openai_text_embedding_adapter import get_openai_text_embedder
 from src.infra.config.settings import get_settings
 from src.infra.database.config_async import get_async_db
 from src.infra.repositories.pending_meal_image_repository_async import (
@@ -29,6 +30,11 @@ __all__ = [
     "get_pending_queue",
     "enqueue_pending_images",
 ]
+
+
+def get_openai_text_embedder(api_key: str, model: str, dimensions: int):
+    module = import_module("src.infra.adapters.openai_text_embedding_adapter")
+    return module.get_openai_text_embedder(api_key, model, dimensions)
 
 
 async def get_meal_image_cache_service(
@@ -53,4 +59,3 @@ async def get_pending_queue(
     session: AsyncSession = Depends(get_async_db),
 ) -> AsyncPendingMealImageRepository:
     return AsyncPendingMealImageRepository(session)
-
