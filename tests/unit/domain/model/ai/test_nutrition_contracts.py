@@ -257,6 +257,20 @@ class TestVisionNutritionResponse:
         assert response.beverage_metadata is not None
         assert response.beverage_metadata.is_packaged_beverage is True
 
+    def test_rejects_extra_beverage_metadata_fields(self):
+        with pytest.raises(ValidationError):
+            VisionNutritionResponse.model_validate(
+                {
+                    "is_food": False,
+                    "foods": [],
+                    "beverage_metadata": {
+                        "is_packaged_beverage": True,
+                        "brand": "Coca-Cola",
+                        "unknown_field": "boom",
+                    },
+                }
+            )
+
     def test_brand_max_length_100_enforced(self):
         with pytest.raises(ValidationError):
             BeverageMetadata.model_validate(
@@ -332,6 +346,28 @@ class TestMealTextNutritionResponse:
         assert item.macros.fat_g == pytest.approx(9.5)
         assert "protein" not in item.model_dump()
         assert "calories" not in item.model_dump()
+
+    def test_text_macros_ignore_nested_extra_fields(self):
+        response = MealTextNutritionResponse.model_validate(
+            {
+                "items": [
+                    {
+                        "name": "Pho",
+                        "quantity": 1.0,
+                        "unit": "bowl",
+                        "macros": {
+                            "protein_g": 20.0,
+                            "carbs_g": 40.0,
+                            "fat_g": 10.0,
+                            "calories": 9999,
+                        },
+                    }
+                ]
+            }
+        )
+
+        assert response.items[0].macros.protein_g == pytest.approx(20.0)
+        assert "calories" not in response.items[0].macros.model_dump()
 
     def test_rejects_empty_items(self):
         with pytest.raises(ValidationError):

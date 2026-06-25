@@ -33,7 +33,7 @@ def _strip_required_text(value: str) -> str:
 class AINutritionMacros(BaseModel):
     """Macronutrients reported by AI, in grams."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     protein_g: float = Field(
         ...,
@@ -72,6 +72,12 @@ class AINutritionMacros(BaseModel):
     )
 
 
+class AIVisionNutritionMacros(AINutritionMacros):
+    """Strict macronutrients contract for provider-facing vision responses."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class VisionFoodEstimate(BaseModel):
     """Single food estimate extracted from an image."""
 
@@ -84,7 +90,7 @@ class VisionFoodEstimate(BaseModel):
         le=MAX_FOOD_ITEM_QUANTITY,
         validation_alias=AliasChoices("quantity_g", "quantity"),
     )
-    macros: AINutritionMacros
+    macros: AIVisionNutritionMacros
     confidence: float = Field(1.0, ge=0, le=1)
 
     @field_validator("name")
