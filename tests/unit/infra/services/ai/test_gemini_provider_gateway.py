@@ -1,8 +1,9 @@
 """Unit tests — GeminiProvider CF AI Gateway client construction."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 
 # DO NOT use importlib.reload — it pollutes GeminiModelManager singleton state across tests.
 # Pattern: mock both GeminiModelManager.get_instance and get_settings before
@@ -131,3 +132,35 @@ async def test_gateway_vision_uses_canonical_response_schema():
     config = gateway_client.aio.models.generate_content.await_args.kwargs["config"]
     assert config.response_schema is VisionNutritionResponse
     assert result["foods"][0]["quantity_g"] == 180
+
+
+@pytest.mark.asyncio
+async def test_gateway_malformed_text_raises_classified_parse_error_without_fallback():
+    from src.infra.services.ai.providers.gemini_provider import GeminiProvider
+
+    response = MagicMock()
+    response.parsed = None
+    response.text = "not json"
+
+    with patch(f"{_MODULE}.get_settings", return_value=_enabled_settings()):
+        with patch(_MANAGER, return_value=MagicMock()):
+            with patch(f"{_MODULE}.genai.Client"):
+                provider = GeminiProvider()
+
+    gateway_client = MagicMock()
+    gateway_client.aio.models.generate_content = AsyncMock(return_value=response)
+    provider._gateway_client = gateway_client
+    provider._model_manager.get_model_for_purpose = Mock()
+
+    with pytest.raises(AIVisionError) as exc_info:
+        await provider.generate_with_vision(
+            model="gemini-2.5-flash",
+            prompt="analyze",
+            image_data=b"fake-image",
+            schema=VisionNutritionResponse,
+        )
+
+    assert exc_info.value.kind == AIVisionFailureKind.json_parse
+    assert exc_info.value.provider == "gemini"
+    assert exc_info.value.model == "gemini-2.5-flash"
+    provider._model_manager.get_model_for_purpose.assert_not_called()

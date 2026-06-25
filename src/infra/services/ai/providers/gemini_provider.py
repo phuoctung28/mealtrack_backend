@@ -200,10 +200,19 @@ class GeminiProvider(AIProviderPort):
             )
 
         text = response.text
-        if not text or not text.strip():
-            raise ValueError(f"[GEMINI-GATEWAY-VISION] Empty response for model={model}")
-
-        parsed = self._extract_json(text)
+        try:
+            if not text or not text.strip():
+                raise ValueError(
+                    f"[GEMINI-GATEWAY-VISION] Empty response for model={model}"
+                )
+            parsed = self._extract_json(text)
+        except ValueError as exc:
+            raise AIVisionError(
+                f"[GEMINI-GATEWAY-VISION-PARSE-FAIL] provider=gemini model={model}",
+                kind=AIVisionFailureKind.json_parse,
+                provider="gemini",
+                model=model,
+            ) from exc
         return self._validate_vision_response(parsed, VisionNutritionResponse, model)
 
     async def generate_with_vision(
