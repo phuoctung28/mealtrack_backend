@@ -6,7 +6,8 @@ from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
 )
-from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.parsers.vision_response_parser import VisionResponseParser
 from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     MealAnalysisStrategy,
@@ -21,7 +22,7 @@ def _valid_vision_response():
             {
                 "name": "rice",
                 "quantity_g": 180,
-                "macros": {"protein": 4, "carbs": 50, "fat": 1},
+                "macros": {"protein_g": 4, "carbs_g": 50, "fat_g": 1},
             }
         ],
         "confidence": 0.8,
@@ -73,9 +74,15 @@ async def test_analyze_with_strategy_returns_structured_data(
     result = await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
     assert result["structured_data"]["dish_name"] == "test meal"
-    assert result["structured_data"]["foods"][0]["quantity"] == 180
-    assert result["structured_data"]["foods"][0]["unit"] == "g"
+    assert result["structured_data"]["foods"][0]["quantity_g"] == 180
+    assert "unit" not in result["structured_data"]["foods"][0]
     assert "raw_response" in result
+    assert (
+        VisionResponseParser().parse_to_nutrition(result).food_items[0].quantity == 180
+    )
+    assert (
+        GPTResponseParser().parse_to_nutrition(result).food_items[0].macros.protein == 4
+    )
 
 
 @pytest.mark.asyncio
@@ -95,8 +102,6 @@ async def test_analyze_with_strategy_preserves_non_food_guard(
 
     assert result["structured_data"]["is_food"] is False
     assert result["structured_data"]["foods"] == []
-
-    from src.domain.parsers.gpt_response_parser import GPTResponseParser
 
     assert GPTResponseParser().parse_is_food(result) is False
 
@@ -128,7 +133,9 @@ async def test_analyze_with_strategy_passes_prompt_from_strategy(
 async def test_analyze_with_strategy_raises_runtime_error_on_failure(
     service, mock_ai_manager, mock_strategy
 ):
-    mock_ai_manager.generate_with_vision = AsyncMock(side_effect=Exception("AI failure"))
+    mock_ai_manager.generate_with_vision = AsyncMock(
+        side_effect=Exception("AI failure")
+    )
 
     with pytest.raises(RuntimeError, match="Failed to analyze image"):
         await service.analyze_with_strategy(b"fake_image", mock_strategy)
@@ -156,52 +163,35 @@ async def test_analyze_with_strategy_preserves_ai_unavailable(
 
 
 @pytest.mark.asyncio
-async def test_analyze_with_strategy_retries_invalid_structured_output_once(
+async def test_analyze_with_strategy_does_not_retry_invalid_structured_output(
     service, mock_ai_manager, mock_strategy
 ):
     mock_ai_manager.generate_with_vision = AsyncMock(
-        side_effect=[
-            {
-                "dish_name": "Rice bowl",
-                "foods": [
-                    {
-                        "name": "rice",
-                        "quantity_g": 150000,
-                        "macros": {"protein": 4, "carbs": 50, "fat": 1},
-                    }
-                ],
-            },
-            {
-                "dish_name": "Rice bowl",
-                "foods": [
-                    {
-                        "name": "rice",
-                        "quantity_g": 180,
-                        "macros": {"protein": 4, "carbs": 50, "fat": 1},
-                    }
-                ],
-                "confidence": 0.8,
-            },
-        ]
+        return_value={
+            "dish_name": "Rice bowl",
+            "foods": [
+                {
+                    "name": "rice",
+                    "quantity_g": 150000,
+                    "macros": {"protein_g": 4, "carbs_g": 50, "fat_g": 1},
+                }
+            ],
+        }
     )
 
-    result = await service.analyze_with_strategy(b"fake_image", mock_strategy)
+    with pytest.raises(AIOutputValidationError) as exc_info:
+        await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
-    assert mock_ai_manager.generate_with_vision.await_count == 2
-    second_call = mock_ai_manager.generate_with_vision.await_args_list[1].kwargs
-    assert "Return the full corrected response" in second_call["prompt"]
-    assert "foods.0.quantity_g" in second_call["prompt"]
-    assert result["structured_data"]["foods"][0]["quantity"] == 180
-    assert result["structured_data"]["foods"][0]["unit"] == "g"
-    assert result["structured_data"]["foods"][0]["macros"] == {
-        "protein": 4.0,
-        "carbs": 50.0,
-        "fat": 1.0,
-    }
+    assert mock_ai_manager.generate_with_vision.await_count == 1
+    call_kwargs = mock_ai_manager.generate_with_vision.await_args.kwargs
+    assert call_kwargs["purpose"].value == "meal_scan"
+    assert exc_info.value.purpose == "meal_scan"
+    assert exc_info.value.attempt_count == 1
+    assert "foods.0.quantity_g" in exc_info.value.validation_details[0]
 
 
 @pytest.mark.asyncio
-async def test_analyze_with_strategy_raises_controlled_error_after_retry_failure(
+async def test_analyze_with_strategy_raises_controlled_error_without_repair_retry(
     service, mock_ai_manager, mock_strategy
 ):
     invalid = {
@@ -210,18 +200,18 @@ async def test_analyze_with_strategy_raises_controlled_error_after_retry_failure
             {
                 "name": "rice",
                 "quantity_g": 150000,
-                "macros": {"protein": 4, "carbs": 50, "fat": 1},
+                "macros": {"protein_g": 4, "carbs_g": 50, "fat_g": 1},
             }
         ],
     }
-    mock_ai_manager.generate_with_vision = AsyncMock(side_effect=[invalid, invalid])
+    mock_ai_manager.generate_with_vision = AsyncMock(return_value=invalid)
 
     with pytest.raises(AIOutputValidationError) as exc_info:
         await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
-    assert mock_ai_manager.generate_with_vision.await_count == 2
+    assert mock_ai_manager.generate_with_vision.await_count == 1
     assert exc_info.value.purpose == "meal_scan"
-    assert exc_info.value.attempt_count == 2
+    assert exc_info.value.attempt_count == 1
     assert "foods.0.quantity_g" in exc_info.value.validation_details[0]
 
 
