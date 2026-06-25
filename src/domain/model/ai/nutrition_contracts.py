@@ -1,8 +1,8 @@
 """Canonical AI nutrition output contracts.
 
 These schemas validate AI output before it is mapped into domain nutrition
-models. They intentionally ignore AI-reported calories because calories are
-derived from backend macros.
+models. Text-parse contracts ignore advisory AI calories for compatibility;
+provider-facing vision contracts reject them so calories stay backend-derived.
 """
 
 from typing import Any, Literal
