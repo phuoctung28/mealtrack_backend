@@ -196,6 +196,33 @@ class TestGenerateWithVision:
         mock_llm.with_structured_output.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_generate_with_vision_without_schema_skips_gateway_when_configured(
+        self, provider, mock_model_manager
+    ):
+        mock_llm = Mock()
+        mock_llm.invoke = Mock(
+            return_value=Mock(
+                content='{"name": "lentil", "confidence": 0.91, "category": "legume"}'
+            )
+        )
+        mock_llm.with_structured_output = Mock()
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+        provider._gateway_client = Mock()
+        provider._generate_vision_via_gateway = AsyncMock(
+            return_value=_canonical_vision_payload("Should not be used")
+        )
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash",
+            prompt="identify ingredient",
+            image_data=b"fake-image",
+        )
+
+        assert result == {"name": "lentil", "confidence": 0.91, "category": "legume"}
+        provider._generate_vision_via_gateway.assert_not_awaited()
+        mock_llm.with_structured_output.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_generate_with_vision_uses_structured_output_when_schema_provided(
         self, provider, mock_model_manager
     ):

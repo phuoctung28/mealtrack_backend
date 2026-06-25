@@ -221,8 +221,9 @@ class GeminiProvider(AIProviderPort):
         max_tokens: int = kwargs.get("max_tokens", 4096)
         schema = kwargs.get("schema")
 
-        # Try CF AI Gateway path first when configured
-        if self._gateway_client is not None:
+        # Gateway vision currently uses the canonical meal schema, so only use
+        # it for callers that requested schema validation.
+        if schema is not None and self._gateway_client is not None:
             try:
                 return await self._generate_vision_via_gateway(
                     model=model,
