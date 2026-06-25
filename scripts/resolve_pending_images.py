@@ -88,23 +88,25 @@ async def drain(
 
 
 async def _main() -> int:
+    import httpx
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    import httpx
 
+    from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
+    from src.infra.adapters.cloudflare_image_generator import CloudflareImageGenerator
+    from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
+    from src.infra.adapters.openai_text_embedding_adapter import (
+        OpenAITextEmbeddingAdapter,
+    )
     from src.infra.config.settings import get_settings
     from src.infra.database.config import SQLALCHEMY_DATABASE_URL
-    from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
-    from src.infra.adapters.gemini_text_embedding_adapter import GeminiTextEmbeddingAdapter
-    from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-    from src.infra.adapters.cloudflare_image_generator import CloudflareImageGenerator
+    from src.infra.event_bus import PyMediatorEventBus
     from src.infra.repositories.pending_meal_image_repository import (
         PendingMealImageRepository,
     )
     from src.infra.repositories.pgvector_meal_image_cache_repository import (
         PgvectorMealImageCacheRepository,
     )
-    from src.infra.event_bus import PyMediatorEventBus
 
     settings = get_settings()
 
@@ -118,7 +120,14 @@ async def _main() -> int:
                 r.raise_for_status()
                 return r.content
 
-    text_embedder = GeminiTextEmbeddingAdapter(api_key=settings.GOOGLE_API_KEY)
+    if not settings.OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is required for meal image cache embeddings")
+
+    text_embedder = OpenAITextEmbeddingAdapter(
+        api_key=settings.OPENAI_API_KEY,
+        model=settings.OPENAI_EMBEDDING_MODEL,
+        dimensions=settings.OPENAI_EMBEDDING_DIMENSIONS,
+    )
     image_scorer = ClipEmbeddingAdapter.from_settings(
         model_name=settings.CLIP_MODEL_NAME,
         device=settings.CLIP_DEVICE,

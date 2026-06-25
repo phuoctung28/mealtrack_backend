@@ -21,8 +21,10 @@ class AsyncPgvectorMealImageCacheRepository:
         stmt = text(
             "SELECT id, meal_name, name_slug, image_url, thumbnail_url, "
             "source, "
-            "confidence, text_embedding <=> CAST(:emb AS vector) AS distance "
+            "confidence, text_embedding_v2 <=> CAST(:emb AS vector) AS distance "
             "FROM meal_image_cache "
+            "WHERE text_embedding_v2 IS NOT NULL "
+            "AND embedding_provider = 'openai' "
             "ORDER BY distance ASC LIMIT 1"
         )
         result = await self._session.execute(stmt, {"emb": emb_literal})
@@ -71,11 +73,13 @@ class AsyncPgvectorMealImageCacheRepository:
                 c.thumbnail_url,
                 c.source,
                 c.confidence,
-                c.text_embedding <=> q.emb AS distance
+                c.text_embedding_v2 <=> q.emb AS distance
             FROM query_embs q
             CROSS JOIN LATERAL (
                 SELECT * FROM meal_image_cache
-                ORDER BY text_embedding <=> q.emb
+                WHERE text_embedding_v2 IS NOT NULL
+                  AND embedding_provider = 'openai'
+                ORDER BY text_embedding_v2 <=> q.emb
                 LIMIT 1
             ) c
             ORDER BY q.idx, distance
@@ -108,13 +112,17 @@ class AsyncPgvectorMealImageCacheRepository:
         emb_literal = str(record.text_embedding)
         stmt = text(
             "INSERT INTO meal_image_cache "
-            "(meal_name, name_slug, text_embedding, image_url, thumbnail_url, "
+            "(meal_name, name_slug, text_embedding, text_embedding_v2, "
+            "embedding_provider, embedding_model, image_url, thumbnail_url, "
             "source, confidence) "
             "VALUES (:meal_name, :name_slug, CAST(:emb AS vector), "
-            ":image_url, "
-            "        :thumbnail_url, :source, :confidence) "
+            "CAST(:emb AS vector), :embedding_provider, :embedding_model, "
+            ":image_url, :thumbnail_url, :source, :confidence) "
             "ON CONFLICT (name_slug) DO UPDATE SET "
             "  text_embedding = CAST(:emb AS vector), "
+            "  text_embedding_v2 = CAST(:emb AS vector), "
+            "  embedding_provider = EXCLUDED.embedding_provider, "
+            "  embedding_model = EXCLUDED.embedding_model, "
             "  image_url = EXCLUDED.image_url, "
             "  thumbnail_url = EXCLUDED.thumbnail_url, "
             "  source = EXCLUDED.source, "
@@ -127,6 +135,8 @@ class AsyncPgvectorMealImageCacheRepository:
                 "meal_name": record.meal_name,
                 "name_slug": record.name_slug,
                 "emb": emb_literal,
+                "embedding_provider": record.embedding_provider,
+                "embedding_model": record.embedding_model,
                 "image_url": record.image_url,
                 "thumbnail_url": record.thumbnail_url,
                 "source": record.source,

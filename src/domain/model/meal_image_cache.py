@@ -26,6 +26,8 @@ class CachedImageUpsert:
     thumbnail_url: Optional[str]
     source: str
     confidence: Optional[float]
+    embedding_provider: str = "openai"
+    embedding_model: str = "text-embedding-3-small"
 
 
 @dataclass(frozen=True)
