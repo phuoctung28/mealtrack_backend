@@ -92,6 +92,9 @@ class GetJourneyProgressQueryHandler(
             target_calories=target_calories,
             target_protein_g=target_protein_g,
             water_goal_ml=water_goal_ml,
+            journey_progress_seed_percent=getattr(
+                profile, "journey_progress_seed_percent", 0.0
+            ),
         )
 
     async def _load_actions(

@@ -5,6 +5,7 @@ Clean separation with event bus pattern.
 
 import logging
 import time
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -461,6 +462,18 @@ async def get_daily_breakdown(
     )
     result = await event_bus.send(query)
     return result
+
+
+@router.get("/upload-token")
+async def get_upload_token(
+    user_id: str = Depends(get_current_user_id),
+    image_store=Depends(get_image_store),
+):
+    """Return a signed Cloudinary upload token for direct client-side upload."""
+    image_id = str(uuid.uuid4())
+    token = await image_store.generate_upload_signature_async(image_id)
+    logger.info("[UPLOAD-TOKEN] user=%s image_id=%s", user_id, image_id)
+    return token
 
 
 @router.get("/{meal_id}", response_model=DetailedMealResponse)

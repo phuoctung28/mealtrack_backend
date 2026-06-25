@@ -141,3 +141,73 @@ def test_journey_progress_does_not_backfill_before_current_period():
 
     assert result["progress_percent"] == 0
     assert result["latest_action"] is None
+
+
+def test_journey_progress_seed_scales_current_period_into_remaining_percent():
+    result = calculate_journey_progress(
+        actions=[
+            JourneyAction(
+                source="meal",
+                label="Breakfast",
+                logged_at=datetime(2026, 6, 21, 12, tzinfo=UTC),
+                calories=400,
+                protein_g=20,
+            ),
+            JourneyAction(
+                source="meal",
+                label="Lunch",
+                logged_at=datetime(2026, 6, 21, 13, tzinfo=UTC),
+                calories=400,
+                protein_g=20,
+            ),
+            JourneyAction(
+                source="meal",
+                label="Dinner",
+                logged_at=datetime(2026, 6, 21, 18, tzinfo=UTC),
+                calories=400,
+                protein_g=20,
+            ),
+            JourneyAction(
+                source="hydration",
+                label="Water",
+                logged_at=datetime(2026, 6, 21, 19, tzinfo=UTC),
+                hydration_ml=2000,
+            ),
+            JourneyAction(
+                source="activity",
+                label="Walk",
+                logged_at=datetime(2026, 6, 21, 20, tzinfo=UTC),
+            ),
+        ],
+        period_start=datetime(2026, 6, 21, tzinfo=UTC),
+        timeline_days=10,
+        user_tz=get_zone_info("UTC"),
+        as_of=datetime(2026, 6, 22, tzinfo=UTC),
+        target_calories=1200,
+        target_protein_g=60,
+        water_goal_ml=2000,
+        journey_progress_seed_percent=50,
+    )
+
+    assert result["current_period_progress_percent"] == 10
+    assert result["journey_progress_seed_percent"] == 50
+    assert result["progress_percent"] == 55
+    assert result["confirmed_progress_percent"] == 55
+    assert result["provisional_progress_percent"] == 0
+
+
+def test_journey_progress_seed_is_clamped_to_valid_percent_range():
+    result = calculate_journey_progress(
+        actions=[],
+        period_start=datetime(2026, 6, 21, tzinfo=UTC),
+        timeline_days=10,
+        user_tz=get_zone_info("UTC"),
+        as_of=datetime(2026, 6, 22, tzinfo=UTC),
+        target_calories=400,
+        target_protein_g=20,
+        water_goal_ml=2000,
+        journey_progress_seed_percent=150,
+    )
+
+    assert result["journey_progress_seed_percent"] == 100
+    assert result["progress_percent"] == 100
