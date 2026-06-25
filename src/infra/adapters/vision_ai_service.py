@@ -105,6 +105,7 @@ class VisionAIService(VisionAIServicePort):
                 image_data=image_bytes,
                 system_message=strategy.get_analysis_prompt(),
                 max_tokens=self._max_output_tokens,
+                schema=VisionNutritionResponse,
             )
             structured_data = validate_ai_output(
                 result,

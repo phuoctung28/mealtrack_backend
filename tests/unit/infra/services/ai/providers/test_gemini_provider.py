@@ -1,9 +1,26 @@
+import json
 from unittest.mock import Mock, patch
 
 import pytest
 
 from src.domain.ports.ai_provider_port import AICapability
+from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
+
+
+def _canonical_vision_payload(dish_name: str = "Bowl"):
+    return {
+        "dish_name": dish_name,
+        "foods": [
+            {
+                "name": "rice",
+                "quantity_g": 180,
+                "macros": {"protein_g": 4, "carbs_g": 50, "fat_g": 1},
+            }
+        ],
+        "confidence": 0.9,
+    }
 
 
 @pytest.fixture
@@ -135,7 +152,9 @@ class TestGenerateWithVision:
         self, provider, mock_model_manager
     ):
         mock_llm = Mock()
-        mock_llm.invoke = Mock(return_value=Mock(content='{"result": "ok"}'))
+        mock_llm.invoke = Mock(
+            return_value=Mock(content=json.dumps(_canonical_vision_payload("Rice bowl")))
+        )
         mock_llm.with_structured_output = Mock(side_effect=NotImplementedError)
         mock_model_manager.get_model_for_purpose.return_value = mock_llm
 
@@ -154,9 +173,9 @@ class TestGenerateWithVision:
     async def test_generate_with_vision_uses_structured_output_first(
         self, provider, mock_model_manager
     ):
-        from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
-
-        parsed_instance = VisionAnalyzeResponse(dish_name="Bowl", foods=[], confidence=0.9)
+        parsed_instance = VisionNutritionResponse.model_validate(
+            _canonical_vision_payload()
+        )
         structured_chain = Mock()
         structured_chain.invoke = Mock(return_value={"parsed": parsed_instance})
 
@@ -176,12 +195,37 @@ class TestGenerateWithVision:
         mock_llm.invoke.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_generate_with_vision_requests_canonical_structured_schema(
+        self, provider, mock_model_manager
+    ):
+        structured_chain = Mock()
+        structured_chain.invoke = Mock(
+            return_value={"parsed": _canonical_vision_payload("Rice bowl")}
+        )
+
+        mock_llm = Mock()
+        mock_llm.with_structured_output = Mock(return_value=structured_chain)
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash",
+            prompt="analyze this",
+            image_data=b"fake-image",
+        )
+
+        schema_arg = mock_llm.with_structured_output.call_args.args[0]
+        assert schema_arg == VisionNutritionResponse.model_json_schema()
+        assert result["foods"][0]["quantity_g"] == 180
+
+    @pytest.mark.asyncio
     async def test_generate_with_vision_falls_back_to_raw_parse(
         self, provider, mock_model_manager
     ):
         mock_llm = Mock()
         mock_llm.with_structured_output = Mock(side_effect=NotImplementedError("unsupported"))
-        mock_llm.invoke = Mock(return_value=Mock(content='{"dish_name": "Rice", "confidence": 0.8}'))
+        mock_llm.invoke = Mock(
+            return_value=Mock(content=json.dumps(_canonical_vision_payload("Rice")))
+        )
         mock_model_manager.get_model_for_purpose.return_value = mock_llm
 
         result = await provider.generate_with_vision(
@@ -193,6 +237,25 @@ class TestGenerateWithVision:
         mock_llm.invoke.assert_called_once()
         assert isinstance(result, dict)
         assert result["dish_name"] == "Rice"
+        assert result["foods"][0]["quantity_g"] == 180
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_raw_parse_rejects_non_canonical_payload(
+        self, provider, mock_model_manager
+    ):
+        mock_llm = Mock()
+        mock_llm.with_structured_output = Mock(side_effect=NotImplementedError("unsupported"))
+        mock_llm.invoke = Mock(return_value=Mock(content='{"dish_name": "Rice"}'))
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        with pytest.raises(AIVisionError) as exc_info:
+            await provider.generate_with_vision(
+                model="gemini-2.5-flash",
+                prompt="analyze",
+                image_data=b"fake-image",
+            )
+
+        assert exc_info.value.kind == AIVisionFailureKind.schema_validation
 
     @pytest.mark.asyncio
     async def test_generate_with_vision_handles_none_parsed(
@@ -203,7 +266,9 @@ class TestGenerateWithVision:
 
         mock_llm = Mock()
         mock_llm.with_structured_output = Mock(return_value=structured_chain)
-        mock_llm.invoke = Mock(return_value=Mock(content='{"dish_name": "Soup", "confidence": 0.7}'))
+        mock_llm.invoke = Mock(
+            return_value=Mock(content=json.dumps(_canonical_vision_payload("Soup")))
+        )
         mock_model_manager.get_model_for_purpose.return_value = mock_llm
 
         result = await provider.generate_with_vision(

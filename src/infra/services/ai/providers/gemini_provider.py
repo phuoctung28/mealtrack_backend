@@ -7,7 +7,9 @@ from typing import Any
 from google import genai
 from google.genai.types import HttpOptions
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import ValidationError
 
+from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 from src.infra.adapters.ai_json_utils import (
     extract_json as extract_ai_json,
@@ -167,14 +169,13 @@ class GeminiProvider(AIProviderPort):
     ) -> dict[str, Any]:
         """Call Gemini vision through CF AI Gateway using google-genai SDK."""
         from google.genai import types as genai_types
-        from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 
         config = genai_types.GenerateContentConfig(
             system_instruction=system_message or None,
             max_output_tokens=max_tokens,
             temperature=0.2,
             response_mime_type="application/json",
-            response_schema=VisionAnalyzeResponse,
+            response_schema=VisionNutritionResponse,
         )
         parts: list[Any] = [
             genai_types.Part.from_text(text=prompt),
@@ -192,15 +193,14 @@ class GeminiProvider(AIProviderPort):
         if response.parsed is not None:
             if hasattr(response.parsed, "model_dump"):
                 return response.parsed.model_dump()
-            return VisionAnalyzeResponse.model_validate(response.parsed).model_dump()
+            return self._validate_vision_response(response.parsed, model)
 
         text = response.text
         if not text or not text.strip():
             raise ValueError(f"[GEMINI-GATEWAY-VISION] Empty response for model={model}")
 
         parsed = self._extract_json(text)
-        validated = VisionAnalyzeResponse.model_validate(parsed)
-        return validated.model_dump()
+        return self._validate_vision_response(parsed, model)
 
     async def generate_with_vision(
         self,
@@ -213,7 +213,6 @@ class GeminiProvider(AIProviderPort):
     ) -> dict[str, Any]:
         """Generate with image input, using structured output first."""
         import base64
-        from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 
         max_tokens: int = kwargs.get("max_tokens", 4096)
 
@@ -264,7 +263,7 @@ class GeminiProvider(AIProviderPort):
         # Try structured output first
         try:
             structured_llm = llm.with_structured_output(
-                VisionAnalyzeResponse.model_json_schema(),
+                VisionNutritionResponse.model_json_schema(),
                 method="json_schema",
                 include_raw=True,
             )
@@ -274,14 +273,15 @@ class GeminiProvider(AIProviderPort):
                 if hasattr(parsed, "model_dump"):
                     return parsed.model_dump()
                 if isinstance(parsed, dict):
-                    return parsed
+                    return self._validate_vision_response(parsed, model)
         except Exception:
             logger.debug("[GEMINI-VISION-STRUCTURED-FALLBACK] model=%s", model)
 
         # Fallback to raw text parse
         response = await asyncio.to_thread(llm.invoke, messages)
         try:
-            return self._extract_json(response.content)
+            parsed = self._extract_json(response.content)
+            return self._validate_vision_response(parsed, model)
         except ValueError as exc:
             raise AIVisionError(
                 f"[GEMINI-VISION-PARSE-FAIL] provider=gemini model={model}",
@@ -306,3 +306,14 @@ class GeminiProvider(AIProviderPort):
     def _extract_json(self, content: str) -> dict[str, Any]:
         """Extract JSON from response content."""
         return extract_ai_json(content)
+
+    def _validate_vision_response(self, data: Any, model: str) -> dict[str, Any]:
+        try:
+            return VisionNutritionResponse.model_validate(data).model_dump()
+        except ValidationError as exc:
+            raise AIVisionError(
+                f"[GEMINI-VISION-SCHEMA-FAIL] provider=gemini model={model}",
+                kind=AIVisionFailureKind.schema_validation,
+                provider="gemini",
+                model=model,
+            ) from exc

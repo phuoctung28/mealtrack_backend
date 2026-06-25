@@ -12,6 +12,7 @@ from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     MealAnalysisStrategy,
 )
+from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.infra.adapters.vision_ai_service import VisionAIService
 
 
@@ -116,6 +117,7 @@ async def test_analyze_with_strategy_calls_correct_purpose(
 
     call_kwargs = mock_ai_manager.generate_with_vision.call_args
     assert call_kwargs.kwargs["purpose"] == ModelPurpose.MEAL_SCAN
+    assert call_kwargs.kwargs["schema"] is VisionNutritionResponse
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.domain.ports.ai_provider_port import AICapability
@@ -132,10 +133,13 @@ class TestVisionFailureKindRouting:
             purpose=ModelPurpose.MEAL_SCAN,
             prompt="analyze food",
             image_data=b"fake_image",
+            schema=VisionNutritionResponse,
         )
 
         assert result == {"result": "gemini_vision_success"}
         mock_gemini_provider.generate_with_vision.assert_awaited()
+        assert mock_cf_vision_provider.generate_with_vision.await_args.kwargs["schema"] is VisionNutritionResponse
+        assert mock_gemini_provider.generate_with_vision.await_args.kwargs["schema"] is VisionNutritionResponse
         mock_circuit_breaker.record_failure.assert_not_called()
 
     @pytest.mark.asyncio

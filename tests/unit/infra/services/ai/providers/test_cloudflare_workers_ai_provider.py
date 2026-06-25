@@ -6,6 +6,8 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from src.domain.ports.ai_provider_port import AICapability
+from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.providers.cloudflare_workers_ai_provider import (
     CloudflareWorkersAIProvider,
 )
@@ -485,10 +487,8 @@ class TestGenerateWithVision:
     ):
         """Provider returns parsed dict as-is; schema enforcement is the application layer's job.
 
-        Previously the provider validated against VisionAnalyzeResponse (legacy schema requiring
-        quantity+unit), but the system prompt returns quantity_g with no unit — causing a
-        deterministic 100% schema failure. Schema validation was moved to VisionAIService which
-        uses VisionNutritionResponse (accepts quantity_g via AliasChoices).
+        Without a caller-provided schema, the provider does not enforce nutrition
+        fields because non-nutrition vision strategies have their own contracts.
         """
         from unittest.mock import AsyncMock, patch
 
@@ -512,6 +512,60 @@ class TestGenerateWithVision:
         assert isinstance(result, dict)
         assert result["dish_name"] == "Salad"
         assert result["foods"][0]["quantity_g"] == 100
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_validates_when_schema_provided(
+        self, provider_with_vision
+    ):
+        """Provider applies caller-supplied canonical schema at the boundary."""
+        from unittest.mock import AsyncMock, patch
+
+        valid_json = (
+            '{"dish_name": "Salad", "confidence": 0.9, "foods": ['
+            '{"name": "Lettuce", "quantity_g": 100, '
+            '"macros": {"protein_g": 1.0, "carbs_g": 2.0, "fat_g": 0.2}}]}'
+        )
+
+        with patch.object(
+            provider_with_vision,
+            "_post_workers_ai",
+            new=AsyncMock(return_value={"result": {"response": valid_json}}),
+        ):
+            result = await provider_with_vision.generate_with_vision(
+                model="@cf/google/gemma-4-26b-a4b-it",
+                prompt="analyze",
+                image_data=b"fake",
+                schema=VisionNutritionResponse,
+            )
+
+        assert result["foods"][0]["quantity_g"] == 100
+        assert result["foods"][0]["macros"]["protein_g"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_invalid_schema_raises_classified_error(
+        self, provider_with_vision
+    ):
+        """Schema failures are deterministic and must route as schema_validation."""
+        from unittest.mock import AsyncMock, patch
+
+        invalid_json = '{"dish_name": "Salad", "confidence": 0.9}'
+
+        with patch.object(
+            provider_with_vision,
+            "_post_workers_ai",
+            new=AsyncMock(return_value={"result": {"response": invalid_json}}),
+        ):
+            with pytest.raises(AIVisionError) as exc_info:
+                await provider_with_vision.generate_with_vision(
+                    model="@cf/google/gemma-4-26b-a4b-it",
+                    prompt="analyze",
+                    image_data=b"fake",
+                    schema=VisionNutritionResponse,
+                )
+
+        assert exc_info.value.kind == AIVisionFailureKind.schema_validation
+        assert exc_info.value.provider == "cloudflare-workers-ai"
+        assert exc_info.value.model == "@cf/google/gemma-4-26b-a4b-it"
 
     def test_no_secrets_in_vision_error_messages(self, provider_with_vision):
         """generate_with_vision NotImplementedError must not expose the api token."""

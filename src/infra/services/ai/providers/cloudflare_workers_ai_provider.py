@@ -225,6 +225,19 @@ class CloudflareWorkersAIProvider(AIProviderPort):
                 model=model,
             ) from exc
 
+        schema = kwargs.get("schema")
+        if schema is not None:
+            try:
+                return schema.model_validate(parsed).model_dump()
+            except ValidationError as exc:
+                raise AIVisionError(
+                    "[CF-WORKERS-AI-VISION-SCHEMA-FAIL] "
+                    f"provider=cloudflare-workers-ai model={model}",
+                    kind=AIVisionFailureKind.schema_validation,
+                    provider="cloudflare-workers-ai",
+                    model=model,
+                ) from exc
+
         return parsed
 
     def extract_error_code(self, error: Exception) -> int | str | None:

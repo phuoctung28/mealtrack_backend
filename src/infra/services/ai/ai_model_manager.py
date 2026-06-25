@@ -351,6 +351,10 @@ class AIModelManager:
                 },
             )
 
+            provider_kwargs = dict(kwargs)
+            if "schema" in kwargs:
+                provider_kwargs["schema"] = kwargs["schema"]
+
             try:
                 result = await provider.generate_with_vision(
                     model=model,
@@ -358,7 +362,7 @@ class AIModelManager:
                     image_data=image_data,
                     system_message=system_message,
                     purpose_hint=purpose.value,  # NEW
-                    **kwargs,
+                    **provider_kwargs,
                 )
 
                 self._circuit_breaker.record_success(model)

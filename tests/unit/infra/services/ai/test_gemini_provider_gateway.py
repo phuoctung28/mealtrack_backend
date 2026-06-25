@@ -1,6 +1,8 @@
 """Unit tests — GeminiProvider CF AI Gateway client construction."""
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 
 # DO NOT use importlib.reload — it pollutes GeminiModelManager singleton state across tests.
 # Pattern: mock both GeminiModelManager.get_instance and get_settings before
@@ -86,3 +88,46 @@ def test_gateway_client_none_when_api_key_missing():
         with patch(_MANAGER, return_value=MagicMock()):
             provider = GeminiProvider()
             assert provider._gateway_client is None
+
+
+@pytest.mark.asyncio
+async def test_gateway_vision_uses_canonical_response_schema():
+    from src.infra.services.ai.providers.gemini_provider import GeminiProvider
+
+    parsed = VisionNutritionResponse.model_validate(
+        {
+            "dish_name": "Rice bowl",
+            "foods": [
+                {
+                    "name": "rice",
+                    "quantity_g": 180,
+                    "macros": {"protein_g": 4, "carbs_g": 50, "fat_g": 1},
+                }
+            ],
+            "confidence": 0.9,
+        }
+    )
+    response = MagicMock()
+    response.parsed = parsed
+
+    with patch(f"{_MODULE}.get_settings", return_value=_enabled_settings()):
+        with patch(_MANAGER, return_value=MagicMock()):
+            with patch(f"{_MODULE}.genai.Client"):
+                provider = GeminiProvider()
+
+    gateway_client = MagicMock()
+    gateway_client.aio.models.generate_content = AsyncMock(return_value=response)
+    provider._gateway_client = gateway_client
+
+    result = await provider._generate_vision_via_gateway(
+        model="gemini-2.5-flash",
+        prompt="analyze",
+        image_data=b"fake-image",
+        system_message="system",
+        max_tokens=1024,
+        purpose_hint="meal_scan",
+    )
+
+    config = gateway_client.aio.models.generate_content.await_args.kwargs["config"]
+    assert config.response_schema is VisionNutritionResponse
+    assert result["foods"][0]["quantity_g"] == 180
