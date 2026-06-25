@@ -3,7 +3,7 @@ Global pytest configuration and fixtures.
 """
 
 from collections.abc import Generator
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import and_, create_engine, func, or_, text, update
@@ -212,10 +212,10 @@ class TestMealRepository:
         user_timezone: str | None = None,
         projection: MealProjection = MealProjection.FULL,
     ) -> list[Meal]:
-        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
         start_dt = datetime.combine(
             date_obj, datetime.min.time(), tzinfo=tz
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         end_dt = start_dt + timedelta(days=1)
         query = (
             self.db.query(MealORM)
@@ -242,14 +242,14 @@ class TestMealRepository:
         user_timezone: str | None = None,
         projection: MealProjection = MealProjection.FULL,
     ) -> list[Meal]:
-        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
         start_dt = datetime.combine(
             start_date, datetime.min.time(), tzinfo=tz
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         end_dt = (
             datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
             + timedelta(days=1)
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         rows = (
             self.db.query(MealORM)
             .options(*TEST_MEAL_PROJECTION_OPTS[projection])
@@ -266,10 +266,10 @@ class TestMealRepository:
     def sum_hydration_ml_for_date(
         self, date_obj: date, user_id: str, user_timezone: str | None = None
     ) -> int:
-        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
         start_dt = datetime.combine(
             date_obj, datetime.min.time(), tzinfo=tz
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         end_dt = start_dt + timedelta(days=1)
         return (
             self.db.query(func.coalesce(func.sum(MealORM.quantity), 0))
@@ -290,14 +290,14 @@ class TestMealRepository:
         end_date: date,
         user_timezone: str | None = None,
     ) -> dict[date, int]:
-        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
         start_dt = datetime.combine(
             start_date, datetime.min.time(), tzinfo=tz
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         end_dt = (
             datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
             + timedelta(days=1)
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         date_expr = func.date(MealORM.created_at)
         rows = (
             self.db.query(date_expr, func.coalesce(func.sum(MealORM.quantity), 0))
@@ -325,14 +325,14 @@ class TestMealRepository:
         end_date: date,
         user_timezone: str | None = None,
     ) -> dict[date, int]:
-        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
         start_dt = datetime.combine(
             start_date, datetime.min.time(), tzinfo=tz
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         end_dt = (
             datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
             + timedelta(days=1)
-        ).astimezone(UTC)
+        ).astimezone(timezone.utc)
         date_expr = func.date(MealORM.created_at)
         rows = (
             self.db.query(date_expr, func.count())
