@@ -18,6 +18,10 @@ from .nutrition_contracts import (
     VisionFoodEstimate,
     VisionNutritionResponse,
 )
+from .vision_food_identity_contract import (
+    VisionFoodIdentity,
+    VisionFoodIdentityResponse,
+)
 
 __all__ = [
     "AINutritionMacros",
@@ -32,6 +36,8 @@ __all__ = [
     "GPTResponseParsingError",
     "GPTResponseIncompleteError",
     "VisionFoodEstimate",
+    "VisionFoodIdentity",
+    "VisionFoodIdentityResponse",
     "VisionNutritionResponse",
     "ModelPurpose",
 ]
