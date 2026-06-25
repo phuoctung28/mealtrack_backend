@@ -29,6 +29,39 @@ def _invalid_payload() -> dict:
     }
 
 
+def _legacy_alias_payload() -> dict:
+    return {
+        "structured_data": {
+            "dish_name": "Legacy Chicken Rice",
+            "foods": [
+                {
+                    "name": "Chicken",
+                    "quantity": 120,
+                    "unit": "g",
+                    "macros": {"protein": 30, "carbs": 0, "fat": 6},
+                }
+            ],
+            "confidence": 0.9,
+        }
+    }
+
+
+def _legacy_alias_payload_without_unit() -> dict:
+    return {
+        "structured_data": {
+            "dish_name": "Legacy Chicken Rice",
+            "foods": [
+                {
+                    "name": "Chicken",
+                    "quantity": 120,
+                    "macros": {"protein": 30, "carbs": 0, "fat": 6},
+                }
+            ],
+            "confidence": 0.9,
+        }
+    }
+
+
 def test_rank_candidates_prefers_higher_parse_success_then_lower_token_cost():
     loop = PromptEvalLoop()
     cases = [
@@ -108,6 +141,39 @@ def test_schema_invalid_payload_has_lower_validation_rate():
     ]
     candidates = {"candidate": "x" * 200}
     ranked = loop.rank_candidates(candidates, cases)
+    assert ranked[0].validation_success_rate == pytest.approx(0.5)
+
+
+def test_alias_only_legacy_payload_lowers_validation_rate():
+    """Prompt validation must match parser preflight rejection for legacy aliases."""
+    loop = PromptEvalLoop()
+    cases = [
+        PromptEvalCase(case_id="valid", response_payload=_valid_payload()),
+        PromptEvalCase(case_id="legacy", response_payload=_legacy_alias_payload()),
+    ]
+    candidates = {"candidate": "x" * 200}
+
+    ranked = loop.rank_candidates(candidates, cases)
+
+    assert ranked[0].parse_success_rate == pytest.approx(0.5)
+    assert ranked[0].validation_success_rate == pytest.approx(0.5)
+
+
+def test_alias_only_legacy_payload_without_unit_lowers_validation_rate():
+    """Prompt validation must reject alias-only payloads accepted by schema aliases."""
+    loop = PromptEvalLoop()
+    cases = [
+        PromptEvalCase(case_id="valid", response_payload=_valid_payload()),
+        PromptEvalCase(
+            case_id="legacy",
+            response_payload=_legacy_alias_payload_without_unit(),
+        ),
+    ]
+    candidates = {"candidate": "x" * 200}
+
+    ranked = loop.rank_candidates(candidates, cases)
+
+    assert ranked[0].parse_success_rate == pytest.approx(0.5)
     assert ranked[0].validation_success_rate == pytest.approx(0.5)
 
 

@@ -54,9 +54,7 @@ class VisionResponseParser:
                     "No structured data found in GPT response"
                 )
 
-            normalized_data = self._normalize_structured_data(data)
-            self._reject_legacy_food_item_shape(normalized_data)
-            canonical = VisionNutritionResponse.model_validate(normalized_data)
+            canonical = self.validate_structured_data(data)
 
             food_items = self._parse_food_items(canonical)
             total_macros = self._calculate_total_macros(food_items)
@@ -75,6 +73,17 @@ class VisionResponseParser:
         except (KeyError, ValueError, TypeError, ValidationError) as e:
             raise VisionResponseParsingError(
                 f"Failed to parse GPT response: {str(e)}"
+            ) from e
+
+    def validate_structured_data(self, data: dict[str, Any]) -> VisionNutritionResponse:
+        """Validate structured data using the parser's canonical vision preflight."""
+        try:
+            normalized_data = self._normalize_structured_data(data)
+            self._reject_legacy_food_item_shape(normalized_data)
+            return VisionNutritionResponse.model_validate(normalized_data)
+        except (KeyError, ValueError, TypeError, ValidationError) as e:
+            raise VisionResponseParsingError(
+                f"Failed to validate GPT response: {str(e)}"
             ) from e
 
     def _normalize_structured_data(self, data: dict[str, Any]) -> dict[str, Any]:
