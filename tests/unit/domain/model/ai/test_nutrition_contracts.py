@@ -58,7 +58,6 @@ class TestVisionNutritionResponse:
                     }
                 ],
                 "confidence": 0.88,
-                "calories": 9999,
             }
         )
 
@@ -66,7 +65,78 @@ class TestVisionNutritionResponse:
         assert response.is_food is True
         assert response.foods[0].quantity_g == pytest.approx(150.0)
         assert response.foods[0].macros.protein_g == pytest.approx(35.0)
-        assert "calories" not in response.model_dump()
+        assert response.emoji is None
+
+    def test_accepts_optional_emoji(self):
+        response = VisionNutritionResponse.model_validate(
+            {
+                "dish_name": "Chicken rice bowl",
+                "emoji": "🍚",
+                "foods": [
+                    {
+                        "name": "Grilled chicken",
+                        "quantity_g": 150.0,
+                        "macros": _valid_macros(),
+                        "confidence": 0.92,
+                    }
+                ],
+                "confidence": 0.88,
+            }
+        )
+
+        assert response.emoji == "🍚"
+
+    def test_rejects_extra_top_level_fields(self):
+        with pytest.raises(ValidationError):
+            VisionNutritionResponse.model_validate(
+                {
+                    "dish_name": "Chicken rice bowl",
+                    "foods": [
+                        {
+                            "name": "Grilled chicken",
+                            "quantity_g": 150.0,
+                            "macros": _valid_macros(),
+                        }
+                    ],
+                    "confidence": 0.88,
+                    "calories": 9999,
+                }
+            )
+
+    def test_rejects_extra_food_fields(self):
+        with pytest.raises(ValidationError):
+            VisionNutritionResponse.model_validate(
+                {
+                    "dish_name": "Chicken rice bowl",
+                    "foods": [
+                        {
+                            "name": "Grilled chicken",
+                            "quantity_g": 150.0,
+                            "unit": "g",
+                            "macros": _valid_macros(),
+                        }
+                    ],
+                    "confidence": 0.88,
+                }
+            )
+
+    def test_rejects_extra_macro_fields(self):
+        macros = _valid_macros()
+        macros["calories"] = 9999.0
+
+        with pytest.raises(ValidationError):
+            VisionNutritionResponse.model_validate(
+                {
+                    "dish_name": "Chicken rice bowl",
+                    "foods": [
+                        {
+                            "name": "Grilled chicken",
+                            "quantity_g": 150.0,
+                            "macros": macros,
+                        }
+                    ],
+                }
+            )
 
     def test_accepts_non_food_with_empty_foods(self):
         response = VisionNutritionResponse.model_validate(

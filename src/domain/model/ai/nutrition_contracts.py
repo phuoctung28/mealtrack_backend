@@ -33,7 +33,7 @@ def _strip_required_text(value: str) -> str:
 class AINutritionMacros(BaseModel):
     """Macronutrients reported by AI, in grams."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     protein_g: float = Field(
         ...,
@@ -75,7 +75,7 @@ class AINutritionMacros(BaseModel):
 class VisionFoodEstimate(BaseModel):
     """Single food estimate extracted from an image."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=200)
     quantity_g: float = Field(
@@ -96,7 +96,7 @@ class VisionFoodEstimate(BaseModel):
 class BeverageMetadata(BaseModel):
     """Metadata for packaged beverage images detected by AI."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     is_packaged_beverage: bool
     brand: str | None = Field(None, max_length=100)
@@ -111,10 +111,11 @@ class BeverageMetadata(BaseModel):
 class VisionNutritionResponse(BaseModel):
     """Structured image meal-analysis response."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     is_food: bool = Field(True, description="Whether the image contains edible food")
     dish_name: str | None = Field(None, max_length=200)
+    emoji: str | None = Field(None, max_length=32)
     foods: list[VisionFoodEstimate] = Field(
         default_factory=list,
         max_length=MAX_AI_FOOD_ITEMS,
