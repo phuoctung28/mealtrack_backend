@@ -112,7 +112,6 @@ class Settings(BaseSettings):
     DEEPL_API_KEY: str | None = Field(
         default=None, description="DeepL API key for meal translation"
     )
-    GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     FATSECRET_CLIENT_ID: str | None = Field(
         default=None, description="fatsecret OAuth 2.0 client ID"
@@ -126,8 +125,8 @@ class Settings(BaseSettings):
 
     # LLM Provider configuration
     AI_PRIMARY_PROVIDER: str = Field(
-        default="gemini",
-        description="Primary AI provider. Use 'openai' only after canary approval.",
+        default="openai",
+        description="Primary AI provider.",
     )
     AI_FALLBACK_PROVIDER: str = Field(
         default="cloudflare-workers-ai",
@@ -144,21 +143,6 @@ class Settings(BaseSettings):
         default=False,
         description="Whether OpenAI may store Responses API payloads.",
     )
-    GEMINI_MODEL: str = Field(
-        default="gemini-2.5-flash",
-        description="Gemini model to use (same as food scanning)",
-    )
-
-    # Multi-model Gemini configuration for rate limit distribution
-    GEMINI_MODEL_NAMES: str = Field(
-        default="gemini-2.5-flash-lite",
-        description="Gemini model for meal name generation (higher RPM: 10/min)",
-    )
-    GEMINI_MODEL_RECIPE: str = Field(
-        default="gemini-2.5-flash-lite",
-        description="Model for recipe generation",
-    )
-
     # Image search (meal discovery photos)
     PEXELS_API_KEY: str | None = Field(
         default=None, description="Pexels API key for food photos"
@@ -245,7 +229,7 @@ class Settings(BaseSettings):
     # Cloudflare Workers AI — text generation / AI fallback
     CLOUDFLARE_WORKERS_AI_ENABLED: bool = Field(
         default=True,
-        description="Enable Cloudflare Workers AI as the primary text-generation provider (Gemini is fallback)",
+        description="Enable Cloudflare Workers AI as an alternate text-generation provider",
     )
     CLOUDFLARE_ACCOUNT_ID: str = Field(
         default="", description="Cloudflare account ID for Workers AI text API"
@@ -262,7 +246,7 @@ class Settings(BaseSettings):
     )
     CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES: str = Field(
         default="recipe,general,meal_names,discovery,parse_text",
-        description="Comma-separated ModelPurpose values where Workers AI is used as primary",
+        description="Comma-separated ModelPurpose values where Workers AI is included in routing",
     )
     CLOUDFLARE_WORKERS_AI_JSON_MODE: bool = Field(
         default=True, description="Enable Workers AI JSON Mode for structured responses"
@@ -272,7 +256,7 @@ class Settings(BaseSettings):
     )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,
-        description="Enable Cloudflare Workers AI for vision tasks (Gemini is fallback)",
+        description="Enable Cloudflare Workers AI for vision tasks",
     )
     CLOUDFLARE_WORKERS_AI_VISION_MODEL: str = Field(
         default="@cf/google/gemma-4-26b-a4b-it",
@@ -280,16 +264,8 @@ class Settings(BaseSettings):
     )
     CLOUDFLARE_WORKERS_AI_VISION_PURPOSES: str = Field(
         default="meal_scan,ingredient_scan",
-        description="Comma-separated ModelPurpose values where Workers AI vision is tried first",
+        description="Comma-separated ModelPurpose values where Workers AI vision is included in routing",
     )
-    CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED: bool = Field(
-        default=False,
-        description=(
-            "Route Gemini vision calls through Cloudflare AI Gateway. "
-            "Requires CLOUDFLARE_AI_GATEWAY_ID and CLOUDFLARE_ACCOUNT_ID to be set."
-        ),
-    )
-
     # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
     CF_ACCOUNT_ID: str | None = Field(
         default=None,

@@ -33,7 +33,7 @@ class _AIUnavailableHandler(EventHandler[_AIUnavailableQuery, None]):
     async def handle(self, event: _AIUnavailableQuery) -> None:
         raise AIUnavailableError(
             f"All vision models failed for {event.purpose}",
-            attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+            attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
             last_error="504 DEADLINE_EXCEEDED",
         )
 

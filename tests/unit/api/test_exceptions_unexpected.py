@@ -24,7 +24,7 @@ def test_handle_exception_ai_unavailable_returns_503_without_provider_error():
     exc = handle_exception(
         AIUnavailableError(
             "All models failed for discovery",
-            attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+            attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
             last_error="429 RESOURCE_EXHAUSTED",
         )
     )
@@ -34,7 +34,7 @@ def test_handle_exception_ai_unavailable_returns_503_without_provider_error():
     assert exc.detail["error_code"] == "AI_UNAVAILABLE"
     assert exc.detail["message"] == "AI meal generation is temporarily unavailable"
     assert exc.detail["details"] == {
-        "attempted_models": ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+        "attempted_models": ["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
     }
     assert "RESOURCE_EXHAUSTED" not in str(exc.detail)
 

@@ -124,7 +124,7 @@ async def test_generate_discovery_falls_back_when_ai_unavailable():
     session = _make_real_session()
     unavailable = AIUnavailableError(
         "All models failed for discovery",
-        attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+        attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
         last_error="429 RESOURCE_EXHAUSTED",
     )
     gen._generation.generate_meal_plan_async = AsyncMock(side_effect=unavailable)

@@ -47,7 +47,7 @@ def _parse_text_fatsecret_timeout_seconds() -> float:
 class ParseMealTextHandler(
     EventHandler[ParseMealTextCommand, ParseMealTextResponseDto]
 ):
-    """Handler for parsing meal text descriptions using Gemini."""
+    """Handler for parsing meal text descriptions using AI."""
 
     def __init__(
         self,
@@ -303,7 +303,7 @@ class ParseMealTextHandler(
         except Exception as e:
             logger.debug(f"fatsecret lookup failed for {name}: {e}")
 
-        # Fallback to AI estimate (values from Gemini prompt, already per-serving)
+        # Fallback to AI estimate (values from prompt, already per-serving)
         item["data_source"] = "ai_estimate"
         return item
 

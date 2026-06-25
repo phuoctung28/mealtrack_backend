@@ -149,7 +149,7 @@ async def test_analyze_with_strategy_preserves_ai_unavailable(
 ):
     unavailable = AIUnavailableError(
         "All vision models failed",
-        attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+        attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
         last_error="503 UNAVAILABLE",
     )
     mock_ai_manager.generate_with_vision = AsyncMock(side_effect=unavailable)
@@ -158,8 +158,8 @@ async def test_analyze_with_strategy_preserves_ai_unavailable(
         await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
     assert exc_info.value.attempted_models == [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
+        "gpt-5.4-mini-2026-03-17",
+        "gpt-5.4-mini-2026-03-17",
     ]
     assert mock_ai_manager.generate_with_vision.await_count == 1
 

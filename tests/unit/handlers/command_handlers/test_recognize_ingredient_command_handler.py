@@ -50,7 +50,7 @@ async def test_recognize_ingredient_rejects_decoded_image_over_5mb():
 async def test_recognize_ingredient_preserves_ai_unavailable():
     unavailable = AIUnavailableError(
         "All vision models failed",
-        attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+        attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
         last_error="503 UNAVAILABLE",
     )
     vision_service = Mock()

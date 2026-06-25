@@ -2,13 +2,18 @@
 Global pytest configuration and fixtures.
 """
 
+from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
-from typing import Generator
 
 import pytest
 from sqlalchemy import and_, create_engine, func, or_, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, noload, selectinload, sessionmaker
+from tests.fixtures.database.test_config import (
+    create_test_engine,
+    get_test_database_url,
+)
+from tests.fixtures.mock_image_store import MockImageStore
 
 from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
 from src.domain.model.meal_projection import MealProjection
@@ -43,12 +48,6 @@ from src.infra.mappers.user_mapper import (
     UserProfileMapper,
     build_profile_preference_entries,
 )
-from tests.fixtures.database.test_config import (
-    create_test_engine,
-    get_test_database_url,
-)
-from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
-from tests.fixtures.mock_image_store import MockImageStore
 
 TEST_MEAL_PROJECTION_OPTS: dict = {
     MealProjection.MACROS_ONLY: (
@@ -683,17 +682,14 @@ def event_loop():
 
 
 @pytest.fixture(autouse=True)
-def reset_gemini_service():
-    """Reset AI singletons before and after each test to prevent model-pool pollution."""
-    from src.infra.ai.gemini_service import GeminiService
+def reset_ai_model_manager():
+    """Reset AI singleton before and after each test to prevent model-pool pollution."""
     from src.infra.services.ai.ai_model_manager import AIModelManager
 
-    GeminiService.reset_instance()
     AIModelManager.reset_instance()
 
     yield
 
-    GeminiService.reset_instance()
     AIModelManager.reset_instance()
 
 
@@ -825,7 +821,7 @@ def test_engine(worker_id, request):
 
 
 @pytest.fixture(scope="function")
-def test_session(test_engine) -> Generator[Session, None, None]:
+def test_session(test_engine) -> Generator[Session]:
     """Create a test database session with rollback after each test."""
     # Create a new connection for each test
     connection = test_engine.connect()

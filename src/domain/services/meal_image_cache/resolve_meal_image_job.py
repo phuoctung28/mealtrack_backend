@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from src.domain.events.meal_image_resolved_event import MealImageResolvedEvent
 from src.domain.model.meal_image_cache import CachedImageUpsert, PendingItem
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 class ResolveResult:
     image_url: str
     source: str
-    confidence: Optional[float]
+    confidence: float | None
 
 
 class ResolveMealImageJob:
@@ -34,7 +33,7 @@ class ResolveMealImageJob:
         self,
         *,
         cache,
-        text_embedder,  # Gemini API — produces embeddings stored in pgvector
+        text_embedder,  # OpenAI API — produces embeddings stored in pgvector
         image_scorer,  # SigLIP — scores image/text relevance via sigmoid logits
         http,  # object with `download(url) -> bytes`
         cloudinary,  # object with `save(bytes, content_type) -> url`
@@ -109,7 +108,7 @@ class ResolveMealImageJob:
                 f"AI image generation failed for {meal_name}: {e}"
             ) from e
 
-        ai_score: Optional[float] = None
+        ai_score: float | None = None
         try:
             ai_score = await self._image_scorer.score_image_text(ai_bytes, meal_name)
             logger.info("ai_generated score for %s: %.3f", meal_name, ai_score)

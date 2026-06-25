@@ -173,7 +173,7 @@ async def test_parse_text_raises_controlled_error_after_retry_failure():
 async def test_parse_text_does_not_retry_provider_outage():
     unavailable = AIUnavailableError(
         "All parse text models failed",
-        attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+        attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
         last_error="503 UNAVAILABLE",
     )
     meal_generation_service = _FakeMealGenerationService(responses=[unavailable])

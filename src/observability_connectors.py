@@ -28,8 +28,8 @@ SAFE_CONTEXT_KEYS = frozenset(
         "phase",
         "provider",
         # AI observability — low-cardinality provider/model routing attributes
-        "ai_provider",       # e.g. "gemini", "cloudflare-workers-ai"
-        "ai_model",          # e.g. "gemini-3.1-flash-lite"
+        "ai_provider",       # e.g. "openai", "cloudflare-workers-ai"
+        "ai_model",          # e.g. "gpt-5.4-mini-2026-03-17"
         "ai_purpose",        # e.g. "meal_scan"
         "ai_stage",          # e.g. "structured_output", "raw_parse", "schema_validation"
         "failure_kind",      # AIVisionFailureKind.value

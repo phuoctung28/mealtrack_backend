@@ -12,7 +12,6 @@ from src.infra.services.ai.provider_circuit_breaker import ProviderCircuitBreake
 from src.infra.services.ai.providers.cloudflare_workers_ai_provider import (
     CloudflareWorkersAIProvider,
 )
-from src.infra.services.ai.providers.gemini_provider import GeminiProvider
 from src.infra.services.ai.providers.openai_provider import OpenAIProvider
 from src.observability import increment_metric, log_event
 
@@ -21,39 +20,33 @@ logger = logging.getLogger(__name__)
 
 FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
     # ==========================================================================
-    # VISION TASKS: CF Workers AI first → Gemini fallback
+    # VISION TASKS: OpenAI primary, optional provider routes can prepend/append
     # ==========================================================================
     ModelPurpose.MEAL_SCAN: [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
+        "gpt-5.4-mini-2026-03-17",
     ],
     ModelPurpose.INGREDIENT_SCAN: [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
+        "gpt-5.4-mini-2026-03-17",
     ],
     # ==========================================================================
-    # SHORT STRUCTURED TEXT: Gemini Flash-Lite first → Flash fallback
+    # SHORT STRUCTURED TEXT: OpenAI primary
     # ==========================================================================
     ModelPurpose.PARSE_TEXT: [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
+        "gpt-5.4-mini-2026-03-17",
     ],
-    ModelPurpose.BARCODE: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.BARCODE: ["gpt-5.4-mini-2026-03-17"],
     ModelPurpose.MEAL_NAMES: [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
+        "gpt-5.4-mini-2026-03-17",
     ],
     ModelPurpose.DISCOVERY: [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
+        "gpt-5.4-mini-2026-03-17",
     ],
-    ModelPurpose.GENERAL: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.GENERAL: ["gpt-5.4-mini-2026-03-17"],
     # ==========================================================================
-    # RECIPE TASKS: Gemini Flash-Lite first → Flash fallback
+    # RECIPE TASKS: OpenAI primary
     # ==========================================================================
     ModelPurpose.RECIPE: [
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash",
+        "gpt-5.4-mini-2026-03-17",
     ],
 }
 
@@ -89,13 +82,11 @@ class AIModelManager:
 
         _settings = settings if settings is not None else get_settings()
 
-        self._cache_manager: Any | None = None
         self._circuit_breaker = ProviderCircuitBreaker()
-        self._gemini = GeminiProvider()
-        self._providers: dict[str, Any] = {"gemini": self._gemini}
+        self._providers: dict[str, Any] = {}
         self._model_provider_overrides: dict[str, str] = {}
 
-        # Start with a mutable copy of base Gemini-only chains
+        # Start with a mutable copy of base OpenAI-first chains.
         self._fallback_chains: dict[ModelPurpose, list[str]] = {
             p: list(chain) for p, chain in FALLBACK_CHAINS.items()
         }
@@ -104,7 +95,7 @@ class AIModelManager:
         self._maybe_add_openai_provider(_settings)
 
     def _maybe_add_openai_provider(self, settings) -> None:
-        """Instantiate OpenAI when configured without making it default by accident."""
+        """Instantiate OpenAI when configured and map explicit model ownership."""
         if not settings.OPENAI_API_KEY:
             return
 
@@ -118,22 +109,21 @@ class AIModelManager:
         self._model_provider_overrides[settings.OPENAI_TEXT_MODEL] = "openai"
         self._model_provider_overrides[settings.OPENAI_VISION_MODEL] = "openai"
 
-        if settings.AI_PRIMARY_PROVIDER == "openai":
-            self._prepend_model_for_purposes(
-                settings.OPENAI_TEXT_MODEL,
-                {
-                    ModelPurpose.PARSE_TEXT,
-                    ModelPurpose.BARCODE,
-                    ModelPurpose.MEAL_NAMES,
-                    ModelPurpose.RECIPE,
-                    ModelPurpose.DISCOVERY,
-                    ModelPurpose.GENERAL,
-                },
-            )
-            self._prepend_model_for_purposes(
-                settings.OPENAI_VISION_MODEL,
-                {ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN},
-            )
+        self._prepend_model_for_purposes(
+            settings.OPENAI_TEXT_MODEL,
+            {
+                ModelPurpose.PARSE_TEXT,
+                ModelPurpose.BARCODE,
+                ModelPurpose.MEAL_NAMES,
+                ModelPurpose.RECIPE,
+                ModelPurpose.DISCOVERY,
+                ModelPurpose.GENERAL,
+            },
+        )
+        self._prepend_model_for_purposes(
+            settings.OPENAI_VISION_MODEL,
+            {ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN},
+        )
 
     def _prepend_model_for_purposes(
         self,
@@ -198,14 +188,14 @@ class AIModelManager:
         )
 
     def _append_cf_to_text_chains(self, cf_model: str, text_purposes_csv: str) -> None:
-        """Prepend raw CF model id to configured text-purpose chains (CF is tried first)."""
+        """Prepend raw CF model id to configured text-purpose chains."""
         configured = {p.strip().lower() for p in text_purposes_csv.split(",") if p.strip()}
         for purpose in ModelPurpose:
             if purpose.value in configured:
                 self._fallback_chains[purpose].insert(0, cf_model)
 
     def _prepend_cf_to_vision_chains(self, cf_model: str, vision_purposes_csv: str) -> None:
-        """Prepend CF vision model to configured vision-purpose chains (CF is tried first)."""
+        """Prepend CF vision model to configured vision-purpose chains."""
         configured = {p.strip().lower() for p in vision_purposes_csv.split(",") if p.strip()}
         valid_values = {mp.value for mp in ModelPurpose}
         unknown = configured - valid_values
@@ -218,10 +208,6 @@ class AIModelManager:
             if purpose.value in configured:
                 self._fallback_chains[purpose].insert(0, cf_model)
 
-    def set_cache_manager(self, cache_manager) -> None:
-        """Wire in GeminiCacheManager after startup warmup."""
-        self._cache_manager = cache_manager
-
     def get_fallback_chain(self, purpose: ModelPurpose) -> list[str]:
         """Get fallback chain for a purpose."""
         return self._fallback_chains.get(
@@ -232,8 +218,6 @@ class AIModelManager:
         """Get provider that owns a model, checking explicit overrides before prefix heuristics."""
         if model in self._model_provider_overrides:
             return self._providers.get(self._model_provider_overrides[model])
-        if model.startswith("gemini"):
-            return self._gemini
         return None
 
     async def generate(
@@ -261,17 +245,6 @@ class AIModelManager:
             )
             available = [chain[0]]
 
-        # Gemini context caches are model-specific; lookup happens per attempt.
-        cache_type: str | None = None
-        if self._cache_manager is not None:
-            purpose_to_cache_type = {
-                ModelPurpose.RECIPE: "recipe",
-                ModelPurpose.MEAL_SCAN: "vision",
-                ModelPurpose.PARSE_TEXT: "text_parse",
-                ModelPurpose.BARCODE: "text_parse",
-            }
-            cache_type = purpose_to_cache_type.get(purpose)
-
         attempted = []
         last_error = None
 
@@ -284,7 +257,6 @@ class AIModelManager:
 
             try:
                 logger.debug(f"[AI-ATTEMPT] purpose={purpose.value} | model={model}")
-                cache_name = await self._get_cache_name_for_model(cache_type, model)
 
                 result = await provider.generate(
                     model=model,
@@ -294,7 +266,6 @@ class AIModelManager:
                     max_tokens=max_tokens,
                     schema=schema,
                     purpose_hint=purpose.value,
-                    cache_name=cache_name if provider is self._gemini else None,
                     **kwargs,
                 )
 
@@ -326,26 +297,6 @@ class AIModelManager:
             attempted_models=attempted,
             last_error=last_error,
         )
-
-    async def _get_cache_name_for_model(
-        self, cache_type: str | None, model: str
-    ) -> str | None:
-        """Return Gemini cache only when the model is owned by the Gemini provider."""
-        if (
-            cache_type is None
-            or self._cache_manager is None
-            or self._get_provider_for_model(model) is not self._gemini
-        ):
-            return None
-        try:
-            if hasattr(self._cache_manager, "get_cache_name_for_model"):
-                return await self._cache_manager.get_cache_name_for_model(
-                    cache_type, model
-                )
-            return None
-        except Exception as e:
-            logger.warning("[AI-CACHE-LOOKUP-FAILED] cache_type=%s error=%s", cache_type, e)
-            return None
 
     async def generate_with_vision(
         self,

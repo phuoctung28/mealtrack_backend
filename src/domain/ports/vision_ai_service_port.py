@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Any
 
 from src.domain.strategies.meal_analysis_strategy import MealAnalysisStrategy
 
@@ -9,14 +9,14 @@ class VisionAIServicePort(ABC):
     Port interface for AI vision services that can analyze food images.
 
     This port is used by the application layer to interact with vision AI services
-    like Vision AI provider (currently Gemini).
+    behind the configured provider router.
 
     NOTE: All methods generate content in English. Translation to user's
     language happens post-generation via TranslationService (PR #61 approach).
     """
 
     @abstractmethod
-    async def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
+    async def analyze(self, image_bytes: bytes) -> dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
 
@@ -34,7 +34,7 @@ class VisionAIServicePort(ABC):
     @abstractmethod
     async def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image URL using a custom analysis strategy.
 
@@ -49,8 +49,8 @@ class VisionAIServicePort(ABC):
 
     @abstractmethod
     async def analyze_with_ingredients_context(
-        self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, image_bytes: bytes, ingredients: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Analyze a food image with ingredients context.
 
@@ -69,7 +69,7 @@ class VisionAIServicePort(ABC):
     @abstractmethod
     async def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image with portion size context.
 
@@ -89,7 +89,7 @@ class VisionAIServicePort(ABC):
     @abstractmethod
     async def analyze_with_weight_context(
         self, image_bytes: bytes, weight_grams: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image with specific weight context for accurate nutrition.
 

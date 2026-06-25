@@ -41,7 +41,7 @@ def _make_service(max_output_tokens: int | None = None) -> VisionAIService:
         return VisionAIService(max_output_tokens=max_output_tokens)
 
 
-def test_vision_service_uses_gemini_service():
+def test_vision_service_uses_ai_model_manager():
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
         mock_manager.generate_with_vision = AsyncMock(return_value={})

@@ -1,3 +1,3 @@
 """AI provider implementations."""
 
-__all__ = ["CloudflareWorkersAIProvider", "GeminiProvider"]
+__all__ = ["CloudflareWorkersAIProvider", "OpenAIProvider"]

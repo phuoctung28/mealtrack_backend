@@ -232,24 +232,6 @@ async def lifespan(app: FastAPI):
             logger.critical("Cache layer is required; aborting startup")
             raise
 
-    # Initialize Gemini explicit context caches
-    gemini_cache_manager = None
-    try:
-        from src.api.base_dependencies import get_raw_redis_client
-        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
-
-        _raw_redis = get_raw_redis_client()
-        if _raw_redis is not None:
-            gemini_cache_manager = GeminiCacheManager(redis_client=_raw_redis)
-            await gemini_cache_manager.warm_all()
-            gemini_cache_manager.start_refresh_loop()
-            logger.info("Gemini context caches warmed")
-            gemini_cache_manager.wire_to_gemini_service()
-        else:
-            logger.warning("Redis not available — Gemini cache skipped")
-    except Exception as e:
-        logger.warning(f"Gemini cache warmup failed (non-fatal): {e}")
-
     # Eagerly build singleton event buses during single-threaded startup so
     # concurrent first requests never race the lazy initializer (which would
     # otherwise build several throwaway buses on a cold start).
@@ -279,13 +261,6 @@ async def lifespan(app: FastAPI):
         logger.warning("Background task drain failed: %s", exc)
     finally:
         clear_task_manager()
-
-    # Stop Gemini cache refresh loop before disconnecting Redis
-    if gemini_cache_manager is not None:
-        try:
-            await gemini_cache_manager.stop()
-        except Exception as e:
-            logger.warning(f"Gemini cache manager stop failed: {e}")
 
     # Disconnect cache
     await shutdown_cache_layer()
