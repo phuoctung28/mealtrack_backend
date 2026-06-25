@@ -4,11 +4,11 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.domain.parsers.vision_response_parser import (
-    VisionResponseParser,
     GPTResponseParsingError,
+    VisionResponseParser,
 )
-from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class PromptEvalLoop:
                 structured = payload.get("structured_data", {})
 
                 try:
-                    VisionAnalyzeResponse.model_validate(structured)
+                    VisionNutritionResponse.model_validate(structured)
                     validation_success_count += 1
                 except ValidationError:
                     pass

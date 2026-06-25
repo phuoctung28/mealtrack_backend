@@ -14,9 +14,8 @@ def _valid_payload() -> dict:
             "foods": [
                 {
                     "name": "Chicken",
-                    "quantity": 120,
-                    "unit": "g",
-                    "macros": {"protein": 30, "carbs": 0, "fat": 6},
+                    "quantity_g": 120,
+                    "macros": {"protein_g": 30, "carbs_g": 0, "fat_g": 6},
                 }
             ],
             "confidence": 0.9,
@@ -82,7 +81,7 @@ def test_enforce_thresholds_raises_on_regression():
         loop.enforce_thresholds(
             result, min_parse_success_rate=0.9, max_prompt_tokens=100
         )
-        assert False, "Expected threshold validation to fail"
+        raise AssertionError("Expected threshold validation to fail")
     except ValueError as exc:
         message = str(exc)
         assert "parse_success_rate" in message or "prompt_tokens_estimate" in message
@@ -97,9 +96,8 @@ def test_schema_invalid_payload_has_lower_validation_rate():
             "foods": [
                 {
                     "name": "Huge",
-                    "quantity": 150000,
-                    "unit": "g",
-                    "macros": {"protein": 500, "carbs": 1000, "fat": 200},
+                    "quantity_g": 150000,
+                    "macros": {"protein_g": 500, "carbs_g": 1000, "fat_g": 200},
                 }
             ],
         }
