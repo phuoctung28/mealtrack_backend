@@ -10,6 +10,7 @@ from .gpt_response_errors import (
     GPTResponseParsingError,
     GPTResponseValidationError,
 )
+from .model_purpose import ModelPurpose
 from .nutrition_contracts import (
     AINutritionMacros,
     MealTextFoodEstimate,
@@ -32,4 +33,5 @@ __all__ = [
     "GPTResponseIncompleteError",
     "VisionFoodEstimate",
     "VisionNutritionResponse",
+    "ModelPurpose",
 ]

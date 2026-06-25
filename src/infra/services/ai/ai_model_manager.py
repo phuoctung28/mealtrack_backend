@@ -2,10 +2,10 @@
 
 import logging
 import threading
-from enum import Enum
 from typing import Any, Optional
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.model.ai.model_purpose import ModelPurpose
 from src.domain.ports.ai_provider_port import AICapability
 from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.provider_circuit_breaker import ProviderCircuitBreaker
@@ -13,22 +13,10 @@ from src.infra.services.ai.providers.cloudflare_workers_ai_provider import (
     CloudflareWorkersAIProvider,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
+from src.infra.services.ai.providers.openai_provider import OpenAIProvider
 from src.observability import increment_metric, log_event
 
 logger = logging.getLogger(__name__)
-
-
-class ModelPurpose(Enum):
-    """Purpose-based model selection."""
-
-    MEAL_SCAN = "meal_scan"
-    INGREDIENT_SCAN = "ingredient_scan"
-    PARSE_TEXT = "parse_text"
-    BARCODE = "barcode"
-    MEAL_NAMES = "meal_names"
-    RECIPE = "recipe"
-    DISCOVERY = "discovery"
-    GENERAL = "general"
 
 
 FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
@@ -113,6 +101,50 @@ class AIModelManager:
         }
 
         self._maybe_add_cf_provider(_settings)
+        self._maybe_add_openai_provider(_settings)
+
+    def _maybe_add_openai_provider(self, settings) -> None:
+        """Instantiate OpenAI when configured without making it default by accident."""
+        if not settings.OPENAI_API_KEY:
+            return
+
+        openai = OpenAIProvider(
+            api_key=settings.OPENAI_API_KEY,
+            request_timeout_seconds=settings.OPENAI_REQUEST_TIMEOUT_SECONDS,
+            max_retries=settings.OPENAI_MAX_RETRIES,
+            store_responses=settings.OPENAI_STORE_RESPONSES,
+        )
+        self._providers["openai"] = openai
+        self._model_provider_overrides[settings.OPENAI_TEXT_MODEL] = "openai"
+        self._model_provider_overrides[settings.OPENAI_VISION_MODEL] = "openai"
+
+        if settings.AI_PRIMARY_PROVIDER == "openai":
+            self._prepend_model_for_purposes(
+                settings.OPENAI_TEXT_MODEL,
+                {
+                    ModelPurpose.PARSE_TEXT,
+                    ModelPurpose.BARCODE,
+                    ModelPurpose.MEAL_NAMES,
+                    ModelPurpose.RECIPE,
+                    ModelPurpose.DISCOVERY,
+                    ModelPurpose.GENERAL,
+                },
+            )
+            self._prepend_model_for_purposes(
+                settings.OPENAI_VISION_MODEL,
+                {ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN},
+            )
+
+    def _prepend_model_for_purposes(
+        self,
+        model: str,
+        purposes: set[ModelPurpose],
+    ) -> None:
+        for purpose in purposes:
+            chain = self._fallback_chains[purpose]
+            if model in chain:
+                chain.remove(model)
+            chain.insert(0, model)
 
     def _maybe_add_cf_provider(self, settings) -> None:
         """Instantiate and wire Workers AI provider when all required settings are present."""
