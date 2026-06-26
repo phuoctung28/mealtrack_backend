@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
 **Last Updated:** June 18, 2026
-**Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Cloudflare Workers AI, Google Imagen, Pollinations, nutree-affiliate
+**Services:** Firebase, Cloudinary, Google Gemini, OpenAI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Cloudflare Workers AI, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
@@ -96,6 +96,19 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 | Single meal | 1500 |
 
 **Config:** `GOOGLE_API_KEY`
+
+---
+
+## OpenAI Responses API Prompt Caching
+
+**Purpose:** Best-effort provider-side prefix caching for repeated long OpenAI Responses API requests.
+
+- Enabled with `OPENAI_PROMPT_CACHE_ENABLED`.
+- Optional retention uses `OPENAI_PROMPT_CACHE_RETENTION`; key namespace uses `OPENAI_PROMPT_CACHE_KEY_PREFIX`.
+- Cache keys are derived from the model, purpose, and a hash of the system prompt. They never contain raw user prompt text, images, emails, or IDs.
+- Prompt caching only helps when the repeated prefix is at least 1024 tokens. Shorter prompts should not be expected to benefit.
+- Treat caching as best-effort, not guaranteed savings. Monitor `ai.openai.prompt_cache.request.count`, `ai.openai.prompt_cache.cached_tokens`, and `ai.openai.prompt_cache.input_tokens` before claiming cost reduction.
+- Cached-token evidence comes from OpenAI `usage.input_tokens_details.cached_tokens` when the SDK returns it.
 
 ---
 
