@@ -199,7 +199,7 @@ def test_ingredients_recognize_ai_unavailable(ingredients_app):
         async def send(self, msg):
             raise AIUnavailableError(
                 "All vision models failed",
-                attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+                attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
                 last_error="503 UNAVAILABLE",
             )
 

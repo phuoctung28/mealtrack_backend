@@ -1,4 +1,4 @@
-"""Handler for scan-by-url: download Cloudinary image → compress → Gemini bytes path."""
+"""Handler for scan-by-url: download Cloudinary image → compress → AI bytes path."""
 
 import asyncio
 import logging
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 @handles(ScanByUrlCommand)
 class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
-    """Download Cloudinary image → compress → Gemini bytes path → persist Meal."""
+    """Download Cloudinary image → compress → AI bytes path → persist Meal."""
 
     def __init__(
         self,
@@ -98,7 +98,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 meal_datetime.astimezone(zone_info)
             )
 
-            # Vision analysis via bytes path (never sends URL to Gemini)
+            # Vision analysis via bytes path (never sends URL to the AI provider)
             if command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,

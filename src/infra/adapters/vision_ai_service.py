@@ -15,7 +15,6 @@ from src.domain.exceptions.ai_exceptions import (
 from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.ai_output_validation_service import (
-    build_validation_retry_prompt,
     validate_ai_output,
 )
 from src.domain.strategies.meal_analysis_strategy import (
@@ -23,6 +22,7 @@ from src.domain.strategies.meal_analysis_strategy import (
     IngredientIdentificationStrategy,
     MealAnalysisStrategy,
 )
+from src.infra.adapters.ai_json_utils import extract_json
 from src.infra.config.settings import get_settings
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
@@ -32,7 +32,6 @@ MAX_URL_IMAGE_BYTES = 5 * 1024 * 1024
 URL_FETCH_TIMEOUT_SECONDS = 10
 ALLOWED_URL_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 VISION_VALIDATION_PURPOSE = "meal_scan"
-MAX_VALIDATION_ATTEMPTS = 2
 
 
 class VisionAIService(VisionAIServicePort):
@@ -99,63 +98,42 @@ class VisionAIService(VisionAIServicePort):
         if isinstance(strategy, IngredientIdentificationStrategy):
             return await self._analyze_without_nutrition_contract(image_bytes, strategy)
 
-        base_prompt = strategy.get_user_message()
-        prompt = base_prompt
-
-        for attempt in range(1, MAX_VALIDATION_ATTEMPTS + 1):
-            try:
-                result = await self._ai_manager.generate_with_vision(
-                    purpose=ModelPurpose.MEAL_SCAN,
-                    prompt=prompt,
-                    image_data=image_bytes,
-                    system_message=strategy.get_analysis_prompt(),
-                    max_tokens=self._max_output_tokens,
-                )
-                validated = validate_ai_output(
-                    result,
-                    schema=VisionNutritionResponse,
-                    purpose=VISION_VALIDATION_PURPOSE,
-                    attempt_count=attempt,
-                )
-                structured_data = self._to_legacy_vision_payload(validated)
-                if attempt > 1:
-                    logger.info(
-                        "[AI-OUTPUT-VALIDATION-RETRY-SUCCESS] "
-                        "purpose=%s strategy=%s attempt=%s",
-                        VISION_VALIDATION_PURPOSE,
-                        strategy.get_strategy_name(),
-                        attempt,
-                    )
-                return {
-                    "raw_response": json.dumps(structured_data),
-                    "structured_data": structured_data,
-                    "strategy_used": strategy.get_strategy_name(),
-                }
-            except AIOutputValidationError as exc:
-                logger.warning(
-                    "[AI-OUTPUT-VALIDATION-FAILED] purpose=%s strategy=%s attempt=%s "
-                    "details=%s",
-                    VISION_VALIDATION_PURPOSE,
-                    strategy.get_strategy_name(),
-                    attempt,
-                    exc.validation_details,
-                )
-                if attempt >= MAX_VALIDATION_ATTEMPTS:
-                    raise AIOutputValidationError(
-                        "Invalid AI output after validation retry",
-                        purpose=VISION_VALIDATION_PURPOSE,
-                        attempt_count=attempt,
-                        validation_details=exc.validation_details,
-                    ) from exc
-                prompt = build_validation_retry_prompt(base_prompt, exc)
-            except AIUnavailableError:
-                raise
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
-                ) from e
-
-        raise RuntimeError("Failed to analyze image after validation retry")
+        try:
+            result = await self._ai_manager.generate_with_vision(
+                purpose=ModelPurpose.MEAL_SCAN,
+                prompt=strategy.get_user_message(),
+                image_data=image_bytes,
+                system_message=strategy.get_analysis_prompt(),
+                max_tokens=self._max_output_tokens,
+                schema=VisionNutritionResponse,
+            )
+            structured_data = validate_ai_output(
+                result,
+                schema=VisionNutritionResponse,
+                purpose=VISION_VALIDATION_PURPOSE,
+                attempt_count=1,
+            )
+            return {
+                "raw_response": json.dumps(structured_data),
+                "structured_data": structured_data,
+                "strategy_used": strategy.get_strategy_name(),
+            }
+        except AIOutputValidationError as exc:
+            logger.warning(
+                "[AI-OUTPUT-VALIDATION-FAILED] purpose=%s strategy=%s attempt=%s "
+                "details=%s",
+                VISION_VALIDATION_PURPOSE,
+                strategy.get_strategy_name(),
+                exc.attempt_count,
+                exc.validation_details,
+            )
+            raise
+        except AIUnavailableError:
+            raise
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
+            ) from e
 
     async def _analyze_without_nutrition_contract(
         self, image_bytes: bytes, strategy: MealAnalysisStrategy
@@ -183,33 +161,6 @@ class VisionAIService(VisionAIServicePort):
             raise RuntimeError(
                 f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
             ) from e
-
-    def _to_legacy_vision_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Map canonical image contract to the current parser-compatible payload."""
-        foods = []
-        for food in payload.get("foods", []):
-            macros = food.get("macros", {})
-            foods.append(
-                {
-                    "name": food.get("name"),
-                    "quantity": food.get("quantity_g"),
-                    "unit": "g",
-                    "macros": {
-                        "protein": macros.get("protein_g", 0.0),
-                        "carbs": macros.get("carbs_g", 0.0),
-                        "fat": macros.get("fat_g", 0.0),
-                    },
-                    "confidence": food.get("confidence", 1.0),
-                }
-            )
-
-        return {
-            "is_food": payload.get("is_food", True),
-            "dish_name": payload.get("dish_name"),
-            "foods": foods,
-            "confidence": payload.get("confidence", 0.5),
-            "beverage_metadata": payload.get("beverage_metadata"),
-        }
 
     async def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy

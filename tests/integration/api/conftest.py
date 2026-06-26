@@ -33,7 +33,7 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     - Redis/Cache: Mocked to avoid Redis dependency
     - Cloudinary/ImageStore: Mocked to avoid external API calls
     - Vision AI: Mocked with realistic responses
-    - Gemini/AI services: Mocked to avoid external API calls
+    - AI services: Mocked to avoid external API calls
 
     REAL (application services):
     - Event bus handlers
@@ -182,11 +182,11 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     mock_image_store = MockImageStore()
     base_deps_module._image_store = mock_image_store
 
-    # === Mock Vision AI Service (Google Gemini - 3rd party) ===
+    # === Mock Vision AI Service (3rd party) ===
     mock_vision = MockVisionAIService()
     base_deps_module._vision_service = mock_vision
 
-    # === Mock GPT Parser (Uses Gemini - 3rd party) ===
+    # === Mock GPT Parser (3rd party) ===
     from src.domain.parsers.gpt_response_parser import GPTResponseParser
 
     mock_gpt_parser = GPTResponseParser()  # Use real parser, it just processes data

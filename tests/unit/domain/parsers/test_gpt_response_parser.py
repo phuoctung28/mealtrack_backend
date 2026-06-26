@@ -5,14 +5,93 @@ import pytest
 from src.domain.parsers.gpt_response_parser import GPTResponseParsingError
 
 
+def test_parse_to_nutrition_accepts_canonical_quantity_g(gpt_parser):
+    gpt_response = {
+        "structured_data": {
+            "is_food": True,
+            "dish_name": "Chicken rice bowl",
+            "emoji": "🍚",
+            "foods": [
+                {
+                    "name": "Grilled chicken",
+                    "quantity_g": 150.0,
+                    "macros": {
+                        "protein_g": 35.0,
+                        "carbs_g": 0.0,
+                        "fat_g": 5.0,
+                        "fiber_g": 0.0,
+                        "sugar_g": 0.0,
+                    },
+                    "confidence": 0.92,
+                }
+            ],
+            "confidence": 0.88,
+        }
+    }
+
+    nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+
+    assert nutrition.food_items[0].quantity == 150.0
+    assert nutrition.food_items[0].unit == "g"
+    assert nutrition.food_items[0].macros.protein == 35.0
+    assert nutrition.confidence_score == 0.88
+
+
+def test_parse_to_nutrition_rejects_legacy_quantity_unit_shape(gpt_parser):
+    gpt_response = {
+        "structured_data": {
+            "is_food": True,
+            "dish_name": "Chicken rice bowl",
+            "foods": [
+                {
+                    "name": "Grilled chicken",
+                    "quantity": 150.0,
+                    "unit": "g",
+                    "macros": {
+                        "protein": 35.0,
+                        "carbs": 0.0,
+                        "fat": 5.0,
+                    },
+                }
+            ],
+            "confidence": 0.88,
+        }
+    }
+
+    with pytest.raises(GPTResponseParsingError):
+        gpt_parser.parse_to_nutrition(gpt_response)
+
+
+def test_parse_emoji_reads_canonical_emoji(gpt_parser):
+    gpt_response = {
+        "structured_data": {
+            "is_food": True,
+            "dish_name": "Chicken rice bowl",
+            "emoji": "🍚",
+            "foods": [
+                {
+                    "name": "Grilled chicken",
+                    "quantity_g": 150.0,
+                    "macros": {
+                        "protein_g": 35.0,
+                        "carbs_g": 0.0,
+                        "fat_g": 5.0,
+                    },
+                }
+            ],
+        }
+    }
+
+    assert gpt_parser.parse_emoji(gpt_response) == "🍚"
+
+
 class TestGPTResponseParserFoodLimit:
     def test_rejects_food_items_over_max(self, gpt_parser):
         foods = [
             {
                 "name": f"Food {i}",
-                "quantity": 1,
-                "unit": "g",
-                "macros": {"protein": 1, "carbs": 2, "fat": 3},
+                "quantity_g": 1,
+                "macros": {"protein_g": 1, "carbs_g": 2, "fat_g": 3},
                 "confidence": 0.8,
             }
             for i in range(9)
@@ -37,9 +116,8 @@ class TestGPTResponseParserDishNameCompatibility:
                 "foods": [
                     {
                         "name": "Food 0",
-                        "quantity": 1,
-                        "unit": "g",
-                        "macros": {"protein": 1, "carbs": 2, "fat": 3},
+                        "quantity_g": 1,
+                        "macros": {"protein_g": 1, "carbs_g": 2, "fat_g": 3},
                         "confidence": 0.8,
                     }
                 ],
@@ -58,28 +136,22 @@ class TestGPTResponseParserDishNameCompatibility:
 
 
 class TestGPTResponseParserOptionalFoods:
-    def test_parse_to_nutrition_allows_missing_foods_with_macros(self, gpt_parser):
+    def test_parse_to_nutrition_rejects_missing_foods_for_food_image(self, gpt_parser):
         gpt_response = {
             "structured_data": {
                 "dish_name": "Macro Meal",
-                "macros": {"protein": 20, "carbs": 40, "fat": 10},
             }
         }
 
-        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+        with pytest.raises(GPTResponseParsingError):
+            gpt_parser.parse_to_nutrition(gpt_response)
 
-        assert nutrition.food_items is None
-        assert nutrition.macros.protein == pytest.approx(20.0)
-        assert nutrition.macros.carbs == pytest.approx(40.0)
-        assert nutrition.macros.fat == pytest.approx(10.0)
-        assert nutrition.confidence_score == pytest.approx(0.5)
-
-    def test_parse_to_nutrition_allows_empty_foods_with_macros(self, gpt_parser):
+    def test_parse_to_nutrition_allows_non_food_without_foods(self, gpt_parser):
         gpt_response = {
             "structured_data": {
+                "is_food": False,
                 "dish_name": "Macro Meal",
                 "foods": [],
-                "macros": {"protein": 10, "carbs": 20, "fat": 5},
                 "confidence": 0.8,
             }
         }
@@ -87,29 +159,28 @@ class TestGPTResponseParserOptionalFoods:
         nutrition = gpt_parser.parse_to_nutrition(gpt_response)
 
         assert nutrition.food_items is None
-        assert nutrition.macros.protein == pytest.approx(10.0)
-        assert nutrition.macros.carbs == pytest.approx(20.0)
-        assert nutrition.macros.fat == pytest.approx(5.0)
+        assert nutrition.macros.protein == pytest.approx(0.0)
+        assert nutrition.macros.carbs == pytest.approx(0.0)
+        assert nutrition.macros.fat == pytest.approx(0.0)
         assert nutrition.confidence_score == pytest.approx(0.8)
 
-    def test_parse_to_nutrition_clamps_top_level_confidence(self, gpt_parser):
+    def test_parse_to_nutrition_reads_top_level_confidence(self, gpt_parser):
         gpt_response = {
             "structured_data": {
                 "foods": [
                     {
                         "name": "Food 0",
-                        "quantity": 1,
-                        "unit": "g",
-                        "macros": {"protein": 1, "carbs": 2, "fat": 3},
+                        "quantity_g": 1,
+                        "macros": {"protein_g": 1, "carbs_g": 2, "fat_g": 3},
                     }
                 ],
-                "confidence": 1.2,
+                "confidence": 0.72,
             }
         }
 
         nutrition = gpt_parser.parse_to_nutrition(gpt_response)
 
-        assert nutrition.confidence_score == pytest.approx(1.0)
+        assert nutrition.confidence_score == pytest.approx(0.72)
 
 
 class TestGPTResponseParserFoodGuard:
@@ -138,7 +209,7 @@ class TestGPTResponseParserFoodGuard:
 
 
 class TestGPTResponseParserStrictSchemaMode:
-    def test_non_strict_mode_allows_non_list_foods_with_top_level_macros(self):
+    def test_non_strict_mode_rejects_non_list_foods(self):
         from src.domain.parsers.gpt_response_parser import GPTResponseParser
 
         parser = GPTResponseParser(strict_schema_mode=False)
@@ -146,16 +217,11 @@ class TestGPTResponseParserStrictSchemaMode:
             "structured_data": {
                 "dish_name": "Macro Meal",
                 "foods": "invalid-shape",
-                "macros": {"protein": 12, "carbs": 30, "fat": 7},
             }
         }
 
-        nutrition = parser.parse_to_nutrition(gpt_response)
-
-        assert nutrition.food_items is None
-        assert nutrition.macros.protein == pytest.approx(12.0)
-        assert nutrition.macros.carbs == pytest.approx(30.0)
-        assert nutrition.macros.fat == pytest.approx(7.0)
+        with pytest.raises(GPTResponseParsingError):
+            parser.parse_to_nutrition(gpt_response)
 
 
 class TestGPTResponseParserZeroQuantity:
@@ -167,21 +233,18 @@ class TestGPTResponseParserZeroQuantity:
                 "foods": [
                     {
                         "name": "Valid Food",
-                        "quantity": 100,
-                        "unit": "g",
-                        "macros": {"protein": 10, "carbs": 20, "fat": 5},
+                        "quantity_g": 100,
+                        "macros": {"protein_g": 10, "carbs_g": 20, "fat_g": 5},
                     },
                     {
                         "name": "Zero Quantity Food",
-                        "quantity": 0,
-                        "unit": "g",
-                        "macros": {"protein": 5, "carbs": 10, "fat": 2},
+                        "quantity_g": 0,
+                        "macros": {"protein_g": 5, "carbs_g": 10, "fat_g": 2},
                     },
                     {
                         "name": "Another Valid Food",
-                        "quantity": 50,
-                        "unit": "g",
-                        "macros": {"protein": 8, "carbs": 15, "fat": 3},
+                        "quantity_g": 50,
+                        "macros": {"protein_g": 8, "carbs_g": 15, "fat_g": 3},
                     },
                 ],
                 "confidence": 0.9,
@@ -199,15 +262,13 @@ class TestGPTResponseParserZeroQuantity:
                 "foods": [
                     {
                         "name": "Negative Quantity",
-                        "quantity": -5,
-                        "unit": "g",
-                        "macros": {"protein": 5, "carbs": 10, "fat": 2},
+                        "quantity_g": -5,
+                        "macros": {"protein_g": 5, "carbs_g": 10, "fat_g": 2},
                     },
                     {
                         "name": "Valid Food",
-                        "quantity": 100,
-                        "unit": "g",
-                        "macros": {"protein": 10, "carbs": 20, "fat": 5},
+                        "quantity_g": 100,
+                        "macros": {"protein_g": 10, "carbs_g": 20, "fat_g": 5},
                     },
                 ],
                 "confidence": 0.9,
@@ -225,15 +286,17 @@ class TestGPTResponseParserZeroQuantity:
                 "foods": [
                     {
                         "name": "Valid Food",
-                        "quantity": 100,
-                        "unit": "g",
-                        "macros": {"protein": 10, "carbs": 20, "fat": 5},
+                        "quantity_g": 100,
+                        "macros": {"protein_g": 10, "carbs_g": 20, "fat_g": 5},
                     },
                     {
                         "name": "Impossible Quantity",
-                        "quantity": 150000,
-                        "unit": "g",
-                        "macros": {"protein": 500, "carbs": 1000, "fat": 200},
+                        "quantity_g": 150000,
+                        "macros": {
+                            "protein_g": 500,
+                            "carbs_g": 1000,
+                            "fat_g": 200,
+                        },
                     },
                 ],
                 "confidence": 0.9,
@@ -245,17 +308,20 @@ class TestGPTResponseParserZeroQuantity:
 
 
 class TestGPTResponseParserQuantityGMapping:
-    def test_valid_quantity_maps_to_food_item_with_grams_unit(self, gpt_parser):
-        """quantity=100 (from legacy vision payload, converted from quantity_g=100) maps to FoodItem(quantity=100, unit='g')."""
+    def test_valid_quantity_g_maps_to_food_item_with_grams_unit(self, gpt_parser):
+        """quantity_g=100 maps to FoodItem(quantity=100, unit='g')."""
         gpt_response = {
             "structured_data": {
                 "dish_name": "Grilled Chicken",
                 "foods": [
                     {
                         "name": "Chicken breast",
-                        "quantity": 100,
-                        "unit": "g",
-                        "macros": {"protein": 30.0, "carbs": 0.0, "fat": 6.0},
+                        "quantity_g": 100,
+                        "macros": {
+                            "protein_g": 30.0,
+                            "carbs_g": 0.0,
+                            "fat_g": 6.0,
+                        },
                         "confidence": 0.9,
                     }
                 ],
@@ -279,12 +345,14 @@ class TestGPTResponseParserQuantityGMapping:
                 "foods": [
                     {
                         "name": "Rice",
-                        "quantity": 100,
-                        "unit": "g",
-                        "macros": {"protein": 3.0, "carbs": 28.0, "fat": 0.5},
+                        "quantity_g": 100,
+                        "macros": {
+                            "protein_g": 3.0,
+                            "carbs_g": 28.0,
+                            "fat_g": 0.5,
+                        },
                     }
                 ],
-                "kcal": 99999,
                 "confidence": 0.9,
             }
         }

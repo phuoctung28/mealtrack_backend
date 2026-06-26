@@ -262,7 +262,7 @@ async def parse_meal_text(
     """
     Parse natural language meal description into structured food items using AI.
 
-    User types "2 eggs and toast" → Gemini parses → returns structured items with nutrition.
+    User types "2 eggs and toast" → AI parses → returns structured items with nutrition.
     """
     try:
         sanitized_text = sanitize_user_description(payload.text)

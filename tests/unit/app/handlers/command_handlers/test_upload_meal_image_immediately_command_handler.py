@@ -93,8 +93,8 @@ class TestVisionRetryRouting:
         no_food_error = AIVisionError(
             "No food detected",
             kind=AIVisionFailureKind.no_food,
-            provider="gemini",
-            model="gemini-3.1-flash-lite",
+            provider="openai",
+            model="gpt-5.4-mini-2026-03-17",
         )
         analyze_mock = AsyncMock(side_effect=no_food_error)
         handler = _make_handler(analyze_mock, max_attempts=3)

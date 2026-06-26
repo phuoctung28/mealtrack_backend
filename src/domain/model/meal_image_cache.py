@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -11,9 +10,9 @@ class CachedImage:
     meal_name: str
     name_slug: str
     image_url: str
-    thumbnail_url: Optional[str]
+    thumbnail_url: str | None
     source: str
-    confidence: Optional[float]
+    confidence: float | None
     cosine: float
 
 
@@ -23,16 +22,16 @@ class CachedImageUpsert:
     name_slug: str
     text_embedding: list[float]
     image_url: str
-    thumbnail_url: Optional[str]
+    thumbnail_url: str | None
     source: str
-    confidence: Optional[float]
+    confidence: float | None
 
 
 @dataclass(frozen=True)
 class PendingItem:
     meal_name: str
     name_slug: str
-    candidate_image_url: Optional[str] = None
-    candidate_thumbnail_url: Optional[str] = None
-    candidate_source: Optional[str] = None
+    candidate_image_url: str | None = None
+    candidate_thumbnail_url: str | None = None
+    candidate_source: str | None = None
     attempts: int = 0

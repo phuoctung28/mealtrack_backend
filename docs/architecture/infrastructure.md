@@ -6,8 +6,8 @@ Details of external services and infrastructure components.
 
 | Service | Purpose | Implementation |
 |---------|---------|----------------|
-| **Google Gemini 2.5 Flash** | Vision AI | Meal image analysis, food recognition |
-| **OpenAI GPT-4** | Chat & Planning | Conversational AI, meal plan generation |
+| **OpenAI Responses API** | Text & Vision AI | Meal image analysis, food recognition, structured meal parsing |
+| **Cloudflare Workers AI** | AI fallback | Alternate text/vision route for configured purposes |
 | **Pinecone** | Vector Database | Semantic food search (1024-dim vectors) |
 | **Firebase** | Auth & Messaging | User authentication, push notifications (FCM) |
 | **Cloudinary** | Image Storage | CDN and optimized image hosting |
@@ -32,6 +32,6 @@ The system uses Pinecone Inference API with the `llama-text-embed-v2` model.
 
 - **Provider**: Redis
 - **Strategy**: Selective cache-aside with TTL; default to no cache unless the value has a source of truth, safe stale window, clear invalidation, and correct fallback.
-- **Use Cases**: Food search/details, nutrition lookup, short-lived computed read models, Gemini explicit cache names.
+- **Use Cases**: Food search/details, nutrition lookup, short-lived computed read models.
 - **Non-Cache State**: Meal suggestion sessions are transient product state, not cache-aside. Prefer Postgres with `expires_at`, or document Redis as a required state store if retained. AI Handshake guest trial quota (`ai_handshake_guest_trial_quotas`) is durable product state stored in Postgres — Redis is not required for it.
 - **Do Not Cache**: Notification precompute data, FCM token ownership, meal writes, metric updates.

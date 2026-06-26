@@ -1,9 +1,7 @@
-"""
-BraveSearchNutritionService - Search barcode nutrition via Brave Search + Gemini extraction.
-"""
+"""BraveSearchNutritionService - Search barcode nutrition via Brave Search + AI extraction."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -13,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class BraveSearchNutritionService:
-    """Search for barcode nutrition info via Brave Search, extract macros via Gemini."""
+    """Search for barcode nutrition info via Brave Search, extract macros via AI."""
 
     SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 
@@ -23,7 +21,7 @@ class BraveSearchNutritionService:
         self._api_key = api_key
         self._meal_gen = meal_generation_service
         self._macro_validator = macro_validation_service
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -34,8 +32,8 @@ class BraveSearchNutritionService:
         self,
         barcode: str,
         language: str = "en",
-        product_name: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        product_name: str | None = None,
+    ) -> dict[str, Any] | None:
         """Search barcode nutrition via web search + AI extraction."""
         try:
             snippets = await self._search_barcode(barcode, product_name)
@@ -54,8 +52,8 @@ class BraveSearchNutritionService:
             return None
 
     async def _search_barcode(
-        self, barcode: str, product_name: Optional[str] = None
-    ) -> Optional[str]:
+        self, barcode: str, product_name: str | None = None
+    ) -> str | None:
         """Search Brave for barcode nutrition info, return combined snippets."""
         try:
             # Search with barcode + product name if available, otherwise just barcode
@@ -99,8 +97,8 @@ class BraveSearchNutritionService:
 
     async def _extract_nutrition(
         self, barcode: str, snippets: str, language: str
-    ) -> Optional[Dict[str, Any]]:
-        """Use Gemini to extract structured nutrition from search snippets."""
+    ) -> dict[str, Any] | None:
+        """Use AI to extract structured nutrition from search snippets."""
         try:
             system_prompt = SystemPrompts.BARCODE_BRAVE_EXTRACT
             user_prompt = f"Barcode: {barcode}\nLanguage: {language}\n\nWeb search snippets:\n{snippets}"
@@ -131,7 +129,7 @@ class BraveSearchNutritionService:
 
             return result
         except Exception as e:
-            logger.warning(f"Gemini extraction failed for barcode {barcode}: {e}")
+            logger.warning(f"AI extraction failed for barcode {barcode}: {e}")
             return None
 
     async def close(self) -> None:
@@ -143,7 +141,7 @@ class BraveSearchNutritionService:
 def get_brave_search_nutrition_service(
     meal_generation_service: Any = None,
     macro_validation_service: Any = None,
-) -> Optional[BraveSearchNutritionService]:
+) -> BraveSearchNutritionService | None:
     """Return a BraveSearchNutritionService if API key is configured, else None."""
     from src.infra.config.settings import settings
 

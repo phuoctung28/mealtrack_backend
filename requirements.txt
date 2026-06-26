@@ -7,6 +7,7 @@ python-multipart==0.0.32
 
 # AI/LLM dependencies
 langchain-core==1.4.7
+langchain-openai>=1.3.0,<2.0.0
 langchain-cloudflare==0.3.4
 langchain-google-genai==4.2.5
 google-genai==2.8.0
@@ -37,7 +38,7 @@ alembic==1.18.4
 python-dotenv==1.2.2
 
 # Configuration
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 
 # Event-driven architecture
 pymediator==0.3.0

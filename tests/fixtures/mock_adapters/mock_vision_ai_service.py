@@ -1,7 +1,6 @@
-"""
-Mock Vision AI Service for testing.
-"""
+"""Mock Vision AI Service for testing."""
 
+from copy import deepcopy
 from typing import Dict, Any, List
 
 from src.domain.strategies.meal_analysis_strategy import MealAnalysisStrategy
@@ -23,7 +22,7 @@ class MockVisionAIService(VisionAIServicePort):
         self, image_url: str, strategy: MealAnalysisStrategy
     ) -> Dict[str, Any]:
         """Return mock analysis result for URL-based strategy analysis."""
-        response = self.mock_response.copy()
+        response = deepcopy(self.mock_response)
         response["image_url"] = image_url
         response["strategy_used"] = strategy.get_strategy_name()
         return response
@@ -32,7 +31,7 @@ class MockVisionAIService(VisionAIServicePort):
         self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Return mock analysis result with ingredients context."""
-        response = self.mock_response.copy()
+        response = deepcopy(self.mock_response)
         if ingredients:
             response["ingredients_context"] = ingredients
         return response
@@ -41,7 +40,7 @@ class MockVisionAIService(VisionAIServicePort):
         self, image_bytes: bytes, portion_size: float, unit: str
     ) -> Dict[str, Any]:
         """Return mock analysis result with portion context."""
-        response = self.mock_response.copy()
+        response = deepcopy(self.mock_response)
         response["portion_context"] = {"portion_size": portion_size, "unit": unit}
         return response
 
@@ -49,22 +48,23 @@ class MockVisionAIService(VisionAIServicePort):
         self, image_bytes: bytes, weight_grams: float
     ) -> Dict[str, Any]:
         """Return mock analysis result with weight context."""
-        response = self.mock_response.copy()
+        response = deepcopy(self.mock_response)
         response["weight_context"] = {"weight_grams": weight_grams}
         if "structured_data" in response:
             weight_factor = weight_grams / 100.0
-            response["structured_data"]["total_calories"] = int(
-                response["structured_data"]["total_calories"] * weight_factor
-            )
             for food in response["structured_data"].get("foods", []):
-                food["calories"] = int(food["calories"] * weight_factor)
+                food["quantity_g"] = float(food["quantity_g"]) * weight_factor
+                macros = food.get("macros", {})
+                for field in ("protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g"):
+                    if field in macros:
+                        macros[field] = float(macros[field]) * weight_factor
         return response
 
     async def analyze_with_strategy(
         self, image_bytes: bytes, strategy: MealAnalysisStrategy
     ) -> Dict[str, Any]:
         """Return mock analysis result using a strategy."""
-        response = self.mock_response.copy()
+        response = deepcopy(self.mock_response)
         response["strategy_used"] = strategy.get_strategy_name()
         return response
 
@@ -73,51 +73,45 @@ class MockVisionAIService(VisionAIServicePort):
         return {
             "structured_data": {
                 "dish_name": "Grilled Chicken with Rice",
-                "total_calories": 650,
                 "confidence": 0.92,
                 "foods": [
                     {
                         "name": "Grilled Chicken Breast",
-                        "quantity": 150,
-                        "unit": "g",
-                        "calories": 250,
+                        "quantity_g": 150,
                         "confidence": 0.95,
                         "macros": {
-                            "protein": 40,
-                            "carbs": 0,
-                            "fat": 8,
+                            "protein_g": 40,
+                            "carbs_g": 0,
+                            "fat_g": 8,
+                            "fiber_g": 0,
+                            "sugar_g": 0,
                         },
                     },
                     {
                         "name": "White Rice",
-                        "quantity": 200,
-                        "unit": "g",
-                        "calories": 260,
+                        "quantity_g": 200,
                         "confidence": 0.90,
                         "macros": {
-                            "protein": 5,
-                            "carbs": 55,
-                            "fat": 1,
+                            "protein_g": 5,
+                            "carbs_g": 55,
+                            "fat_g": 1,
+                            "fiber_g": 0,
+                            "sugar_g": 0,
                         },
                     },
                     {
                         "name": "Mixed Vegetables",
-                        "quantity": 100,
-                        "unit": "g",
-                        "calories": 140,
+                        "quantity_g": 100,
                         "confidence": 0.88,
                         "macros": {
-                            "protein": 3,
-                            "carbs": 15,
-                            "fat": 8,
+                            "protein_g": 3,
+                            "carbs_g": 15,
+                            "fat_g": 8,
+                            "fiber_g": 0,
+                            "sugar_g": 0,
                         },
                     },
                 ],
-                "macros": {
-                    "protein": 48,
-                    "carbs": 70,
-                    "fat": 17,
-                },
             },
             "raw_response": "Mock AI response for testing",
         }

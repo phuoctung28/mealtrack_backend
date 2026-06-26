@@ -1,10 +1,7 @@
 import pytest
 import time
 from unittest.mock import patch
-from src.infra.ai.circuit_breaker import (
-    ProviderCircuitBreaker,
-    CircuitState,
-)
+from src.infra.services.ai.provider_circuit_breaker import CircuitState, ProviderCircuitBreaker
 
 
 @pytest.fixture

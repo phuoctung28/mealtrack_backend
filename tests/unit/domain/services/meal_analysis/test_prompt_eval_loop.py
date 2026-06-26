@@ -14,9 +14,8 @@ def _valid_payload() -> dict:
             "foods": [
                 {
                     "name": "Chicken",
-                    "quantity": 120,
-                    "unit": "g",
-                    "macros": {"protein": 30, "carbs": 0, "fat": 6},
+                    "quantity_g": 120,
+                    "macros": {"protein_g": 30, "carbs_g": 0, "fat_g": 6},
                 }
             ],
             "confidence": 0.9,
@@ -27,6 +26,39 @@ def _valid_payload() -> dict:
 def _invalid_payload() -> dict:
     return {
         "structured_data": {"dish_name": "Broken", "foods": [{"name": "No macros"}]}
+    }
+
+
+def _legacy_alias_payload() -> dict:
+    return {
+        "structured_data": {
+            "dish_name": "Legacy Chicken Rice",
+            "foods": [
+                {
+                    "name": "Chicken",
+                    "quantity": 120,
+                    "unit": "g",
+                    "macros": {"protein": 30, "carbs": 0, "fat": 6},
+                }
+            ],
+            "confidence": 0.9,
+        }
+    }
+
+
+def _legacy_alias_payload_without_unit() -> dict:
+    return {
+        "structured_data": {
+            "dish_name": "Legacy Chicken Rice",
+            "foods": [
+                {
+                    "name": "Chicken",
+                    "quantity": 120,
+                    "macros": {"protein": 30, "carbs": 0, "fat": 6},
+                }
+            ],
+            "confidence": 0.9,
+        }
     }
 
 
@@ -82,7 +114,7 @@ def test_enforce_thresholds_raises_on_regression():
         loop.enforce_thresholds(
             result, min_parse_success_rate=0.9, max_prompt_tokens=100
         )
-        assert False, "Expected threshold validation to fail"
+        raise AssertionError("Expected threshold validation to fail")
     except ValueError as exc:
         message = str(exc)
         assert "parse_success_rate" in message or "prompt_tokens_estimate" in message
@@ -97,9 +129,8 @@ def test_schema_invalid_payload_has_lower_validation_rate():
             "foods": [
                 {
                     "name": "Huge",
-                    "quantity": 150000,
-                    "unit": "g",
-                    "macros": {"protein": 500, "carbs": 1000, "fat": 200},
+                    "quantity_g": 150000,
+                    "macros": {"protein_g": 500, "carbs_g": 1000, "fat_g": 200},
                 }
             ],
         }
@@ -110,6 +141,39 @@ def test_schema_invalid_payload_has_lower_validation_rate():
     ]
     candidates = {"candidate": "x" * 200}
     ranked = loop.rank_candidates(candidates, cases)
+    assert ranked[0].validation_success_rate == pytest.approx(0.5)
+
+
+def test_alias_only_legacy_payload_lowers_validation_rate():
+    """Prompt validation must match parser preflight rejection for legacy aliases."""
+    loop = PromptEvalLoop()
+    cases = [
+        PromptEvalCase(case_id="valid", response_payload=_valid_payload()),
+        PromptEvalCase(case_id="legacy", response_payload=_legacy_alias_payload()),
+    ]
+    candidates = {"candidate": "x" * 200}
+
+    ranked = loop.rank_candidates(candidates, cases)
+
+    assert ranked[0].parse_success_rate == pytest.approx(0.5)
+    assert ranked[0].validation_success_rate == pytest.approx(0.5)
+
+
+def test_alias_only_legacy_payload_without_unit_lowers_validation_rate():
+    """Prompt validation must reject alias-only payloads accepted by schema aliases."""
+    loop = PromptEvalLoop()
+    cases = [
+        PromptEvalCase(case_id="valid", response_payload=_valid_payload()),
+        PromptEvalCase(
+            case_id="legacy",
+            response_payload=_legacy_alias_payload_without_unit(),
+        ),
+    ]
+    candidates = {"candidate": "x" * 200}
+
+    ranked = loop.rank_candidates(candidates, cases)
+
+    assert ranked[0].parse_success_rate == pytest.approx(0.5)
     assert ranked[0].validation_success_rate == pytest.approx(0.5)
 
 

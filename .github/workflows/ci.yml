@@ -7,7 +7,7 @@ on:
     branches: [main, delivery]
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.13.2"
 
 jobs:
   test:

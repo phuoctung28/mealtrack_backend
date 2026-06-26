@@ -1,8 +1,8 @@
 """Canonical AI nutrition output contracts.
 
 These schemas validate AI output before it is mapped into domain nutrition
-models. They intentionally ignore AI-reported calories because calories are
-derived from backend macros.
+models. Text-parse contracts ignore advisory AI calories for compatibility;
+provider-facing vision contracts reject them so calories stay backend-derived.
 """
 
 from typing import Any, Literal
@@ -72,10 +72,16 @@ class AINutritionMacros(BaseModel):
     )
 
 
+class AIVisionNutritionMacros(AINutritionMacros):
+    """Strict macronutrients contract for provider-facing vision responses."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class VisionFoodEstimate(BaseModel):
     """Single food estimate extracted from an image."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=200)
     quantity_g: float = Field(
@@ -84,7 +90,7 @@ class VisionFoodEstimate(BaseModel):
         le=MAX_FOOD_ITEM_QUANTITY,
         validation_alias=AliasChoices("quantity_g", "quantity"),
     )
-    macros: AINutritionMacros
+    macros: AIVisionNutritionMacros
     confidence: float = Field(1.0, ge=0, le=1)
 
     @field_validator("name")
@@ -96,7 +102,7 @@ class VisionFoodEstimate(BaseModel):
 class BeverageMetadata(BaseModel):
     """Metadata for packaged beverage images detected by AI."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     is_packaged_beverage: bool
     brand: str | None = Field(None, max_length=100)
@@ -111,10 +117,11 @@ class BeverageMetadata(BaseModel):
 class VisionNutritionResponse(BaseModel):
     """Structured image meal-analysis response."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     is_food: bool = Field(True, description="Whether the image contains edible food")
     dish_name: str | None = Field(None, max_length=200)
+    emoji: str | None = Field(None, max_length=32)
     foods: list[VisionFoodEstimate] = Field(
         default_factory=list,
         max_length=MAX_AI_FOOD_ITEMS,

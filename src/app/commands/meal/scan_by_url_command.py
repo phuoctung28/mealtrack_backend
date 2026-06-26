@@ -9,7 +9,7 @@ from src.app.events.base import Command
 
 @dataclass
 class ScanByUrlCommand(Command):
-    """Analyze a Cloudinary-hosted image without sending the URL to Gemini directly."""
+    """Analyze a Cloudinary-hosted image without sending the URL to the AI provider directly."""
 
     user_id: str
     image_url: str

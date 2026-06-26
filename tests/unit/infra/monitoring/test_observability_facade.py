@@ -17,6 +17,7 @@ from src.observability import (
     set_request_context,
     start_span,
 )
+from src.observability_connectors import filter_safe_attributes, filter_safe_tags
 
 
 class RecordingConnector:
@@ -99,6 +100,24 @@ def test_facade_delegates_to_configured_connector():
         ("start_span", "cron.email", "email", None),
         ("flush", 2),
     ]
+
+
+def test_cache_hit_is_safe_observability_attribute_and_tag():
+    attributes = {
+        "ai_provider": "openai",
+        "ai_model": "gpt-5.4-mini-2026-03-17",
+        "ai_purpose": "parse_text",
+        "cache_hit": "true",
+        "user_prompt": "do not export",
+    }
+
+    assert filter_safe_attributes(attributes) == {
+        "ai_provider": "openai",
+        "ai_model": "gpt-5.4-mini-2026-03-17",
+        "ai_purpose": "parse_text",
+        "cache_hit": "true",
+    }
+    assert filter_safe_tags(attributes)["cache_hit"] == "true"
 
 
 def test_noop_connector_methods_do_not_raise():

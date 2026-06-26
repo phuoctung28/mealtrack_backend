@@ -23,12 +23,20 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 ## 🛠 Technology Stack
 
-- **Core**: FastAPI 0.115+ (Python 3.13), SQLAlchemy 2.0 async runtime (`AsyncSession`, `AsyncUnitOfWork`).
+- **Core**: FastAPI 0.115+ (Python 3.13.2), SQLAlchemy 2.0 async runtime (`AsyncSession`, `AsyncUnitOfWork`).
 - **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0, Redis 7.0 for selective optional caching; required state documented separately.
-- **AI**: Google Gemini 2.5 Flash (multi-model for rate distribution), Pinecone Inference API (1024-dim).
+- **AI**: OpenAI via LangChain for image scanning, Cloudflare Workers AI first for text tasks, Cloudflare embeddings, Pinecone Inference API (1024-dim).
 - **Infrastructure**: Firebase (JWT Auth + FCM), Cloudinary (image storage), RevenueCat (subscriptions).
 - **Event Bus**: PyMediator with singleton registry for CQRS.
 - **Testing**: pytest (1,499+ tests), ruff (linting), mypy (type checking).
+
+### OpenAI Prompt Caching
+
+- OpenAI calls run through LangChain `ChatOpenAI` with Responses API enabled.
+- Enable provider-side prompt caching with `OPENAI_PROMPT_CACHE_ENABLED`.
+- Optional retention uses `OPENAI_PROMPT_CACHE_RETENTION`; key namespace uses `OPENAI_PROMPT_CACHE_KEY_PREFIX`.
+- Cache keys are derived from the model, purpose, and a hash of the system prompt. They never include raw user prompt text, images, emails, or IDs.
+- Track `ai.openai.prompt_cache.request.count`, `ai.openai.prompt_cache.cached_tokens`, and `ai.openai.prompt_cache.input_tokens` before assuming savings.
 
 ## 🏗 Architecture
 

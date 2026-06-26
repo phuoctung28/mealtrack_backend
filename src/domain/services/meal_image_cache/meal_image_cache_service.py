@@ -1,15 +1,12 @@
-"""Vector-based hot-path cache lookup + the store helper used by the pipeline job.
+"""Vector-based cache lookup + store helper for meal image cache records.
 
-API read path: lookup_batch() embeds query text via Gemini API (no torch) then
-does a pgvector ANN nearest-neighbour search — semantically robust to name variants.
-
-Pipeline write path: store() receives pre-computed text_embedding from the job.
+lookup_batch() embeds query text with the injected text embedder, then does a
+pgvector ANN nearest-neighbour search.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from src.domain.model.meal_image_cache import CachedImage, CachedImageUpsert
 from src.domain.ports.embedding_service_port import TextEmbeddingService
@@ -30,8 +27,8 @@ class MealImageCacheService:
         self._embedder = embedder
         self._threshold = dedup_threshold
 
-    async def lookup_batch(self, names: list[str]) -> list[Optional[CachedImage]]:
-        """Embed names via Gemini API → single pgvector batch ANN search.
+    async def lookup_batch(self, names: list[str]) -> list[CachedImage | None]:
+        """Embed names with the injected adapter, then run batch ANN search.
 
         Always returns exactly len(names) items. Individual failures
         yield None so the caller can fall through to the normal image search.
@@ -71,9 +68,9 @@ class MealImageCacheService:
         meal_name: str,
         text_embedding: list[float],
         image_url: str,
-        thumbnail_url: Optional[str],
+        thumbnail_url: str | None,
         source: str,
-        confidence: Optional[float],
+        confidence: float | None,
     ) -> None:
         await self._cache.upsert(
             CachedImageUpsert(

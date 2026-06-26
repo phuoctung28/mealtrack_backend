@@ -171,7 +171,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                 f"[BARCODE-CASCADE] {query.barcode} → step 3 MISS (openfoodfacts)"
             )
 
-        # Step 4: Try Brave Search + Gemini extraction
+        # Step 4: Try Brave Search + AI extraction
         brave_name: str | None = None
         brave_result: dict[str, Any] | None = None
         if self.brave_search:
@@ -291,7 +291,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         language: str,
         partial_name: str | None = None,
     ) -> dict[str, Any] | None:
-        """Estimate nutrition via Gemini when all other sources fail."""
+        """Estimate nutrition via AI when all other sources fail."""
         if not self.meal_gen:
             return None
         try:
