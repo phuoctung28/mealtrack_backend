@@ -15,6 +15,7 @@ from openai import (
 )
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
+from src.infra.services.ai.openai_prompt_cache_policy import OpenAIPromptCachePolicy
 
 
 class OpenAIProvider(AIProviderPort):
@@ -27,6 +28,9 @@ class OpenAIProvider(AIProviderPort):
         request_timeout_seconds: int,
         max_retries: int,
         store_responses: bool,
+        prompt_cache_enabled: bool = True,
+        prompt_cache_retention: str | None = None,
+        prompt_cache_key_prefix: str = "mealtrack",
     ) -> None:
         self._client = AsyncOpenAI(
             api_key=api_key,
@@ -34,6 +38,11 @@ class OpenAIProvider(AIProviderPort):
             max_retries=max_retries,
         )
         self._store_responses = store_responses
+        self._prompt_cache_policy = OpenAIPromptCachePolicy(
+            enabled=prompt_cache_enabled,
+            key_prefix=prompt_cache_key_prefix,
+            retention=prompt_cache_retention,
+        )
 
     @property
     def provider_name(self) -> str:
@@ -50,6 +59,19 @@ class OpenAIProvider(AIProviderPort):
     def get_available_models(self) -> list[str]:
         return []
 
+    def _prompt_cache_kwargs(
+        self,
+        *,
+        model: str,
+        purpose_hint: str | None,
+        system_message: str | None,
+    ) -> dict[str, Any]:
+        return self._prompt_cache_policy.request_kwargs(
+            model=model,
+            purpose_hint=purpose_hint,
+            system_message=system_message,
+        )
+
     async def generate(
         self,
         model: str,
@@ -60,6 +82,11 @@ class OpenAIProvider(AIProviderPort):
         schema: type | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        prompt_cache_kwargs = self._prompt_cache_kwargs(
+            model=model,
+            purpose_hint=kwargs.get("purpose_hint"),
+            system_message=system_message,
+        )
         if schema is not None:
             response = await self._client.responses.parse(
                 model=model,
@@ -71,6 +98,7 @@ class OpenAIProvider(AIProviderPort):
                 max_output_tokens=max_tokens,
                 reasoning={"effort": "none"},
                 store=self._store_responses,
+                **prompt_cache_kwargs,
             )
             return self._dump_parsed(response.output_parsed)
 
@@ -83,6 +111,7 @@ class OpenAIProvider(AIProviderPort):
             max_output_tokens=max_tokens,
             reasoning={"effort": "none"},
             store=self._store_responses,
+            **prompt_cache_kwargs,
         )
         return {"raw_content": response.output_text}
 
@@ -99,6 +128,11 @@ class OpenAIProvider(AIProviderPort):
         image_mime_type = kwargs.get("image_mime_type", "image/jpeg")
         image_b64 = base64.b64encode(image_data).decode("ascii")
         image_data_url = f"data:{image_mime_type};base64,{image_b64}"
+        prompt_cache_kwargs = self._prompt_cache_kwargs(
+            model=model,
+            purpose_hint=kwargs.get("purpose_hint"),
+            system_message=system_message,
+        )
 
         response = await self._client.responses.parse(
             model=model,
@@ -120,6 +154,7 @@ class OpenAIProvider(AIProviderPort):
             max_output_tokens=max_tokens,
             reasoning={"effort": "none"},
             store=self._store_responses,
+            **prompt_cache_kwargs,
         )
         return self._dump_parsed(response.output_parsed)
 
