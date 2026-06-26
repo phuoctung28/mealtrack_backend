@@ -72,6 +72,7 @@ async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
 
     assert meal_generation_service.call_kwargs["model_purpose"] == "parse_text"
     assert meal_generation_service.call_kwargs["thinking_budget"] == 0
+    assert meal_generation_service.call_kwargs["schema"] is MealTextNutritionResponse
     assert item.unit == "one very full noodle bowl"
     assert item.protein == 30
     assert item.carbs == 80

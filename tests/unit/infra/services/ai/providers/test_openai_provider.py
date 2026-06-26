@@ -85,7 +85,38 @@ async def test_generate_structured_text_calls_adapter_with_prompt_cache_kwargs()
 
 
 @pytest.mark.asyncio
-async def test_generate_raw_text_calls_adapter_and_returns_raw_content():
+async def test_generate_json_without_schema_parses_raw_content():
+    provider = _provider()
+    raw_message = SimpleNamespace()
+    provider._langchain.generate_raw = AsyncMock(
+        return_value=LangChainOpenAIResult(
+            parsed={"raw_content": '{"items":[{"name":"pho"}]}'},
+            raw_message=raw_message,
+        )
+    )
+
+    result = await provider.generate(
+        model="gpt-5.4-mini-2026-03-17",
+        prompt="Generate summary.",
+        system_message="Be concise.",
+        max_tokens=600,
+        purpose_hint="general",
+    )
+
+    assert result == {"items": [{"name": "pho"}]}
+    call_kwargs = provider._langchain.generate_raw.await_args.kwargs
+    assert call_kwargs["model"] == "gpt-5.4-mini-2026-03-17"
+    assert call_kwargs["prompt"] == "Generate summary."
+    assert call_kwargs["system_message"] == "Be concise."
+    assert call_kwargs["max_tokens"] == 600
+    assert call_kwargs["request_kwargs"]["prompt_cache_key"].startswith(
+        "mealtrack-test:general:"
+    )
+    assert call_kwargs["request_kwargs"]["prompt_cache_retention"] == "in_memory"
+
+
+@pytest.mark.asyncio
+async def test_generate_text_without_schema_returns_raw_content():
     provider = _provider()
     raw_message = SimpleNamespace()
     provider._langchain.generate_raw = AsyncMock(
@@ -99,20 +130,12 @@ async def test_generate_raw_text_calls_adapter_and_returns_raw_content():
         model="gpt-5.4-mini-2026-03-17",
         prompt="Generate summary.",
         system_message="Be concise.",
+        response_type="text",
         max_tokens=600,
         purpose_hint="general",
     )
 
     assert result == {"raw_content": "ok"}
-    call_kwargs = provider._langchain.generate_raw.await_args.kwargs
-    assert call_kwargs["model"] == "gpt-5.4-mini-2026-03-17"
-    assert call_kwargs["prompt"] == "Generate summary."
-    assert call_kwargs["system_message"] == "Be concise."
-    assert call_kwargs["max_tokens"] == 600
-    assert call_kwargs["request_kwargs"]["prompt_cache_key"].startswith(
-        "mealtrack-test:general:"
-    )
-    assert call_kwargs["request_kwargs"]["prompt_cache_retention"] == "in_memory"
 
 
 @pytest.mark.asyncio
@@ -242,6 +265,7 @@ async def test_records_raw_text_prompt_cache_usage_metrics(monkeypatch):
         model="gpt-5.4-mini-2026-03-17",
         prompt="Generate summary.",
         system_message="Be concise.",
+        response_type="text",
         purpose_hint="general",
     )
 

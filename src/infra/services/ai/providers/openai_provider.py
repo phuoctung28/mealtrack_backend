@@ -13,6 +13,7 @@ from openai import (
 )
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
+from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
 from src.infra.services.ai.langchain_openai_adapter import OpenAILangChainAdapter
 from src.infra.services.ai.openai_prompt_cache_policy import OpenAIPromptCachePolicy
 from src.observability import increment_metric
@@ -149,6 +150,9 @@ class OpenAIProvider(AIProviderPort):
             model=model,
             purpose_hint=purpose_hint,
         )
+        if response_type == "json":
+            raw_content = result.parsed.get("raw_content", "")
+            return extract_ai_json(raw_content)
         return self._dump_parsed(result.parsed)
 
     async def generate_with_vision(

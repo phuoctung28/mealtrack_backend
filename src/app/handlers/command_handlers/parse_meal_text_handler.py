@@ -149,6 +149,7 @@ class ParseMealTextHandler(
                     system_message=retry_system_prompt,
                     response_type="json",
                     max_tokens=2048,
+                    schema=MealTextNutritionResponse,
                     model_purpose="parse_text",
                     thinking_budget=0,
                 )
