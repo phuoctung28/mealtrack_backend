@@ -25,7 +25,7 @@ async def recognize_ingredient(
     """
     Recognize a food ingredient from an image.
 
-    Takes a base64 encoded image and uses Gemini Vision AI to identify
+    Takes a base64 encoded image and uses the configured vision AI provider to identify
     the primary food ingredient visible in the image.
     Respects Accept-Language header for translating the ingredient name.
 
@@ -53,7 +53,7 @@ async def ingredients_health():
         "service": "ingredient_recognition",
         "features": [
             "photo_ingredient_identification",
-            "gemini_vision_ai",
+            "vision_ai",
             "confidence_scoring",
         ],
     }

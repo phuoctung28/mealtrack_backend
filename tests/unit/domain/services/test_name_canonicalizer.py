@@ -1,4 +1,5 @@
 import pytest
+
 from src.domain.services.meal_image_cache.name_canonicalizer import slug
 
 

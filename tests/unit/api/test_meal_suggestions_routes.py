@@ -1,7 +1,5 @@
 """Cover meal_suggestions routes with TestClient + rate limiter state."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -138,34 +136,19 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
                 }
             ]
 
-    class _Cache:
-        async def lookup_batch(self, names):
-            return [None for _ in names]
-
     class _Images:
+        def __init__(self):
+            self.names = []
+
         async def search_food_image(self, name):
+            self.names.append(name)
             return None
 
-    async def _cache_service(session):
-        return _Cache()
-
-    mock_image_cache_db = AsyncMock()
-    mock_image_cache_context = MagicMock()
-    mock_image_cache_context.__aenter__ = AsyncMock(return_value=mock_image_cache_db)
-    mock_image_cache_context.__aexit__ = AsyncMock(return_value=None)
-    monkeypatch.setattr(
-        ms_mod,
-        "AsyncSessionLocal",
-        lambda: mock_image_cache_context,
-    )
+    images_service = _Images()
 
     monkeypatch.setattr(
         "src.api.dependencies.food_image.get_food_image_service",
-        lambda: _Images(),
-    )
-    monkeypatch.setattr(
-        "src.api.dependencies.meal_image_cache.get_meal_image_cache_service",
-        _cache_service,
+        lambda: images_service,
     )
     client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusDiscover()
 
@@ -179,34 +162,14 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
         "calorie_target": 450,
     }
 
-    # Patch UoW so no real DB connection is attempted for the pending-queue enqueue.
-    # Both are local imports inside the function, so patch at their source modules.
-    mock_uow = AsyncMock()
-    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
-    mock_uow.__aexit__ = AsyncMock(return_value=False)
-    mock_uow.session = AsyncMock()
-
-    with (
-        patch(
-            "src.infra.database.uow_async.AsyncUnitOfWork",
-            return_value=mock_uow,
-        ),
-        patch(
-            "src.infra.repositories.pending_meal_image_repository_async.AsyncPendingMealImageRepository",
-        ) as mock_repo_cls,
-    ):
-        mock_repo = AsyncMock()
-        mock_repo_cls.return_value = mock_repo
-
-        r = client.post("/v1/meal-suggestions/discover", json=payload)
+    r = client.post("/v1/meal-suggestions/discover", json=payload)
 
     assert r.status_code == 200
     assert isinstance(captured["msg"], DiscoverMealsCommand)
     assert captured["msg"].meal_type == "lunch"
     assert captured["msg"].count == 10
     assert r.json()["meals"][0]["id"] == "disc_a"
-    mock_image_cache_context.__aenter__.assert_awaited_once()
-    mock_image_cache_context.__aexit__.assert_awaited_once()
+    assert images_service.names == ["Tofu Bowl"]
 
 
 def test_generate_recipes_accepts_selected_discovery_ids(ms_client):

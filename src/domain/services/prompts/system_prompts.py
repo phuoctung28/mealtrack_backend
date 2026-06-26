@@ -167,11 +167,10 @@ RESPONSE FORMAT — return exactly this structure:
     {
       "name": "Food name in English",
       "quantity_g": 150.0,
-      "calories": 248,
-      "macros": {"protein": 46.0, "carbs": 0.0, "fat": 5.5}
+      "macros": {"protein": 46.0, "carbs": 0.0, "fat": 5.5},
+      "confidence": 0.92
     }
   ],
-  "total_calories": 248,
   "confidence": 0.85,
   "beverage_metadata": null
 }
@@ -190,11 +189,11 @@ PACKAGED BEVERAGE DETECTION:
   When brand is readable but panel is not, set `label_source="estimate"`.
   When only front label is readable, set `label_source="front_label"`.
 - Container type: "can", "bottle", "cup", "carton", or "unknown".
-- Set `total_calories=0` and `emoji="🥤"` for all packaged beverage responses.
+- Set `emoji="🥤"` for all packaged beverage responses.
 
 FOOD GUARD:
 - If the image contains no edible food AND is not a packaged beverage, return:
-  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "total_calories": 0, "confidence": 0.95, "beverage_metadata": null}
+  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "confidence": 0.95, "beverage_metadata": null}
 - Do not invent food, ingredients, portions, or nutrition for non-food images.
 
 IDENTIFICATION RULES:
@@ -219,7 +218,7 @@ QUANTITY ESTIMATION:
 
 NUTRITION CALCULATION:
 - Calculate macros from standard food databases per 100g.
-- Calories must match: calories ≈ protein*4 + carbs*4 + fat*9 (±5%).
+- Macros must be internally plausible for the food and portion shown.
 - All macro values in grams. Confidence between 0.0 (guessing) and 1.0 (clear image, known food).
 - Fat must be ≥0.5g for any cooked or dressed food. Pure raw vegetables: fat may be 0.
 
@@ -237,12 +236,11 @@ WORKED EXAMPLE 1 — Chicken rice bowl image:
   "dish_name": "Grilled Chicken Rice Bowl",
   "emoji": "🍚",
   "foods": [
-    {"name": "cooked white rice", "quantity_g": 180.0, "calories": 234, "macros": {"protein": 4.3, "carbs": 51.0, "fat": 0.4}},
-    {"name": "grilled chicken breast", "quantity_g": 150.0, "calories": 248, "macros": {"protein": 46.5, "carbs": 0.0, "fat": 5.4}},
-    {"name": "steamed broccoli", "quantity_g": 80.0, "calories": 27, "macros": {"protein": 2.8, "carbs": 5.6, "fat": 0.3}},
-    {"name": "soy sauce", "quantity_g": 10.0, "calories": 6, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}}
+    {"name": "cooked white rice", "quantity_g": 180.0, "macros": {"protein": 4.3, "carbs": 51.0, "fat": 0.4}, "confidence": 0.93},
+    {"name": "grilled chicken breast", "quantity_g": 150.0, "macros": {"protein": 46.5, "carbs": 0.0, "fat": 5.4}, "confidence": 0.95},
+    {"name": "steamed broccoli", "quantity_g": 80.0, "macros": {"protein": 2.8, "carbs": 5.6, "fat": 0.3}, "confidence": 0.9},
+    {"name": "soy sauce", "quantity_g": 10.0, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}, "confidence": 0.74}
   ],
-  "total_calories": 515,
   "confidence": 0.88,
   "beverage_metadata": null
 }
@@ -253,7 +251,6 @@ WORKED EXAMPLE 2 — Coca-Cola 330ml can with visible nutrition panel:
   "dish_name": "Coca-Cola 330ml Can",
   "emoji": "🥤",
   "foods": [],
-  "total_calories": 0,
   "confidence": 0.95,
   "beverage_metadata": {
     "is_packaged_beverage": true,
@@ -273,7 +270,6 @@ WORKED EXAMPLE 3 — Aquarius 500ml PET bottle with visible nutrition panel:
   "dish_name": "Aquarius Lemon 500ml",
   "emoji": "🥤",
   "foods": [],
-  "total_calories": 0,
   "confidence": 0.92,
   "beverage_metadata": {
     "is_packaged_beverage": true,
@@ -293,7 +289,6 @@ WORKED EXAMPLE 4 — Pocari Sweat bottle where nutrition panel is hidden:
   "dish_name": "Pocari Sweat",
   "emoji": "🥤",
   "foods": [],
-  "total_calories": 0,
   "confidence": 0.88,
   "beverage_metadata": {
     "is_packaged_beverage": true,

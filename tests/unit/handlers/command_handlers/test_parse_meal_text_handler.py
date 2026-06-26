@@ -72,6 +72,7 @@ async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
 
     assert meal_generation_service.call_kwargs["model_purpose"] == "parse_text"
     assert meal_generation_service.call_kwargs["thinking_budget"] == 0
+    assert meal_generation_service.call_kwargs["schema"] is MealTextNutritionResponse
     assert item.unit == "one very full noodle bowl"
     assert item.protein == 30
     assert item.carbs == 80
@@ -173,7 +174,7 @@ async def test_parse_text_raises_controlled_error_after_retry_failure():
 async def test_parse_text_does_not_retry_provider_outage():
     unavailable = AIUnavailableError(
         "All parse text models failed",
-        attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+        attempted_models=["gpt-5.4-mini-2026-03-17", "gpt-5.4-mini-2026-03-17"],
         last_error="503 UNAVAILABLE",
     )
     meal_generation_service = _FakeMealGenerationService(responses=[unavailable])

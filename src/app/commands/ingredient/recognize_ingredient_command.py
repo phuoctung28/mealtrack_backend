@@ -12,7 +12,7 @@ class RecognizeIngredientCommand(Command):
     """
     Command to recognize an ingredient from an image.
 
-    Uses Gemini Vision AI to identify the primary food ingredient
+    Uses the configured vision AI provider to identify the primary food ingredient
     in the provided image data.
     """
 

@@ -1,6 +1,6 @@
 # Multi-stage build for faster deployments
 # Stage 1: Build dependencies
-FROM python:3.13-slim AS builder
+FROM python:3.13.2-slim AS builder
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -21,7 +21,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime
-FROM python:3.13-slim
+FROM python:3.13.2-slim
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -2,7 +2,7 @@
 Foods API routes: search and details via USDA, barcode lookup via OpenFoodFacts.
 
 Uses a lightweight singleton event bus to avoid re-initializing
-heavy services (Cloudinary, Gemini, etc.) on every request.
+heavy services (Cloudinary, AI providers, etc.) on every request.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

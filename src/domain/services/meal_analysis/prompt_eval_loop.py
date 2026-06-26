@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pydantic import ValidationError
-
 from src.domain.parsers.vision_response_parser import (
-    VisionResponseParser,
     GPTResponseParsingError,
+    VisionResponseParser,
 )
-from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 
 
 @dataclass(frozen=True)
@@ -54,9 +51,9 @@ class PromptEvalLoop:
                 structured = payload.get("structured_data", {})
 
                 try:
-                    VisionAnalyzeResponse.model_validate(structured)
+                    self._parser.validate_structured_data(structured)
                     validation_success_count += 1
-                except ValidationError:
+                except GPTResponseParsingError:
                     pass
 
                 try:

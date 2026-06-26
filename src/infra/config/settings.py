@@ -112,7 +112,6 @@ class Settings(BaseSettings):
     DEEPL_API_KEY: str | None = Field(
         default=None, description="DeepL API key for meal translation"
     )
-    GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     FATSECRET_CLIENT_ID: str | None = Field(
         default=None, description="fatsecret OAuth 2.0 client ID"
@@ -125,28 +124,35 @@ class Settings(BaseSettings):
     )
 
     # LLM Provider configuration
-    LLM_PROVIDER: str | None = Field(
-        default=None,
-        description="LLM provider to use: 'openai' or 'gemini'. Auto-detects if not set.",
+    AI_PRIMARY_PROVIDER: str = Field(
+        default="openai",
+        description="Primary AI provider.",
     )
-    OPENAI_MODEL: str = Field(
-        default="gpt-3.5-turbo", description="OpenAI model to use"
+    AI_FALLBACK_PROVIDER: str = Field(
+        default="cloudflare-workers-ai",
+        description="Fallback AI provider after the primary provider fails transiently.",
     )
-    GEMINI_MODEL: str = Field(
-        default="gemini-2.5-flash",
-        description="Gemini model to use (same as food scanning)",
+    OPENAI_API_KEY: str | None = Field(default=None)
+    OPENAI_VISION_MODEL: str = Field(default="gpt-5.4-mini-2026-03-17")
+    OPENAI_TEXT_MODEL: str = Field(default="gpt-5.4-mini-2026-03-17")
+    OPENAI_REQUEST_TIMEOUT_SECONDS: int = Field(default=20)
+    OPENAI_MAX_RETRIES: int = Field(default=1)
+    OPENAI_STORE_RESPONSES: bool = Field(
+        default=False,
+        description="Whether OpenAI may store Responses API payloads.",
     )
-
-    # Multi-model Gemini configuration for rate limit distribution
-    GEMINI_MODEL_NAMES: str = Field(
-        default="gemini-2.5-flash-lite",
-        description="Gemini model for meal name generation (higher RPM: 10/min)",
+    OPENAI_PROMPT_CACHE_ENABLED: bool = Field(
+        default=True,
+        description="Enable explicit OpenAI Responses API prompt cache routing.",
     )
-    GEMINI_MODEL_RECIPE: str = Field(
-        default="gemini-2.5-flash-lite",
-        description="Model for recipe generation",
+    OPENAI_PROMPT_CACHE_RETENTION: str | None = Field(
+        default="",
+        description="Optional OpenAI prompt_cache_retention: empty, in_memory, or 24h.",
     )
-
+    OPENAI_PROMPT_CACHE_KEY_PREFIX: str = Field(
+        default="mealtrack",
+        description="Safe prefix for OpenAI prompt_cache_key values.",
+    )
     # Image search (meal discovery photos)
     PEXELS_API_KEY: str | None = Field(
         default=None, description="Pexels API key for food photos"
@@ -217,23 +223,10 @@ class Settings(BaseSettings):
     EMAIL_FROM_ADDRESS: str | None = Field(default=None)
     EMAIL_FROM_NAME: str | None = Field(default=None)
 
-    # --- Meal image cache (nightly-fill vector cache) ---
-    TEXT_DEDUP_THRESHOLD: float = Field(default=0.65)
-    IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
-    MEAL_IMAGE_COSINE_HIT_THRESHOLD: float = Field(
-        default=0.65,
-        description="Cosine similarity above which a cached image is reused (0.65–0.80 recommended)",
-    )
-
-    # Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
-    CLIP_MODEL_NAME: str = Field(default="google/siglip-base-patch16-224")
-    CLIP_DEVICE: str = Field(default="cpu")
-    CLIP_EMBEDDING_DIM: int = Field(default=768)
-
     # Cloudflare Workers AI — text generation / AI fallback
     CLOUDFLARE_WORKERS_AI_ENABLED: bool = Field(
         default=True,
-        description="Enable Cloudflare Workers AI as the primary text-generation provider (Gemini is fallback)",
+        description="Enable Cloudflare Workers AI as an alternate text-generation provider",
     )
     CLOUDFLARE_ACCOUNT_ID: str = Field(
         default="", description="Cloudflare account ID for Workers AI text API"
@@ -249,8 +242,8 @@ class Settings(BaseSettings):
         description="Workers AI model for text generation fallback",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES: str = Field(
-        default="recipe,general,meal_names,discovery,parse_text",
-        description="Comma-separated ModelPurpose values where Workers AI is used as primary",
+        default="recipe,general,meal_names,discovery,parse_text,barcode",
+        description="Comma-separated ModelPurpose values where Workers AI is included in routing",
     )
     CLOUDFLARE_WORKERS_AI_JSON_MODE: bool = Field(
         default=True, description="Enable Workers AI JSON Mode for structured responses"
@@ -260,7 +253,7 @@ class Settings(BaseSettings):
     )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,
-        description="Enable Cloudflare Workers AI for vision tasks (Gemini is fallback)",
+        description="Enable Cloudflare Workers AI for vision tasks",
     )
     CLOUDFLARE_WORKERS_AI_VISION_MODEL: str = Field(
         default="@cf/google/gemma-4-26b-a4b-it",
@@ -268,35 +261,8 @@ class Settings(BaseSettings):
     )
     CLOUDFLARE_WORKERS_AI_VISION_PURPOSES: str = Field(
         default="meal_scan,ingredient_scan",
-        description="Comma-separated ModelPurpose values where Workers AI vision is tried first",
+        description="Comma-separated ModelPurpose values where Workers AI vision is included in routing",
     )
-    CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED: bool = Field(
-        default=False,
-        description=(
-            "Route Gemini vision calls through Cloudflare AI Gateway. "
-            "Requires CLOUDFLARE_AI_GATEWAY_ID and CLOUDFLARE_ACCOUNT_ID to be set."
-        ),
-    )
-
-    # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
-    CF_ACCOUNT_ID: str | None = Field(
-        default=None,
-        description="Cloudflare account ID (dash.cloudflare.com → right sidebar)",
-    )
-    CF_API_TOKEN: str | None = Field(
-        default=None, description="Cloudflare API token with Workers AI permission"
-    )
-    CF_IMAGE_MODEL: str = Field(
-        default="@cf/black-forest-labs/flux-1-schnell",
-        description="CF Workers AI model for image generation",
-    )
-    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
-
-    # Nightly cron drain
-    MAX_JOBS_PER_CRON: int = Field(default=50)
-    CRON_EXTERNAL_CALL_DELAY_SECONDS: float = Field(default=2.0)
-    MAX_RESOLUTION_ATTEMPTS: int = Field(default=5)
-
     # Meal analysis settings
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(

@@ -7,6 +7,7 @@ facade, with safe low-cardinality attributes and no user/meal/resource IDs.
 from __future__ import annotations
 
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -110,35 +111,41 @@ async def test_manual_meal_save_emits_db_and_cache_latency_metrics():
 
 @pytest.mark.asyncio
 async def test_ai_all_models_fail_emits_provider_failure_log_event():
-    from unittest.mock import patch as _patch
-
     from src.domain.exceptions.ai_exceptions import AIUnavailableError
-    from src.infra.ai.gemini_service import GeminiService
-    from src.infra.ai.model_config import ModelPurpose
+    from src.domain.model.ai.model_purpose import ModelPurpose
+    from src.domain.ports.ai_provider_port import AICapability
+    from src.infra.services.ai.ai_model_manager import AIModelManager
 
     rec = _Rec()
     set_observability_connector_for_test(rec)
 
-    with _patch.dict("os.environ", {"GOOGLE_API_KEY": "test-key"}):
-        GeminiService.reset_instance()
-        manager = GeminiService()
-
-    # Mock circuit breaker to allow one model; mock _call_text to always fail
+    settings = SimpleNamespace(
+        OPENAI_API_KEY=None,
+        CLOUDFLARE_WORKERS_AI_ENABLED=False,
+        CLOUDFLARE_ACCOUNT_ID="",
+        CLOUDFLARE_API_TOKEN="",
+        CLOUDFLARE_WORKERS_AI_TEXT_MODEL="",
+    )
+    manager = AIModelManager(settings=settings)
+    provider = MagicMock()
+    provider.provider_name = "openai"
+    provider.supported_capabilities = {AICapability.TEXT_GENERATION}
+    provider.generate = AsyncMock(side_effect=RuntimeError("provider down"))
+    provider.extract_error_code = MagicMock(return_value=503)
+    manager._providers = {"openai": provider}
+    manager._model_provider_overrides = {"model-a": "openai"}
+    manager._fallback_chains[ModelPurpose.GENERAL] = ["model-a"]
     manager._circuit_breaker = MagicMock()
     manager._circuit_breaker.filter_available = MagicMock(return_value=["model-a"])
     manager._circuit_breaker.should_trip = MagicMock(return_value=False)
     manager._circuit_breaker.record_failure = MagicMock()
     manager._circuit_breaker.record_success = MagicMock()
-    manager._resolve_cache_name = AsyncMock(return_value=None)
-    manager._call_text = AsyncMock(side_effect=RuntimeError("provider down"))
-
-    GeminiService.reset_instance()
 
     with pytest.raises(AIUnavailableError):
-        await manager.text_json(
+        await manager.generate(
             purpose=ModelPurpose.GENERAL,
-            user_prompt="test prompt",
-            system_prompt="sys",
+            prompt="test prompt",
+            system_message="sys",
         )
 
     failure_events = [
