@@ -1,10 +1,11 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.domain.ports.ai_provider_port import AICapability
+from src.infra.services.ai.langchain_openai_adapter import LangChainOpenAIResult
 from src.infra.services.ai.providers.openai_provider import OpenAIProvider
 
 
@@ -53,11 +54,74 @@ def test_openai_provider_capabilities():
 
 
 @pytest.mark.asyncio
-async def test_generate_with_vision_uses_responses_parse_and_store_false():
+async def test_generate_structured_text_calls_adapter_with_prompt_cache_kwargs():
     provider = _provider()
     parsed = _parsed_vision_response()
-    provider._client.responses.parse = AsyncMock(
-        return_value=SimpleNamespace(output_parsed=parsed)
+    raw_message = SimpleNamespace()
+    provider._langchain.generate_structured = AsyncMock(
+        return_value=LangChainOpenAIResult(parsed=parsed, raw_message=raw_message)
+    )
+
+    result = await provider.generate(
+        model="gpt-5.4-mini-2026-03-17",
+        prompt="Chicken rice bowl",
+        system_message="Return canonical JSON.",
+        schema=VisionNutritionResponse,
+        max_tokens=1500,
+        purpose_hint="parse_text",
+    )
+
+    assert result["emoji"] == "🍚"
+    call_kwargs = provider._langchain.generate_structured.await_args.kwargs
+    assert call_kwargs["model"] == "gpt-5.4-mini-2026-03-17"
+    assert call_kwargs["prompt"] == "Chicken rice bowl"
+    assert call_kwargs["system_message"] == "Return canonical JSON."
+    assert call_kwargs["schema"] is VisionNutritionResponse
+    assert call_kwargs["max_tokens"] == 1500
+    assert call_kwargs["request_kwargs"]["prompt_cache_key"].startswith(
+        "mealtrack-test:parse_text:"
+    )
+    assert call_kwargs["request_kwargs"]["prompt_cache_retention"] == "in_memory"
+
+
+@pytest.mark.asyncio
+async def test_generate_raw_text_calls_adapter_and_returns_raw_content():
+    provider = _provider()
+    raw_message = SimpleNamespace()
+    provider._langchain.generate_raw = AsyncMock(
+        return_value=LangChainOpenAIResult(
+            parsed={"raw_content": "ok"},
+            raw_message=raw_message,
+        )
+    )
+
+    result = await provider.generate(
+        model="gpt-5.4-mini-2026-03-17",
+        prompt="Generate summary.",
+        system_message="Be concise.",
+        max_tokens=600,
+        purpose_hint="general",
+    )
+
+    assert result == {"raw_content": "ok"}
+    call_kwargs = provider._langchain.generate_raw.await_args.kwargs
+    assert call_kwargs["model"] == "gpt-5.4-mini-2026-03-17"
+    assert call_kwargs["prompt"] == "Generate summary."
+    assert call_kwargs["system_message"] == "Be concise."
+    assert call_kwargs["max_tokens"] == 600
+    assert call_kwargs["request_kwargs"]["prompt_cache_key"].startswith(
+        "mealtrack-test:general:"
+    )
+    assert call_kwargs["request_kwargs"]["prompt_cache_retention"] == "in_memory"
+
+
+@pytest.mark.asyncio
+async def test_generate_with_vision_calls_adapter_with_prompt_cache_kwargs():
+    provider = _provider()
+    parsed = _parsed_vision_response()
+    raw_message = SimpleNamespace()
+    provider._langchain.generate_vision_structured = AsyncMock(
+        return_value=LangChainOpenAIResult(parsed=parsed, raw_message=raw_message)
     )
 
     result = await provider.generate_with_vision(
@@ -68,72 +132,34 @@ async def test_generate_with_vision_uses_responses_parse_and_store_false():
         schema=VisionNutritionResponse,
         image_mime_type="image/png",
         max_tokens=1500,
-    )
-
-    assert result["emoji"] == "🍚"
-    call_kwargs = provider._client.responses.parse.await_args.kwargs
-    assert call_kwargs["model"] == "gpt-5.4-mini-2026-03-17"
-    assert call_kwargs["store"] is False
-    assert call_kwargs["text_format"] is VisionNutritionResponse
-    user_content = call_kwargs["input"][1]["content"]
-    assert user_content[1]["image_url"].startswith("data:image/png;base64,")
-    assert user_content[1]["detail"] == "high"
-
-
-@pytest.mark.asyncio
-async def test_generate_structured_text_includes_prompt_cache_kwargs():
-    provider = _provider()
-    parsed = _parsed_vision_response()
-    provider._client.responses.parse = AsyncMock(
-        return_value=SimpleNamespace(output_parsed=parsed)
-    )
-
-    await provider.generate(
-        model="gpt-5.4-mini-2026-03-17",
-        prompt="Chicken rice bowl",
-        system_message="Return canonical JSON.",
-        schema=VisionNutritionResponse,
-        purpose_hint="parse_text",
-    )
-
-    call_kwargs = provider._client.responses.parse.await_args.kwargs
-    assert call_kwargs["prompt_cache_key"].startswith("mealtrack-test:parse_text:")
-    assert call_kwargs["prompt_cache_retention"] == "in_memory"
-
-
-@pytest.mark.asyncio
-async def test_generate_with_vision_includes_prompt_cache_kwargs():
-    provider = _provider()
-    parsed = _parsed_vision_response()
-    provider._client.responses.parse = AsyncMock(
-        return_value=SimpleNamespace(output_parsed=parsed)
-    )
-
-    await provider.generate_with_vision(
-        model="gpt-5.4-mini-2026-03-17",
-        prompt="Identify food.",
-        image_data=b"image-bytes",
-        system_message="Return canonical JSON.",
-        schema=VisionNutritionResponse,
         purpose_hint="meal_scan",
     )
 
-    call_kwargs = provider._client.responses.parse.await_args.kwargs
-    assert call_kwargs["prompt_cache_key"].startswith("mealtrack-test:meal_scan:")
-    assert call_kwargs["prompt_cache_retention"] == "in_memory"
+    assert result["dish_name"] == "Chicken rice bowl"
+    call_kwargs = provider._langchain.generate_vision_structured.await_args.kwargs
+    assert call_kwargs["model"] == "gpt-5.4-mini-2026-03-17"
+    assert call_kwargs["prompt"] == "Identify food."
+    assert call_kwargs["image_data"] == b"image-bytes"
+    assert call_kwargs["image_mime_type"] == "image/png"
+    assert call_kwargs["system_message"] == "Return canonical JSON."
+    assert call_kwargs["schema"] is VisionNutritionResponse
+    assert call_kwargs["max_tokens"] == 1500
+    assert call_kwargs["request_kwargs"]["prompt_cache_key"].startswith(
+        "mealtrack-test:meal_scan:"
+    )
+    assert call_kwargs["request_kwargs"]["prompt_cache_retention"] == "in_memory"
 
 
 @pytest.mark.asyncio
 async def test_records_prompt_cache_usage_metrics(monkeypatch):
     provider = _provider()
     parsed = _parsed_vision_response()
-    usage = SimpleNamespace(
-        input_tokens=1500,
-        input_tokens_details=SimpleNamespace(cached_tokens=1024),
+    raw_message = SimpleNamespace()
+    provider._langchain.generate_structured = AsyncMock(
+        return_value=LangChainOpenAIResult(parsed=parsed, raw_message=raw_message)
     )
-    provider._client.responses.parse = AsyncMock(
-        return_value=SimpleNamespace(output_parsed=parsed, usage=usage)
-    )
+    provider._langchain.input_tokens = Mock(return_value=1500)
+    provider._langchain.cached_tokens = Mock(return_value=1024)
     metrics = []
 
     def capture_metric(name, value=1.0, *, unit=None, attributes=None):
@@ -159,6 +185,8 @@ async def test_records_prompt_cache_usage_metrics(monkeypatch):
         purpose_hint="parse_text",
     )
 
+    provider._langchain.input_tokens.assert_called_once_with(raw_message)
+    provider._langchain.cached_tokens.assert_called_once_with(raw_message)
     assert {
         "name": "ai.openai.prompt_cache.request.count",
         "value": 1.0,
@@ -187,13 +215,15 @@ async def test_records_prompt_cache_usage_metrics(monkeypatch):
 @pytest.mark.asyncio
 async def test_records_raw_text_prompt_cache_usage_metrics(monkeypatch):
     provider = _provider()
-    usage = SimpleNamespace(
-        input_tokens=1300,
-        input_tokens_details=SimpleNamespace(cached_tokens=0),
+    raw_message = SimpleNamespace()
+    provider._langchain.generate_raw = AsyncMock(
+        return_value=LangChainOpenAIResult(
+            parsed={"raw_content": "ok"},
+            raw_message=raw_message,
+        )
     )
-    provider._client.responses.create = AsyncMock(
-        return_value=SimpleNamespace(output_text="ok", usage=usage)
-    )
+    provider._langchain.input_tokens = Mock(return_value=1300)
+    provider._langchain.cached_tokens = Mock(return_value=0)
     metrics = []
 
     monkeypatch.setattr(
@@ -220,6 +250,8 @@ async def test_records_raw_text_prompt_cache_usage_metrics(monkeypatch):
         for metric in metrics
         if metric["name"] == "ai.openai.prompt_cache.request.count"
     )
+    provider._langchain.input_tokens.assert_called_once_with(raw_message)
+    provider._langchain.cached_tokens.assert_called_once_with(raw_message)
     assert request_metric["attributes"]["cache_hit"] == "false"
     assert any(
         metric["name"] == "ai.openai.prompt_cache.input_tokens"
@@ -232,13 +264,12 @@ async def test_records_raw_text_prompt_cache_usage_metrics(monkeypatch):
 async def test_records_vision_prompt_cache_usage_metrics(monkeypatch):
     provider = _provider()
     parsed = _parsed_vision_response()
-    usage = SimpleNamespace(
-        input_tokens=1800,
-        input_tokens_details=SimpleNamespace(cached_tokens=900),
+    raw_message = SimpleNamespace()
+    provider._langchain.generate_vision_structured = AsyncMock(
+        return_value=LangChainOpenAIResult(parsed=parsed, raw_message=raw_message)
     )
-    provider._client.responses.parse = AsyncMock(
-        return_value=SimpleNamespace(output_parsed=parsed, usage=usage)
-    )
+    provider._langchain.input_tokens = Mock(return_value=1800)
+    provider._langchain.cached_tokens = Mock(return_value=900)
     metrics = []
 
     monkeypatch.setattr(
@@ -262,6 +293,8 @@ async def test_records_vision_prompt_cache_usage_metrics(monkeypatch):
         purpose_hint="meal_scan",
     )
 
+    provider._langchain.input_tokens.assert_called_once_with(raw_message)
+    provider._langchain.cached_tokens.assert_called_once_with(raw_message)
     assert any(
         metric["name"] == "ai.openai.prompt_cache.cached_tokens"
         and metric["value"] == 900

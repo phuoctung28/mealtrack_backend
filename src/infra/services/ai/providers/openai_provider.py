@@ -1,8 +1,7 @@
-"""OpenAI implementation of AIProviderPort using the native Responses API."""
+"""OpenAI implementation of AIProviderPort using LangChain OpenAI adapter."""
 
 from __future__ import annotations
 
-import base64
 import re
 from typing import Any
 
@@ -10,11 +9,11 @@ from openai import (
     APIConnectionError,
     APIStatusError,
     APITimeoutError,
-    AsyncOpenAI,
     RateLimitError,
 )
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
+from src.infra.services.ai.langchain_openai_adapter import OpenAILangChainAdapter
 from src.infra.services.ai.openai_prompt_cache_policy import OpenAIPromptCachePolicy
 from src.observability import increment_metric
 
@@ -33,12 +32,12 @@ class OpenAIProvider(AIProviderPort):
         prompt_cache_retention: str | None = None,
         prompt_cache_key_prefix: str = "mealtrack",
     ) -> None:
-        self._client = AsyncOpenAI(
+        self._langchain = OpenAILangChainAdapter(
             api_key=api_key,
-            timeout=request_timeout_seconds,
+            request_timeout_seconds=request_timeout_seconds,
             max_retries=max_retries,
+            store_responses=store_responses,
         )
-        self._store_responses = store_responses
         self._prompt_cache_policy = OpenAIPromptCachePolicy(
             enabled=prompt_cache_enabled,
             key_prefix=prompt_cache_key_prefix,
@@ -75,18 +74,13 @@ class OpenAIProvider(AIProviderPort):
 
     def _record_prompt_cache_usage(
         self,
-        response: Any,
+        raw_message: Any,
         *,
         model: str,
         purpose_hint: str | None,
     ) -> None:
-        usage = getattr(response, "usage", None)
-        if usage is None:
-            return
-
-        input_tokens = _usage_number(usage, "input_tokens")
-        details = getattr(usage, "input_tokens_details", None)
-        cached_tokens = _usage_number(details, "cached_tokens") if details else 0
+        input_tokens = self._langchain.input_tokens(raw_message)
+        cached_tokens = self._langchain.cached_tokens(raw_message)
         attributes = {
             "ai_provider": "openai",
             "ai_model": model,
@@ -128,42 +122,34 @@ class OpenAIProvider(AIProviderPort):
             system_message=system_message,
         )
         if schema is not None:
-            response = await self._client.responses.parse(
+            result = await self._langchain.generate_structured(
                 model=model,
-                input=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": prompt},
-                ],
-                text_format=schema,
-                max_output_tokens=max_tokens,
-                reasoning={"effort": "none"},
-                store=self._store_responses,
-                **prompt_cache_kwargs,
+                prompt=prompt,
+                system_message=system_message,
+                schema=schema,
+                max_tokens=max_tokens,
+                request_kwargs=prompt_cache_kwargs,
             )
             self._record_prompt_cache_usage(
-                response,
+                result.raw_message,
                 model=model,
                 purpose_hint=purpose_hint,
             )
-            return self._dump_parsed(response.output_parsed)
+            return self._dump_parsed(result.parsed)
 
-        response = await self._client.responses.create(
+        result = await self._langchain.generate_raw(
             model=model,
-            input=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt},
-            ],
-            max_output_tokens=max_tokens,
-            reasoning={"effort": "none"},
-            store=self._store_responses,
-            **prompt_cache_kwargs,
+            prompt=prompt,
+            system_message=system_message,
+            max_tokens=max_tokens,
+            request_kwargs=prompt_cache_kwargs,
         )
         self._record_prompt_cache_usage(
-            response,
+            result.raw_message,
             model=model,
             purpose_hint=purpose_hint,
         )
-        return {"raw_content": response.output_text}
+        return self._dump_parsed(result.parsed)
 
     async def generate_with_vision(
         self,
@@ -176,8 +162,6 @@ class OpenAIProvider(AIProviderPort):
         schema = kwargs["schema"]
         max_tokens: int | None = kwargs.get("max_tokens")
         image_mime_type = kwargs.get("image_mime_type", "image/jpeg")
-        image_b64 = base64.b64encode(image_data).decode("ascii")
-        image_data_url = f"data:{image_mime_type};base64,{image_b64}"
         purpose_hint = kwargs.get("purpose_hint")
         prompt_cache_kwargs = self._prompt_cache_kwargs(
             model=model,
@@ -185,34 +169,22 @@ class OpenAIProvider(AIProviderPort):
             system_message=system_message,
         )
 
-        response = await self._client.responses.parse(
+        result = await self._langchain.generate_vision_structured(
             model=model,
-            input=[
-                {"role": "system", "content": system_message or ""},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                        {
-                            "type": "input_image",
-                            "image_url": image_data_url,
-                            "detail": "high",
-                        },
-                    ],
-                },
-            ],
-            text_format=schema,
-            max_output_tokens=max_tokens,
-            reasoning={"effort": "none"},
-            store=self._store_responses,
-            **prompt_cache_kwargs,
+            prompt=prompt,
+            image_data=image_data,
+            image_mime_type=image_mime_type,
+            system_message=system_message,
+            schema=schema,
+            max_tokens=max_tokens,
+            request_kwargs=prompt_cache_kwargs,
         )
         self._record_prompt_cache_usage(
-            response,
+            result.raw_message,
             model=model,
             purpose_hint=purpose_hint,
         )
-        return self._dump_parsed(response.output_parsed)
+        return self._dump_parsed(result.parsed)
 
     def extract_error_code(self, error: Exception) -> int | str | None:
         if isinstance(error, RateLimitError):
@@ -233,10 +205,3 @@ class OpenAIProvider(AIProviderPort):
         if hasattr(parsed, "model_dump"):
             return parsed.model_dump()
         return dict(parsed)
-
-
-def _usage_number(obj: Any, attr: str) -> float:
-    value = getattr(obj, attr, 0)
-    if value is None:
-        return 0
-    return float(value)
