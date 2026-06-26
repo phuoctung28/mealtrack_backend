@@ -16,6 +16,7 @@ from openai import (
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 from src.infra.services.ai.openai_prompt_cache_policy import OpenAIPromptCachePolicy
+from src.observability import increment_metric
 
 
 class OpenAIProvider(AIProviderPort):
@@ -72,6 +73,44 @@ class OpenAIProvider(AIProviderPort):
             system_message=system_message,
         )
 
+    def _record_prompt_cache_usage(
+        self,
+        response: Any,
+        *,
+        model: str,
+        purpose_hint: str | None,
+    ) -> None:
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+
+        input_tokens = _usage_number(usage, "input_tokens")
+        details = getattr(usage, "input_tokens_details", None)
+        cached_tokens = _usage_number(details, "cached_tokens") if details else 0
+        attributes = {
+            "ai_provider": "openai",
+            "ai_model": model,
+            "ai_purpose": purpose_hint or "unknown",
+            "cache_hit": "true" if cached_tokens > 0 else "false",
+        }
+        increment_metric(
+            "ai.openai.prompt_cache.request.count",
+            attributes=attributes,
+        )
+        increment_metric(
+            "ai.openai.prompt_cache.cached_tokens",
+            cached_tokens,
+            unit="token",
+            attributes=attributes,
+        )
+        if input_tokens > 0:
+            increment_metric(
+                "ai.openai.prompt_cache.input_tokens",
+                input_tokens,
+                unit="token",
+                attributes=attributes,
+            )
+
     async def generate(
         self,
         model: str,
@@ -82,9 +121,10 @@ class OpenAIProvider(AIProviderPort):
         schema: type | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        purpose_hint = kwargs.get("purpose_hint")
         prompt_cache_kwargs = self._prompt_cache_kwargs(
             model=model,
-            purpose_hint=kwargs.get("purpose_hint"),
+            purpose_hint=purpose_hint,
             system_message=system_message,
         )
         if schema is not None:
@@ -100,6 +140,11 @@ class OpenAIProvider(AIProviderPort):
                 store=self._store_responses,
                 **prompt_cache_kwargs,
             )
+            self._record_prompt_cache_usage(
+                response,
+                model=model,
+                purpose_hint=purpose_hint,
+            )
             return self._dump_parsed(response.output_parsed)
 
         response = await self._client.responses.create(
@@ -112,6 +157,11 @@ class OpenAIProvider(AIProviderPort):
             reasoning={"effort": "none"},
             store=self._store_responses,
             **prompt_cache_kwargs,
+        )
+        self._record_prompt_cache_usage(
+            response,
+            model=model,
+            purpose_hint=purpose_hint,
         )
         return {"raw_content": response.output_text}
 
@@ -128,9 +178,10 @@ class OpenAIProvider(AIProviderPort):
         image_mime_type = kwargs.get("image_mime_type", "image/jpeg")
         image_b64 = base64.b64encode(image_data).decode("ascii")
         image_data_url = f"data:{image_mime_type};base64,{image_b64}"
+        purpose_hint = kwargs.get("purpose_hint")
         prompt_cache_kwargs = self._prompt_cache_kwargs(
             model=model,
-            purpose_hint=kwargs.get("purpose_hint"),
+            purpose_hint=purpose_hint,
             system_message=system_message,
         )
 
@@ -156,6 +207,11 @@ class OpenAIProvider(AIProviderPort):
             store=self._store_responses,
             **prompt_cache_kwargs,
         )
+        self._record_prompt_cache_usage(
+            response,
+            model=model,
+            purpose_hint=purpose_hint,
+        )
         return self._dump_parsed(response.output_parsed)
 
     def extract_error_code(self, error: Exception) -> int | str | None:
@@ -177,3 +233,10 @@ class OpenAIProvider(AIProviderPort):
         if hasattr(parsed, "model_dump"):
             return parsed.model_dump()
         return dict(parsed)
+
+
+def _usage_number(obj: Any, attr: str) -> float:
+    value = getattr(obj, attr, 0)
+    if value is None:
+        return 0
+    return float(value)

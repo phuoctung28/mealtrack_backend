@@ -32,6 +32,7 @@ SAFE_CONTEXT_KEYS = frozenset(
         "ai_model",          # e.g. "gpt-5.4-mini-2026-03-17"
         "ai_purpose",        # e.g. "meal_scan"
         "ai_stage",          # e.g. "structured_output", "raw_parse", "schema_validation"
+        "cache_hit",         # "true" or "false" for cacheable AI operations
         "failure_kind",      # AIVisionFailureKind.value
         "attempt_index",     # int: which attempt in the chain
         "fallback_from",     # model that failed before fallback
@@ -61,6 +62,7 @@ SAFE_TAG_KEYS = frozenset(
         "ai_model",
         "ai_purpose",
         "ai_stage",
+        "cache_hit",
         "failure_kind",
         "fallback_from",
         "fallback_to",
