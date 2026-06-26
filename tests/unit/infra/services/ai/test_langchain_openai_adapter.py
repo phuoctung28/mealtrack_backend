@@ -69,7 +69,7 @@ def _adapter(monkeypatch, *, store_responses: bool = False):
             self.structured.ainvoke = AsyncMock(
                 return_value={
                     "raw": self.structured_raw_message,
-                    "parsed": _parsed_vision_response(),
+                    "parsed": _parsed_vision_response().model_dump(),
                     "parsing_error": None,
                 }
             )
@@ -154,7 +154,9 @@ async def test_structured_text_uses_chat_openai_with_responses_api(monkeypatch):
         "use_responses_api": True,
         "reasoning": {"effort": "none"},
     }
-    assert llm.structured_schema is VisionNutritionResponse
+    assert llm.structured_schema["name"] == "VisionNutritionResponse"
+    assert llm.structured_schema["strict"] is True
+    assert llm.structured_schema["schema"]["title"] == "VisionNutritionResponse"
     assert llm.structured_kwargs == {
         "method": "json_schema",
         "strict": True,
@@ -262,6 +264,8 @@ async def test_vision_uses_multimodal_human_message_with_data_url(monkeypatch):
         "max_tokens": 1200,
         "store": False,
     }
+    assert created[0].structured_schema["name"] == "VisionNutritionResponse"
+    assert created[0].structured_schema["strict"] is True
 
 
 def test_usage_extractors_support_response_metadata_fallback(monkeypatch):

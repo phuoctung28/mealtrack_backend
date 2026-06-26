@@ -8,6 +8,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ class OpenAILangChainAdapter:
     ) -> LangChainOpenAIResult:
         llm = self._llm(model=model)
         structured = llm.with_structured_output(
-            schema,
+            _openai_json_schema(schema),
             method="json_schema",
             strict=True,
             include_raw=True,
@@ -61,7 +62,7 @@ class OpenAILangChainAdapter:
         if parsing_error is not None:
             raise parsing_error
         return LangChainOpenAIResult(
-            parsed=response["parsed"],
+            parsed=_validate_parsed(schema, response["parsed"]),
             raw_message=response["raw"],
         )
 
@@ -101,7 +102,7 @@ class OpenAILangChainAdapter:
     ) -> LangChainOpenAIResult:
         llm = self._llm(model=model)
         structured = llm.with_structured_output(
-            schema,
+            _openai_json_schema(schema),
             method="json_schema",
             strict=True,
             include_raw=True,
@@ -127,7 +128,7 @@ class OpenAILangChainAdapter:
         if parsing_error is not None:
             raise parsing_error
         return LangChainOpenAIResult(
-            parsed=response["parsed"],
+            parsed=_validate_parsed(schema, response["parsed"]),
             raw_message=response["raw"],
         )
 
@@ -209,3 +210,19 @@ def _number(value: Any) -> float:
     if value is None:
         return 0.0
     return float(value)
+
+
+def _openai_json_schema(schema: type) -> dict[str, Any]:
+    if not isinstance(schema, type) or not issubclass(schema, BaseModel):
+        raise TypeError("OpenAI structured output schema must be a Pydantic model")
+    return {
+        "name": schema.__name__,
+        "schema": schema.model_json_schema(),
+        "strict": True,
+    }
+
+
+def _validate_parsed(schema: type, parsed: Any) -> BaseModel:
+    if isinstance(parsed, schema):
+        return parsed
+    return schema.model_validate(parsed)
