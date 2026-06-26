@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python 3.13.2, FastAPI backend, OpenAI Python SDK `responses.create` / `responses.parse`, Pydantic settings, pytest, provider-neutral `src.observability`.
 
+> Follow-up note: the OpenAI call path is being migrated from raw `openai.AsyncOpenAI` calls to LangChain `ChatOpenAI` in `docs/superpowers/plans/2026-06-26-langchain-openai-provider.md`. The prompt-cache policy, settings, and metric names remain valid.
+
 ---
 
 ## Scope

@@ -101,14 +101,15 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 
 ## OpenAI Responses API Prompt Caching
 
-**Purpose:** Best-effort provider-side prefix caching for repeated long OpenAI Responses API requests.
+**Purpose:** Best-effort provider-side prefix caching for repeated long OpenAI requests through LangChain `ChatOpenAI`.
 
+- OpenAI text and vision calls use LangChain `ChatOpenAI` with Responses API enabled.
 - Enabled with `OPENAI_PROMPT_CACHE_ENABLED`.
 - Optional retention uses `OPENAI_PROMPT_CACHE_RETENTION`; key namespace uses `OPENAI_PROMPT_CACHE_KEY_PREFIX`.
 - Cache keys are derived from the model, purpose, and a hash of the system prompt. They never contain raw user prompt text, images, emails, or IDs.
 - Prompt caching only helps when the repeated prefix is at least 1024 tokens. Shorter prompts should not be expected to benefit.
 - Treat caching as best-effort, not guaranteed savings. Monitor `ai.openai.prompt_cache.request.count`, `ai.openai.prompt_cache.cached_tokens`, and `ai.openai.prompt_cache.input_tokens` before claiming cost reduction.
-- Cached-token evidence comes from OpenAI `usage.input_tokens_details.cached_tokens` when the SDK returns it.
+- Cached-token evidence comes from LangChain `AIMessage.usage_metadata.input_token_details.cache_read` or OpenAI-native token metadata when LangChain exposes it in `response_metadata`.
 
 ---
 
