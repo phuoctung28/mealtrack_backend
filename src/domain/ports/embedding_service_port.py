@@ -1,10 +1,8 @@
 """Ports for embedding services.
 
-TextEmbeddingService — text-only, no torch required. Implemented by
-CloudflareTextEmbeddingAdapter (API + pipeline text side).
+TextEmbeddingService — text-only, no torch required.
 
-EmbeddingService — full multimodal (text + image scoring). Implemented by
-ClipEmbeddingAdapter (pipeline image-validation side only).
+EmbeddingService — optional full multimodal contract for text + image scoring.
 """
 
 from __future__ import annotations

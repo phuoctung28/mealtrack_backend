@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
+from tests.fakes.fake_embedding_adapter import FakeEmbeddingAdapter
 
 from src.domain.model.meal_image_cache import CachedImage
 from src.domain.services.meal_image_cache.meal_image_cache_service import (
     MealImageCacheService,
 )
-from tests.fakes.fake_embedding_adapter import FakeEmbeddingAdapter
 
 
 @pytest.mark.asyncio

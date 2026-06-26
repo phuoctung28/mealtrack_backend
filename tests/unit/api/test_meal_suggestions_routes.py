@@ -1,7 +1,5 @@
 """Cover meal_suggestions routes with TestClient + rate limiter state."""
 
-from unittest.mock import patch
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -164,10 +162,7 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
         "calorie_target": 450,
     }
 
-    with patch(
-        "src.api.dependencies.meal_image_cache.get_meal_image_cache_service"
-    ) as cache_service:
-        r = client.post("/v1/meal-suggestions/discover", json=payload)
+    r = client.post("/v1/meal-suggestions/discover", json=payload)
 
     assert r.status_code == 200
     assert isinstance(captured["msg"], DiscoverMealsCommand)
@@ -175,7 +170,6 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
     assert captured["msg"].count == 10
     assert r.json()["meals"][0]["id"] == "disc_a"
     assert images_service.names == ["Tofu Bowl"]
-    cache_service.assert_not_called()
 
 
 def test_generate_recipes_accepts_selected_discovery_ids(ms_client):

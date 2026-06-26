@@ -35,14 +35,14 @@ async def test_query_nearest_batch_binds_embedding_array_before_cast():
     session = _AsyncCapturingSession()
     repo = AsyncPgvectorMealImageCacheRepository(session)
 
-    await repo.query_nearest_batch([[0.0] * 768])
+    await repo.query_nearest_batch([[0.0] * 512])
 
     bind_names = set(session.statement._bindparams.keys())
     assert "emb_array" in bind_names
     dialect = postgresql.psycopg2.dialect()
     compiled = str(session.statement.compile(dialect=dialect))
     assert "UNNEST(%(emb_array)s::TEXT[])" in compiled
-    assert session.params == {"emb_array": [str([0.0] * 768)]}
+    assert session.params == {"emb_array": [str([0.0] * 512)]}
 
 
 @pytest.mark.asyncio
@@ -51,7 +51,7 @@ async def test_query_nearest_batch_rolls_back_failed_session():
     repo = AsyncPgvectorMealImageCacheRepository(session)
 
     with pytest.raises(RuntimeError, match="db failed"):
-        await repo.query_nearest_batch([[0.0] * 768])
+        await repo.query_nearest_batch([[0.0] * 512])
 
     session.rollback.assert_awaited_once()
 
@@ -65,7 +65,7 @@ async def test_upsert_flushes_without_committing():
         CachedImageUpsert(
             meal_name="Rice Bowl",
             name_slug="rice-bowl",
-            text_embedding=[0.1] * 768,
+            text_embedding=[0.1] * 512,
             image_url="https://example.com/rice.jpg",
             thumbnail_url=None,
             source="test",

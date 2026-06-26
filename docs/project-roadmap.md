@@ -15,7 +15,7 @@
 - [x] Pinned direct production and test dependencies for reproducible local, CI, and Docker installs.
 - [x] Removed unused `fatsecret` package dependency; runtime FatSecret integration uses the in-repo HTTP adapter.
 - [x] Upgraded pytest tooling to 9.x to clear the test dependency audit finding.
-- [x] Verified `requirements.txt` and `requirements-test.txt` with `pip-audit`; ML-only `torch` remains isolated in `requirements-ml.txt` pending an upstream CVE fix.
+- [x] Verified `requirements.txt` and `requirements-test.txt` with `pip-audit`; ML-only resolver dependencies are no longer shipped.
 
 ### June 2026: Journey Progress Card
 - [x] Added canonical `GET /v1/progress/journey` for the dashboard progress card.

@@ -25,8 +25,6 @@ class CachedImageUpsert:
     thumbnail_url: str | None
     source: str
     confidence: float | None
-    embedding_provider: str = "cloudflare-workers-ai"
-    embedding_model: str = "@cf/google/embeddinggemma-300m"
 
 
 @dataclass(frozen=True)

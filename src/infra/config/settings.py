@@ -223,19 +223,6 @@ class Settings(BaseSettings):
     EMAIL_FROM_ADDRESS: str | None = Field(default=None)
     EMAIL_FROM_NAME: str | None = Field(default=None)
 
-    # --- Meal image cache (nightly-fill vector cache) ---
-    TEXT_DEDUP_THRESHOLD: float = Field(default=0.65)
-    IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
-    MEAL_IMAGE_COSINE_HIT_THRESHOLD: float = Field(
-        default=0.65,
-        description="Cosine similarity above which a cached image is reused (0.65–0.80 recommended)",
-    )
-
-    # Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
-    CLIP_MODEL_NAME: str = Field(default="google/siglip-base-patch16-224")
-    CLIP_DEVICE: str = Field(default="cpu")
-    CLIP_EMBEDDING_DIM: int = Field(default=768)
-
     # Cloudflare Workers AI — text generation / AI fallback
     CLOUDFLARE_WORKERS_AI_ENABLED: bool = Field(
         default=True,
@@ -253,14 +240,6 @@ class Settings(BaseSettings):
     CLOUDFLARE_WORKERS_AI_TEXT_MODEL: str = Field(
         default="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         description="Workers AI model for text generation fallback",
-    )
-    CLOUDFLARE_WORKERS_AI_EMBEDDING_MODEL: str = Field(
-        default="@cf/google/embeddinggemma-300m",
-        description="Workers AI model for meal image cache text embeddings",
-    )
-    CLOUDFLARE_WORKERS_AI_EMBEDDING_DIMENSIONS: int = Field(
-        default=768,
-        description="Vector dimensions returned by the Workers AI embedding model",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES: str = Field(
         default="recipe,general,meal_names,discovery,parse_text,barcode",
@@ -284,25 +263,6 @@ class Settings(BaseSettings):
         default="meal_scan,ingredient_scan",
         description="Comma-separated ModelPurpose values where Workers AI vision is included in routing",
     )
-    # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
-    CF_ACCOUNT_ID: str | None = Field(
-        default=None,
-        description="Cloudflare account ID (dash.cloudflare.com → right sidebar)",
-    )
-    CF_API_TOKEN: str | None = Field(
-        default=None, description="Cloudflare API token with Workers AI permission"
-    )
-    CF_IMAGE_MODEL: str = Field(
-        default="@cf/black-forest-labs/flux-1-schnell",
-        description="CF Workers AI model for image generation",
-    )
-    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
-
-    # Nightly cron drain
-    MAX_JOBS_PER_CRON: int = Field(default=50)
-    CRON_EXTERNAL_CALL_DELAY_SECONDS: float = Field(default=2.0)
-    MAX_RESOLUTION_ATTEMPTS: int = Field(default=5)
-
     # Meal analysis settings
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(

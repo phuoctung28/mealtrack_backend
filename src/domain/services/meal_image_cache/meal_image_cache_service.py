@@ -1,9 +1,7 @@
-"""Vector-based hot-path cache lookup + the store helper used by the pipeline job.
+"""Vector-based cache lookup + store helper for meal image cache records.
 
-API read path: lookup_batch() embeds query text via Cloudflare Workers AI (no torch) then
-does a pgvector ANN nearest-neighbour search — semantically robust to name variants.
-
-Pipeline write path: store() receives pre-computed text_embedding from the job.
+lookup_batch() embeds query text with the injected text embedder, then does a
+pgvector ANN nearest-neighbour search.
 """
 
 from __future__ import annotations
@@ -30,7 +28,7 @@ class MealImageCacheService:
         self._threshold = dedup_threshold
 
     async def lookup_batch(self, names: list[str]) -> list[CachedImage | None]:
-        """Embed names via Cloudflare Workers AI → single pgvector batch ANN search.
+        """Embed names with the injected adapter, then run batch ANN search.
 
         Always returns exactly len(names) items. Individual failures
         yield None so the caller can fall through to the normal image search.
