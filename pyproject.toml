@@ -32,7 +32,7 @@ dependencies = [
     "greenlet==3.5.1",
     "alembic==1.18.4",
     "python-dotenv==1.2.2",
-    "pydantic-settings==2.14.1",
+    "pydantic-settings==2.14.2",
     "pymediator==0.3.0",
     "firebase-admin==6.9.0",
     "cachetools==7.1.4",
