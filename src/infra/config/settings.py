@@ -141,6 +141,18 @@ class Settings(BaseSettings):
         default=False,
         description="Whether OpenAI may store Responses API payloads.",
     )
+    OPENAI_PROMPT_CACHE_ENABLED: bool = Field(
+        default=True,
+        description="Enable explicit OpenAI Responses API prompt cache routing.",
+    )
+    OPENAI_PROMPT_CACHE_RETENTION: str | None = Field(
+        default="",
+        description="Optional OpenAI prompt_cache_retention: empty, in_memory, or 24h.",
+    )
+    OPENAI_PROMPT_CACHE_KEY_PREFIX: str = Field(
+        default="mealtrack",
+        description="Safe prefix for OpenAI prompt_cache_key values.",
+    )
     # Image search (meal discovery photos)
     PEXELS_API_KEY: str | None = Field(
         default=None, description="Pexels API key for food photos"

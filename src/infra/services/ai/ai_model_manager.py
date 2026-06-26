@@ -104,6 +104,9 @@ class AIModelManager:
             request_timeout_seconds=settings.OPENAI_REQUEST_TIMEOUT_SECONDS,
             max_retries=settings.OPENAI_MAX_RETRIES,
             store_responses=settings.OPENAI_STORE_RESPONSES,
+            prompt_cache_enabled=settings.OPENAI_PROMPT_CACHE_ENABLED,
+            prompt_cache_retention=settings.OPENAI_PROMPT_CACHE_RETENTION or None,
+            prompt_cache_key_prefix=settings.OPENAI_PROMPT_CACHE_KEY_PREFIX,
         )
         self._providers["openai"] = openai
         self._model_provider_overrides[settings.OPENAI_TEXT_MODEL] = "openai"

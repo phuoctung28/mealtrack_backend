@@ -28,6 +28,9 @@ def _fake_settings(cf_enabled=False):
     s.OPENAI_REQUEST_TIMEOUT_SECONDS = 20
     s.OPENAI_MAX_RETRIES = 1
     s.OPENAI_STORE_RESPONSES = False
+    s.OPENAI_PROMPT_CACHE_ENABLED = True
+    s.OPENAI_PROMPT_CACHE_RETENTION = ""
+    s.OPENAI_PROMPT_CACHE_KEY_PREFIX = "mealtrack"
     s.CLOUDFLARE_WORKERS_AI_ENABLED = cf_enabled
     s.CLOUDFLARE_ACCOUNT_ID = ""
     s.CLOUDFLARE_API_TOKEN = ""
@@ -40,6 +43,23 @@ def _fake_settings(cf_enabled=False):
     s.CLOUDFLARE_WORKERS_AI_VISION_MODEL = ""
     s.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = ""
     return s
+
+
+def test_openai_provider_receives_prompt_cache_settings(mock_circuit_breaker):
+    settings = _fake_settings()
+    settings.OPENAI_PROMPT_CACHE_ENABLED = True
+    settings.OPENAI_PROMPT_CACHE_RETENTION = "in_memory"
+    settings.OPENAI_PROMPT_CACHE_KEY_PREFIX = "mealtrack-test"
+
+    with patch("src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker", return_value=mock_circuit_breaker):
+        with patch("src.infra.services.ai.ai_model_manager.OpenAIProvider") as provider_cls:
+            AIModelManager(settings=settings)
+
+    provider_cls.assert_called_once()
+    kwargs = provider_cls.call_args.kwargs
+    assert kwargs["prompt_cache_enabled"] is True
+    assert kwargs["prompt_cache_retention"] == "in_memory"
+    assert kwargs["prompt_cache_key_prefix"] == "mealtrack-test"
 
 
 @pytest.fixture(autouse=True)
