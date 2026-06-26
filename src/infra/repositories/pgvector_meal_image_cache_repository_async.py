@@ -24,7 +24,7 @@ class AsyncPgvectorMealImageCacheRepository:
             "confidence, text_embedding_v2 <=> CAST(:emb AS vector) AS distance "
             "FROM meal_image_cache "
             "WHERE text_embedding_v2 IS NOT NULL "
-            "AND embedding_provider = 'openai' "
+            "AND embedding_provider = 'cloudflare-workers-ai' "
             "ORDER BY distance ASC LIMIT 1"
         )
         result = await self._session.execute(stmt, {"emb": emb_literal})
@@ -78,7 +78,7 @@ class AsyncPgvectorMealImageCacheRepository:
             CROSS JOIN LATERAL (
                 SELECT * FROM meal_image_cache
                 WHERE text_embedding_v2 IS NOT NULL
-                  AND embedding_provider = 'openai'
+                  AND embedding_provider = 'cloudflare-workers-ai'
                 ORDER BY text_embedding_v2 <=> q.emb
                 LIMIT 1
             ) c

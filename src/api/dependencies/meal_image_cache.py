@@ -1,8 +1,9 @@
 """FastAPI DI for the meal image cache services.
 
-The API uses OpenAI text embeddings for vector search — no torch, no local model.
-SigLIP/torch is only used by the nightly pipeline (scripts/resolve_pending_images.py)
-for image-text scoring, which requires vision encoding.
+The API uses Cloudflare Workers AI text embeddings for vector search — no torch,
+no local model. SigLIP/torch is only used by the nightly pipeline
+(scripts/resolve_pending_images.py) for image-text scoring, which requires
+vision encoding.
 """
 
 from __future__ import annotations
@@ -32,24 +33,40 @@ __all__ = [
 ]
 
 
-def get_openai_text_embedder(api_key: str, model: str, dimensions: int):
-    module = import_module("src.infra.adapters.openai_text_embedding_adapter")
-    return module.get_openai_text_embedder(api_key, model, dimensions)
+def get_cloudflare_text_embedder(
+    account_id: str,
+    api_token: str,
+    model: str,
+    dimensions: int,
+    timeout_seconds: int,
+):
+    module = import_module("src.infra.adapters.cloudflare_text_embedding_adapter")
+    return module.get_cloudflare_text_embedder(
+        account_id,
+        api_token,
+        model,
+        dimensions,
+        timeout_seconds,
+    )
 
 
 async def get_meal_image_cache_service(
     session: AsyncSession = Depends(get_async_db),
 ) -> MealImageCacheService:
     settings = get_settings()
-    if not settings.OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is required for meal image cache embeddings")
+    if not settings.CLOUDFLARE_ACCOUNT_ID or not settings.CLOUDFLARE_API_TOKEN:
+        raise RuntimeError(
+            "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required for meal image cache embeddings"
+        )
 
     return MealImageCacheService(
         cache=AsyncPgvectorMealImageCacheRepository(session),
-        embedder=get_openai_text_embedder(
-            settings.OPENAI_API_KEY,
-            settings.OPENAI_EMBEDDING_MODEL,
-            settings.OPENAI_EMBEDDING_DIMENSIONS,
+        embedder=get_cloudflare_text_embedder(
+            settings.CLOUDFLARE_ACCOUNT_ID,
+            settings.CLOUDFLARE_API_TOKEN,
+            settings.CLOUDFLARE_WORKERS_AI_EMBEDDING_MODEL,
+            settings.CLOUDFLARE_WORKERS_AI_EMBEDDING_DIMENSIONS,
+            settings.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS,
         ),
         dedup_threshold=settings.TEXT_DEDUP_THRESHOLD,
     )

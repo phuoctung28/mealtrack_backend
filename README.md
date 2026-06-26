@@ -25,7 +25,7 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 - **Core**: FastAPI 0.115+ (Python 3.13), SQLAlchemy 2.0 async runtime (`AsyncSession`, `AsyncUnitOfWork`).
 - **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0, Redis 7.0 for selective optional caching; required state documented separately.
-- **AI**: OpenAI Responses API for text/vision, OpenAI text embeddings, Cloudflare Workers AI fallback, Pinecone Inference API (1024-dim).
+- **AI**: OpenAI Responses API for text/vision, Cloudflare Workers AI embeddings/fallback, Pinecone Inference API (1024-dim).
 - **Infrastructure**: Firebase (JWT Auth + FCM), Cloudinary (image storage), RevenueCat (subscriptions).
 - **Event Bus**: PyMediator with singleton registry for CQRS.
 - **Testing**: pytest (1,499+ tests), ruff (linting), mypy (type checking).

@@ -33,7 +33,7 @@ class ResolveMealImageJob:
         self,
         *,
         cache,
-        text_embedder,  # OpenAI API — produces embeddings stored in pgvector
+        text_embedder,  # Cloudflare Workers AI — produces embeddings stored in pgvector
         image_scorer,  # SigLIP — scores image/text relevance via sigmoid logits
         http,  # object with `download(url) -> bytes`
         cloudinary,  # object with `save(bytes, content_type) -> url`

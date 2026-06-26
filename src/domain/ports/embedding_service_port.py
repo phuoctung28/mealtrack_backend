@@ -1,7 +1,7 @@
 """Ports for embedding services.
 
 TextEmbeddingService — text-only, no torch required. Implemented by
-OpenAITextEmbeddingAdapter (API + pipeline text side).
+CloudflareTextEmbeddingAdapter (API + pipeline text side).
 
 EmbeddingService — full multimodal (text + image scoring). Implemented by
 ClipEmbeddingAdapter (pipeline image-validation side only).

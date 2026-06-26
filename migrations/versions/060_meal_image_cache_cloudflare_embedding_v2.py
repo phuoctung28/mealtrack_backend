@@ -1,4 +1,4 @@
-"""Add OpenAI v2 embedding metadata to meal_image_cache.
+"""Add Cloudflare embedding metadata to meal_image_cache.
 
 Revision ID: 060
 Revises: 059
@@ -15,9 +15,19 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.execute("TRUNCATE TABLE meal_image_cache")
+    op.execute("DROP INDEX IF EXISTS meal_image_cache_text_emb_idx")
+    op.execute(
+        "ALTER TABLE meal_image_cache "
+        "ALTER COLUMN text_embedding TYPE vector(768)"
+    )
+    op.execute(
+        "CREATE INDEX meal_image_cache_text_emb_idx "
+        "ON meal_image_cache USING hnsw (text_embedding vector_cosine_ops)"
+    )
     op.add_column(
         "meal_image_cache",
-        sa.Column("text_embedding_v2", Vector(512), nullable=True),
+        sa.Column("text_embedding_v2", Vector(768), nullable=True),
     )
     op.add_column(
         "meal_image_cache",
@@ -35,7 +45,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("TRUNCATE TABLE meal_image_cache")
     op.execute("DROP INDEX IF EXISTS meal_image_cache_text_emb_v2_idx")
     op.drop_column("meal_image_cache", "embedding_model")
     op.drop_column("meal_image_cache", "embedding_provider")
     op.drop_column("meal_image_cache", "text_embedding_v2")
+    op.execute("DROP INDEX IF EXISTS meal_image_cache_text_emb_idx")
+    op.execute(
+        "ALTER TABLE meal_image_cache "
+        "ALTER COLUMN text_embedding TYPE vector(512)"
+    )
+    op.execute(
+        "CREATE INDEX meal_image_cache_text_emb_idx "
+        "ON meal_image_cache USING hnsw (text_embedding vector_cosine_ops)"
+    )

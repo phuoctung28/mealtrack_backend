@@ -94,10 +94,10 @@ async def _main() -> int:
 
     from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
     from src.infra.adapters.cloudflare_image_generator import CloudflareImageGenerator
-    from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-    from src.infra.adapters.openai_text_embedding_adapter import (
-        OpenAITextEmbeddingAdapter,
+    from src.infra.adapters.cloudflare_text_embedding_adapter import (
+        CloudflareTextEmbeddingAdapter,
     )
+    from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
     from src.infra.config.settings import get_settings
     from src.infra.database.config import SQLALCHEMY_DATABASE_URL
     from src.infra.event_bus import PyMediatorEventBus
@@ -120,13 +120,17 @@ async def _main() -> int:
                 r.raise_for_status()
                 return r.content
 
-    if not settings.OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is required for meal image cache embeddings")
+    if not settings.CLOUDFLARE_ACCOUNT_ID or not settings.CLOUDFLARE_API_TOKEN:
+        raise RuntimeError(
+            "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required for meal image cache embeddings"
+        )
 
-    text_embedder = OpenAITextEmbeddingAdapter(
-        api_key=settings.OPENAI_API_KEY,
-        model=settings.OPENAI_EMBEDDING_MODEL,
-        dimensions=settings.OPENAI_EMBEDDING_DIMENSIONS,
+    text_embedder = CloudflareTextEmbeddingAdapter(
+        account_id=settings.CLOUDFLARE_ACCOUNT_ID,
+        api_token=settings.CLOUDFLARE_API_TOKEN,
+        model=settings.CLOUDFLARE_WORKERS_AI_EMBEDDING_MODEL,
+        dimensions=settings.CLOUDFLARE_WORKERS_AI_EMBEDDING_DIMENSIONS,
+        timeout_seconds=settings.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS,
     )
     image_scorer = ClipEmbeddingAdapter.from_settings(
         model_name=settings.CLIP_MODEL_NAME,
