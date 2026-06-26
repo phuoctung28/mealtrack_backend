@@ -65,18 +65,18 @@
 
 **Default text chain (e.g. RECIPE) when CF text enabled:**
 ```
-@cf/google/gemma-4-26b-a4b-it  →  gemini-2.5-flash-lite  →  gemini-2.5-flash
+@cf/meta/llama-3.3-70b-instruct-fp8-fast  →  gpt-5.4-mini-2026-03-17
 ```
 
-**Vision chains (CF-first when `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true`, Gemini fallback):**
+**Vision chains (OpenAI-first even when CF vision is enabled):**
 ```
-@cf/google/gemma-4-26b-a4b-it  →  gemini-3.1-flash-lite  →  gemini-3.5-flash  →  gemini-2.5-flash
+gpt-5.4-mini-2026-03-17  →  @cf/google/gemma-4-26b-a4b-it
 ```
-When CF vision is disabled, vision chains are Gemini-only: `gemini-3.1-flash-lite → gemini-3.5-flash → gemini-2.5-flash`
+When CF vision is disabled, vision chains stay OpenAI-only.
 
-**Gemini-only parse/barcode fallback unless explicitly routed through Cloudflare:**
+**Text purposes routed through Cloudflare by default:**
 ```
-gemini-2.5-flash-lite  →  gemini-2.5-flash
+recipe, general, meal_names, discovery, parse_text, barcode
 ```
 
 Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Never log prompt content, food payloads, or raw AI output.
@@ -115,7 +115,7 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 
 ## Cloudflare Workers AI (Text + Vision)
 
-**Purpose:** Optional primary AI provider for text and vision tasks. Gemini is fallback for all cases.
+**Purpose:** Primary AI provider for text tasks. Optional fallback for image scanning after OpenAI.
 
 **Two independent routing paths:**
 - **Text path:** LangChain adapter (`ChatCloudflareWorkersAI`) for text-generation purposes.
@@ -140,12 +140,12 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 | `CLOUDFLARE_API_TOKEN` | `` | API token with Workers AI permission |
 | `CLOUDFLARE_AI_GATEWAY_ID` | `` | Optional AI Gateway ID; leave blank for direct Workers AI |
 | `CLOUDFLARE_WORKERS_AI_TEXT_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Model for text generation |
-| `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery,parse_text` | Purposes that include CF text in fallback chain |
+| `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery,parse_text,barcode` | Text purposes that prefer CF first, with OpenAI fallback |
 | `CLOUDFLARE_WORKERS_AI_JSON_MODE` | `true` | Reserved; currently unused by LangChain adapter |
 | `CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS` | `60` | HTTP timeout per request |
-| `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision for image analysis (Gemini is fallback) |
+| `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision as image-analysis fallback after OpenAI |
 | `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
-| `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Purposes that use CF vision as primary |
+| `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Image purposes that include CF vision as fallback |
 | `CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED` | `false` | Route Gemini vision calls through CF AI Gateway (requires `CLOUDFLARE_AI_GATEWAY_ID` + `CLOUDFLARE_ACCOUNT_ID`) |
 
 ### Production Rollout (Vision)
@@ -159,7 +159,7 @@ CLOUDFLARE_WORKERS_AI_VISION_MODEL=@cf/google/gemma-4-26b-a4b-it
 CLOUDFLARE_WORKERS_AI_VISION_PURPOSES=meal_scan,ingredient_scan
 ```
 
-Keep `GOOGLE_API_KEY` configured — Gemini remains the fallback on any CF vision failure.
+Keep `OPENAI_API_KEY` configured — OpenAI remains primary for image scanning.
 
 ### Rollback
 
@@ -471,11 +471,11 @@ Alert thresholds (starting points, tune after baseline):
 - Parse/schema failure count > 10/min → investigate provider
 - p95 duration > 20s → latency regression
 
-### Cloudflare canary rollout gates
-Before making Cloudflare vision primary:
+### Cloudflare vision fallback rollout gates
+Before enabling Cloudflare vision fallback:
 1. Enable via env: `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true`
-2. Monitor `schema_validation_failure.count{ai_provider=cloudflare-workers-ai}` vs Gemini baseline
-3. Compare `request.duration_ms` p95 vs Gemini
+2. Monitor `schema_validation_failure.count{ai_provider=cloudflare-workers-ai}` after OpenAI fallbacks
+3. Compare `request.duration_ms` p95 vs OpenAI primary image scans
 4. Rollback: set `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=false` — zero-downtime via env
 
 ### LLM traces (PostHog)

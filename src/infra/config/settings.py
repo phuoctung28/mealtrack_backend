@@ -263,7 +263,7 @@ class Settings(BaseSettings):
         description="Vector dimensions returned by the Workers AI embedding model",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES: str = Field(
-        default="recipe,general,meal_names,discovery,parse_text",
+        default="recipe,general,meal_names,discovery,parse_text,barcode",
         description="Comma-separated ModelPurpose values where Workers AI is included in routing",
     )
     CLOUDFLARE_WORKERS_AI_JSON_MODE: bool = Field(

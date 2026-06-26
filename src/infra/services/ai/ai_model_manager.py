@@ -17,36 +17,49 @@ from src.observability import increment_metric, log_event
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_OPENAI_MODEL = "gpt-5.4-mini-2026-03-17"
+TEXT_PURPOSES: set[ModelPurpose] = {
+    ModelPurpose.PARSE_TEXT,
+    ModelPurpose.BARCODE,
+    ModelPurpose.MEAL_NAMES,
+    ModelPurpose.RECIPE,
+    ModelPurpose.DISCOVERY,
+    ModelPurpose.GENERAL,
+}
+VISION_PURPOSES: set[ModelPurpose] = {
+    ModelPurpose.MEAL_SCAN,
+    ModelPurpose.INGREDIENT_SCAN,
+}
 
 FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
     # ==========================================================================
-    # VISION TASKS: OpenAI primary, optional provider routes can prepend/append
+    # VISION TASKS: OpenAI primary, optional provider routes append as fallback
     # ==========================================================================
     ModelPurpose.MEAL_SCAN: [
-        "gpt-5.4-mini-2026-03-17",
+        DEFAULT_OPENAI_MODEL,
     ],
     ModelPurpose.INGREDIENT_SCAN: [
-        "gpt-5.4-mini-2026-03-17",
+        DEFAULT_OPENAI_MODEL,
     ],
     # ==========================================================================
-    # SHORT STRUCTURED TEXT: OpenAI primary
+    # SHORT STRUCTURED TEXT: OpenAI fallback when CF text is configured
     # ==========================================================================
     ModelPurpose.PARSE_TEXT: [
-        "gpt-5.4-mini-2026-03-17",
+        DEFAULT_OPENAI_MODEL,
     ],
-    ModelPurpose.BARCODE: ["gpt-5.4-mini-2026-03-17"],
+    ModelPurpose.BARCODE: [DEFAULT_OPENAI_MODEL],
     ModelPurpose.MEAL_NAMES: [
-        "gpt-5.4-mini-2026-03-17",
+        DEFAULT_OPENAI_MODEL,
     ],
     ModelPurpose.DISCOVERY: [
-        "gpt-5.4-mini-2026-03-17",
+        DEFAULT_OPENAI_MODEL,
     ],
-    ModelPurpose.GENERAL: ["gpt-5.4-mini-2026-03-17"],
+    ModelPurpose.GENERAL: [DEFAULT_OPENAI_MODEL],
     # ==========================================================================
-    # RECIPE TASKS: OpenAI primary
+    # RECIPE TASKS: OpenAI fallback when CF text is configured
     # ==========================================================================
     ModelPurpose.RECIPE: [
-        "gpt-5.4-mini-2026-03-17",
+        DEFAULT_OPENAI_MODEL,
     ],
 }
 
@@ -112,31 +125,29 @@ class AIModelManager:
         self._model_provider_overrides[settings.OPENAI_TEXT_MODEL] = "openai"
         self._model_provider_overrides[settings.OPENAI_VISION_MODEL] = "openai"
 
-        self._prepend_model_for_purposes(
+        self._append_model_for_purposes(
             settings.OPENAI_TEXT_MODEL,
-            {
-                ModelPurpose.PARSE_TEXT,
-                ModelPurpose.BARCODE,
-                ModelPurpose.MEAL_NAMES,
-                ModelPurpose.RECIPE,
-                ModelPurpose.DISCOVERY,
-                ModelPurpose.GENERAL,
-            },
+            TEXT_PURPOSES,
+            remove_models={DEFAULT_OPENAI_MODEL, settings.OPENAI_TEXT_MODEL},
         )
         self._prepend_model_for_purposes(
             settings.OPENAI_VISION_MODEL,
-            {ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN},
+            VISION_PURPOSES,
+            remove_models={DEFAULT_OPENAI_MODEL, settings.OPENAI_VISION_MODEL},
         )
 
     def _prepend_model_for_purposes(
         self,
         model: str,
         purposes: set[ModelPurpose],
+        *,
+        remove_models: set[str] | None = None,
     ) -> None:
         for purpose in purposes:
             chain = self._fallback_chains[purpose]
-            if model in chain:
-                chain.remove(model)
+            for existing_model in remove_models or {model}:
+                while existing_model in chain:
+                    chain.remove(existing_model)
             chain.insert(0, model)
 
     def _maybe_add_cf_provider(self, settings) -> None:
@@ -174,7 +185,7 @@ class AIModelManager:
 
         if vision_enabled and vision_model:
             self._model_provider_overrides[vision_model] = "cloudflare-workers-ai"
-            self._prepend_cf_to_vision_chains(
+            self._append_cf_to_vision_chains(
                 cf_model=vision_model,
                 vision_purposes_csv=vision_purposes,
             )
@@ -195,10 +206,10 @@ class AIModelManager:
         configured = {p.strip().lower() for p in text_purposes_csv.split(",") if p.strip()}
         for purpose in ModelPurpose:
             if purpose.value in configured:
-                self._fallback_chains[purpose].insert(0, cf_model)
+                self._prepend_model_for_purposes(cf_model, {purpose})
 
-    def _prepend_cf_to_vision_chains(self, cf_model: str, vision_purposes_csv: str) -> None:
-        """Prepend CF vision model to configured vision-purpose chains."""
+    def _append_cf_to_vision_chains(self, cf_model: str, vision_purposes_csv: str) -> None:
+        """Append CF vision model to configured vision-purpose chains."""
         configured = {p.strip().lower() for p in vision_purposes_csv.split(",") if p.strip()}
         valid_values = {mp.value for mp in ModelPurpose}
         unknown = configured - valid_values
@@ -209,7 +220,21 @@ class AIModelManager:
             )
         for purpose in ModelPurpose:
             if purpose.value in configured:
-                self._fallback_chains[purpose].insert(0, cf_model)
+                self._append_model_for_purposes(cf_model, {purpose})
+
+    def _append_model_for_purposes(
+        self,
+        model: str,
+        purposes: set[ModelPurpose],
+        *,
+        remove_models: set[str] | None = None,
+    ) -> None:
+        for purpose in purposes:
+            chain = self._fallback_chains[purpose]
+            for existing_model in remove_models or {model}:
+                while existing_model in chain:
+                    chain.remove(existing_model)
+            chain.append(model)
 
     def get_fallback_chain(self, purpose: ModelPurpose) -> list[str]:
         """Get fallback chain for a purpose."""

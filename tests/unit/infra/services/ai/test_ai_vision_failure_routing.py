@@ -45,6 +45,20 @@ def _fake_settings(cf_enabled=False):
     return s
 
 
+def _fake_settings_with_cf_text_and_vision():
+    settings = _fake_settings(cf_enabled=True)
+    settings.CLOUDFLARE_ACCOUNT_ID = "cf-account"
+    settings.CLOUDFLARE_API_TOKEN = "cf-token"
+    settings.CLOUDFLARE_WORKERS_AI_TEXT_MODEL = "cf-text-model"
+    settings.CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES = (
+        "recipe,general,meal_names,discovery,parse_text,barcode"
+    )
+    settings.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = True
+    settings.CLOUDFLARE_WORKERS_AI_VISION_MODEL = "cf-vision-model"
+    settings.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = "meal_scan,ingredient_scan"
+    return settings
+
+
 def test_openai_provider_receives_prompt_cache_settings(mock_circuit_breaker):
     settings = _fake_settings()
     settings.OPENAI_PROMPT_CACHE_ENABLED = True
@@ -60,6 +74,49 @@ def test_openai_provider_receives_prompt_cache_settings(mock_circuit_breaker):
     assert kwargs["prompt_cache_enabled"] is True
     assert kwargs["prompt_cache_retention"] == "in_memory"
     assert kwargs["prompt_cache_key_prefix"] == "mealtrack-test"
+
+
+def test_text_purposes_prefer_cf_and_fallback_to_openai(mock_circuit_breaker):
+    settings = _fake_settings_with_cf_text_and_vision()
+
+    with patch(
+        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+        return_value=mock_circuit_breaker,
+    ):
+        with patch("src.infra.services.ai.ai_model_manager.OpenAIProvider"):
+            with patch("src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider"):
+                manager = AIModelManager(settings=settings)
+
+    for purpose in {
+        ModelPurpose.PARSE_TEXT,
+        ModelPurpose.BARCODE,
+        ModelPurpose.MEAL_NAMES,
+        ModelPurpose.RECIPE,
+        ModelPurpose.DISCOVERY,
+        ModelPurpose.GENERAL,
+    }:
+        assert manager.get_fallback_chain(purpose)[:2] == [
+            "cf-text-model",
+            "openai-text-model",
+        ]
+
+
+def test_image_scan_purposes_prefer_openai_and_fallback_to_cf(mock_circuit_breaker):
+    settings = _fake_settings_with_cf_text_and_vision()
+
+    with patch(
+        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+        return_value=mock_circuit_breaker,
+    ):
+        with patch("src.infra.services.ai.ai_model_manager.OpenAIProvider"):
+            with patch("src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider"):
+                manager = AIModelManager(settings=settings)
+
+    for purpose in {ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN}:
+        assert manager.get_fallback_chain(purpose)[:2] == [
+            "openai-vision-model",
+            "cf-vision-model",
+        ]
 
 
 @pytest.fixture(autouse=True)
