@@ -217,7 +217,7 @@ def _openai_json_schema(schema: type) -> dict[str, Any]:
         raise TypeError("OpenAI structured output schema must be a Pydantic model")
     return {
         "name": schema.__name__,
-        "schema": schema.model_json_schema(),
+        "schema": _normalize_for_openai_structured_outputs(schema.model_json_schema()),
         "strict": True,
     }
 
@@ -226,3 +226,41 @@ def _validate_parsed(schema: type, parsed: Any) -> BaseModel:
     if isinstance(parsed, schema):
         return parsed
     return schema.model_validate(parsed)
+
+
+def _normalize_for_openai_structured_outputs(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_normalize_for_openai_structured_outputs(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    normalized: dict[str, Any] = {}
+    for key, child in value.items():
+        if key in _OPENAI_STRUCTURED_OUTPUT_UNSUPPORTED_KEYS:
+            continue
+        normalized[key] = _normalize_for_openai_structured_outputs(child)
+
+    if normalized.get("type") == "object":
+        properties = normalized.get("properties")
+        if isinstance(properties, dict):
+            normalized["required"] = list(properties.keys())
+        normalized["additionalProperties"] = False
+
+    return normalized
+
+
+_OPENAI_STRUCTURED_OUTPUT_UNSUPPORTED_KEYS = {
+    "default",
+    "exclusiveMaximum",
+    "exclusiveMinimum",
+    "format",
+    "maxItems",
+    "maxLength",
+    "maximum",
+    "minItems",
+    "minLength",
+    "minimum",
+    "multipleOf",
+    "pattern",
+    "title",
+}

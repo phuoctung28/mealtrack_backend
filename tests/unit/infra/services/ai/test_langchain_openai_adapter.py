@@ -156,7 +156,7 @@ async def test_structured_text_uses_chat_openai_with_responses_api(monkeypatch):
     }
     assert llm.structured_schema["name"] == "VisionNutritionResponse"
     assert llm.structured_schema["strict"] is True
-    assert llm.structured_schema["schema"]["title"] == "VisionNutritionResponse"
+    assert llm.structured_schema["schema"]["type"] == "object"
     assert llm.structured_kwargs == {
         "method": "json_schema",
         "strict": True,
@@ -306,3 +306,54 @@ async def test_structured_text_raises_parsing_error(monkeypatch):
             max_tokens=None,
             request_kwargs={},
         )
+
+
+@pytest.mark.asyncio
+async def test_structured_schema_is_openai_subset_compatible(monkeypatch):
+    adapter, created = _adapter(monkeypatch)
+
+    await adapter.generate_vision_structured(
+        model="gpt-5.4-mini-2026-03-17",
+        prompt="Identify food.",
+        image_data=b"image-bytes",
+        image_mime_type="image/jpeg",
+        system_message="Return canonical JSON.",
+        schema=VisionNutritionResponse,
+        max_tokens=None,
+        request_kwargs=None,
+    )
+
+    schema = created[0].structured_schema["schema"]
+    unsupported_keys = {
+        "default",
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "format",
+        "maxItems",
+        "maxLength",
+        "maximum",
+        "minItems",
+        "minLength",
+        "minimum",
+        "multipleOf",
+        "pattern",
+        "title",
+    }
+
+    assert not _schema_contains_any_key(schema, unsupported_keys)
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == set(schema["properties"])
+    for definition in schema["$defs"].values():
+        if definition.get("type") == "object":
+            assert definition["additionalProperties"] is False
+            assert set(definition["required"]) == set(definition["properties"])
+
+
+def _schema_contains_any_key(value, keys: set[str]) -> bool:
+    if isinstance(value, dict):
+        return any(key in keys for key in value) or any(
+            _schema_contains_any_key(child, keys) for child in value.values()
+        )
+    if isinstance(value, list):
+        return any(_schema_contains_any_key(item, keys) for item in value)
+    return False
