@@ -47,6 +47,7 @@ class UserProfileDomainModel(BaseDomainModel):
     custom_fat_g: Optional[float] = None
     goal_start_weight_kg: Optional[float] = None
     goal_started_at: Optional[datetime] = None
+    journey_progress_seed_percent: float = 0.0
     daily_water_goal_ml: Optional[int] = None
 
 

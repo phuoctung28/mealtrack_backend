@@ -181,6 +181,9 @@ class UserProfileMapper:
             custom_fat_g=profile_entity.custom_fat_g,
             goal_start_weight_kg=profile_entity.goal_start_weight_kg,
             goal_started_at=profile_entity.goal_started_at,
+            journey_progress_seed_percent=float(
+                profile_entity.journey_progress_seed_percent or 0.0
+            ),
             daily_water_goal_ml=profile_entity.daily_water_goal_ml,
             created_at=profile_entity.created_at,
             updated_at=profile_entity.updated_at,
@@ -219,6 +222,7 @@ class UserProfileMapper:
             custom_fat_g=profile_domain.custom_fat_g,
             goal_start_weight_kg=profile_domain.goal_start_weight_kg,
             goal_started_at=profile_domain.goal_started_at,
+            journey_progress_seed_percent=profile_domain.journey_progress_seed_percent,
             daily_water_goal_ml=profile_domain.daily_water_goal_ml,
         )
         profile.preference_entries = build_profile_preference_entries(profile_domain)

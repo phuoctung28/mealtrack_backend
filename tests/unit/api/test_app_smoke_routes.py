@@ -37,6 +37,17 @@ def client(monkeypatch) -> TestClient:
         def get_url(self, image_id: str) -> str:
             return f"https://example.com/{image_id}"
 
+        async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+            return {
+                "image_id": image_id,
+                "cloud_name": "test_cloud",
+                "api_key": "test_key",
+                "timestamp": 1700000000,
+                "signature": "test_sig",
+                "folder": "mealtrack",
+                "public_id": f"mealtrack/{image_id}",
+            }
+
     main.app.dependency_overrides[get_current_user_id] = lambda: "user_1"
     main.app.dependency_overrides[verify_firebase_token] = lambda: {"uid": "user_1"}
     main.app.dependency_overrides[get_configured_event_bus] = lambda: _DummyBus()
@@ -146,6 +157,18 @@ def test_scan_by_url_non_food_returns_not_food_image(client: TestClient):
 
     assert r.status_code == 400
     assert r.json()["detail"]["error_code"] == "NOT_FOOD_IMAGE"
+
+
+def test_upload_token_returns_signed_params(client: TestClient):
+    r = client.get("/v1/meals/upload-token")
+    assert r.status_code == 200
+    data = r.json()
+    assert "image_id" in data
+    assert "cloud_name" in data
+    assert "signature" in data
+    assert "timestamp" in data
+    assert data["folder"] == "mealtrack"
+    assert data["public_id"].startswith("mealtrack/")
 
 
 def test_user_profiles_onboarding_invalid_birth_date(client: TestClient):

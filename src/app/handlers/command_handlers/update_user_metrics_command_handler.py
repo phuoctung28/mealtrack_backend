@@ -198,6 +198,13 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             elif should_auto_start_goal:
                 profile.goal_started_at = utc_now()
 
+            if (
+                should_auto_start_goal
+                or command.goal_start_weight_kg is not None
+                or command.goal_started_at is not None
+            ):
+                profile.journey_progress_seed_percent = 0.0
+
             if command.reset_water_goal:
                 profile.daily_water_goal_ml = None
             elif command.daily_water_goal_ml is not None:

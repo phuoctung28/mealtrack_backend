@@ -114,6 +114,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     ):
                         profile.goal_start_weight_kg = command.weight_kg
                         profile.goal_started_at = utc_now()
+                        profile.journey_progress_seed_percent = 0.0
                     # Write-once — don't overwrite if already set
                     if command.referral_sources and not profile.referral_sources:
                         profile.referral_sources = command.referral_sources
