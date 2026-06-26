@@ -99,6 +99,34 @@ def _adapter(monkeypatch, *, store_responses: bool = False):
     )
 
 
+def _adapter_with_parsing_error(monkeypatch):
+    class FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            pass
+
+        def with_structured_output(self, schema, *, method, strict, include_raw):
+            structured = MagicMock()
+            structured.ainvoke = AsyncMock(
+                return_value={
+                    "raw": SimpleNamespace(content=""),
+                    "parsed": None,
+                    "parsing_error": ValueError("invalid structured output"),
+                }
+            )
+            return structured
+
+    monkeypatch.setattr(
+        "src.infra.services.ai.langchain_openai_adapter.ChatOpenAI",
+        FakeChatOpenAI,
+    )
+    return OpenAILangChainAdapter(
+        api_key="test-key",
+        request_timeout_seconds=20,
+        max_retries=1,
+        store_responses=False,
+    )
+
+
 @pytest.mark.asyncio
 async def test_structured_text_uses_chat_openai_with_responses_api(monkeypatch):
     adapter, created = _adapter(monkeypatch)
@@ -259,3 +287,18 @@ def test_usage_extractors_return_zero_when_missing(monkeypatch):
 
     assert adapter.input_tokens(message) == 0.0
     assert adapter.cached_tokens(message) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_structured_text_raises_parsing_error(monkeypatch):
+    adapter = _adapter_with_parsing_error(monkeypatch)
+
+    with pytest.raises(ValueError, match="invalid structured output"):
+        await adapter.generate_structured(
+            model="gpt-5.4-mini-2026-03-17",
+            prompt="Chicken rice bowl",
+            system_message="Return canonical JSON.",
+            schema=VisionNutritionResponse,
+            max_tokens=None,
+            request_kwargs={},
+        )
