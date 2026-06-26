@@ -30,7 +30,6 @@ from src.app.commands.meal_suggestion import (
     IngredientItem,
     SaveMealSuggestionCommand,
 )
-from src.infra.database.config_async import AsyncSessionLocal
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -93,78 +92,15 @@ async def discover_meals(
     )
     session, meals = await event_bus.send(command)
 
-    # --- meal-image-cache integration (always enabled) ---
     from src.api.dependencies.food_image import get_food_image_service
-    from src.api.dependencies.meal_image_cache import get_meal_image_cache_service
-    from src.domain.model.meal_image_cache import PendingItem
-    from src.domain.services.meal_image_cache.name_canonicalizer import (
-        slug as _slug,
-    )
 
     image_service = get_food_image_service()
     english_names = [m["english_name"] for m in meals]
-    if AsyncSessionLocal is None:
-        raise RuntimeError(
-            "AsyncSessionLocal is not initialized. Async engine setup failed; "
-            "check async DB configuration."
-        )
-    async with AsyncSessionLocal() as image_cache_db:
-        cache_svc = await get_meal_image_cache_service(session=image_cache_db)
-        cache_hits = await cache_svc.lookup_batch(english_names)
-
-    # Separate cache hits from misses
-    images_list: list = [None] * len(meals)
-    miss_indices: list[int] = []
-    miss_names: list[str] = []
-
-    for i, m in enumerate(meals):
-        hit = cache_hits[i]
-        if hit is not None:
-            logger.info(
-                "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
-                m["english_name"],
-                hit.source,
-                hit.cosine,
-                hit.image_url,
-            )
-            images_list[i] = hit
-        else:
-            miss_indices.append(i)
-            miss_names.append(m["english_name"])
-
-    # Fetch cache misses in parallel
-    if miss_names:
-        miss_results = await _fetch_images_parallel(
-            miss_names,
-            image_service.search_food_image,
-            timeout=3.0,
-        )
-        for idx, result in zip(miss_indices, miss_results, strict=True):
-            images_list[idx] = result
-
-    # Build pending queue items for misses
-    misses: list[PendingItem] = []
-    for i in miss_indices:
-        img_result = images_list[i]
-        misses.append(
-            PendingItem(
-                meal_name=meals[i]["english_name"],
-                name_slug=_slug(meals[i]["english_name"]),
-                candidate_image_url=(img_result.url if img_result else None),
-                candidate_thumbnail_url=(
-                    img_result.thumbnail_url if img_result else None
-                ),
-                candidate_source=(img_result.source if img_result else None),
-            )
-        )
-
-    if misses:
-        from src.api.dependencies.meal_image_cache import enqueue_pending_images
-
-        await enqueue_pending_images(misses)
-
-    images = images_list
-    # --- end integration ---
+    images = await _fetch_images_parallel(
+        english_names,
+        image_service.search_food_image,
+        timeout=3.0,
+    )
 
     # Translate meal names if non-English
     translated_names = [m["name"] for m in meals]
