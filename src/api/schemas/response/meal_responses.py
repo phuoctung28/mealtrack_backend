@@ -115,6 +115,25 @@ class CustomNutritionResponse(BaseModel):
     fat_per_100g: float = Field(..., description="Fat per 100g")
 
 
+class FoodLabelServingSizeResponse(BaseModel):
+    """Serving-size metadata extracted from a Nutrition Facts label."""
+
+    display_text: str = Field(..., description="Serving size text from label")
+    grams: float = Field(..., gt=0, description="Serving size in grams")
+
+
+class FoodLabelMetadataResponse(BaseModel):
+    """Client-facing metadata for a food-label scan."""
+
+    product_name: str = Field(..., description="Product name")
+    brand: Optional[str] = Field(None, description="Brand when visible")
+    serving_size: FoodLabelServingSizeResponse
+    servings_per_package: float = Field(..., gt=0)
+    label_calories_per_serving: Optional[float] = Field(None, ge=0)
+    confidence: float = Field(..., ge=0, le=1)
+    label_notes: List[str] = Field(default_factory=list)
+
+
 class FoodItemResponse(BaseModel):
     """Response DTO for food item information."""
 
@@ -144,6 +163,7 @@ class SimpleMealResponse(BaseModel):
     meal_type: Optional[str] = Field(
         None, description="Meal type (breakfast, lunch, dinner, snack)"
     )
+    source: Optional[str] = Field(None, description="Meal source")
     ready_at: Optional[datetime] = Field(None, description="When analysis completed")
     error_message: Optional[str] = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Creation timestamp")
@@ -164,6 +184,9 @@ class DetailedMealResponse(SimpleMealResponse):
     total_nutrition: Optional[MacrosResponse] = Field(None, description="Total macros")
     translations: Optional[Dict[str, MealTranslationResponse]] = Field(
         None, description="Translations keyed by language code"
+    )
+    food_label_metadata: Optional[FoodLabelMetadataResponse] = Field(
+        None, description="Nutrition Facts metadata for food-label scans"
     )
     # Recipe details (populated for AI suggestions, null for scanned/manual meals)
     description: Optional[str] = Field(None, description="Meal description")

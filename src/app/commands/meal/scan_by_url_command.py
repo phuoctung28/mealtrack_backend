@@ -17,3 +17,4 @@ class ScanByUrlCommand(Command):
     user_description: Optional[str] = None
     target_date: Optional[date] = None
     language: str = "en"
+    scan_mode: str = "scanner"

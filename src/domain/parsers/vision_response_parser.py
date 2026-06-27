@@ -4,7 +4,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.domain.model.ai.nutrition_contracts import (
+    FoodLabelNutritionResponse,
+    VisionNutritionResponse,
+)
 from src.domain.model.nutrition import (
     FoodItem,
     Macros,
@@ -73,6 +76,67 @@ class VisionResponseParser:
         except (KeyError, ValueError, TypeError, ValidationError) as e:
             raise VisionResponseParsingError(
                 f"Failed to parse GPT response: {str(e)}"
+            ) from e
+
+    def parse_food_label_to_nutrition(self, gpt_response: dict[str, Any]) -> Nutrition:
+        """Parse Nutrition Facts label output into a one-serving meal."""
+        try:
+            data = gpt_response.get("structured_data")
+            if not data:
+                raise VisionResponseParsingError(
+                    "No structured data found in GPT response"
+                )
+
+            canonical = FoodLabelNutritionResponse.model_validate(dict(data))
+            macros = Macros(
+                protein=float(canonical.macros_per_serving.protein_g),
+                carbs=float(canonical.macros_per_serving.carbs_g),
+                fat=float(canonical.macros_per_serving.fat_g),
+                fiber=float(canonical.macros_per_serving.fiber_g),
+                sugar=float(canonical.macros_per_serving.sugar_g),
+            )
+            food_item = FoodItem(
+                id=str(uuid.uuid4()),
+                name=canonical.product_name,
+                quantity=float(canonical.serving_size.grams),
+                unit="g",
+                macros=macros,
+                micros=None,
+                confidence=min(max(0.0, float(canonical.confidence)), 1.0),
+                is_custom=True,
+            )
+            return Nutrition(
+                macros=macros,
+                micros=None,
+                food_items=[food_item],
+                confidence_score=min(max(0.0, float(canonical.confidence)), 1.0),
+            )
+        except (KeyError, ValueError, TypeError, ValidationError) as e:
+            raise VisionResponseParsingError(
+                f"Failed to parse food label response: {str(e)}"
+            ) from e
+
+    def parse_food_label_name(self, gpt_response: dict[str, Any]) -> str | None:
+        """Return a display name for a scanned packaged food label."""
+        try:
+            structured_data = gpt_response.get("structured_data", {})
+            product_name = structured_data.get("product_name")
+            brand = structured_data.get("brand")
+            if brand and product_name and brand.lower() not in product_name.lower():
+                return f"{brand} {product_name}"
+            return product_name
+        except (KeyError, TypeError):
+            return None
+
+    def parse_food_label_metadata(self, gpt_response: dict[str, Any]) -> dict[str, Any]:
+        """Return client-facing label metadata after schema validation."""
+        try:
+            structured_data = gpt_response.get("structured_data", {})
+            canonical = FoodLabelNutritionResponse.model_validate(dict(structured_data))
+            return canonical.model_dump()
+        except (KeyError, TypeError, ValidationError, ValueError) as e:
+            raise VisionResponseParsingError(
+                f"Failed to validate food label metadata: {str(e)}"
             ) from e
 
     def validate_structured_data(self, data: dict[str, Any]) -> VisionNutritionResponse:

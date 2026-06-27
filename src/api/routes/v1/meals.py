@@ -93,6 +93,10 @@ async def analyze_meal_image_immediate(
         None,
         description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
     ),
+    scan_mode: str = Query(
+        "scanner",
+        description="scanner for meal photos, food_label for Nutrition Facts labels",
+    ),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
 ):
@@ -122,6 +126,13 @@ async def analyze_meal_image_immediate(
                 details={"size": len(contents), "max_size": MAX_FILE_SIZE},
             )
 
+        if scan_mode not in {"scanner", "food_label"}:
+            raise ValidationException(
+                message="scan_mode must be scanner or food_label",
+                error_code="INVALID_SCAN_MODE",
+                details={"scan_mode": scan_mode},
+            )
+
         parsed_target_date = None
         if target_date:
             try:
@@ -146,6 +157,7 @@ async def analyze_meal_image_immediate(
             target_date=parsed_target_date,
             user_description=sanitized_description,
             language=language,
+            scan_mode=scan_mode,
         )
 
         try:

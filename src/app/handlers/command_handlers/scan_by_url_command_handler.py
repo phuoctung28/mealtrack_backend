@@ -99,7 +99,11 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             )
 
             # Vision analysis via bytes path (never sends URL to the AI provider)
-            if command.user_description:
+            if command.scan_mode == "food_label":
+                vision_result = await self.vision_service.analyze_food_label(
+                    image_bytes
+                )
+            elif command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,
                 )
@@ -120,6 +124,58 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 if isinstance(vision_result, dict)
                 else {}
             )
+
+            if command.scan_mode == "food_label":
+                nutrition = self.gpt_parser.parse_food_label_to_nutrition(
+                    vision_result
+                )
+                label_metadata = self.gpt_parser.parse_food_label_metadata(
+                    vision_result
+                )
+                if not label_metadata.get("is_food_label", True):
+                    raise ValueError(
+                        "Nutrition Facts label could not be read. "
+                        "Please retake the label photo and try again."
+                    )
+
+                meal = Meal(
+                    meal_id=str(uuid4()),
+                    user_id=command.user_id,
+                    status=MealStatus.READY,
+                    created_at=meal_datetime,
+                    meal_type=meal_type,
+                    image=MealImage(
+                        image_id=image_id,
+                        format="jpeg",
+                        size_bytes=len(raw_bytes),
+                        url=command.image_url,
+                    ),
+                    source="food_label",
+                    dish_name=self.gpt_parser.parse_food_label_name(vision_result)
+                    or "Food label",
+                    ready_at=utc_now(),
+                    raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
+                    nutrition=nutrition,
+                )
+
+                async with self.uow as uow:
+                    saved_meal = await uow.meals.save(meal)
+                    await uow.commit()
+
+                logger.info(
+                    "[SCAN-BY-URL-FOOD-LABEL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",
+                    saved_meal.meal_id,
+                    vision_elapsed,
+                    time.time() - start,
+                )
+
+                if self.cache_invalidation:
+                    await self.cache_invalidation.after_meal_write(
+                        command.user_id, meal_date
+                    )
+
+                return saved_meal
+
             bev_meta = structured_data.get("beverage_metadata") if structured_data else None
 
             if bev_meta and bev_meta.get("is_packaged_beverage"):

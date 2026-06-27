@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from src.domain.model.ai.nutrition_contracts import (
     AINutritionMacros,
     BeverageMetadata,
+    FoodLabelNutritionResponse,
     MealTextNutritionResponse,
     VisionNutritionResponse,
 )
@@ -277,6 +278,39 @@ class TestVisionNutritionResponse:
                 {
                     "is_packaged_beverage": True,
                     "brand": "X" * 101,
+                }
+            )
+
+
+class TestFoodLabelNutritionResponse:
+    def test_accepts_food_label_serving_contract(self):
+        response = FoodLabelNutritionResponse.model_validate(
+            {
+                "product_name": "Cereal",
+                "brand": "Acme",
+                "serving_size": {"display_text": "2/3 cup (55g)", "grams": 55},
+                "servings_per_package": 8,
+                "label_calories_per_serving": 230,
+                "macros_per_serving": _valid_macros(),
+                "confidence": 0.91,
+                "label_notes": ["Includes 10g added sugars"],
+            }
+        )
+
+        assert response.is_food_label is True
+        assert response.product_name == "Cereal"
+        assert response.serving_size.grams == pytest.approx(55)
+        assert response.servings_per_package == pytest.approx(8)
+        assert response.macros_per_serving.protein_g == pytest.approx(35)
+
+    def test_rejects_missing_serving_grams(self):
+        with pytest.raises(ValidationError):
+            FoodLabelNutritionResponse.model_validate(
+                {
+                    "product_name": "Cereal",
+                    "serving_size": {"display_text": "2/3 cup"},
+                    "servings_per_package": 8,
+                    "macros_per_serving": _valid_macros(),
                 }
             )
 

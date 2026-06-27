@@ -21,7 +21,7 @@ def _make_uow() -> MagicMock:
     uow.users = MagicMock()
     uow.users.get_user_timezone = AsyncMock(return_value="UTC")
     uow.meals = MagicMock()
-    uow.meals.save = AsyncMock()
+    uow.meals.save = AsyncMock(side_effect=lambda meal: meal)
     uow.meals.find_by_id = AsyncMock()
     uow.hydration_entries = MagicMock()
     uow.hydration_entries.add = AsyncMock(side_effect=lambda entry: entry)
@@ -111,3 +111,60 @@ async def test_scan_by_url_beverage_creates_hydration_entry_not_meal(monkeypatch
     assert result.meal_type == "hydration"
     assert result.source == "scan_beverage"
     assert result.image.url == _IMAGE_URL
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    _install_fake_image_download(monkeypatch)
+    uow = _make_uow()
+    cache = MagicMock()
+    cache.after_meal_write = AsyncMock()
+    handler = ScanByUrlCommandHandler(
+        uow=uow,
+        event_bus=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+        cache_invalidation=cache,
+    )
+    handler.vision_service.analyze_food_label = AsyncMock(
+        return_value={"is_food_label": True, "product_name": "Protein Bar"}
+    )
+    handler.gpt_parser.parse_food_label_to_nutrition.return_value = Nutrition(
+        macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
+        food_items=[
+            FoodItem(
+                id="label-item",
+                name="Protein Bar",
+                quantity=55,
+                unit="g",
+                macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
+                is_custom=True,
+            )
+        ],
+    )
+    handler.gpt_parser.parse_food_label_metadata.return_value = {"is_food_label": True}
+    handler.gpt_parser.parse_food_label_name.return_value = "Protein Bar"
+    handler.gpt_parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
+    handler.gpt_parser.parse_is_food = MagicMock()
+
+    result = await handler.handle(
+        ScanByUrlCommand(
+            user_id=_USER_ID,
+            image_url=_IMAGE_URL,
+            public_id="mealtrack/00000000-0000-0000-0000-000000000002",
+            scan_mode="food_label",
+        )
+    )
+
+    handler.vision_service.analyze_food_label.assert_awaited_once_with(
+        b"fake-image-bytes"
+    )
+    uow.meals.save.assert_awaited_once()
+    handler.gpt_parser.parse_is_food.assert_not_called()
+    cache.after_meal_write.assert_awaited_once()
+    assert result.source == "food_label"
+    assert result.dish_name == "Protein Bar"
+    assert result.emoji is None
+    assert result.nutrition.food_items[0].quantity == 55

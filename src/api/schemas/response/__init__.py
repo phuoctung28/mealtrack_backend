@@ -27,6 +27,8 @@ from .meal_responses import (
     MacrosResponse,
     NutritionResponse,
     FoodItemResponse,
+    FoodLabelMetadataResponse,
+    FoodLabelServingSizeResponse,
     ManualMealCreationResponse,
     MealStatusEnum,
 )
@@ -76,6 +78,8 @@ __all__ = [
     "MacrosResponse",
     "NutritionResponse",
     "FoodItemResponse",
+    "FoodLabelMetadataResponse",
+    "FoodLabelServingSizeResponse",
     "ManualMealCreationResponse",
     "MealStatusEnum",
     # TDEE

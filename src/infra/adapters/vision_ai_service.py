@@ -12,13 +12,17 @@ from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
 )
-from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.domain.model.ai.nutrition_contracts import (
+    FoodLabelNutritionResponse,
+    VisionNutritionResponse,
+)
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.ai_output_validation_service import (
     validate_ai_output,
 )
 from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
+    FoodLabelAnalysisStrategy,
     IngredientIdentificationStrategy,
     MealAnalysisStrategy,
 )
@@ -32,6 +36,7 @@ MAX_URL_IMAGE_BYTES = 5 * 1024 * 1024
 URL_FETCH_TIMEOUT_SECONDS = 10
 ALLOWED_URL_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 VISION_VALIDATION_PURPOSE = "meal_scan"
+FOOD_LABEL_VALIDATION_PURPOSE = "food_label_scan"
 
 
 class VisionAIService(VisionAIServicePort):
@@ -99,18 +104,28 @@ class VisionAIService(VisionAIServicePort):
             return await self._analyze_without_nutrition_contract(image_bytes, strategy)
 
         try:
+            schema = (
+                FoodLabelNutritionResponse
+                if isinstance(strategy, FoodLabelAnalysisStrategy)
+                else VisionNutritionResponse
+            )
+            validation_purpose = (
+                FOOD_LABEL_VALIDATION_PURPOSE
+                if isinstance(strategy, FoodLabelAnalysisStrategy)
+                else VISION_VALIDATION_PURPOSE
+            )
             result = await self._ai_manager.generate_with_vision(
                 purpose=ModelPurpose.MEAL_SCAN,
                 prompt=strategy.get_user_message(),
                 image_data=image_bytes,
                 system_message=strategy.get_analysis_prompt(),
                 max_tokens=self._max_output_tokens,
-                schema=VisionNutritionResponse,
+                schema=schema,
             )
             structured_data = validate_ai_output(
                 result,
-                schema=VisionNutritionResponse,
-                purpose=VISION_VALIDATION_PURPOSE,
+                schema=schema,
+                purpose=validation_purpose,
                 attempt_count=1,
             )
             return {
@@ -122,7 +137,7 @@ class VisionAIService(VisionAIServicePort):
             logger.warning(
                 "[AI-OUTPUT-VALIDATION-FAILED] purpose=%s strategy=%s attempt=%s "
                 "details=%s",
-                VISION_VALIDATION_PURPOSE,
+                validation_purpose,
                 strategy.get_strategy_name(),
                 exc.attempt_count,
                 exc.validation_details,
@@ -223,6 +238,11 @@ class VisionAIService(VisionAIServicePort):
         strategy = AnalysisStrategyFactory.create_basic_strategy(
             optimized_prompt_enabled=self._optimized_prompt_enabled
         )
+        return await self.analyze_with_strategy(image_bytes, strategy)
+
+    async def analyze_food_label(self, image_bytes: bytes) -> dict[str, Any]:
+        """Analyze a packaged food Nutrition Facts label image."""
+        strategy = AnalysisStrategyFactory.create_food_label_strategy()
         return await self.analyze_with_strategy(image_bytes, strategy)
 
     async def analyze_with_portion_context(

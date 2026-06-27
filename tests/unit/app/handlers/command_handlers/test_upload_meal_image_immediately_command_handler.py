@@ -1,5 +1,6 @@
 """Tests for UploadMealImageImmediatelyHandler — focusing on retry/fallback routing."""
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
@@ -12,10 +13,11 @@ def _make_command():
     cmd = Mock(spec=UploadMealImageImmediatelyCommand)
     cmd.file_contents = b"fake_image_bytes"
     cmd.content_type = "image/jpeg"
-    cmd.user_id = "user-123"
+    cmd.user_id = "00000000-0000-0000-0000-000000000001"
     cmd.user_description = None
     cmd.target_date = None
     cmd.language = None
+    cmd.scan_mode = "scanner"
     return cmd
 
 
@@ -33,6 +35,7 @@ def _make_handler(vision_analyze_mock, max_attempts: int = 3):
 
     vision_service = Mock()
     vision_service.analyze = vision_analyze_mock
+    vision_service.analyze_food_label = AsyncMock()
 
     handler = UploadMealImageImmediatelyHandler(
         uow=Mock(),
@@ -45,6 +48,18 @@ def _make_handler(vision_analyze_mock, max_attempts: int = 3):
         cache_invalidation=None,
     )
     return handler
+
+
+def _make_uow():
+    uow = MagicMock()
+    uow.__aenter__ = AsyncMock(return_value=uow)
+    uow.__aexit__ = AsyncMock(return_value=False)
+    uow.users = MagicMock()
+    uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    uow.meals = MagicMock()
+    uow.meals.save = AsyncMock(side_effect=lambda meal: meal)
+    uow.commit = AsyncMock()
+    return uow
 
 
 class TestVisionRetryRouting:
@@ -129,3 +144,80 @@ class TestVisionRetryRouting:
             await handler._run_vision_analysis(_make_command(), meal_id="meal-abc")
 
         assert analyze_mock.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_food_label_mode_uses_label_analyzer(self):
+        """Food-label scans route through the label-specific analyzer."""
+        analyze_mock = AsyncMock()
+        handler = _make_handler(analyze_mock, max_attempts=3)
+        command = _make_command()
+        command.scan_mode = "food_label"
+        handler.vision_service.analyze_food_label = AsyncMock(
+            return_value={"is_food_label": True}
+        )
+
+        result = await handler._run_vision_analysis(command, meal_id="meal-abc")
+
+        assert result == {"is_food_label": True}
+        handler.vision_service.analyze_food_label.assert_awaited_once_with(
+            command.file_contents
+        )
+        analyze_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_food_label_parallel_upload_persists_ready_label_meal(self):
+        from src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler import (
+            UploadMealImageImmediatelyHandler,
+        )
+        from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+        command = _make_command()
+        command.scan_mode = "food_label"
+        uow = _make_uow()
+        image_store = Mock()
+        image_store.save_async = AsyncMock(return_value="https://cdn.test/label.jpg")
+        vision_service = Mock()
+        vision_service.analyze_food_label = AsyncMock(
+            return_value={"is_food_label": True, "product_name": "Protein Bar"}
+        )
+        parser = Mock()
+        parser.parse_food_label_to_nutrition.return_value = Nutrition(
+            macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
+            food_items=[
+                FoodItem(
+                    id="label-item",
+                    name="Protein Bar",
+                    quantity=55,
+                    unit="g",
+                    macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
+                    is_custom=True,
+                )
+            ],
+        )
+        parser.parse_food_label_name.return_value = "Protein Bar"
+        parser.parse_food_label_metadata.return_value = {"is_food_label": True}
+        parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
+        parser.parse_is_food = Mock()
+        cache = Mock()
+        cache.after_meal_write = AsyncMock()
+
+        handler = UploadMealImageImmediatelyHandler(
+            uow=uow,
+            event_bus=Mock(),
+            image_store=image_store,
+            vision_service=vision_service,
+            gpt_parser=parser,
+            fast_path_policy=_make_fast_path_policy(),
+            cache_invalidation=cache,
+        )
+
+        meal = await handler._handle_parallel_upload(command)
+
+        assert meal.status.value == "READY"
+        assert meal.source == "food_label"
+        assert meal.dish_name == "Protein Bar"
+        assert meal.emoji is None
+        assert meal.nutrition.food_items[0].quantity == 55
+        uow.meals.save.assert_awaited_once()
+        cache.after_meal_write.assert_awaited_once()
+        parser.parse_is_food.assert_not_called()

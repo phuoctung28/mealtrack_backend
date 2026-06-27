@@ -361,3 +361,48 @@ class TestGPTResponseParserQuantityGMapping:
         # Calories = protein*4 + carbs*4 + fat*9 = 3*4 + 28*4 + 0.5*9 = 12 + 112 + 4.5 = 128.5
         assert nutrition.calories == pytest.approx(128.5, abs=1.0)
         assert nutrition.calories < 500
+
+
+def test_parse_food_label_to_nutrition_logs_one_serving(gpt_parser):
+    gpt_response = {
+        "structured_data": {
+            "product_name": "Cereal",
+            "brand": "Acme",
+            "serving_size": {"display_text": "2/3 cup (55g)", "grams": 55},
+            "servings_per_package": 8,
+            "label_calories_per_serving": 230,
+            "macros_per_serving": {
+                "protein_g": 3,
+                "carbs_g": 37,
+                "fat_g": 8,
+                "fiber_g": 4,
+                "sugar_g": 12,
+            },
+            "confidence": 0.91,
+        }
+    }
+
+    nutrition = gpt_parser.parse_food_label_to_nutrition(gpt_response)
+
+    assert nutrition.food_items[0].name == "Cereal"
+    assert nutrition.food_items[0].quantity == pytest.approx(55)
+    assert nutrition.food_items[0].unit == "g"
+    assert nutrition.calories == pytest.approx(224)
+
+
+def test_parse_food_label_metadata_returns_validated_label_data(gpt_parser):
+    gpt_response = {
+        "structured_data": {
+            "product_name": "Cereal",
+            "serving_size": {"display_text": "55g", "grams": 55},
+            "servings_per_package": 8,
+            "macros_per_serving": {"protein_g": 3, "carbs_g": 37, "fat_g": 8},
+            "confidence": 0.91,
+        }
+    }
+
+    metadata = gpt_parser.parse_food_label_metadata(gpt_response)
+
+    assert metadata["product_name"] == "Cereal"
+    assert metadata["serving_size"]["grams"] == pytest.approx(55)
+    assert metadata["servings_per_package"] == pytest.approx(8)
