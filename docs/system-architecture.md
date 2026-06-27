@@ -1,9 +1,9 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 22, 2026
+**Last Updated:** June 27, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 620 Python files, ~52.6K LOC in `src/`
+**Codebase:** 627 Python files, 53,972 LOC in `src/`
 
 ---
 
@@ -11,17 +11,17 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (89 files)                    │
+│                      API Layer (91 files)                    │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (208 files)                   │
+│              Application Layer (207 files)                   │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (160 files)                      │
+│                Domain Layer (166 files)                      │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
@@ -37,11 +37,11 @@
 
 | Layer | Files | LOC | Key Contents |
 |-------|-------|-----|-------------|
-| API | 89 | ~10,361 | 26 router registrations, 83 endpoint decorators, schemas, middleware, dependencies |
-| App | 208 | ~10,984 | 51 command files, 50 query files, 15 event files, 87 handler files |
-| Domain | 160 | ~15,460 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
-| Infra | 154 | ~15,041 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
-| **Total** | **611** | **~51,846** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
+| API | 91 | 10,624 | 28 route files, 26 endpoint route modules, 85 endpoint decorators, schemas, middleware, dependencies |
+| App | 207 | 11,192 | 37 command files, 34 query files, 10 event files, 75 handler files |
+| Domain | 166 | 16,283 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
+| Infra | 154 | 15,134 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
+| **Total** | **618** | **53,233** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
 
 **Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns.
 
@@ -53,13 +53,13 @@
 Domain defines port interfaces; infrastructure implements them. Handlers depend on abstractions.
 
 ### CQRS
-- **Commands** — write operations, publish events (CreateMeal, UpdateUserMetrics)
+- **Commands** — write operations, publish events (CreateManualMeal, UpdateUserMetrics)
 - **Queries** — read-only, return immediately (GetMealById, SearchFoods)
 - **Events** — fire-and-forget, processed async (MealCreated, UserOnboarded)
 
 ### Event Bus (PyMediator Singleton)
 ```python
-result = await event_bus.send(CreateMealCommand(...))    # synchronous
+result = await event_bus.send(CreateManualMealCommand(...))    # synchronous
 await event_bus.publish(MealCreatedEvent(...))           # fire-and-forget
 ```
 
@@ -69,7 +69,7 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
 
 ### Observability Connector
-Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Infrastructure owns the Sentry connector, and startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
+Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 
 The connector sends unexpected API failures, `ERROR` logs, sampled request/SQL/cron spans, explicit Sentry Logs, operational metrics, swallowed cron failures, and affiliate outbox permanent failures. It does not send expected 4xx/business errors, product analytics, request bodies, auth headers, Firebase claims, emails, food payloads, raw image URLs, provider payloads, or secrets. Context, log attributes, and metric attributes are allowlisted scalar values.
 
@@ -114,7 +114,7 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 4. Handler uploads to Cloudinary, creates Meal (PROCESSING), publishes `MealImageUploadedEvent`
 5. Handler returns Meal immediately to API (synchronous response to client)
 6. `EventBus.publish()` → `MealAnalysisEventHandler` (background)
-7. Background: calls `VisionAIService` (Gemini), parses nutrition, updates Meal to READY
+7. Background: calls `VisionAIService` through the provider stack, parses nutrition, updates Meal to READY
 
 ---
 

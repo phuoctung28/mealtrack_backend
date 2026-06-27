@@ -5,16 +5,16 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 ## Quick Links
 
 - **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Vision, goals, and requirements.
-- **[System Architecture](./docs/architecture/index.md)** - Multi-layer architecture and data flow.
-- **[Code Standards](./docs/standards/index.md)** - Development guidelines and patterns.
+- **[System Architecture](./docs/system-architecture.md)** - Multi-layer architecture and data flow.
+- **[Code Standards](./docs/code-standards.md)** - Development guidelines and patterns.
 - **[Codebase Summary](./docs/codebase-summary.md)** - Directory structure and file organization.
 - **[Project Roadmap](./docs/project-roadmap.md)** - Future plans and completed features.
 
 ## 🚀 Features
 
-- **AI-Powered Meal Analysis**: Vision-based food recognition with 6 analysis strategies (basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined).
-- **12 REST Route Modules**: 50+ endpoints covering meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks.
-- **CQRS Architecture**: 29 commands, 23 queries, 10+ domain events with PyMediator event bus (singleton pattern).
+- **AI-Powered Meal Analysis**: Vision-based food recognition with 6 analysis strategies and provider fallback routing.
+- **26 Endpoint Route Modules**: 85 endpoint decorators covering meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks, and support routes.
+- **CQRS Architecture**: Commands, queries, events, and handlers wired through a PyMediator singleton event bus.
 - **Intelligent Planning**: AI-generated weekly plans with dietary preferences, cooking time constraints, and ingredient-based generation.
 - **Vector Search**: Pinecone semantic search with 1024-dim embeddings (llama-text-embed-v2).
 - **Real-time Chat**: WebSocket + REST endpoints with streaming AI responses via MessageOrchestrationService.
@@ -23,12 +23,12 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 ## 🛠 Technology Stack
 
-- **Core**: FastAPI 0.115+ (Python 3.13.2), SQLAlchemy 2.0 async runtime (`AsyncSession`, `AsyncUnitOfWork`).
+- **Core**: FastAPI 0.136.3 (Python 3.13.2), SQLAlchemy 2.0 async runtime (`AsyncSession`, `AsyncUnitOfWork`).
 - **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0, Redis 7.0 for selective optional caching; required state documented separately.
-- **AI**: OpenAI via LangChain for image scanning, Cloudflare Workers AI first for text tasks, Cloudflare embeddings, Pinecone Inference API (1024-dim).
+- **AI**: OpenAI via LangChain/Responses API as the default text and vision provider, with optional Cloudflare Workers AI routing for configured text purposes and vision fallback; Pinecone Inference API for embeddings.
 - **Infrastructure**: Firebase (JWT Auth + FCM), Cloudinary (image storage), RevenueCat (subscriptions).
 - **Event Bus**: PyMediator with singleton registry for CQRS.
-- **Testing**: pytest (1,499+ tests), ruff (linting), mypy (type checking).
+- **Testing**: pytest (unit-biased default config), ruff (linting), mypy (type checking).
 
 ### OpenAI Prompt Caching
 
@@ -42,10 +42,10 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 Follows a **4-Layer Clean Architecture** with **CQRS** and **Event-Driven Design**:
 
-1. **API Layer** (74 files, ~8,241 LOC): HTTP routing, Pydantic validation, 8 mappers, 3-layer middleware.
-2. **Application Layer** (136 files, ~5,968 LOC): CQRS - 29 commands, 23 queries, 10+ events, 40+ handlers.
-3. **Domain Layer** (130 files, ~14,079 LOC): 50+ domain services, 8 bounded contexts, 17 port interfaces, 6 analysis strategies.
-4. **Infrastructure Layer** (77 files, ~8,671 LOC): 11 database models, 10+ repositories, external service adapters, Redis cache, PyMediator event bus with singleton registry.
+1. **API Layer** (91 files, 10,624 LOC): 26 endpoint route modules, 85 endpoint decorators, schemas, middleware, dependencies, and API mappers.
+2. **Application Layer** (207 files, 11,192 LOC): CQRS command/query/event handlers and orchestration services.
+3. **Domain Layer** (166 files, 16,283 LOC): entities, services, ports, policies, and bounded contexts.
+4. **Infrastructure Layer** (154 files, 15,134 LOC): database models, repositories, external adapters, cache, observability, and event bus implementation.
 
 ## 🚦 Getting Started
 
@@ -65,4 +65,4 @@ uvicorn src.api.main:app --reload
 ```
 
 - **Swagger Docs**: http://localhost:8000/docs
-- **Tests**: `pytest --cov=src`
+- **Tests**: `pytest` for the default non-integration suite; CI runs `pytest tests/unit --cov=src --cov-fail-under=65`

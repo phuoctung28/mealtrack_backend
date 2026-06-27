@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.6.5
-**Last Updated:** June 13, 2026
-**Status:** Production-ready. 430 Python files, ~38.5K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: configurable referral commissions, BMR floor protection, custom unit normalization, email Universal Links, AsyncUnitOfWork concurrency guard, AI nutrition validation retries.
+**Version:** 0.6.6
+**Last Updated:** June 27, 2026
+**Status:** Production-ready. 627 Python files in `src/`, 53,972 LOC in `src/`, 306 Python files in `tests/`, and 1,600+ collected tests. Latest verified changes: OpenAI-first AI routing, journey progress seed, upload-token smoke coverage, and pydantic-settings/CI alignment.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It implements Clean Architecture with CQRS pattern across 4 layers (430 files, ~38K LOC), integrating AI vision (Gemini 2.5 Flash with 6 analysis strategies) and chat (streaming responses via MessageOrchestrationService, AIResponseCoordinator) for real-time food recognition and personalized nutrition planning. The system handles 50+ REST endpoints across 12 route modules, supports 7 languages, and maintains 70%+ test coverage with 681+ tests. Latest stats: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC).
+MealTrack Backend is a FastAPI-based service for meal tracking and nutritional analysis. It implements Clean Architecture with CQRS across 4 layers, while `src/` also includes bootstrap, cron, and observability modules outside the layer directories. The current API surface spans 28 route files, 26 endpoint-bearing route modules, and 85 endpoint decorators; the test suite is unit-biased by default and exceeds 1,600 collected tests.
 
 ---
 
@@ -18,7 +18,7 @@ MealTrack Backend is a FastAPI-based service powering intelligent meal tracking 
 Empower users to understand their nutrition through effortless, AI-driven tracking and personalized recommendations.
 
 ### Primary Goals
-1. **Accuracy**: >90% food recognition accuracy via Gemini Vision.
+1. **Accuracy**: >90% food recognition accuracy via the vision provider stack.
 2. **Efficiency**: Meal logging in < 30 seconds.
 3. **Personalization**: Goal-based (CUT, BULK, RECOMP) nutritional targets.
 4. **Performance**: API p95 < 500ms.
@@ -30,14 +30,14 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 ### 1. AI-Powered Meal Analysis
 - 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined.
 - Multi-food detection in single image with confidence scoring.
-- Gemini 2.5 Flash with strategy pattern for flexible context handling.
-- Returns results in <3 seconds through state machine (PROCESSING → ANALYZING → READY/FAILED).
+- OpenAI is the default provider; configured Cloudflare Workers AI can take routed text purposes first and vision purposes as fallback.
+- Returns results in <3 seconds through the meal state machine (PROCESSING → ANALYZING → READY/FAILED).
 
-### 2. RESTful API (60+ Endpoints across 17 Route Modules)
+### 2. RESTful API (85 endpoint decorators across 26 endpoint route modules)
 - **Meals**: image/analyze, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
 - **User Profiles**: create, metrics (GET/POST), TDEE, custom-macros.
 - **Users**: sync, Firebase UID lookups, metrics, timezone, language, delete.
-- **Meal Suggestions**: generate (3/session, 4h TTL), discover (6 meals + images), recipes, save.
+- **Meal Suggestions**: discover (6 meals + images), recipes, save.
 - **Saved Suggestions**: list, save, delete.
 - **Foods**: USDA FDC search, details by FDC ID, barcode lookup (6-step cascade).
 - **Ingredients**: image-based recognition.
@@ -87,13 +87,13 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 ---
 
 ## 3. Technical Stack
-- **Framework**: FastAPI 0.115+ (Python 3.13)
-- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0 async runtime, 13+ core tables
+- **Framework**: FastAPI 0.136.3 (Python 3.13.2)
+- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0 async runtime and 39 ORM model files
 - **Cache**: Redis 7.0 for selective optional caching and AI-cost optimization; required state must be modeled separately
 - **Vector DB**: Pinecone Inference API (1024-dim, llama-text-embed-v2)
-- **AI Services**: Google Gemini 2.5 Flash (multi-model for rate distribution)
+- **AI Services**: OpenAI default routing with optional Cloudflare Workers AI fallbacks for configured text and vision purposes
 
-**AI Output Validation (2026-06)**: All Gemini vision and text-parse flows now use canonical Pydantic contracts (`VisionNutritionResponse`, `MealTextNutritionResponse`) with bounded retry. Invalid AI output (over-limit quantities, empty foods) is rejected at the contract boundary with one automatic retry. The parser is a deterministic mapper, not a silent repair engine. Calories are always derived from backend macros, never from AI-reported kcal.
+**AI Output Validation (2026-06)**: Structured meal image and text flows use canonical Pydantic contracts (`VisionNutritionResponse`, `MealTextNutritionResponse`) with one bounded retry. Invalid AI output (over-limit quantities, empty foods) is rejected at the contract boundary. The parser is a deterministic mapper, not a silent repair engine. Calories are always derived from backend macros, never from AI-reported kcal.
 - **Storage**: Cloudinary (image storage with folder organization)
 - **Image Search**: Unsplash + Pexels adapters (meal discovery)
 - **Auth**: Firebase JWT with development bypass middleware
@@ -106,11 +106,11 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 ## 4. Non-Functional Requirements
 - **Reliability**: 99.9% uptime with graceful degradation for external services.
-- **Test Coverage**: 70%+ overall (681+ tests), 100% critical paths.
+- **Test Coverage**: CI enforces unit coverage at 65% minimum; documentation targets remain 70%+ overall and 100% critical paths.
 - **Maintainability**: <200 LOC per file, 4-Layer Clean Architecture with strict separation.
 - **Security**: Firebase JWT verification, RevenueCat webhook auth, soft deletes, input sanitization.
 - **Performance**: Request-scoped DB sessions, Redis caching with TTL, eager loading for queries.
-- **Scalability**: Dynamic connection pool sizing, multi-model Gemini for rate distribution.
+- **Scalability**: Dynamic connection pool sizing and provider fallback routing for AI workloads.
 - **Observability**: Request ID tracking, slow request detection (>1s), structured error responses.
 
 ---
@@ -119,6 +119,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.6.6 | Jun 27, 2026 | Documentation refresh for current runtime versions, current codebase metrics, OpenAI-first AI routing, and updated test/CI defaults. |
 | 0.6.5 | Jun 13, 2026 | Added validation retry orchestration for structured AI nutrition output, with exactly one repair attempt for meal image scan and text parse flows, controlled `AIOutputValidationError` handling, preserved ingredient-recognition's unstructured contract, and kept calorie divergence checks anchored to backend-derived macro calories. |
 | 0.6.4 | Jun 13, 2026 | Added canonical AI nutrition contracts for image and text flows, rejected impossible over-limit food quantities at validation time, preserved current text-parse macro compatibility, and removed silent invalid-food filtering from the legacy parser. |
 | 0.6.2 | May 15, 2026 | Configurable referral commissions (`REFERRAL_COMMISSIONS` env var, per-currency JSON). Custom unit-to-grams fix in nutrition calculation. BMR floor raised to 85% of standard daily; cutting deficit 500→300 kcal; clinical minimums 1200F/1500M. Email Universal Links (apple-app-site-association, /app-download). AsyncUnitOfWork concurrency guard (asyncio.Lock). Variable-length referral codes (3–15 chars). |

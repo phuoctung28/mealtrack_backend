@@ -16,7 +16,7 @@ Mobile → POST /v1/meals/image/analyze or /v1/meals/scan-by-url
          ↓
 UploadMealImageImmediatelyHandler or ScanByUrlCommandHandler
   1. Get image bytes (multipart upload or Cloudinary URL download)
-  2. GeminiService.vision(MEAL_SCAN, image_bytes, VISION_ANALYSIS prompt)
+  2. VisionAIService routes MEAL_SCAN through the configured provider stack
   3. VisionAIService._to_legacy_vision_payload() → includes beverage_metadata
   4. bev_meta = structured_data.get("beverage_metadata")
   5. if bev_meta.is_packaged_beverage → hydration-only scan path
@@ -36,7 +36,7 @@ compatibility row in `meals`.
 
 ## BeverageMetadata Contract
 
-Gemini returns this when `is_packaged_beverage=true`:
+The vision provider returns this when `is_packaged_beverage=true`:
 
 ```json
 {
@@ -72,7 +72,7 @@ hydration_weight = compute_hydration_weight(label_source, sugar_per_100ml)
 
 ## Volume Heuristics
 
-If Gemini cannot read the label volume, the prompt instructs it to estimate:
+If the vision provider cannot read the label volume, the prompt instructs it to estimate:
 
 | Container | Default ml |
 |-----------|-----------|
@@ -106,9 +106,9 @@ new_entries = [e for e in hydration_entries if e.legacy_meal_id not in meal_id_s
 
 ## Observability
 
-GeminiService emits per-call structured logs:
+The AI provider stack emits per-call structured logs:
 ```
-[AI-CALL] method=vision purpose=MEAL_SCAN model=gemini-2.5-flash-lite latency_ms=1240 retry_count=0 fallback_used=False
+[AI-ATTEMPT] purpose=meal_scan model=gpt-5.4-mini-2026-03-17
 ```
 
 Beverages with estimated nutrition log a WARNING:
