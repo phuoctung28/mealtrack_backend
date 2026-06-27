@@ -2,7 +2,7 @@
 Unit tests for food database feature: search, details, and manual meal creation.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 import pytest
 
@@ -11,18 +11,21 @@ import pytest
 class StubFoodDataService:
     async def search_foods(
         self, query: str, limit: int = 20, max_results: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         return [
             {
-                "fdcId": 12345,
                 "description": "Chicken, breast, grilled",
-                "brandOwner": None,
-                "dataType": "Foundation",
-                "publishedDate": "2020-01-01",
+                "brand": None,
+                "source": "fatsecret",
+                "food_id": "12345",
+                "calories_100g": 165.0,
+                "protein_100g": 31.0,
+                "carbs_100g": 0.0,
+                "fat_100g": 3.6,
             }
         ]
 
-    async def get_food_details(self, fdc_id: int) -> Dict[str, Any]:
+    async def get_food_details(self, fdc_id: int) -> dict[str, Any]:
         # Return USDA-style details with nutrient IDs
         return {
             "fdcId": fdc_id,
@@ -63,19 +66,19 @@ class StubFoodDataService:
 
 
 class NoopFoodCacheService:
-    async def get_cached_search(self, query: str) -> Optional[List[Dict[str, Any]]]:
+    async def get_cached_search(self, query: str) -> list[dict[str, Any]] | None:
         return None
 
     async def cache_search(
-        self, query: str, results: List[Dict[str, Any]], ttl: int = 3600
+        self, query: str, results: list[dict[str, Any]], ttl: int = 3600
     ):
         return None
 
-    async def get_cached_food(self, fdc_id: int) -> Optional[Dict[str, Any]]:
+    async def get_cached_food(self, fdc_id: int) -> dict[str, Any] | None:
         return None
 
     async def cache_food(
-        self, fdc_id: int, food_data: Dict[str, Any], ttl: int = 86400
+        self, fdc_id: int, food_data: dict[str, Any], ttl: int = 86400
     ):
         return None
 
@@ -83,7 +86,7 @@ class NoopFoodCacheService:
 # Lightweight in-memory meal repository stub
 class InMemoryMealRepository:
     def __init__(self):
-        self._store: Dict[str, Any] = {}
+        self._store: dict[str, Any] = {}
 
     async def save(self, meal):
         self._store[meal.meal_id] = meal
@@ -96,8 +99,8 @@ class InMemoryMealRepository:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_search_foods_query_handler_returns_mapped_results(monkeypatch):
-    from src.app.queries.food.search_foods_query import SearchFoodsQuery
     from src.app.handlers.query_handlers import SearchFoodsQueryHandler
+    from src.app.queries.food.search_foods_query import SearchFoodsQuery
     from src.domain.services.food_mapping_service import FoodMappingService
 
     handler = SearchFoodsQueryHandler(
@@ -112,16 +115,18 @@ async def test_search_foods_query_handler_returns_mapped_results(monkeypatch):
     assert "results" in result
     assert len(result["results"]) == 1
     item = result["results"][0]
-    assert item["fdc_id"] == 12345
+    assert item["fdc_id"] is None
+    assert item["food_id"] == "12345"
     assert item["name"].lower().startswith("chicken")
-    assert item["data_type"] == "Foundation"
+    assert item["data_type"] == "fatsecret"
+    assert item["source"] == "fatsecret"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_food_details_query_handler_maps_nutrients():
-    from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
     from src.app.handlers.query_handlers import GetFoodDetailsQueryHandler
+    from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
     from src.domain.services.food_mapping_service import FoodMappingService
 
     handler = GetFoodDetailsQueryHandler(
@@ -147,10 +152,11 @@ async def test_get_food_details_query_handler_maps_nutrients():
 async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     # Arrange
     from unittest.mock import AsyncMock, MagicMock
+
     from src.app.commands.meal.create_manual_meal_command import (
         CreateManualMealCommand,
-        ManualMealItem,
         CustomNutrition,
+        ManualMealItem,
     )
     from src.app.handlers.command_handlers.create_manual_meal_command_handler import (
         CreateManualMealCommandHandler,

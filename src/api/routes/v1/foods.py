@@ -1,5 +1,5 @@
 """
-Foods API routes: search and details via USDA, barcode lookup via OpenFoodFacts.
+Foods API routes: manual search/autocomplete, details, and barcode lookup.
 
 Uses a lightweight singleton event bus to avoid re-initializing
 heavy services (Cloudinary, AI providers, etc.) on every request.
@@ -26,10 +26,28 @@ async def search_foods(
     q: str = Query(..., min_length=1),
     limit: int = Query(20, ge=1, le=50),
 ):
-    """Search foods using lightweight singleton event bus."""
+    """Search foods for manual logging using the lightweight event bus."""
     event_bus = get_food_search_event_bus()
     language = get_request_language(request)
     query = SearchFoodsQuery(query=q, limit=limit, language=language)
+    return await event_bus.send(query)
+
+
+@router.get("/autocomplete")
+async def autocomplete_foods(
+    request: Request,
+    q: str = Query(..., min_length=1),
+    limit: int = Query(10, ge=1, le=20),
+):
+    """Autocomplete foods for manual logging using the search provider path."""
+    event_bus = get_food_search_event_bus()
+    language = get_request_language(request)
+    query = SearchFoodsQuery(
+        query=q,
+        limit=limit,
+        language=language,
+        autocomplete=True,
+    )
     return await event_bus.send(query)
 
 
