@@ -22,7 +22,13 @@ class BarcodeProductResponse(BaseModel):
     image_url: Optional[str] = Field(None, description="Product image URL")
     source: Optional[str] = Field(
         None,
-        description="Data source: cache, fatsecret, openfoodfacts, brave_search, ai_estimate",
+        description=(
+            "Data source: cache, fatsecret, openfoodfacts, usda_fdc, "
+            "brave_search, fatsecret_name_search, ai_estimate"
+        ),
+    )
+    provider_source: Optional[str] = Field(
+        None, description="Original provider source when source is cache"
     )
     food_reference_id: Optional[int] = Field(
         None, description="Food reference table ID"

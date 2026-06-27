@@ -252,6 +252,8 @@ def get_food_search_event_bus() -> EventBus:
             brave_search_service=brave_search_service,
             meal_generation_service=meal_generation_service,
             macro_validation_service=macro_validation_service,
+            food_data_service=food_data_service,
+            food_mapping_service=food_mapping_service,
         ),
     )
 

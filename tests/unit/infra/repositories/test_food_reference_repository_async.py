@@ -188,7 +188,7 @@ async def test_upsert_by_normalized_name_verified_protection_skips_upsert():
 async def test_upsert_by_barcode_uses_on_conflict_and_flushes_children():
     row = _food_row()
     row.barcode = "123"
-    session = _AsyncSession([_Result(), _Result(rows=[row])])
+    session = _AsyncSession([_Result(rows=[]), _Result(), _Result(rows=[row])])
     repo = AsyncFoodReferenceRepository(session)
     statement = MagicMock()
     statement.values.return_value = statement
@@ -215,3 +215,65 @@ async def test_upsert_by_barcode_uses_on_conflict_and_flushes_children():
     assert session.flush.await_count == 2
     assert row.serving_size_rows
     assert row.nutrient_rows
+
+
+@pytest.mark.asyncio
+async def test_upsert_by_barcode_persists_verified_flag():
+    row = _food_row()
+    row.barcode = "00036000291452"
+    session = _AsyncSession([_Result(), _Result(rows=[row])])
+    repo = AsyncFoodReferenceRepository(session)
+    statement = MagicMock()
+    statement.values.return_value = statement
+    statement.on_conflict_do_update.return_value = statement
+
+    with patch(
+        "src.infra.repositories.food_reference_repository_async.pg_insert",
+        return_value=statement,
+    ):
+        await repo.upsert(
+            {
+                "barcode": "00036000291452",
+                "name": "Cereal",
+                "protein_100g": 8,
+                "carbs_100g": 72,
+                "fat_100g": 2.5,
+                "source": "usda_fdc",
+                "is_verified": True,
+            }
+        )
+
+    values = statement.values.call_args.kwargs
+    assert values["is_verified"] is True
+    statement.on_conflict_do_update.assert_called_once()
+    assert "where" not in statement.on_conflict_do_update.call_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_unverified_barcode_upsert_does_not_sync_children_on_verified_row():
+    row = _food_row(verified=True)
+    row.barcode = "00036000291452"
+    session = _AsyncSession([_Result(rows=[row])])
+    repo = AsyncFoodReferenceRepository(session)
+
+    with patch(
+        "src.infra.repositories.food_reference_repository_async.pg_insert"
+    ) as insert:
+        await repo.upsert(
+            {
+                "barcode": "00036000291452",
+                "name": "Unverified",
+                "protein_100g": 1,
+                "carbs_100g": 2,
+                "fat_100g": 3,
+                "source": "brave_search",
+                "is_verified": False,
+                "serving_sizes": [{"name": "cup", "grams": 100}],
+                "extra_nutrients": {"sodium_mg": 1},
+            }
+        )
+
+    insert.assert_not_called()
+    assert row.serving_size_rows == []
+    assert row.nutrient_rows == []
+    session.flush.assert_not_awaited()

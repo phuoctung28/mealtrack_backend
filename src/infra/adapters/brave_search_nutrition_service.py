@@ -5,7 +5,12 @@ from typing import Any
 
 import httpx
 
+from src.domain.services.barcode.barcode_logging import redact_barcode
+from src.domain.services.barcode.barcode_nutrition_validator import (
+    validate_barcode_nutrition,
+)
 from src.domain.services.prompts.system_prompts import SystemPrompts
+from src.infra.adapters.ai_json_utils import extract_json
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +49,15 @@ class BraveSearchNutritionService:
             if not extracted:
                 return None
 
-            validated = self._macro_validator.validate_and_correct(extracted)
+            validated = validate_barcode_nutrition(extracted)
             validated["barcode"] = barcode
             return validated
         except Exception as e:
-            logger.warning(f"Brave search failed for barcode {barcode}: {e}")
+            logger.warning(
+                "Brave search failed for barcode_ref=%s error=%s",
+                redact_barcode(barcode),
+                type(e).__name__,
+            )
             return None
 
     async def _search_barcode(
@@ -82,17 +91,28 @@ class BraveSearchNutritionService:
             for r in results[:5]:
                 title = r.get("title", "")
                 description = r.get("description", "")
-                url = r.get("url", "")
                 snippets.append(f"{title}: {description}")
-                logger.debug(f"Brave result for {barcode}: {title} | {url}")
+                logger.debug(
+                    "Brave result for barcode_ref=%s title_present=%s url_present=%s",
+                    redact_barcode(barcode),
+                    bool(title),
+                    bool(r.get("url")),
+                )
 
             combined = "\n\n".join(snippets)
             logger.debug(
-                f"Brave snippets for {barcode} ({len(results)} results, {len(combined)} chars)"
+                "Brave snippets for barcode_ref=%s results=%d chars=%d",
+                redact_barcode(barcode),
+                len(results),
+                len(combined),
             )
             return combined
         except Exception as e:
-            logger.warning(f"Brave search API error for {barcode}: {e}")
+            logger.warning(
+                "Brave search API error for barcode_ref=%s error=%s",
+                redact_barcode(barcode),
+                type(e).__name__,
+            )
             return None
 
     async def _extract_nutrition(
@@ -106,10 +126,11 @@ class BraveSearchNutritionService:
             result = await self._meal_gen.generate_meal_plan_async(
                 user_prompt,
                 system_prompt,
-                response_type="json",
+                response_type="text",
                 max_tokens=500,
                 model_purpose="barcode",
             )
+            result = self._parse_extraction_result(result, barcode)
 
             if not result or not isinstance(result, dict):
                 return None
@@ -120,17 +141,47 @@ class BraveSearchNutritionService:
             if confidence == "low":
                 result["is_estimate"] = True  # Mark low-confidence as estimate
                 logger.debug(
-                    f"Brave+AI extraction low confidence for {barcode}, marking as estimate"
+                    "Brave+AI extraction low confidence for barcode_ref=%s",
+                    redact_barcode(barcode),
                 )
 
             required = ["protein_100g", "carbs_100g", "fat_100g"]
             if not all(result.get(f) is not None for f in required):
                 return None
 
-            return result
+            return validate_barcode_nutrition(result)
         except Exception as e:
-            logger.warning(f"AI extraction failed for barcode {barcode}: {e}")
+            logger.warning(
+                "AI extraction failed for barcode_ref=%s error=%s",
+                redact_barcode(barcode),
+                type(e).__name__,
+            )
             return None
+
+    @staticmethod
+    def _parse_extraction_result(result: Any, barcode: str) -> dict[str, Any] | None:
+        """Parse Brave extraction output, treating uncertain prose as a miss."""
+        if isinstance(result, dict) and "raw_content" not in result:
+            return result
+
+        raw = result.get("raw_content") if isinstance(result, dict) else result
+        if raw is None:
+            return None
+
+        text = str(raw).strip()
+        if not text or text.lower() == "null":
+            return None
+
+        if "{" not in text:
+            logger.info(
+                "Brave+AI extraction returned non-json text for barcode_ref=%s; "
+                "treating as no product identified",
+                redact_barcode(barcode),
+            )
+            return None
+
+        parsed = extract_json(text)
+        return parsed if isinstance(parsed, dict) else None
 
     async def close(self) -> None:
         if self._client:

@@ -105,6 +105,30 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 
 ---
 
+## Barcode Food Data Cascade
+
+**Purpose:** Resolve packaged-food barcode scans while keeping uncertain web/LLM results out of the canonical food catalog.
+
+Source order:
+1. `food_reference` cache using canonical GTIN aliases.
+2. FatSecret exact barcode lookup.
+3. OpenFoodFacts exact barcode lookup.
+4. USDA FoodData Central Branded exact `gtinUpc` lookup.
+5. Brave Search + AI as an identity/estimate hint only.
+6. AI estimate as last resort.
+
+Reliability rules:
+- GTIN validation happens before provider calls; invalid values return 400.
+- Exact FatSecret/OpenFoodFacts/USDA hits are cacheable verified external data.
+- Brave-only nutrition and name-only provider matches are returned as editable estimates and are not cached.
+- Barcode logs and metrics must not include full raw barcode values; use source, reason, and redacted correlation only.
+
+Config:
+- `USDA_FDC_API_KEY` enables USDA FoodData Central branded-food exact-match fallback.
+- `BRAVE_SEARCH_API_KEY` enables Brave Search estimate fallback.
+
+---
+
 ## Cloudflare Workers AI (Text + Vision)
 
 **Purpose:** Optional routed provider for configured text purposes and optional fallback for image scanning after OpenAI.

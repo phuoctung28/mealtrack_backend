@@ -14,6 +14,8 @@ from src.api.schemas.response.barcode_product_response import BarcodeProductResp
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.domain.exceptions.barcode_exceptions import InvalidBarcodeError
+from src.domain.services.barcode import normalize_gtin
 
 router = APIRouter(prefix="/v1/foods", tags=["Foods"])
 
@@ -47,10 +49,20 @@ async def lookup_barcode(
     barcode: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Look up product by barcode from OpenFoodFacts."""
+    """Look up product by barcode from structured providers and estimates."""
     event_bus = get_food_search_event_bus()
     language = get_request_language(request)
-    query = LookupBarcodeQuery(barcode=barcode, language=language)
+    try:
+        lookup_keys = normalize_gtin(barcode)
+    except InvalidBarcodeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    query = LookupBarcodeQuery(
+        barcode=lookup_keys.gtin_14,
+        language=language,
+        scanned_barcode=lookup_keys.raw,
+        aliases=lookup_keys.aliases,
+    )
     result = await event_bus.send(query)
 
     if result is None:

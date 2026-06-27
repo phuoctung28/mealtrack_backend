@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 
 class FoodMappingServicePort(ABC):
@@ -11,7 +11,7 @@ class FoodMappingServicePort(ABC):
     """
 
     @abstractmethod
-    def map_search_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+    def map_search_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """
         Transform a provider-native search result item into a simplified dict
         used by the API/application layer.
@@ -25,7 +25,7 @@ class FoodMappingServicePort(ABC):
         pass
 
     @abstractmethod
-    def map_food_details(self, details: Dict[str, Any]) -> Dict[str, Any]:
+    def map_food_details(self, details: dict[str, Any]) -> dict[str, Any]:
         """
         Transform provider-native food details into a dict capturing serving,
         calories and macro nutrients with normalized names.
@@ -36,5 +36,21 @@ class FoodMappingServicePort(ABC):
         Returns:
             A simplified dictionary with keys: fdc_id, name, brand, serving_size,
             serving_unit, calories, macros, portions.
+        """
+        pass
+
+    @abstractmethod
+    def map_fdc_barcode_product(
+        self, item: dict[str, Any], barcode: str
+    ) -> dict[str, Any]:
+        """
+        Transform a provider-native FDC branded row into barcode response shape.
+
+        Args:
+            item: Provider-native FDC branded search result.
+            barcode: Canonical barcode to attach to the mapped result.
+
+        Returns:
+            Flat barcode product fields, including *_100g macros and source metadata.
         """
         pass

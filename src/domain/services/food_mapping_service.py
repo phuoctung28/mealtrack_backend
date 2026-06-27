@@ -3,13 +3,15 @@ Maps USDA FDC responses into internal simplified structures and domain-friendly 
 Keeps logic flat and readable.
 """
 
-from typing import Dict, Any, List
+from typing import Any
 
 USDA_NUTRIENT_MAPPING = {
     1008: "calories",  # Energy (cal)
     1003: "protein",  # Protein (g)
     1005: "carbs",  # Carbohydrate (g)
     1004: "fat",  # Total lipid (fat) (g)
+    1079: "fiber",  # Fiber, total dietary (g)
+    2000: "sugar",  # Sugars, total including NLEA (g)
 }
 
 # Fallback unit categories for custom/manual ingredients
@@ -47,7 +49,7 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
 
 class FoodMappingService(FoodMappingServicePort):
-    def map_search_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+    def map_search_item(self, item: dict[str, Any]) -> dict[str, Any]:
         # Handle fatsecret results with embedded nutrition
         if item.get("source") == "fatsecret":
             return {
@@ -95,6 +97,8 @@ class FoodMappingService(FoodMappingServicePort):
                 "protein": nutrients.get("protein"),
                 "fat": nutrients.get("fat"),
                 "carbs": nutrients.get("carbs"),
+                "fiber": nutrients.get("fiber"),
+                "sugar": nutrients.get("sugar"),
             },
             "allowed_units": (
                 self._parse_usda_portions(item.get("foodPortions"))
@@ -107,8 +111,8 @@ class FoodMappingService(FoodMappingServicePort):
         return result
 
     def _parse_usda_portions(
-        self, portions: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, portions: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Parse USDA foodPortions into allowed_units format."""
         if not portions:
             return DEFAULT_ALLOWED_UNITS
@@ -138,12 +142,14 @@ class FoodMappingService(FoodMappingServicePort):
 
         return units
 
-    def _extract_macros(self, nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
-        values: Dict[str, float] = {
+    def _extract_macros(self, nutrients: list[dict[str, Any]]) -> dict[str, float]:
+        values: dict[str, float] = {
             "calories": 0.0,
             "protein": 0.0,
             "carbs": 0.0,
             "fat": 0.0,
+            "fiber": 0.0,
+            "sugar": 0.0,
         }
         for entry in nutrients or []:
             # Handle both search results format and details format
@@ -158,11 +164,58 @@ class FoodMappingService(FoodMappingServicePort):
                 amount = float(entry.get("value") or 0.0)
 
             key = USDA_NUTRIENT_MAPPING.get(nutrient_id)
+            if not key:
+                key = self._nutrient_name_key(entry)
             if key:
                 values[key] = amount
         return values
 
-    def map_food_details(self, details: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _nutrient_name_key(entry: dict[str, Any]) -> str | None:
+        nutrient = entry.get("nutrient") or {}
+        name = str(entry.get("nutrientName") or nutrient.get("name") or "").lower()
+        if "protein" in name:
+            return "protein"
+        if "carbohydrate" in name:
+            return "carbs"
+        if "total lipid" in name or name == "fat":
+            return "fat"
+        if "fiber" in name:
+            return "fiber"
+        if "sugar" in name:
+            return "sugar"
+        return None
+
+    def map_fdc_barcode_product(
+        self, item: dict[str, Any], barcode: str
+    ) -> dict[str, Any]:
+        nutrients = self._extract_macros(item.get("foodNutrients") or [])
+        serving_size = item.get("servingSize")
+        serving_unit = item.get("servingSizeUnit")
+        serving_text = None
+        if serving_size and serving_unit:
+            serving_text = f"{serving_size} {serving_unit}"
+        elif serving_size:
+            serving_text = str(serving_size)
+
+        return {
+            "name": item.get("description") or item.get("lowercaseDescription"),
+            "brand": item.get("brandOwner") or item.get("brandName"),
+            "barcode": barcode,
+            "protein_100g": nutrients.get("protein", 0.0),
+            "carbs_100g": nutrients.get("carbs", 0.0),
+            "fat_100g": nutrients.get("fat", 0.0),
+            "fiber_100g": nutrients.get("fiber", 0.0),
+            "sugar_100g": nutrients.get("sugar", 0.0),
+            "serving_size": serving_text,
+            "fdc_id": item.get("fdcId"),
+            "source": "usda_fdc",
+            "provider_source": "usda_fdc",
+            "is_verified": True,
+            "is_estimate": False,
+        }
+
+    def map_food_details(self, details: dict[str, Any]) -> dict[str, Any]:
         macros = self._extract_macros(details.get("foodNutrients") or [])
         return {
             "fdc_id": details.get("fdcId"),

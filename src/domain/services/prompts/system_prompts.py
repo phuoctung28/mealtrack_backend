@@ -339,6 +339,8 @@ Return ONLY valid JSON matching the structure above."""
     BARCODE_BRAVE_EXTRACT = (
         "You are a nutrition data extraction expert. "
         "Extract nutrition information per 100g from web search snippets about a food product. "
+        "You must output exactly one of: a single JSON object, or the literal token null. "
+        "Do not explain uncertainty in prose. "
         "If snippets mention nutrition values per serving, convert to per 100g. "
         "If snippets identify the product but lack exact macros, estimate based on "
         "your knowledge of similar products and set confidence to medium. "
@@ -347,7 +349,7 @@ Return ONLY valid JSON matching the structure above."""
         '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
         '"fiber_100g": float, "sugar_100g": float, "serving_size": "description or null", '
         '"confidence": "high|medium|low"} '
-        "Return null ONLY if you cannot identify the product at all from the snippets."
+        "Return the literal token null ONLY if you cannot identify the product at all from the snippets."
     )
 
     INGREDIENT_IDENTIFY = """
