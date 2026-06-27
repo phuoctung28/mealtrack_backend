@@ -10,6 +10,7 @@ from uuid import uuid4
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.domain.constants import MealDefaults
 from src.domain.model.hydration import HydrationEntry
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
@@ -202,7 +203,6 @@ class UploadMealImageImmediatelyHandler(
 
         if command.scan_mode == "food_label":
             nutrition = self.gpt_parser.parse_food_label_to_nutrition(analysis_result)
-            dish_name = self.gpt_parser.parse_food_label_name(analysis_result)
             label_metadata = self.gpt_parser.parse_food_label_metadata(analysis_result)
             if not label_metadata.get("is_food_label", True):
                 raise ValueError(
@@ -239,7 +239,7 @@ class UploadMealImageImmediatelyHandler(
                         url=image_url,
                     ),
                     source="food_label",
-                    dish_name=dish_name or "Food label",
+                    dish_name=MealDefaults.UNNAMED_FOOD_NAME,
                     ready_at=utc_now(),
                     raw_gpt_json=self.gpt_parser.extract_raw_json(analysis_result),
                     nutrition=nutrition,

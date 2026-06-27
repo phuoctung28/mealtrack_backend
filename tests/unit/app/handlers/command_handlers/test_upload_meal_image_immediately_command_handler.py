@@ -194,7 +194,6 @@ class TestVisionRetryRouting:
                 )
             ],
         )
-        parser.parse_food_label_name.return_value = "Protein Bar"
         parser.parse_food_label_metadata.return_value = {"is_food_label": True}
         parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
         parser.parse_is_food = Mock()
@@ -215,9 +214,10 @@ class TestVisionRetryRouting:
 
         assert meal.status.value == "READY"
         assert meal.source == "food_label"
-        assert meal.dish_name == "Protein Bar"
+        assert meal.dish_name == "Unnamed Food"
         assert meal.emoji is None
         assert meal.nutrition.food_items[0].quantity == 55
         uow.meals.save.assert_awaited_once()
         cache.after_meal_write.assert_awaited_once()
         parser.parse_is_food.assert_not_called()
+        parser.parse_food_label_name.assert_not_called()

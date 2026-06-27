@@ -11,6 +11,7 @@ import httpx
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.domain.constants import MealDefaults
 from src.domain.model.hydration import HydrationEntry
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
@@ -151,8 +152,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                         url=command.image_url,
                     ),
                     source="food_label",
-                    dish_name=self.gpt_parser.parse_food_label_name(vision_result)
-                    or "Food label",
+                    dish_name=MealDefaults.UNNAMED_FOOD_NAME,
                     ready_at=utc_now(),
                     raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
                     nutrition=nutrition,

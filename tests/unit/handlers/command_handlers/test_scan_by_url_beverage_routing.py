@@ -145,7 +145,6 @@ async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
         ],
     )
     handler.gpt_parser.parse_food_label_metadata.return_value = {"is_food_label": True}
-    handler.gpt_parser.parse_food_label_name.return_value = "Protein Bar"
     handler.gpt_parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
     handler.gpt_parser.parse_is_food = MagicMock()
 
@@ -165,6 +164,7 @@ async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
     handler.gpt_parser.parse_is_food.assert_not_called()
     cache.after_meal_write.assert_awaited_once()
     assert result.source == "food_label"
-    assert result.dish_name == "Protein Bar"
+    assert result.dish_name == "Unnamed Food"
     assert result.emoji is None
     assert result.nutrition.food_items[0].quantity == 55
+    handler.gpt_parser.parse_food_label_name.assert_not_called()

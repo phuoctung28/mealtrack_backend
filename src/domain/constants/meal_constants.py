@@ -24,6 +24,12 @@ class MealDistribution:
     DINNER_WITH_SNACK = 0.27  # 30% * 0.9
 
 
+class MealDefaults:
+    """Default values for user-facing meal fields."""
+
+    UNNAMED_FOOD_NAME = "Unnamed Food"
+
+
 class NutritionConstants:
     """Constants for nutrition calculations."""
 
