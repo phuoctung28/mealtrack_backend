@@ -3,7 +3,7 @@
 **Last Updated:** June 17, 2026
 **Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
 **Migrations:** Alembic via deployment entrypoint/pre-deploy flow
-**Tables:** 36 ORM table declarations across core, normalized tracking, referral, notification, and cache models
+**Tables:** 39 ORM table declarations across core, normalized tracking, referral, notification, and cache models
 
 ---
 
@@ -162,9 +162,9 @@ alembic revision --autogenerate -m "description"  # Create new
 alembic downgrade -1                              # Rollback one
 ```
 
-Deployments run migrations before application startup through `docker-entrypoint.sh`
-for non-production environments or through a production pre-deploy job. Use
-timestamp naming for new migrations and keep app runtime URLs separate from
+Non-production deployments may run migrations through `docker-entrypoint.sh`.
+Production uses the pre-deploy migration job before the web service is promoted.
+Use timestamp naming for new migrations and keep app runtime URLs separate from
 migration/admin URLs.
 
 **Recent migrations:**

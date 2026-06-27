@@ -23,17 +23,17 @@ Uses SQLAlchemy eager loading strategies:
 - `joinedload()`: For Many-to-One (User on Meal).
 - `selectinload()`: For One-to-Many (FoodItems on Meal).
 
-## Session-Based Suggestions (Phase 06)
+## Meal Suggestions
 
-Implemented for real-time meal recommendations.
-- **TTL**: 4 hours in Redis.
-- **Flow**: Generate 3 suggestions → Accept/Reject → Track session state.
+Implemented for real-time meal discovery and recipe generation.
+- **Current API Flow**: `/v1/meal-suggestions/discover` → `/recipes` → `/save`.
+- **State**: Request context and generated options move through the CQRS/domain pipeline; Redis may be used for transient optimization, not as durable nutrition truth.
 
 ## Multilingual Meal Suggestions (Phase 01)
 
 Language parameter flows through entire suggestion pipeline:
 
-1. **API Layer** (`MealSuggestionRequest.language`)
+1. **API Layer** (`DiscoverMealsRequest.language` or the current route-specific request)
    - Validated by `validate_language_code()` field validator
    - Defaults to "en"
    - Valid codes: en, vi, es, fr, de, ja, zh

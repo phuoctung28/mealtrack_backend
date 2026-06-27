@@ -1,7 +1,7 @@
 # Backend Code Standards — Python Style & Conventions
 
 **Last Updated:** June 17, 2026
-**Scope:** All code in `src/` (620 Python files, ~52.6K LOC)
+**Scope:** All code in `src/` (626 Python files, 53,696 LOC)
 **Applies To:** Typing, naming, imports, code organization, error handling
 
 ---
@@ -39,6 +39,7 @@ Entry points stay lean; detail moves to on-demand references (progressive disclo
 - **`CLAUDE.md`**: <100 lines (loads every session)
 - **Tier-3 reference docs** (`docs/*.md`): target <200 lines, hard cap ~300; split by topic and link from the entry point
 - Treat each doc as a table of contents that points to detail, not a dumping ground
+- Keep architecture and boundary docs aligned with the live contract, even when tests still carry known collection or import debt.
 
 ---
 

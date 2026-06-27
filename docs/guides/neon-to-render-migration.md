@@ -54,15 +54,18 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 
 ## Step 5: Update environment variables
 
-Replace `DATABASE_URL` everywhere:
+Configure runtime and migration URLs explicitly:
 
 - `.env` (local dev)
 - Production environment variables (wherever the backend is deployed)
-- GitHub Actions secrets if any workflows use `DATABASE_URL`
+- GitHub Actions secrets if any workflows use database URLs
 
 ```bash
-# New value format
-DATABASE_URL=postgresql://USER:PASSWORD@RENDER_HOST/dbname
+# App runtime URL
+APP_DATABASE_URL=postgresql://USER:PASSWORD@RENDER_HOST/dbname
+
+# Migration/admin URL when different from runtime
+MIGRATION_DATABASE_URL=postgresql://USER:PASSWORD@RENDER_HOST/dbname
 ```
 
 ## Step 6: Run migrations
@@ -91,13 +94,13 @@ curl -H "Authorization: Bearer ..." http://localhost:8000/v1/meals
 
 Once verified:
 
-1. Deploy backend with new `DATABASE_URL`
+1. Deploy backend with new `APP_DATABASE_URL`
 2. Monitor logs for any connection errors
 3. Cancel Neon subscription after 1-2 days of stable prod traffic
 
 ## Rollback
 
-If anything goes wrong, revert `DATABASE_URL` to the Neon connection string. Neon data is untouched throughout this process — pg_dump is read-only.
+If anything goes wrong, revert `APP_DATABASE_URL` to the Neon connection string. Neon data is untouched throughout this process — pg_dump is read-only.
 
 ---
 

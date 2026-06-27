@@ -48,7 +48,7 @@ The backend stores the client-supplied `kcal_burned` verbatim. Decision: **optio
 
 Sanity bounds added (both `log` and `update`):
 - `kcal_burned > 5000` → `400 INVALID_KCAL`
-- `kcal_burned > duration_min × 25` → `400 INVALID_KCAL` (25 kcal/min ≈ elite cyclist ceiling)
+- `kcal_burned > duration_min × 30` → `400 INVALID_KCAL` (30 kcal/min ≈ elite cyclist ceiling)
 
 ### 2.3 Treat the catalog IDs as a frozen contract
 `log_movement_command_handler._validate_log_movement` rejects any `activity_id` not in `movement_catalog_service` with `400 INVALID_ACTIVITY`. The mobile app now sends `activity_id` for presets (and `null` for custom). **Renaming or removing any catalog `id` is a breaking change** that will:
@@ -107,7 +107,7 @@ Custom activities send `activity_id = null` (no `custom` id on the backend — s
 ## 6. Pre-release checklist
 
 - [ ] Migration `20260531000001` applied in staging and production.
-- [x] `kcal_burned` trust model decided — client-trust, bounds: `> 5000` or `> duration_min × 25` → 400 (§2.2).
+- [x] `kcal_burned` trust model decided — client-trust, bounds: `> 5000` or `> duration_min × 30` → 400 (§2.2).
 - [x] Catalog IDs confirmed frozen; locked list in §5 (§2.3).
 - [x] `WorkoutActivityResponse` removed from `activity_responses.py` (§3.1).
 - [x] Catalog ownership: `/movement/catalog` is source of truth; mobile must fetch + cache (§3.2).

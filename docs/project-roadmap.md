@@ -1,9 +1,9 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.5
-**Last Updated:** June 16, 2026
-**Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 1649+ unit tests, 70%+ coverage.
-**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
+**Version:** 0.6.6
+**Last Updated:** June 27, 2026
+**Status:** Production-ready current snapshot. 626 source files, 53,696 LOC across 4 layers (API: 91, App: 207, Domain: 165, Infra: 154). 306 test files; collection currently hits one known import error before completion.
+**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring + OpenAI-first AI routing.
 
 ---
 
@@ -72,7 +72,7 @@
 - [x] Runtime database access consolidated to async SQLAlchemy: FastAPI dependencies, cron jobs, handlers, repositories, and UoW use `AsyncSession`.
 - [x] Deleted the sync unit-of-work runtime, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
 - [x] Architecture guard now expects zero sync DB runtime imports in `src` and no broad sync repository transition allowlist.
-- [x] Default validation: `pytest -q` passes (`1499 passed, 3 skipped`).
+- [x] Default validation remains `pytest`; the current tree still has one known collection import error and should not be described as fully green until that is cleared.
 
 ### June 2026: Weekly Budget Resilience
 - [x] Weekly budget meal loading now quarantines malformed legacy `READY` rows without nutrition before domain hydration.
@@ -111,6 +111,10 @@
 - [x] Food reference name normalization (migration 046)
 - [x] Progress tracking endpoints: streak, daily-breakdown
 - [x] Documentation updates: system-architecture, code-standards, project-overview, roadmap
+
+### June 2026: Snapshot Refresh
+- [x] Refreshed documentation metrics to match the live codebase snapshot and the current OpenAI-first + Cloudflare fallback AI routing contract.
+- [x] Replaced stale Pinecone/Gemini-primary references in current-facing docs with the verified runtime stack.
 
 ### February 2026: Documentation Refresh v0.5.0
 - [x] Updated all documentation with latest scout-verified statistics (430 files, ~38K LOC).
@@ -202,7 +206,7 @@
 - [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config
 
 ### Medium Priority
-- [ ] Add monitoring for Gemini API quota and Cloudinary storage limits
+- [ ] Add monitoring for AI provider quotas and Cloudinary storage limits
 - [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes
 - [ ] Tune rate limiting thresholds for meal_suggestions endpoints based on usage patterns
 

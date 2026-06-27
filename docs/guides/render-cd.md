@@ -41,8 +41,9 @@ MIGRATION_LOCK_TIMEOUT_MS=10000
 MIGRATION_STATEMENT_TIMEOUT_MS=240000
 ```
 
-`docker-entrypoint.sh` intentionally does not run migrations. Do not add migration
-commands back to container startup.
+`docker-entrypoint.sh` skips migrations in production. Do not add production
+migration commands back to container startup; non-production environments may
+still run migrations through the entrypoint.
 
 ## Why
 

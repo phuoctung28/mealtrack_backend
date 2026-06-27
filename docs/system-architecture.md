@@ -1,9 +1,9 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 22, 2026
+**Last Updated:** June 27, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 620 Python files, ~52.6K LOC in `src/`
+**Codebase:** 626 Python files, 53,696 LOC in `src/`
 
 ---
 
@@ -11,17 +11,17 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (89 files)                    │
+│                      API Layer (91 files)                    │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (208 files)                   │
+│              Application Layer (207 files)                   │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (160 files)                      │
+│                Domain Layer (165 files)                      │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
@@ -37,13 +37,13 @@
 
 | Layer | Files | LOC | Key Contents |
 |-------|-------|-----|-------------|
-| API | 89 | ~10,361 | 26 router registrations, 83 endpoint decorators, schemas, middleware, dependencies |
-| App | 208 | ~10,984 | 51 command files, 50 query files, 15 event files, 87 handler files |
-| Domain | 160 | ~15,460 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
-| Infra | 154 | ~15,041 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
-| **Total** | **611** | **~51,846** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
+| API | 91 | 10,624 | 27 router registrations, 85 endpoint decorators, schemas, middleware, dependencies |
+| App | 207 | 11,044 | 50 command files, 52 query files, 14 event files, 86 handler files |
+| Domain | 165 | 16,152 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
+| Infra | 154 | 15,134 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
+| **Total** | **617** | **52,954** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
 
-**Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns.
+**Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns. API/app/infra boundary tests enforce the current contract; a small amount of edge-layer cleanup debt remains tracked separately.
 
 ---
 
@@ -114,7 +114,7 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 4. Handler uploads to Cloudinary, creates Meal (PROCESSING), publishes `MealImageUploadedEvent`
 5. Handler returns Meal immediately to API (synchronous response to client)
 6. `EventBus.publish()` → `MealAnalysisEventHandler` (background)
-7. Background: calls `VisionAIService` (Gemini), parses nutrition, updates Meal to READY
+7. Background: calls the provider-neutral AI routing layer, parses nutrition, updates Meal to READY
 
 ---
 

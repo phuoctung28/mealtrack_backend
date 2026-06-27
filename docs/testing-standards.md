@@ -2,7 +2,7 @@
 
 **Last Updated:** June 17, 2026
 **Coverage Target:** 70%+ overall, 100% critical paths, 80%+ new features  
-**Suite Size:** 291 Python files in `tests/`; latest collection reaches 1,600+ tests
+**Suite Size:** 306 Python files in `tests/`; collection reaches 1,761 items before the known import error is hit
 
 ---
 
@@ -155,6 +155,7 @@ def test_meal_repository_find_by_id_performance(benchmark):
 - **Clarity**: Test names describe intent clearly
 - **Coverage**: Critical paths at 100%, happy paths at 80%+
 - **Async**: Use `async def test_` for async handlers
+- **Collection hygiene**: Fix import-time errors before interpreting suite size or coverage numbers.
 
 ---
 

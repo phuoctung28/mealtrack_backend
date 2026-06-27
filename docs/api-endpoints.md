@@ -252,11 +252,11 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 
 ## Response Format
 
-```json
-// Success (2xx)
-{ "data": {...} }
+Most success responses return raw schema objects or plain dictionaries shaped by the route. A few shared helpers still wrap payloads, but there is no universal `{ "data": ... }` envelope across the API.
 
-// Error (4xx, 5xx)
+Errors return the standard exception payload:
+
+```json
 { "error": { "code": "MEAL_NOT_FOUND", "message": "Meal not found" } }
 ```
 

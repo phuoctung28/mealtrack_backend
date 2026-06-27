@@ -8,18 +8,18 @@ Details of external services and infrastructure components.
 |---------|---------|----------------|
 | **OpenAI Responses API** | Text & Vision AI | Meal image analysis, food recognition, structured meal parsing |
 | **Cloudflare Workers AI** | AI fallback | Alternate text/vision route for configured purposes |
-| **Pinecone** | Vector Database | Semantic food search (1024-dim vectors) |
+| **PostgreSQL pgvector** | Vector Search | Semantic food search (1024-dim vectors) |
 | **Firebase** | Auth & Messaging | User authentication, push notifications (FCM) |
 | **Cloudinary** | Image Storage | CDN and optimized image hosting |
 | **RevenueCat** | Subscriptions | Payment and entitlement management |
 
-## Vector Search (Pinecone Phase 05)
+## Vector Search
 
-The system uses Pinecone Inference API with the `llama-text-embed-v2` model.
+The system uses PostgreSQL/pgvector-backed semantic search with 1024-dimensional embeddings.
 
 - **Dimensions**: 1024
-- **Indexes**: `ingredients` (per-100g data), `usda` (fallback database)
-- **Logic**: Search `ingredients` first (threshold 0.35); fallback to `usda` if score < 0.6.
+- **Storage**: food reference embeddings live alongside relational food-reference data
+- **Logic**: Search normalized food references first, then fall back to external lookup adapters when local confidence is insufficient.
 
 ## Database Design
 

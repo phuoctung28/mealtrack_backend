@@ -7,7 +7,7 @@ Developer guide for implementing and maintaining language support in meal sugges
 
 ## Overview
 
-Meal suggestion generation supports 7 ISO 639-1 language codes. The language parameter flows through the entire CQRS pipeline and is persisted with the suggestion session.
+Meal suggestion generation supports 7 ISO 639-1 language codes. The current public API uses `/v1/meal-suggestions/discover`, `/v1/meal-suggestions/recipes`, and `/v1/meal-suggestions/save`; older session-style examples in this guide are historical implementation context.
 
 ## Supported Languages
 
@@ -112,9 +112,9 @@ else:
 
 ## Implementation Details
 
-### 1. API Schema Validation (`MealSuggestionRequest`)
+### 1. API Schema Validation
 
-Located: `src/api/schemas/request/meal_suggestion_requests.py`
+Located: `src/api/schemas/request/meal_suggestion_requests.py`. Current request models include `DiscoverMealsRequest`, `GenerateRecipesRequest`, and `SaveMealSuggestionRequest`.
 
 ```python
 @field_validator("language")
@@ -192,7 +192,7 @@ async def generate_suggestions(
 ### Generate Suggestions in Vietnamese
 
 ```bash
-curl -X POST http://localhost:8000/v1/meal-suggestions \
+curl -X POST http://localhost:8000/v1/meal-suggestions/discover \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -259,7 +259,7 @@ To support a new language:
 ```python
 def test_language_validation_valid():
     """Valid language codes pass through."""
-    request = MealSuggestionRequest(
+    request = DiscoverMealsRequest(
         meal_type="lunch",
         meal_portion_type=MealPortionTypeEnum.MAIN,
         ingredients=["chicken"],
@@ -270,7 +270,7 @@ def test_language_validation_valid():
 
 def test_language_validation_invalid_fallback():
     """Invalid codes fallback to 'en'."""
-    request = MealSuggestionRequest(
+    request = DiscoverMealsRequest(
         meal_type="lunch",
         meal_portion_type=MealPortionTypeEnum.MAIN,
         ingredients=["chicken"],
@@ -286,7 +286,7 @@ def test_language_validation_invalid_fallback():
 async def test_suggestions_in_vietnamese(client, user_token):
     """Suggestions generated in Vietnamese."""
     response = await client.post(
-        "/v1/meal-suggestions",
+        "/v1/meal-suggestions/discover",
         headers={"Authorization": f"Bearer {user_token}"},
         json={
             "meal_type": "lunch",

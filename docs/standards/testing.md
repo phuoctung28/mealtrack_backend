@@ -9,7 +9,7 @@
 - **Unit**: Mock all dependencies, test one logic unit (`tests/unit/`).
 - **Integration**: Test API endpoints or infrastructure with real/mocked external services (`tests/integration/`).
 
-## Pinecone Testing
-- Pinecone unit tests MUST mock the Inference API.
-- Vectors in mocks MUST be 1024-dimensional.
-- Integration tests should skip automatically if `PINECONE_API_KEY` is missing.
+## Food Search Testing
+- Unit tests MUST mock external food lookup and embedding providers.
+- Vector fixtures should preserve the production embedding dimensionality when behavior depends on shape.
+- Integration tests that require external provider credentials should skip automatically when the relevant env vars are missing.

@@ -95,7 +95,7 @@ Returns all drinks in the catalog. No body, no query params.
       "brand_color": "#3B82F6",
       "category": "hydration"
     }
-    // ... 6 more
+    // ... 11 more public drinks, plus virtual "scanned" for historical rows
   ]
 }
 ```
@@ -141,7 +141,7 @@ Log a zero-calorie or hydration drink (Water, Tea, Coffee, etc.).
   "credited_ml": 300,
   "kcal": 0.0,
   "source": "hydration",
-  "meal_id": null,
+  "meal_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "logged_at": "2026-05-23T08:00:00Z"
 }
 ```
@@ -150,7 +150,7 @@ Log a zero-calorie or hydration drink (Water, Tea, Coffee, etc.).
 
 ### `POST /v1/hydration/log/drink`
 
-Log a caloric drink (Milk tea, Coke, etc.). Creates a **hydration entry** and a **meal entry** atomically in a single transaction.
+Log a caloric drink (Milk tea, Coke, etc.). Creates a normalized **hydration entry**. The response keeps `meal_id` as a backward-compatible alias for the hydration entry ID; it does not persist a `Meal`.
 
 **Headers** — same as `POST /log`
 
@@ -170,24 +170,24 @@ Log a caloric drink (Milk tea, Coke, etc.). Creates a **hydration entry** and a 
 }
 ```
 
-**Response 201** — `HydrationEntry` with `meal_id` populated
+**Response 201** — `HydrationEntry`
 
 ```json
 {
   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "meal_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "meal_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "drink_id": "milk-tea",
   "drink_name": "Milk tea",
   "emoji": "🧋",
   "volume_ml": 500,
   "credited_ml": 350,
   "kcal": 380.0,
-  "source": "caloric_drink",
+  "source": "hydration",
   "logged_at": "2026-05-23T08:00:00Z"
 }
 ```
 
-> **Macro derivation:** `carbs = sugar_per_100ml × (volume_ml / 100)`, `fat = max(0, (kcal - sugar×4) / 9) × (volume_ml / 100)`, `protein = 0`. Calories are never stored — always derived.
+> **Nutrition derivation:** caloric drink hydration entries report serving kcal from the catalog and volume. Meal scan nutrition remains the backend source of truth for meal calories.
 
 ---
 
@@ -236,7 +236,7 @@ Get the daily hydration summary, entry list, and streak for a given date.
 
 > `consumed_ml` = sum of `credited_ml` across all non-deleted entries for the date.  
 > `percentage` = `consumed_ml / goal_ml × 100`, capped at 100.  
-> `goal_ml` = per-user setting, defaults to `2000` until configurable via profile update.  
+> `goal_ml` = `UserProfile.daily_water_goal_ml` when set, otherwise the backend default of `2000`.
 > `streak` = consecutive days where `consumed_ml >= goal_ml`, ending on or before today. Resets to `0` if the last qualifying day is before yesterday.
 
 ---
@@ -282,7 +282,7 @@ Get 7-day hydration chart data for a calendar week.
 
 ### `DELETE /v1/hydration/{entry_id}`
 
-Soft-delete a hydration entry. If the entry has a linked meal (`source = "caloric_drink"`), that meal is also deactivated.
+Soft-delete a hydration entry. Legacy linked meal rows are deactivated when present.
 
 **Path param**
 
@@ -300,14 +300,19 @@ Soft-delete a hydration entry. If the entry has a linked meal (`source = "calori
 
 ## Drink Catalog
 
-7 drinks total (4 hydration, 3 caloric).
+12 public drinks plus virtual `scanned` for historical scanned beverage rows.
 
 | `id` | Name | Category | Default | kcal/100ml | hydration_weight | `sub` |
 |------|------|----------|---------|------------|-----------------|-------|
 | `water` | Water | hydration | 250 ml | 0 | 1.00 | null |
 | `tea` | Tea | hydration | 250 ml | 0 | 0.90 | null |
 | `coffee` | Coffee | hydration | 250 ml | 0 | 0.80 | null |
-| `electrolyte` | Electrolyte | hydration | 500 ml | 2 | 0.95 | "Sports drink" |
+| `coke-zero` | Coke Zero | hydration | 330 ml | 0 | 1.00 | "No sugar" |
+| `electrolyte` | Electrolyte | caloric | 500 ml | 2 | 0.95 | "Sports drink" |
 | `milk-tea` | Milk tea | caloric | 500 ml | 76 | 0.70 | "Boba" |
 | `coke` | Soda | caloric | 330 ml | 42.1 | 0.80 | "Soft drink" |
 | `oj` | Fruit juice | caloric | 250 ml | 44 | 0.95 | "Fresh pressed" |
+| `smoothie` | Smoothie | caloric | 400 ml | 62.5 | 0.90 | "Açaí blend" |
+| `energy` | Energy drink | caloric | 250 ml | 44 | 0.85 | "Red Bull" |
+| `iced-latte` | Iced latte | caloric | 350 ml | 37.1 | 0.85 | "Cold brew" |
+| `beer` | Beer | caloric | 330 ml | 45.5 | 0.60 | "Lager" |

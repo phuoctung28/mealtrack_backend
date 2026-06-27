@@ -1,8 +1,8 @@
 # Backend Codebase Summary
 
-**Generated:** June 22, 2026
-**Status:** Production-ready snapshot of the live backend codebase
-**Runtime:** FastAPI 0.115+ on Python 3.11+ with async SQLAlchemy 2.0
+**Generated:** June 27, 2026
+**Status:** Current snapshot of the live backend codebase
+**Runtime:** FastAPI 0.136.3 on Python 3.13.2 with async SQLAlchemy 2.0
 
 ---
 
@@ -10,20 +10,19 @@
 
 | Metric | Value |
 |--------|-------|
-| Source files | 620 Python files in `src/` |
-| Source LOC | ~52.6K LOC in `src/` |
-| Test files | 291 Python files in `tests/` |
-| Collected tests | 1,600+ collected tests |
-| API routers | 26 router registrations in `src/api/main.py` |
-| API endpoints | 83 endpoint decorators under `src/api/routes/` |
-| CQRS command files | 51 |
-| CQRS query files | 50 |
-| CQRS event files | 15 |
-| CQRS handler files | 87 |
-| Domain service files | 50 |
+| Source files | 626 Python files in `src/` |
+| Source LOC | 53,696 LOC in `src/` |
+| Test files | 306 Python files in `tests/` |
+| API routers | 27 router registrations in `src/api/main.py` |
+| API endpoints | 85 endpoint decorators under `src/api/routes/` |
+| CQRS command files | 50 |
+| CQRS query files | 52 |
+| CQRS event files | 14 |
+| CQRS handler files | 86 |
+| Domain service files | 53 |
 | Port files | 26 |
-| Database model files | 47 |
-| ORM table declarations | 36 |
+| Database model files | 48 |
+| ORM table declarations | 39 |
 
 ---
 
@@ -31,10 +30,10 @@
 
 | Layer | Files | LOC | Notes |
 |-------|-------|-----|-------|
-| API | 89 | ~10.4K | Routes, middleware, schemas, dependency wiring, and API mappers |
-| Application | 208 | ~11.0K | Commands, queries, handlers, and orchestration services |
-| Domain | 160 | ~15.5K | Entities, services, ports, policies, and bounded contexts |
-| Infrastructure | 154 | ~15.0K | Database, cache, adapters, observability, and service integrations |
+| API | 91 | 10,624 | Routes, middleware, schemas, dependency wiring, and API mappers |
+| Application | 207 | 11,044 | Commands, queries, handlers, and orchestration services |
+| Domain | 165 | 16,152 | Entities, services, ports, policies, and bounded contexts |
+| Infrastructure | 154 | 15,134 | Database, cache, adapters, observability, and service integrations |
 
 ---
 
@@ -52,9 +51,9 @@ The current HTTP surface includes:
 
 ## Core Runtime Notes
 
-- Runtime DB access uses PostgreSQL/Neon via `src/infra/database/config_async.py` and `asyncpg`.
+- Runtime DB access uses PostgreSQL/Neon via `src/infra/database/config_async.py`, `asyncpg`, and pgvector-backed search where needed.
 - Redis is optional and used for cache-aside and AI-context caching, not as the source of truth.
-- Database migrations are Alembic-managed and run before app startup through the entrypoint/pre-deploy flow.
+- Database migrations are Alembic-managed and run through the deployment pre-deploy flow; the container entrypoint does not own production migrations.
 - The event bus is a singleton PyMediator registry wired from `src/api/dependencies/event_bus.py`.
 
 ---
@@ -73,7 +72,7 @@ The current HTTP surface includes:
 | `src/infra/database/models/` | 13+ | Database tables |
 | `src/infra/repositories/` | 10+ | Data access |
 | `src/infra/services/` | 8+ | External services |
-| `tests/` | 92 | 681+ tests (70%+ coverage) |
+| `tests/` | 306 Python files | Unit, integration, migration, architecture, fixture, and fake test support |
 
 ---
 
