@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.5
-**Last Updated:** June 16, 2026
-**Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 1649+ unit tests, 70%+ coverage.
+**Version:** 0.6.6
+**Last Updated:** June 27, 2026
+**Status:** Production-ready. 627 source files in `src/`, 53,972 LOC in `src/`, 306 Python test files, and 1,600+ collected tests. Default `pytest` is unit-biased because integration tests are ignored by config.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
@@ -22,6 +22,12 @@
 - [x] Strict active-period filtering keeps only `period_start <= action_time < period_end`; existing users without `goal_started_at` fall back to the stable 2026-06-21 feature start in their local timezone.
 - [x] Onboarding and target-weight updates now set the journey baseline fields that anchor the active period.
 - [x] Existing-user migration can now seed journey progress from pre-release action logs with a bounded `journey_progress_seed_percent`, while post-release actions continue filling the remaining progress.
+
+### June 2026: Provider and Contract Refresh
+- [x] OpenAI is the default AI provider for text and vision; configured Cloudflare Workers AI can prepend text-purpose chains and append vision fallbacks.
+- [x] OpenAI model ownership is explicit in `src/infra/services/ai/ai_model_manager.py` with `gpt-5.4-mini-2026-03-17` as the base default.
+- [x] Upload-token smoke coverage is part of the current API verification set.
+- [x] `pydantic-settings` and the CI/test default flow were updated to Python 3.13.2, FastAPI 0.136.3, and unit-biased pytest defaults.
 
 ### June 2026: Single-Owner Logger System
 - [x] Established log-or-raise rule: one root-cause `ERROR` per unexpected request failure; expected 4xx exceptions produce zero ERROR logs.
@@ -47,7 +53,7 @@
 
 ### June 2026: Vision Parser Resilience
 - [x] Canonical AI nutrition contracts now reject impossible over-limit food quantities before domain hydration, invalid AI items now fail instead of being silently repaired, and structured meal image/text output retries exactly once before raising controlled `AIOutputValidationError`.
-- [x] Meal image analysis now carries an explicit `is_food` guard through Gemini schema validation, adapter mapping, parsers, command handlers, and API error mapping so explicit non-food images reject before nutrition parsing without changing successful meal response shape.
+- [x] Meal image analysis now carries an explicit `is_food` guard through provider schema validation, adapter mapping, parsers, command handlers, and API error mapping so explicit non-food images reject before nutrition parsing without changing successful meal response shape.
 - [x] LLM nutrition output contracts: Structured Pydantic contracts for all AI meal-analysis flows; bounded validation retry; parser becomes deterministic mapping; `quantity=150000` and similar impossible AI outputs are rejected before persistence. Background event handler sanitizes `AIOutputValidationError` into a user-friendly failure message. `PromptEvalLoop` tracks schema `validation_success_rate` as a separate observable metric alongside `parse_success_rate`.
 - [x] Beverage image scans now persist only normalized `hydration_entries` rows, with no compatibility meal row, while preserving the existing meal-shaped scan response.
 
@@ -202,7 +208,7 @@
 - [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config
 
 ### Medium Priority
-- [ ] Add monitoring for Gemini API quota and Cloudinary storage limits
+- [ ] Add monitoring for AI provider quota and Cloudinary storage limits
 - [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes
 - [ ] Tune rate limiting thresholds for meal_suggestions endpoints based on usage patterns
 

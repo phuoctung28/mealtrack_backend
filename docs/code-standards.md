@@ -1,7 +1,7 @@
 # Backend Code Standards — Python Style & Conventions
 
-**Last Updated:** June 17, 2026
-**Scope:** All code in `src/` (620 Python files, ~52.6K LOC)
+**Last Updated:** June 27, 2026
+**Scope:** All code in `src/` (627 Python files, 53,972 LOC)
 **Applies To:** Typing, naming, imports, code organization, error handling
 
 ---
@@ -217,6 +217,7 @@ environment, not alias lists or raw provider identifiers.
 - [ ] No `dynamic` types (always explicit)
 - [ ] Logs follow severity and privacy rules
 - [ ] Run before commit: `black src/ tests/ && ruff check src/ && mypy src/`
+- [ ] Run `lint-imports` when changing layer boundaries or imports between `src/api`, `src/app`, `src/domain`, and `src/infra`
 
 ---
 

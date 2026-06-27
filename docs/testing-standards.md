@@ -1,8 +1,8 @@
 # Backend Testing Standards
 
-**Last Updated:** June 17, 2026
-**Coverage Target:** 70%+ overall, 100% critical paths, 80%+ new features  
-**Suite Size:** 291 Python files in `tests/`; latest collection reaches 1,600+ tests
+**Last Updated:** June 27, 2026
+**Coverage Target:** CI gate 65% for unit coverage; docs target 70%+ overall, 100% critical paths, 80%+ new features
+**Suite Size:** 306 Python files in `tests/`; latest collection reaches 1,600+ tests
 
 ---
 
@@ -49,7 +49,7 @@ def test_repository_find_by_id_raises_not_found_when_missing():
 def test_feature_condition_expected():
     # Arrange: set up data
     user = create_test_user()
-    command = CreateMealCommand(user_id=user.id, ...)
+    command = CreateManualMealCommand(user_id=user.id, ...)
     
     # Act: execute
     meal = await handler.handle(command)
@@ -90,9 +90,13 @@ def test_meal_creation_saves_to_db():
 **Run specific tests:**
 ```bash
 pytest -m unit                      # Unit tests only
-pytest -m integration               # Integration tests only
+pytest tests/integration -o addopts="" -m integration  # Explicit integration run
 pytest --cov=src --cov-report=html  # With coverage report
 ```
+
+Default `pytest` uses `pytest.ini` addopts that ignore `tests/integration` and
+select `not integration`. CI runs `lint-imports` and then
+`pytest tests/unit --cov=src --cov-fail-under=65`.
 
 ---
 
@@ -116,7 +120,8 @@ def mock_vision_ai():
 
 ## Fixtures (Reusable)
 
-Place in `conftest.py`:
+Place shared fixtures in `tests/conftest.py`; keep domain-specific fixtures in
+`tests/fixtures/` or the nearest package-level `conftest.py`:
 
 ```python
 @pytest.fixture
@@ -136,12 +141,13 @@ async def event_bus():
 
 ## Performance Testing
 
-For integration tests with DB access:
+For integration tests with DB access, assert timing directly unless the
+`pytest-benchmark` plugin is added to the environment:
 
 ```python
 @pytest.mark.integration
-def test_meal_repository_find_by_id_performance(benchmark):
-    result = benchmark(repo.find_by_id, "meal-1")
+async def test_meal_repository_find_by_id_performance():
+    result = await repo.find_by_id("meal-1")
     assert result is not None
 ```
 
