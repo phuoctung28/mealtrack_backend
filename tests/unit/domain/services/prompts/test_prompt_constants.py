@@ -112,8 +112,27 @@ class TestBasicAnalysisPromptConstraints:
         prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
 
         assert '"is_food"' in prompt
-        assert "no edible food" in prompt
+        assert "no visible edible or drinkable item" in prompt
         assert "do not invent" in prompt
+
+    def test_basic_analysis_prompt_accepts_ambiguous_bakery_foods(self):
+        """Bakery/display-case foods should not be rejected as non-food."""
+        prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
+
+        assert "bakery pastries" in prompt
+        assert "display-case items" in prompt
+        assert "behind glass" in prompt
+        assert "lower confidence" in prompt
+
+    def test_basic_analysis_prompt_treats_drinks_as_normal_food_items(self):
+        """Meal scan should not route packaged beverages into hydration metadata."""
+        prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
+
+        assert "edible or drinkable items" in prompt
+        assert "caloric drinks" in prompt
+        assert "drinks should be represented as normal `foods` entries" in prompt
+        assert "if the image shows a packaged drink" not in prompt
+        assert '"is_food": false,\n  "dish_name": "coca-cola' not in prompt
 
     def test_basic_analysis_strategy_optimized_flag_always_returns_vision_analysis(
         self,

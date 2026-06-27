@@ -202,60 +202,52 @@ class TestVisionNutritionResponse:
         with pytest.raises(ValidationError):
             VisionNutritionResponse.model_validate({"dish_name": "Unknown meal"})
 
-    def test_beverage_metadata_is_food_false_foods_empty_passes_validation(self):
-        response = VisionNutritionResponse.model_validate(
-            {
-                "is_food": False,
-                "dish_name": "Coca-Cola 330ml Can",
-                "foods": [],
-                "confidence": 0.95,
-                "beverage_metadata": {
-                    "is_packaged_beverage": True,
-                    "brand": "Coca-Cola",
-                    "product_name": "Coca-Cola Original",
-                    "container_type": "can",
-                    "volume_ml": 330,
-                    "sugar_per_100ml": 10.6,
-                    "kcal_per_100ml": 42.0,
-                    "label_source": "nutrition_panel",
-                },
-            }
-        )
+    def test_rejects_beverage_metadata_for_meal_scan_output(self):
+        with pytest.raises(ValidationError, match="beverage_metadata is not accepted"):
+            VisionNutritionResponse.model_validate(
+                {
+                    "is_food": True,
+                    "dish_name": "Coca-Cola 330ml Can",
+                    "foods": [
+                        {
+                            "name": "Coca-Cola",
+                            "quantity_g": 330,
+                            "macros": _valid_macros(),
+                        }
+                    ],
+                    "confidence": 0.95,
+                    "beverage_metadata": {
+                        "is_packaged_beverage": True,
+                        "brand": "Coca-Cola",
+                        "product_name": "Coca-Cola Original",
+                        "container_type": "can",
+                        "volume_ml": 330,
+                        "sugar_per_100ml": 10.6,
+                        "kcal_per_100ml": 42.0,
+                        "label_source": "nutrition_panel",
+                    },
+                }
+            )
 
-        assert response.is_food is False
-        assert response.foods == []
-        assert response.beverage_metadata is not None
-        assert response.beverage_metadata.is_packaged_beverage is True
-        assert response.beverage_metadata.brand == "Coca-Cola"
-        assert response.beverage_metadata.container_type == "can"
-        assert response.beverage_metadata.volume_ml == 330
-        assert response.beverage_metadata.label_source == "nutrition_panel"
-
-    def test_beverage_metadata_with_is_food_true_but_packaged_beverage_passes_validation(self):
-        # Validator bypass: is_food=True with no foods is allowed when beverage metadata
-        # flags is_packaged_beverage=True (safety net for AI output variation).
-        response = VisionNutritionResponse.model_validate(
-            {
-                "is_food": True,
-                "dish_name": "Pocari Sweat",
-                "foods": [],
-                "confidence": 0.88,
-                "beverage_metadata": {
-                    "is_packaged_beverage": True,
-                    "brand": "Pocari Sweat",
-                    "container_type": "bottle",
-                    "volume_ml": 500,
-                    "kcal_per_100ml": 25.0,
-                    "sugar_per_100ml": 6.2,
-                    "label_source": "estimate",
-                },
-            }
-        )
-
-        assert response.is_food is True
-        assert response.foods == []
-        assert response.beverage_metadata is not None
-        assert response.beverage_metadata.is_packaged_beverage is True
+    def test_rejects_metadata_only_packaged_beverage_output(self):
+        with pytest.raises(ValidationError, match="beverage_metadata is not accepted"):
+            VisionNutritionResponse.model_validate(
+                {
+                    "is_food": True,
+                    "dish_name": "Pocari Sweat",
+                    "foods": [],
+                    "confidence": 0.88,
+                    "beverage_metadata": {
+                        "is_packaged_beverage": True,
+                        "brand": "Pocari Sweat",
+                        "container_type": "bottle",
+                        "volume_ml": 500,
+                        "kcal_per_100ml": 25.0,
+                        "sugar_per_100ml": 6.2,
+                        "label_source": "estimate",
+                    },
+                }
+            )
 
     def test_rejects_extra_beverage_metadata_fields(self):
         with pytest.raises(ValidationError):

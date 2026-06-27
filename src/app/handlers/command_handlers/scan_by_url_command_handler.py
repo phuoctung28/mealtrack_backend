@@ -11,17 +11,13 @@ import httpx
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
-from src.domain.model.hydration import HydrationEntry
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
-from src.domain.model.nutrition.macros import Macros
-from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.parsers.vision_response_parser import (
     VisionResponseParser as GPTResponseParser,
 )
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.hydration_write_service import build_beverage_scan_params
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
 )
@@ -35,6 +31,7 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
+from src.observability import capture_message
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +55,26 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.gpt_parser = gpt_parser
         self.meal_translation_service = meal_translation_service
         self.cache_invalidation = cache_invalidation
+
+    def _capture_rejected_scan(
+        self,
+        *,
+        image_id: str,
+        image_url: str,
+        reason: str,
+    ) -> None:
+        capture_message(
+            "meal_scan.image_rejected",
+            level="warning",
+            context={
+                "component": "meal_scan",
+                "operation": "scan_by_url",
+                "ai_purpose": "meal_scan",
+                "image_id": image_id,
+                "image_url": image_url,
+                "rejection_reason": reason,
+            },
+        )
 
     async def handle(self, command: ScanByUrlCommand) -> Meal:
         if not all([self.vision_service, self.gpt_parser]):
@@ -115,95 +132,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             vision_elapsed = time.time() - start
 
-            structured_data = (
-                vision_result.get("structured_data", {})
-                if isinstance(vision_result, dict)
-                else {}
-            )
-            bev_meta = structured_data.get("beverage_metadata") if structured_data else None
-
-            if bev_meta and bev_meta.get("is_packaged_beverage"):
-                params = build_beverage_scan_params(
-                    user_id=command.user_id,
-                    bev_meta=bev_meta,
-                    image_url=command.image_url,
-                )
-                if params.label_source == "estimate":
-                    logger.warning(
-                        "[SCAN-BY-URL-BEVERAGE-KCAL-ESTIMATE] drink=%s kcal_total=%.1f label_source=%s",
-                        params.drink_name,
-                        params.kcal_total,
-                        params.label_source,
-                    )
-
-                fat_g = max(0.0, (params.kcal_total - params.sugar_g_total * 4) / 9)
-                carbs_g = params.sugar_g_total
-                nutrition = Nutrition(
-                    macros=Macros(
-                        protein=0.0,
-                        carbs=round(carbs_g, 1),
-                        fat=round(fat_g, 1),
-                        fiber=0.0,
-                        sugar=round(params.sugar_g_total, 1),
-                    ),
-                    food_items=None,
-                )
-
-                async with self.uow as uow:
-                    hydration_entry = await uow.hydration_entries.add(
-                        HydrationEntry(
-                            id=str(uuid4()),
-                            user_id=command.user_id,
-                            drink_id="scanned",
-                            drink_name_snapshot=params.drink_name,
-                            emoji_snapshot=params.emoji,
-                            volume_ml=params.volume_ml,
-                            credited_ml=params.credited_ml,
-                            carbs_g=nutrition.macros.carbs,
-                            fat_g=nutrition.macros.fat,
-                            sugar_g=nutrition.macros.sugar,
-                            logged_at=meal_datetime,
-                            source="scan_beverage",
-                            legacy_meal_id=None,
-                            image_url=command.image_url,
-                        )
-                    )
-                    await uow.commit()
-
-                logger.info(
-                    "[SCAN-BY-URL-BEVERAGE-COMPLETE] entry=%s vision=%.2fs total=%.2fs",
-                    hydration_entry.id,
-                    vision_elapsed,
-                    time.time() - start,
-                )
-
-                if self.cache_invalidation:
-                    await self.cache_invalidation.after_hydration_write(
-                        command.user_id,
-                        meal_date,
-                    )
-
-                return Meal(
-                    meal_id=hydration_entry.id,
-                    user_id=command.user_id,
-                    status=MealStatus.READY,
-                    created_at=meal_datetime,
-                    meal_type="hydration",
-                    image=MealImage(
-                        image_id=str(uuid4()),
-                        format="jpeg",
-                        size_bytes=len(raw_bytes),
-                        url=command.image_url,
-                    ),
-                    source="scan_beverage",
-                    dish_name=params.drink_name,
-                    emoji=params.emoji,
-                    ready_at=meal_datetime,
-                    nutrition=nutrition,
-                    quantity=params.credited_ml,
-                )
-
             if not self.gpt_parser.parse_is_food(vision_result):
+                self._capture_rejected_scan(
+                    image_id=image_id,
+                    image_url=command.image_url,
+                    reason="parser_not_food",
+                )
                 raise ValueError(
                     "Image does not appear to contain food. "
                     "Please take a photo of food and try again."
@@ -219,6 +153,11 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 and nutrition.calories > 0
             )
             if not has_food:
+                self._capture_rejected_scan(
+                    image_id=image_id,
+                    image_url=command.image_url,
+                    reason="nutrition_empty_or_zero_calorie",
+                )
                 raise ValueError(
                     "No edible food detected in the image. "
                     "Please take a photo of food and try again."
