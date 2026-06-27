@@ -1,11 +1,14 @@
 """USDA FoodData Central HTTP client using async httpx."""
 
+import logging
 import os
 from typing import Any
 
 import httpx
 
 from src.domain.ports.food_data_service_port import FoodDataServicePort
+
+logger = logging.getLogger(__name__)
 
 
 class FoodDataService(FoodDataServicePort):
@@ -51,3 +54,35 @@ class FoodDataService(FoodDataServicePort):
                 return await self.get_food_details(fid)
 
         return list(await asyncio.gather(*[_fetch(fid) for fid in fdc_ids]))
+
+    async def get_branded_food_by_gtin(
+        self, gtin_aliases: list[str]
+    ) -> dict[str, Any] | None:
+        aliases = {_normalize_gtin_alias(alias) for alias in gtin_aliases if alias}
+        aliases.discard("")
+        if not aliases or not self.api_key:
+            return None
+
+        for alias in gtin_aliases:
+            try:
+                data = await self._get(
+                    "/foods/search",
+                    {
+                        "query": alias,
+                        "dataType": "Branded",
+                        "pageSize": 5,
+                    },
+                )
+            except (httpx.HTTPError, ValueError) as exc:
+                logger.warning("USDA branded GTIN lookup failed: %s", type(exc).__name__)
+                return None
+
+            for item in data.get("foods", []) or []:
+                candidate = _normalize_gtin_alias(str(item.get("gtinUpc") or ""))
+                if candidate in aliases:
+                    return item
+        return None
+
+
+def _normalize_gtin_alias(value: str) -> str:
+    return "".join(ch for ch in value.strip() if ch.isdigit()).lstrip("0")

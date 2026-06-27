@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exception_handlers import register_exception_handlers
-from src.api.exceptions import ValidationException
 from src.api.routes.v1 import activities as activities_mod
 from src.api.routes.v1 import cheat_days as cheat_days_mod
 from src.api.routes.v1 import foods as foods_mod
@@ -67,7 +66,7 @@ def test_foods_details(foods_app, monkeypatch):
 def test_foods_barcode_found(foods_app, monkeypatch):
     bus = _Bus(
         {
-            "barcode": "123",
+            "barcode": "036000291452",
             "name": "Product",
             "brand": None,
             "protein_100g": 1.0,
@@ -81,7 +80,7 @@ def test_foods_barcode_found(foods_app, monkeypatch):
     )
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: bus)
     foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
-    r = TestClient(foods_app).get("/v1/foods/barcode/123")
+    r = TestClient(foods_app).get("/v1/foods/barcode/036000291452")
     assert r.status_code == 200
 
 
@@ -89,8 +88,19 @@ def test_foods_barcode_404(foods_app, monkeypatch):
     bus = _Bus(None)
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: bus)
     foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
-    r = TestClient(foods_app).get("/v1/foods/barcode/unknown")
+    r = TestClient(foods_app).get("/v1/foods/barcode/036000291452")
     assert r.status_code == 404
+
+
+def test_foods_barcode_invalid_returns_400_before_event_bus(foods_app, monkeypatch):
+    bus = _Bus(None)
+    monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: bus)
+    foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
+
+    r = TestClient(foods_app).get("/v1/foods/barcode/unknown")
+
+    assert r.status_code == 400
+    assert bus.sent == []
 
 
 @pytest.fixture
@@ -229,5 +239,7 @@ def test_foods_barcode_generic_exception(foods_app, monkeypatch):
 
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: _Bad())
     foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
-    r = TestClient(foods_app, raise_server_exceptions=False).get("/v1/foods/barcode/xyz")
+    r = TestClient(foods_app, raise_server_exceptions=False).get(
+        "/v1/foods/barcode/036000291452"
+    )
     assert r.status_code == 500

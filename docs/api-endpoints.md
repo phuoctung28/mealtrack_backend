@@ -102,9 +102,17 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 |--------|----------|---------|
 | GET | `/v1/foods/search` | Search USDA foods |
 | GET | `/v1/foods/{fdc_id}/details` | Get food details by FDC ID |
-| GET | `/v1/foods/barcode/{barcode}` | Barcode lookup (6-step cascade) |
+| GET | `/v1/foods/barcode/{barcode}` | Barcode lookup (cache -> FatSecret -> OpenFoodFacts -> USDA FDC -> estimates) |
 | POST | `/v1/ingredients/recognize` | Recognize ingredients from image |
 | GET | `/v1/ingredients/health` | Ingredient recognition health |
+
+### Barcode Lookup Contract
+
+- Accepts numeric GTIN-8/12/13/14 values with a valid check digit; malformed input returns 400 before external calls.
+- Valid GTIN misses return 404.
+- Verified sources are `cache`, `fatsecret`, `openfoodfacts`, and `usda_fdc`.
+- `brave_search`, `fatsecret_name_search`, and `ai_estimate` are editable estimates with `is_estimate=true` and are not written to the global catalog.
+- Cached responses may include `provider_source` to expose the original provider behind `source=cache`.
 
 ---
 

@@ -79,6 +79,11 @@ class AsyncFoodReferenceRepository:
 
     async def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update a food reference by barcode without owning commit."""
+        if data.get("barcode") and not data.get("is_verified", False):
+            existing = await self._find_model_by_barcode(data["barcode"])
+            if existing is not None and existing.is_verified:
+                return
+
         values = {
             "barcode": data.get("barcode"),
             "name": data.get("name"),
@@ -93,6 +98,7 @@ class AsyncFoodReferenceRepository:
             "serving_sizes": data.get("serving_sizes"),
             "image_url": data.get("image_url"),
             "source": data.get("source", "fatsecret"),
+            "is_verified": data.get("is_verified", False),
             "fdc_id": data.get("fdc_id"),
             "category": data.get("category"),
             "region": data.get("region", "global"),
@@ -101,11 +107,16 @@ class AsyncFoodReferenceRepository:
         }
         stmt = pg_insert(FoodReferenceModel).values(**values)
         update_fields = {k: v for k, v in values.items() if k != "barcode"}
+        if not values["is_verified"]:
+            update_fields.pop("is_verified", None)
+        on_conflict_kwargs: dict[str, Any] = {
+            "index_elements": [FoodReferenceModel.barcode],
+            "set_": update_fields,
+        }
+        if not values["is_verified"]:
+            on_conflict_kwargs["where"] = FoodReferenceModel.is_verified.is_(False)
         await self._session.execute(
-            stmt.on_conflict_do_update(
-                index_elements=[FoodReferenceModel.barcode],
-                set_=update_fields,
-            )
+            stmt.on_conflict_do_update(**on_conflict_kwargs)
         )
         await self._session.flush()
 
@@ -192,6 +203,14 @@ class AsyncFoodReferenceRepository:
         result = await self._session.execute(
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized == name_normalized)
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        return result.scalars().first()
+
+    async def _find_model_by_barcode(self, barcode: str) -> FoodReferenceModel | None:
+        result = await self._session.execute(
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.barcode == barcode)
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         return result.scalars().first()

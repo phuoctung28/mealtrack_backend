@@ -363,6 +363,10 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
             """Return mock food details for multiple IDs."""
             return [await self.get_food_details(fdc_id) for fdc_id in fdc_ids]
 
+        async def get_branded_food_by_gtin(self, gtin_aliases: list[str]):
+            """Return no branded barcode match by default."""
+            return None
+
         async def search_foods(self, query: str, limit: int = 20):
             """Return mock search results."""
             return [
