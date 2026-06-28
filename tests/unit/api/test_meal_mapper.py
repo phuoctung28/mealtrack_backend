@@ -4,6 +4,7 @@ Unit tests for MealMapper.
 
 import uuid
 from datetime import datetime
+import json
 
 import pytest
 
@@ -225,7 +226,7 @@ class TestMealMapper:
                 name="Homemade Sauce",
                 quantity=50,
                 unit="g",
-                macros=Macros(protein=1, carbs=8, fat=2),
+                macros=Macros(protein=1, carbs=8, fat=2, fiber=1, sugar=3),
                 confidence=1.0,
                 fdc_id=None,
                 is_custom=True,
@@ -233,7 +234,8 @@ class TestMealMapper:
         ]
 
         nutrition = Nutrition(
-            macros=Macros(protein=1, carbs=8, fat=2), food_items=food_items
+            macros=Macros(protein=1, carbs=8, fat=2, fiber=1, sugar=3),
+            food_items=food_items,
         )
 
         image = MealImage(
@@ -263,8 +265,80 @@ class TestMealMapper:
         assert result.food_items[0].fdc_id is None
         assert result.food_items[0].custom_nutrition is not None
         assert result.food_items[0].custom_nutrition.calories_per_100g == pytest.approx(
-            108.0
-        )  # derived: (1*4+8*4+2*9) * (100/50)
+            104.0
+        )  # derived fiber-aware then scaled to 100g
+        assert result.food_items[0].custom_nutrition.fiber_per_100g == pytest.approx(
+            2.0
+        )
+        assert result.food_items[0].custom_nutrition.sugar_per_100g == pytest.approx(
+            6.0
+        )
+
+    def test_to_detailed_response_includes_food_label_metadata(self):
+        """Food-label meal details expose serving and package metadata."""
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/label.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            dish_name="Protein Bar",
+            ready_at=datetime(2025, 1, 15, 15, 0),
+            created_at=datetime(2025, 1, 15, 14, 30),
+            source="food_label",
+            raw_gpt_json=json.dumps(
+                {
+                    "product_name": "Protein Bar",
+                    "brand": "Example",
+                    "serving_size": {
+                        "display_text": "1 bar (55g)",
+                        "grams": 55,
+                    },
+                    "servings_per_package": 8,
+                    "label_calories_per_serving": 230,
+                    "confidence": 0.92,
+                    "label_notes": ["Calories differ from derived macros."],
+                }
+            ),
+            nutrition=Nutrition(
+                macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
+                food_items=[
+                    FoodItem(
+                        id="label-item",
+                        name="Protein Bar",
+                        quantity=55,
+                        unit="g",
+                        macros=Macros(
+                            protein=10,
+                            carbs=20,
+                            fat=5,
+                            fiber=4,
+                            sugar=8,
+                        ),
+                        is_custom=True,
+                    )
+                ],
+            ),
+        )
+
+        result = MealMapper.to_detailed_response(meal)
+
+        assert result.source == "food_label"
+        assert result.food_label_metadata is not None
+        assert result.food_label_metadata.product_name == "Protein Bar"
+        assert result.food_label_metadata.brand == "Example"
+        assert result.food_label_metadata.serving_size.display_text == "1 bar (55g)"
+        assert result.food_label_metadata.serving_size.grams == 55
+        assert result.food_label_metadata.servings_per_package == 8
+        assert result.food_label_metadata.label_calories_per_serving == 230
+        assert result.food_label_metadata.confidence == 0.92
+        assert result.food_label_metadata.label_notes == [
+            "Calories differ from derived macros."
+        ]
 
     def test_to_detailed_response_custom_nutrition_uses_grams_for_large_units(self):
         """Custom nutrition is projected per 100g, not per serving count."""

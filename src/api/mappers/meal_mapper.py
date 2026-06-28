@@ -2,9 +2,13 @@
 Mapper for meal-related DTOs and domain models.
 """
 
+import json
+
 from src.api.schemas.response import (
     DetailedMealResponse,
     FoodItemResponse,
+    FoodLabelMetadataResponse,
+    FoodLabelServingSizeResponse,
     MealListResponse,
     NutritionResponse,
     SimpleMealResponse,
@@ -44,6 +48,7 @@ class MealMapper:
             dish_name=meal.dish_name,
             emoji=meal.emoji,
             meal_type=meal.meal_type,
+            source=meal.source,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at,
@@ -140,6 +145,12 @@ class MealMapper:
                             fat_per_100g=(
                                 item.macros.fat * scale_factor if item.macros else 0.0
                             ),
+                            fiber_per_100g=(
+                                item.macros.fiber * scale_factor if item.macros else 0.0
+                            ),
+                            sugar_per_100g=(
+                                item.macros.sugar * scale_factor if item.macros else 0.0
+                            ),
                         )
 
                     food_item_dto = FoodItemResponse(
@@ -214,6 +225,7 @@ class MealMapper:
             dish_name=dish_name,
             emoji=meal.emoji,
             meal_type=meal.meal_type,
+            source=meal.source,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at,
@@ -226,6 +238,7 @@ class MealMapper:
             ),
             total_nutrition=total_nutrition,
             translations=translations_response,
+            food_label_metadata=MealMapper._food_label_metadata(meal),
             description=getattr(meal, "description", None),
             instructions=instructions,
             prep_time_min=getattr(meal, "prep_time_min", None),
@@ -233,6 +246,28 @@ class MealMapper:
             cuisine_type=getattr(meal, "cuisine_type", None),
             origin_country=getattr(meal, "origin_country", None),
         )
+
+    @staticmethod
+    def _food_label_metadata(meal: Meal) -> FoodLabelMetadataResponse | None:
+        if meal.source != "food_label" or not meal.raw_gpt_json:
+            return None
+        try:
+            data = json.loads(meal.raw_gpt_json)
+            serving_size = data.get("serving_size") or {}
+            return FoodLabelMetadataResponse(
+                product_name=data["product_name"],
+                brand=data.get("brand"),
+                serving_size=FoodLabelServingSizeResponse(
+                    display_text=serving_size["display_text"],
+                    grams=float(serving_size["grams"]),
+                ),
+                servings_per_package=float(data["servings_per_package"]),
+                label_calories_per_serving=data.get("label_calories_per_serving"),
+                confidence=float(data.get("confidence", 0.5)),
+                label_notes=list(data.get("label_notes") or []),
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
 
     @staticmethod
     def _normalize_instructions(instructions: list | None) -> list | None:

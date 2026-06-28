@@ -3,6 +3,7 @@ Unit tests for meal edit request validation.
 """
 
 import pytest
+from datetime import datetime
 from pydantic import ValidationError
 
 from src.api.schemas.request.meal_requests import (
@@ -238,6 +239,31 @@ class TestCreateManualMealFromFoodsRequest:
 
         assert request.source == "manual"
 
+    def test_prompt_source_allows_legacy_back_calculated_fiber_and_sugar_rates(self):
+        request = CreateManualMealFromFoodsRequest(
+            dish_name="Smoothie bowl",
+            source="prompt",
+            items=[
+                {
+                    "name": "Smoothie bowl",
+                    "quantity": 1.0,
+                    "unit": "bowl",
+                    "custom_nutrition": {
+                        "protein_per_100g": 120.0,
+                        "carbs_per_100g": 600.0,
+                        "fat_per_100g": 80.0,
+                        "fiber_per_100g": 150.0,
+                        "sugar_per_100g": 240.0,
+                    },
+                }
+            ],
+        )
+
+        nutrition = request.items[0].custom_nutrition
+        assert nutrition is not None
+        assert nutrition.fiber_per_100g == 150.0
+        assert nutrition.sugar_per_100g == 240.0
+
     def test_missing_source_rejects_impossible_gram_macro_rates(self):
         with pytest.raises(ValidationError):
             CreateManualMealFromFoodsRequest(
@@ -270,6 +296,27 @@ class TestCreateManualMealFromFoodsRequest:
                             "protein_per_100g": 3000.0,
                             "carbs_per_100g": 10.0,
                             "fat_per_100g": 5.0,
+                        },
+                    }
+                ],
+            )
+
+    def test_gram_custom_nutrition_rejects_impossible_fiber_and_sugar_rates(self):
+        with pytest.raises(ValidationError):
+            CreateManualMealFromFoodsRequest(
+                dish_name="Granola",
+                source="manual",
+                items=[
+                    {
+                        "name": "Granola",
+                        "quantity": 100.0,
+                        "unit": "g",
+                        "custom_nutrition": {
+                            "protein_per_100g": 10.0,
+                            "carbs_per_100g": 60.0,
+                            "fat_per_100g": 8.0,
+                            "fiber_per_100g": 120.0,
+                            "sugar_per_100g": 140.0,
                         },
                     }
                 ],
@@ -318,11 +365,26 @@ class TestEditMealIngredientsRequest:
         assert request.dish_name is None
         assert len(request.food_item_changes) == 1
 
-    def test_empty_food_item_changes(self):
-        """Test empty food item changes validation."""
-        # Arrange & Act & Assert
+    def test_metadata_only_edit_request(self):
+        """Test meal metadata edits without ingredient changes."""
+        created_at = datetime(2026, 6, 28, 8, 30)
+
+        request = EditMealIngredientsRequest(
+            dish_name="Updated Meal",
+            created_at=created_at,
+            meal_type="breakfast",
+            food_item_changes=[],
+        )
+
+        assert request.dish_name == "Updated Meal"
+        assert request.created_at == created_at
+        assert request.meal_type == "breakfast"
+        assert request.food_item_changes == []
+
+    def test_empty_edit_request(self):
+        """Test empty edit requests are rejected."""
         with pytest.raises(ValidationError):
-            EditMealIngredientsRequest(food_item_changes=[])
+            EditMealIngredientsRequest()
 
     def test_dish_name_too_long(self):
         """Test dish name too long validation."""
@@ -338,17 +400,14 @@ class TestEditMealIngredientsRequest:
             )
 
     def test_empty_dish_name(self):
-        """Test empty dish name validation."""
-        # Arrange & Act & Assert
-        with pytest.raises(ValidationError):
-            EditMealIngredientsRequest(
-                dish_name="",
-                food_item_changes=[
-                    FoodItemChangeRequest(
-                        action="add", name="Test Food", quantity=100.0, unit="g"
-                    )
-                ],
-            )
+        """Test empty dish name is accepted for clearing a meal name."""
+        request = EditMealIngredientsRequest(
+            dish_name="",
+            food_item_changes=[],
+        )
+
+        assert request.dish_name == ""
+        assert request.food_item_changes == []
 
 
 @pytest.mark.unit

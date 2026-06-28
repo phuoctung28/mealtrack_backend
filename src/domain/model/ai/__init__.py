@@ -13,6 +13,8 @@ from .gpt_response_errors import (
 from .model_purpose import ModelPurpose
 from .nutrition_contracts import (
     AINutritionMacros,
+    FoodLabelNutritionResponse,
+    FoodLabelServingSize,
     MealTextFoodEstimate,
     MealTextNutritionResponse,
     VisionFoodEstimate,
@@ -25,6 +27,8 @@ from .vision_food_identity_contract import (
 
 __all__ = [
     "AINutritionMacros",
+    "FoodLabelNutritionResponse",
+    "FoodLabelServingSize",
     "MealTextFoodEstimate",
     "MealTextNutritionResponse",
     "GPTMacros",

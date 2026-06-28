@@ -304,6 +304,39 @@ WORKED EXAMPLE 4 — Pocari Sweat bottle where nutrition panel is hidden:
 
 Return ONLY valid JSON matching the structure above."""
 
+    FOOD_LABEL_ANALYSIS = """You are a nutrition-label extraction assistant. Analyze the image as a packaged food Nutrition Facts label and return structured data as JSON only. No markdown, no prose.
+
+RESPONSE FORMAT — return exactly this structure:
+{
+  "is_food_label": true,
+  "product_name": "Product name in English if visible, otherwise concise packaged food name",
+  "brand": "Brand name if visible, otherwise null",
+  "serving_size": {"display_text": "2/3 cup (55g)", "grams": 55.0},
+  "servings_per_package": 8.0,
+  "label_calories_per_serving": 230.0,
+  "macros_per_serving": {
+    "protein_g": 3.0,
+    "carbs_g": 37.0,
+    "fat_g": 8.0,
+    "fiber_g": 4.0,
+    "sugar_g": 12.0
+  },
+  "confidence": 0.92,
+  "label_notes": ["Includes 10g added sugars"]
+}
+
+RULES:
+- Only extract values that belong to one serving on the visible Nutrition Facts label.
+- serving_size.grams is required. Convert ounces to grams when grams are not printed.
+- servings_per_package is required. Use the printed "servings per container/package" value.
+- macros_per_serving values are grams per serving. Total carbohydrate maps to carbs_g, total fat maps to fat_g, dietary fiber maps to fiber_g, total sugars maps to sugar_g, protein maps to protein_g.
+- label_calories_per_serving is optional label metadata. The backend will derive logged calories from macros, so do not alter macros to force calories to match.
+- If the product or brand is not visible, infer a concise generic product_name from the label context and set brand to null.
+- Do not extract ingredients. Ingredients are hidden unless confidently read by a separate ingredient flow.
+- If no Nutrition Facts label is visible, set "is_food_label": false and still return the same keys with conservative values only when the serving size and macros are readable.
+
+Return ONLY valid JSON matching the structure above."""
+
     # Supported language codes (ISO 639-1)
     SUPPORTED_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
 

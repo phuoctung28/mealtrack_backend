@@ -52,6 +52,7 @@
       application logs.
 
 ### June 2026: Vision Parser Resilience
+- [x] Food-label custom nutrition now preserves fiber and sugar through manual meal creation, meal edit requests, response mapping, and serving-size recalculation, with gram-based per-100g validation extended to the new fields. Completed 2026-06-28.
 - [x] Canonical AI nutrition contracts now reject impossible over-limit food quantities before domain hydration, invalid AI items now fail instead of being silently repaired, and structured meal image/text output retries exactly once before raising controlled `AIOutputValidationError`.
 - [x] Meal image analysis now carries an explicit `is_food` guard through provider schema validation, adapter mapping, parsers, command handlers, and API error mapping so explicit non-food images reject before nutrition parsing without changing successful meal response shape.
 - [x] LLM nutrition output contracts: Structured Pydantic contracts for all AI meal-analysis flows; bounded validation retry; parser becomes deterministic mapping; `quantity=150000` and similar impossible AI outputs are rejected before persistence. Background event handler sanitizes `AIOutputValidationError` into a user-friendly failure message. `PromptEvalLoop` tracks schema `validation_success_rate` as a separate observable metric alongside `parse_success_rate`.

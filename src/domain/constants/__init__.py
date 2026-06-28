@@ -6,6 +6,7 @@ values used throughout the domain layer.
 """
 
 from .meal_constants import (
+    MealDefaults,
     MealDistribution,
     NutritionConstants,
     PortionUnits,
@@ -16,6 +17,7 @@ from .meal_constants import (
 )
 
 __all__ = [
+    "MealDefaults",
     "MealDistribution",
     "NutritionConstants",
     "PortionUnits",

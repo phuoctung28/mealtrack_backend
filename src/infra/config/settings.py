@@ -260,7 +260,7 @@ class Settings(BaseSettings):
         description="Workers AI model for image analysis (must support vision input)",
     )
     CLOUDFLARE_WORKERS_AI_VISION_PURPOSES: str = Field(
-        default="meal_scan,ingredient_scan",
+        default="meal_scan,food_label_scan,ingredient_scan",
         description="Comma-separated ModelPurpose values where Workers AI vision is included in routing",
     )
     # Meal analysis settings

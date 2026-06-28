@@ -33,10 +33,15 @@ def _valid_vision_response() -> dict:
     }
 
 
-def _make_service(max_output_tokens: int | None = None) -> VisionAIService:
+def _make_service(
+    max_output_tokens: int | None = None,
+    response: dict | None = None,
+) -> VisionAIService:
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
-        mock_manager.generate_with_vision = AsyncMock(return_value=_valid_vision_response())
+        mock_manager.generate_with_vision = AsyncMock(
+            return_value=response or _valid_vision_response()
+        )
         mock_cls.get_instance.return_value = mock_manager
         return VisionAIService(max_output_tokens=max_output_tokens)
 
@@ -143,6 +148,29 @@ async def test_analyze_with_strategy_allows_max_token_override():
 
     call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
     assert call_kwargs.get("max_tokens") == 4096
+
+
+@pytest.mark.asyncio
+async def test_analyze_food_label_uses_food_label_schema():
+    service = _make_service(
+        response={
+            "product_name": "Cereal",
+            "serving_size": {"display_text": "55g", "grams": 55},
+            "servings_per_package": 8,
+            "macros_per_serving": {"protein_g": 3, "carbs_g": 37, "fat_g": 8},
+            "confidence": 0.91,
+        }
+    )
+
+    image = _make_jpeg(400, 300)
+    await service.analyze_food_label(image)
+
+    from src.domain.model.ai.nutrition_contracts import FoodLabelNutritionResponse
+
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
+    assert call_kwargs["purpose"].value == "food_label_scan"
+    assert call_kwargs["schema"] is FoodLabelNutritionResponse
+    assert "Nutrition Facts label" in call_kwargs["system_message"]
 
 
 @pytest.mark.asyncio

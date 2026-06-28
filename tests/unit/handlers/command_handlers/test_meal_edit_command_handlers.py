@@ -16,6 +16,7 @@ from src.app.handlers.command_handlers.edit_meal_command_handler import (
     EditMealCommandHandler,
 )
 from src.domain.model.meal import MealTranslation
+from src.infra.database.models import MealORM
 
 
 @pytest.mark.unit
@@ -199,6 +200,27 @@ class TestEditMealCommandHandler:
         assert "Updated portion" in summary
         assert "Removed ingredient" in summary
         assert "Added New Ingredient" in summary
+
+    @pytest.mark.asyncio
+    async def test_edit_meal_allows_clearing_dish_name(
+        self, event_bus, sample_meal_with_nutrition, test_session
+    ):
+        """Test metadata edit can clear meal name."""
+        meal = sample_meal_with_nutrition
+
+        command = EditMealCommand(
+            meal_id=meal.meal_id,
+            dish_name="",
+            food_item_changes=[],
+        )
+
+        result = await event_bus.send(command)
+
+        assert result["success"] is True
+        saved_meal = (
+            test_session.query(MealORM).filter(MealORM.meal_id == meal.meal_id).one()
+        )
+        assert saved_meal.dish_name == ""
 
     @pytest.mark.asyncio
     async def test_edit_meal_unauthorized_user(

@@ -9,7 +9,17 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    UploadFile,
+    Query,
+    Request,
+    status,
+)
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -93,6 +103,10 @@ async def analyze_meal_image_immediate(
         None,
         description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
     ),
+    scan_mode: str = Query(
+        "scanner",
+        description="scanner for meal photos, food_label for Nutrition Facts labels",
+    ),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
 ):
@@ -122,6 +136,13 @@ async def analyze_meal_image_immediate(
                 details={"size": len(contents), "max_size": MAX_FILE_SIZE},
             )
 
+        if scan_mode not in {"scanner", "food_label"}:
+            raise ValidationException(
+                message="scan_mode must be scanner or food_label",
+                error_code="INVALID_SCAN_MODE",
+                details={"scan_mode": scan_mode},
+            )
+
         parsed_target_date = None
         if target_date:
             try:
@@ -146,6 +167,7 @@ async def analyze_meal_image_immediate(
             target_date=parsed_target_date,
             user_description=sanitized_description,
             language=language,
+            scan_mode=scan_mode,
         )
 
         try:
@@ -200,6 +222,8 @@ async def create_manual_meal(
                     protein_per_100g=i.custom_nutrition.protein_per_100g,
                     carbs_per_100g=i.custom_nutrition.carbs_per_100g,
                     fat_per_100g=i.custom_nutrition.fat_per_100g,
+                    fiber_per_100g=i.custom_nutrition.fiber_per_100g,
+                    sugar_per_100g=i.custom_nutrition.sugar_per_100g,
                 )
             items.append(
                 ManualMealItem(
@@ -504,9 +528,7 @@ async def get_meal(
     language = get_request_language(request)
 
     # Use mapper to convert to response with translation support
-    return MealMapper.to_detailed_response(
-        meal, image_url, target_language=language
-    )
+    return MealMapper.to_detailed_response(meal, image_url, target_language=language)
 
 
 @router.delete("/{meal_id}")
@@ -575,6 +597,8 @@ async def update_meal_ingredients(
                 protein_per_100g=change_request.custom_nutrition.protein_per_100g,
                 carbs_per_100g=change_request.custom_nutrition.carbs_per_100g,
                 fat_per_100g=change_request.custom_nutrition.fat_per_100g,
+                fiber_per_100g=change_request.custom_nutrition.fiber_per_100g,
+                sugar_per_100g=change_request.custom_nutrition.sugar_per_100g,
             )
 
         food_item_changes.append(
@@ -593,6 +617,8 @@ async def update_meal_ingredients(
         meal_id=meal_id,
         user_id=user_id,
         dish_name=request.dish_name,
+        created_at=request.created_at,
+        meal_type=request.meal_type,
         food_item_changes=food_item_changes,
     )
 

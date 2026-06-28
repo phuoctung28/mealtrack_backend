@@ -28,6 +28,7 @@ class ScanByUrlRequest(BaseModel):
     image_id: str
     user_description: Optional[str] = None
     target_date: Optional[str] = None
+    scan_mode: str = "scanner"
 
 
 @router.post(
@@ -57,6 +58,13 @@ async def scan_meal_by_url(
                 details={"image_id": body.image_id},
             )
 
+        if body.scan_mode not in {"scanner", "food_label"}:
+            raise ValidationException(
+                message="scan_mode must be scanner or food_label",
+                error_code="INVALID_SCAN_MODE",
+                details={"scan_mode": body.scan_mode},
+            )
+
         parsed_target_date = None
         if body.target_date:
             try:
@@ -79,6 +87,7 @@ async def scan_meal_by_url(
             user_description=sanitized_description,
             target_date=parsed_target_date,
             language=language,
+            scan_mode=body.scan_mode,
         )
 
         try:
