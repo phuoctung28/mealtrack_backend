@@ -8,8 +8,9 @@ import json
 
 import pytest
 
-from src.api.mappers.meal_mapper import MealMapper, STATUS_MAPPING
-from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
+from src.api.mappers.meal_mapper import STATUS_MAPPING, MealMapper
+from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
+from src.domain.model.meal import FoodItemTranslation, MealTranslation
 
 
 class TestMealMapper:
@@ -154,6 +155,68 @@ class TestMealMapper:
         assert result.image_url == "https://example.com/image.jpg"
         # total_weight_grams is calculated from food items
         assert result.total_weight_grams == 350 or result.total_weight_grams is None
+
+    def test_to_detailed_response_uses_item_id_translations_when_list_is_stale(self):
+        """Translated food item IDs preserve locale after ingredient add/remove."""
+        food_items = [
+            FoodItem(
+                id="item-1",
+                name="Chicken Breast",
+                quantity=200,
+                unit="g",
+                macros=Macros(protein=40, carbs=0, fat=5),
+            ),
+            FoodItem(
+                id="item-2",
+                name="Rice",
+                quantity=150,
+                unit="g",
+                macros=Macros(protein=4, carbs=43, fat=0.4),
+            ),
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/detailed.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Chicken and Rice",
+            ready_at=datetime(2025, 1, 15, 14, 0),
+            created_at=datetime(2025, 1, 15, 13, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=44, carbs=43, fat=5.4),
+                food_items=food_items,
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm gà",
+                    meal_ingredients=["Ức gà", "Cơm", "Bông cải"],
+                    food_items=[
+                        FoodItemTranslation(
+                            food_item_id="item-1",
+                            name="Ức gà",
+                        ),
+                        FoodItemTranslation(
+                            food_item_id="item-2",
+                            name="Cơm",
+                        ),
+                    ],
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert result.dish_name == "Cơm gà"
+        assert [item.name for item in result.food_items] == ["Ức gà", "Cơm"]
 
     def test_to_detailed_response_with_custom_food_item(self):
         """Test detailed response with custom food item."""
