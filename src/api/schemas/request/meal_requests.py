@@ -304,7 +304,7 @@ class EditMealIngredientsRequest(BaseModel):
     """Request DTO for editing meal ingredients."""
 
     dish_name: Optional[str] = Field(
-        None, min_length=1, max_length=200, description="Updated meal name"
+        None, min_length=0, max_length=200, description="Updated meal name"
     )
     created_at: Optional[datetime] = Field(
         None, description="Updated meal log timestamp"

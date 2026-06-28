@@ -76,7 +76,11 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 # 4. Update meal
                 updated_meal = meal.mark_edited(
                     nutrition=updated_nutrition,
-                    dish_name=command.dish_name or meal.dish_name,
+                    dish_name=(
+                        command.dish_name
+                        if command.dish_name is not None
+                        else meal.dish_name
+                    ),
                     created_at=updated_created_at,
                     meal_type=updated_meal_type,
                 )

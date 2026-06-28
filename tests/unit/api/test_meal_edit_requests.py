@@ -354,17 +354,14 @@ class TestEditMealIngredientsRequest:
             )
 
     def test_empty_dish_name(self):
-        """Test empty dish name validation."""
-        # Arrange & Act & Assert
-        with pytest.raises(ValidationError):
-            EditMealIngredientsRequest(
-                dish_name="",
-                food_item_changes=[
-                    FoodItemChangeRequest(
-                        action="add", name="Test Food", quantity=100.0, unit="g"
-                    )
-                ],
-            )
+        """Test empty dish name is accepted for clearing a meal name."""
+        request = EditMealIngredientsRequest(
+            dish_name="",
+            food_item_changes=[],
+        )
+
+        assert request.dish_name == ""
+        assert request.food_item_changes == []
 
 
 @pytest.mark.unit
