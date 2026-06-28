@@ -9,7 +9,17 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    UploadFile,
+    Query,
+    Request,
+    status,
+)
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -516,9 +526,7 @@ async def get_meal(
     language = get_request_language(request)
 
     # Use mapper to convert to response with translation support
-    return MealMapper.to_detailed_response(
-        meal, image_url, target_language=language
-    )
+    return MealMapper.to_detailed_response(meal, image_url, target_language=language)
 
 
 @router.delete("/{meal_id}")
@@ -605,6 +613,8 @@ async def update_meal_ingredients(
         meal_id=meal_id,
         user_id=user_id,
         dish_name=request.dish_name,
+        created_at=request.created_at,
+        meal_type=request.meal_type,
         food_item_changes=food_item_changes,
     )
 

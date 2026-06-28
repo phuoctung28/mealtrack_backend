@@ -106,6 +106,40 @@ class TestMealEditDomain:
         assert edited_meal.edit_count == 3
         assert edited_meal.is_manually_edited is True
 
+    def test_meal_mark_edited_updates_log_time_and_meal_type(self):
+        """Test that mark_edited can update meal timestamp metadata."""
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            created_at=datetime(2026, 6, 28, 8, 0),
+            image=MealImage(
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=100000,
+                url="https://example.com/image.jpg",
+            ),
+            dish_name="Test Meal",
+            nutrition=Nutrition(
+                macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
+                food_items=[],
+                confidence_score=0.9,
+            ),
+            ready_at=datetime(2026, 6, 28, 8, 1),
+            meal_type="breakfast",
+        )
+        updated_at = datetime(2026, 6, 28, 19, 30)
+
+        edited_meal = meal.mark_edited(
+            meal.nutrition,
+            "Test Meal",
+            created_at=updated_at,
+            meal_type="dinner",
+        )
+
+        assert edited_meal.created_at == updated_at
+        assert edited_meal.meal_type == "dinner"
+
     def test_meal_preserves_other_fields_when_edited(self):
         """Test that mark_edited preserves other meal fields."""
         # Arrange

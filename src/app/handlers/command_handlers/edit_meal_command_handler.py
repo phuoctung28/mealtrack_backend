@@ -15,6 +15,9 @@ from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealEditedEvent
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import MealStatus
+from src.domain.services.meal_type_determination_service import (
+    determine_meal_type_from_timestamp,
+)
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 
@@ -60,19 +63,38 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 # 3. Recalculate nutrition
                 updated_nutrition = self._calculate_total_nutrition(updated_food_items)
 
+                updated_created_at = command.created_at or meal.created_at
+                if command.meal_type is not None:
+                    updated_meal_type = command.meal_type
+                elif command.created_at is not None:
+                    updated_meal_type = determine_meal_type_from_timestamp(
+                        command.created_at
+                    )
+                else:
+                    updated_meal_type = meal.meal_type
+
                 # 4. Update meal
                 updated_meal = meal.mark_edited(
                     nutrition=updated_nutrition,
                     dish_name=command.dish_name or meal.dish_name,
+                    created_at=updated_created_at,
+                    meal_type=updated_meal_type,
                 )
 
                 # 5. Persist changes
                 saved_meal = await uow.meals.save(updated_meal)
                 await uow.commit()
 
+                old_meal_date = (meal.created_at or utc_now()).date()
                 meal_date = (saved_meal.created_at or utc_now()).date()
                 if self.cache_invalidation:
-                    await self.cache_invalidation.after_meal_write(saved_meal.user_id, meal_date)
+                    if old_meal_date != meal_date:
+                        await self.cache_invalidation.after_meal_write(
+                            saved_meal.user_id, old_meal_date
+                        )
+                    await self.cache_invalidation.after_meal_write(
+                        saved_meal.user_id, meal_date
+                    )
 
                 # 6. Calculate nutrition delta for event
                 nutrition_delta = self._calculate_nutrition_delta(

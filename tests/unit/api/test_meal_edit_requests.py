@@ -3,6 +3,7 @@ Unit tests for meal edit request validation.
 """
 
 import pytest
+from datetime import datetime
 from pydantic import ValidationError
 
 from src.api.schemas.request.meal_requests import (
@@ -318,11 +319,26 @@ class TestEditMealIngredientsRequest:
         assert request.dish_name is None
         assert len(request.food_item_changes) == 1
 
-    def test_empty_food_item_changes(self):
-        """Test empty food item changes validation."""
-        # Arrange & Act & Assert
+    def test_metadata_only_edit_request(self):
+        """Test meal metadata edits without ingredient changes."""
+        created_at = datetime(2026, 6, 28, 8, 30)
+
+        request = EditMealIngredientsRequest(
+            dish_name="Updated Meal",
+            created_at=created_at,
+            meal_type="breakfast",
+            food_item_changes=[],
+        )
+
+        assert request.dish_name == "Updated Meal"
+        assert request.created_at == created_at
+        assert request.meal_type == "breakfast"
+        assert request.food_item_changes == []
+
+    def test_empty_edit_request(self):
+        """Test empty edit requests are rejected."""
         with pytest.raises(ValidationError):
-            EditMealIngredientsRequest(food_item_changes=[])
+            EditMealIngredientsRequest()
 
     def test_dish_name_too_long(self):
         """Test dish name too long validation."""

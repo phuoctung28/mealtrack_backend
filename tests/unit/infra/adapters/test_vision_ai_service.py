@@ -168,6 +168,7 @@ async def test_analyze_food_label_uses_food_label_schema():
     from src.domain.model.ai.nutrition_contracts import FoodLabelNutritionResponse
 
     call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
+    assert call_kwargs["purpose"].value == "food_label_scan"
     assert call_kwargs["schema"] is FoodLabelNutritionResponse
     assert "Nutrition Facts label" in call_kwargs["system_message"]
 

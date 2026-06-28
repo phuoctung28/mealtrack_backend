@@ -114,8 +114,13 @@ class VisionAIService(VisionAIServicePort):
                 if isinstance(strategy, FoodLabelAnalysisStrategy)
                 else VISION_VALIDATION_PURPOSE
             )
+            model_purpose = (
+                ModelPurpose.FOOD_LABEL_SCAN
+                if isinstance(strategy, FoodLabelAnalysisStrategy)
+                else ModelPurpose.MEAL_SCAN
+            )
             result = await self._ai_manager.generate_with_vision(
-                purpose=ModelPurpose.MEAL_SCAN,
+                purpose=model_purpose,
                 prompt=strategy.get_user_message(),
                 image_data=image_bytes,
                 system_message=strategy.get_analysis_prompt(),

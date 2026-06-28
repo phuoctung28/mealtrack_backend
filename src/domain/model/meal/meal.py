@@ -216,13 +216,19 @@ class Meal:
             **self._recipe_fields(),
         )
 
-    def mark_edited(self, nutrition: Nutrition, dish_name: str) -> "Meal":
+    def mark_edited(
+        self,
+        nutrition: Nutrition,
+        dish_name: str,
+        created_at: datetime | None = None,
+        meal_type: str | None = None,
+    ) -> "Meal":
         """Mark meal as edited with updated nutrition."""
         return Meal(
             meal_id=self.meal_id,
             user_id=self.user_id,
             status=MealStatus.READY,
-            created_at=self.created_at,
+            created_at=created_at or self.created_at,
             image=self.image,
             dish_name=dish_name,
             nutrition=nutrition,
@@ -233,7 +239,7 @@ class Meal:
             last_edited_at=utc_now(),
             edit_count=self.edit_count + 1,
             is_manually_edited=True,
-            meal_type=self.meal_type,
+            meal_type=meal_type or self.meal_type,
             translations=self.translations,
             source=self.source,
             **self._recipe_fields(),

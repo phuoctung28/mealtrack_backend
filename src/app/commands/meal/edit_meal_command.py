@@ -3,6 +3,7 @@ Command to edit meal ingredients and portions.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional, List
 
 from src.app.events.base import Command
@@ -16,6 +17,8 @@ class EditMealCommand(Command):
     meal_id: str
     user_id: str = ""
     dish_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    meal_type: Optional[str] = None
     food_item_changes: List[FoodItemChange] = field(default_factory=list)
 
 

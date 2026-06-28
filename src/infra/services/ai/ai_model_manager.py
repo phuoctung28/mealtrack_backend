@@ -28,6 +28,7 @@ TEXT_PURPOSES: set[ModelPurpose] = {
 }
 VISION_PURPOSES: set[ModelPurpose] = {
     ModelPurpose.MEAL_SCAN,
+    ModelPurpose.FOOD_LABEL_SCAN,
     ModelPurpose.INGREDIENT_SCAN,
 }
 
@@ -36,6 +37,9 @@ FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
     # VISION TASKS: OpenAI primary, optional provider routes append as fallback
     # ==========================================================================
     ModelPurpose.MEAL_SCAN: [
+        DEFAULT_OPENAI_MODEL,
+    ],
+    ModelPurpose.FOOD_LABEL_SCAN: [
         DEFAULT_OPENAI_MODEL,
     ],
     ModelPurpose.INGREDIENT_SCAN: [
