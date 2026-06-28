@@ -2,18 +2,16 @@
 Mapper for meal-related DTOs and domain models.
 """
 
-from typing import List, Optional
-
 from src.api.schemas.response import (
-    SimpleMealResponse,
     DetailedMealResponse,
-    MealListResponse,
     FoodItemResponse,
+    MealListResponse,
     NutritionResponse,
+    SimpleMealResponse,
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
-from src.domain.model.nutrition import FoodItem, Nutrition, Macros, Micros
+from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
 # Status mapping from domain to API
@@ -54,8 +52,8 @@ class MealMapper:
     @staticmethod
     def to_detailed_response(
         meal: Meal,
-        image_url: Optional[str] = None,
-        target_language: Optional[str] = None,
+        image_url: str | None = None,
+        target_language: str | None = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -70,8 +68,8 @@ class MealMapper:
             DetailedMealResponse DTO
         """
         from src.api.schemas.response.meal_responses import (
-            MacrosResponse,
             CustomNutritionResponse,
+            MacrosResponse,
             MealTranslationResponse,
             TranslatedFoodItemResponse,
         )
@@ -173,7 +171,19 @@ class MealMapper:
                     dish_name = tr.dish_name
                 if tr.meal_instruction:
                     instructions = tr.meal_instruction
-                if tr.meal_ingredients and len(tr.meal_ingredients) == len(food_items):
+                translated_names_by_id = {
+                    str(item.food_item_id): item.name
+                    for item in tr.food_items
+                    if item.name
+                }
+                if translated_names_by_id:
+                    for fi in food_items:
+                        translated_name = translated_names_by_id.get(str(fi.id))
+                        if translated_name:
+                            fi.name = translated_name
+                elif tr.meal_ingredients and len(tr.meal_ingredients) == len(
+                    food_items
+                ):
                     for i, fi in enumerate(food_items):
                         fi.name = tr.meal_ingredients[i]
 
@@ -225,7 +235,7 @@ class MealMapper:
         )
 
     @staticmethod
-    def _normalize_instructions(instructions: Optional[list]) -> Optional[list]:
+    def _normalize_instructions(instructions: list | None) -> list | None:
         """Normalize instructions to structured format.
 
         Converts legacy List[str] to List[dict] with {instruction, duration_minutes}.
@@ -243,11 +253,11 @@ class MealMapper:
 
     @staticmethod
     def to_meal_list_response(
-        meals: List[Meal],
+        meals: list[Meal],
         total: int,
         page: int = 1,
         page_size: int = 10,
-        image_urls: Optional[dict] = None,
+        image_urls: dict | None = None,
     ) -> MealListResponse:
         """
         Convert list of Meal domain models to MealListResponse DTO.
@@ -316,14 +326,12 @@ class MealMapper:
         Returns:
             FoodItem domain model
         """
-        # Extract calories and macros from nutrition dict if present
-        calories = item_dict.get("calories", 0)
+        # Extract macros from nutrition dict if present; calories are derived.
         macros = Macros(protein=0, carbs=0, fat=0)
         micros = None
 
         if "nutrition" in item_dict and item_dict["nutrition"]:
             nutrition_data = item_dict["nutrition"]
-            calories = nutrition_data.get("calories", 0)
             macros = Macros(
                 protein=nutrition_data.get("protein_g", 0),
                 carbs=nutrition_data.get("carbs_g", 0),
@@ -355,12 +363,12 @@ class MealMapper:
         Returns:
             DailyNutritionResponse DTO
         """
+        from src.api.exceptions import ResourceNotFoundException
         from src.api.schemas.response.daily_nutrition_response import (
+            HydrationSummaryResponse,
             MacrosResponse,
             WeeklyContextResponse,
-            HydrationSummaryResponse,
         )
-        from src.api.exceptions import ResourceNotFoundException
 
         # Extract data - require actual user targets, no hardcoded defaults
         target_calories = daily_macros_data.get("target_calories")
