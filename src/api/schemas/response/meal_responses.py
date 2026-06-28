@@ -113,6 +113,8 @@ class CustomNutritionResponse(BaseModel):
     protein_per_100g: float = Field(..., description="Protein per 100g")
     carbs_per_100g: float = Field(..., description="Carbs per 100g")
     fat_per_100g: float = Field(..., description="Fat per 100g")
+    fiber_per_100g: float = Field(0, ge=0, description="Fiber per 100g")
+    sugar_per_100g: float = Field(0, ge=0, description="Sugar per 100g")
 
 
 class FoodLabelServingSizeResponse(BaseModel):

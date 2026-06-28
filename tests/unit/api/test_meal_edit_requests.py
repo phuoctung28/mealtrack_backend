@@ -239,6 +239,31 @@ class TestCreateManualMealFromFoodsRequest:
 
         assert request.source == "manual"
 
+    def test_prompt_source_allows_legacy_back_calculated_fiber_and_sugar_rates(self):
+        request = CreateManualMealFromFoodsRequest(
+            dish_name="Smoothie bowl",
+            source="prompt",
+            items=[
+                {
+                    "name": "Smoothie bowl",
+                    "quantity": 1.0,
+                    "unit": "bowl",
+                    "custom_nutrition": {
+                        "protein_per_100g": 120.0,
+                        "carbs_per_100g": 600.0,
+                        "fat_per_100g": 80.0,
+                        "fiber_per_100g": 150.0,
+                        "sugar_per_100g": 240.0,
+                    },
+                }
+            ],
+        )
+
+        nutrition = request.items[0].custom_nutrition
+        assert nutrition is not None
+        assert nutrition.fiber_per_100g == 150.0
+        assert nutrition.sugar_per_100g == 240.0
+
     def test_missing_source_rejects_impossible_gram_macro_rates(self):
         with pytest.raises(ValidationError):
             CreateManualMealFromFoodsRequest(
@@ -271,6 +296,27 @@ class TestCreateManualMealFromFoodsRequest:
                             "protein_per_100g": 3000.0,
                             "carbs_per_100g": 10.0,
                             "fat_per_100g": 5.0,
+                        },
+                    }
+                ],
+            )
+
+    def test_gram_custom_nutrition_rejects_impossible_fiber_and_sugar_rates(self):
+        with pytest.raises(ValidationError):
+            CreateManualMealFromFoodsRequest(
+                dish_name="Granola",
+                source="manual",
+                items=[
+                    {
+                        "name": "Granola",
+                        "quantity": 100.0,
+                        "unit": "g",
+                        "custom_nutrition": {
+                            "protein_per_100g": 10.0,
+                            "carbs_per_100g": 60.0,
+                            "fat_per_100g": 8.0,
+                            "fiber_per_100g": 120.0,
+                            "sugar_per_100g": 140.0,
                         },
                     }
                 ],

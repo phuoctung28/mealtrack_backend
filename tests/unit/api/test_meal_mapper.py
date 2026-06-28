@@ -163,7 +163,7 @@ class TestMealMapper:
                 name="Homemade Sauce",
                 quantity=50,
                 unit="g",
-                macros=Macros(protein=1, carbs=8, fat=2),
+                macros=Macros(protein=1, carbs=8, fat=2, fiber=1, sugar=3),
                 confidence=1.0,
                 fdc_id=None,
                 is_custom=True,
@@ -171,7 +171,8 @@ class TestMealMapper:
         ]
 
         nutrition = Nutrition(
-            macros=Macros(protein=1, carbs=8, fat=2), food_items=food_items
+            macros=Macros(protein=1, carbs=8, fat=2, fiber=1, sugar=3),
+            food_items=food_items,
         )
 
         image = MealImage(
@@ -201,8 +202,14 @@ class TestMealMapper:
         assert result.food_items[0].fdc_id is None
         assert result.food_items[0].custom_nutrition is not None
         assert result.food_items[0].custom_nutrition.calories_per_100g == pytest.approx(
-            108.0
-        )  # derived: (1*4+8*4+2*9) * (100/50)
+            104.0
+        )  # derived fiber-aware then scaled to 100g
+        assert result.food_items[0].custom_nutrition.fiber_per_100g == pytest.approx(
+            2.0
+        )
+        assert result.food_items[0].custom_nutrition.sugar_per_100g == pytest.approx(
+            6.0
+        )
 
     def test_to_detailed_response_includes_food_label_metadata(self):
         """Food-label meal details expose serving and package metadata."""

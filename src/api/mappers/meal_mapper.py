@@ -146,6 +146,12 @@ class MealMapper:
                             fat_per_100g=(
                                 item.macros.fat * scale_factor if item.macros else 0.0
                             ),
+                            fiber_per_100g=(
+                                item.macros.fiber * scale_factor if item.macros else 0.0
+                            ),
+                            sugar_per_100g=(
+                                item.macros.sugar * scale_factor if item.macros else 0.0
+                            ),
                         )
 
                     food_item_dto = FoodItemResponse(
@@ -344,14 +350,12 @@ class MealMapper:
         Returns:
             FoodItem domain model
         """
-        # Extract calories and macros from nutrition dict if present
-        calories = item_dict.get("calories", 0)
+        # Extract macros from nutrition dict if present.
         macros = Macros(protein=0, carbs=0, fat=0)
         micros = None
 
         if "nutrition" in item_dict and item_dict["nutrition"]:
             nutrition_data = item_dict["nutrition"]
-            calories = nutrition_data.get("calories", 0)
             macros = Macros(
                 protein=nutrition_data.get("protein_g", 0),
                 carbs=nutrition_data.get("carbs_g", 0),

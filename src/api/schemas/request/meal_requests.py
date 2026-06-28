@@ -143,7 +143,13 @@ class AnalyzeMealImageRequest(BaseModel):
 def _has_macro_over_100(nutrition) -> bool:
     return any(
         getattr(nutrition, field, 0) > 100
-        for field in ("protein_per_100g", "carbs_per_100g", "fat_per_100g")
+        for field in (
+            "protein_per_100g",
+            "carbs_per_100g",
+            "fat_per_100g",
+            "fiber_per_100g",
+            "sugar_per_100g",
+        )
     )
 
 
@@ -163,12 +169,18 @@ class ManualMealCustomNutritionRequest(BaseModel):
     protein_per_100g: float = Field(..., ge=0, description="Protein per 100g")
     carbs_per_100g: float = Field(..., ge=0, description="Carbohydrates per 100g")
     fat_per_100g: float = Field(..., ge=0, description="Fat per 100g")
+    fiber_per_100g: float = Field(0.0, ge=0, description="Fiber per 100g")
+    sugar_per_100g: float = Field(0.0, ge=0, description="Sugar per 100g")
 
     @property
     def calories_per_100g(self) -> float:
-        """Derive calories from macros: P*4 + C*4 + F*9."""
+        """Derive calories from macros using fiber-aware formula."""
+        net_carbs = max(0.0, self.carbs_per_100g - self.fiber_per_100g)
         return round(
-            self.protein_per_100g * 4 + self.carbs_per_100g * 4 + self.fat_per_100g * 9,
+            self.protein_per_100g * 4
+            + net_carbs * 4
+            + self.fiber_per_100g * 2
+            + self.fat_per_100g * 9,
             2,
         )
 
@@ -271,7 +283,7 @@ class FoodItemChangeRequest(BaseModel):
 class CustomNutritionRequest(BaseModel):
     """Request DTO for custom nutrition data.
 
-    Calories always derived from macros: P*4 + C*4 + F*9.
+    Calories always derived from macros using the canonical fiber-aware formula.
     """
 
     protein_per_100g: float = Field(
@@ -281,12 +293,22 @@ class CustomNutritionRequest(BaseModel):
         ..., ge=0, le=100, description="Carbohydrates per 100g in grams"
     )
     fat_per_100g: float = Field(..., ge=0, le=100, description="Fat per 100g in grams")
+    fiber_per_100g: float = Field(
+        0.0, ge=0, le=100, description="Fiber per 100g in grams"
+    )
+    sugar_per_100g: float = Field(
+        0.0, ge=0, le=100, description="Sugar per 100g in grams"
+    )
 
     @property
     def calories_per_100g(self) -> float:
-        """Derive calories from macros: P*4 + C*4 + F*9."""
+        """Derive calories from macros using fiber-aware formula."""
+        net_carbs = max(0.0, self.carbs_per_100g - self.fiber_per_100g)
         return round(
-            self.protein_per_100g * 4 + self.carbs_per_100g * 4 + self.fat_per_100g * 9,
+            self.protein_per_100g * 4
+            + net_carbs * 4
+            + self.fiber_per_100g * 2
+            + self.fat_per_100g * 9,
             2,
         )
 
@@ -296,6 +318,8 @@ class CustomNutritionRequest(BaseModel):
                 "protein_per_100g": 31.0,
                 "carbs_per_100g": 0.0,
                 "fat_per_100g": 3.6,
+                "fiber_per_100g": 0.0,
+                "sugar_per_100g": 0.0,
             }
         }
 

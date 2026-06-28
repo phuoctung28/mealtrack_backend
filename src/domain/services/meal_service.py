@@ -48,6 +48,8 @@ class MealService:
                         protein=change.custom_nutrition.protein_per_100g * scale_factor,
                         carbs=change.custom_nutrition.carbs_per_100g * scale_factor,
                         fat=change.custom_nutrition.fat_per_100g * scale_factor,
+                        fiber=change.custom_nutrition.fiber_per_100g * scale_factor,
+                        sugar=change.custom_nutrition.sugar_per_100g * scale_factor,
                     )
                 else:
                     # Default values when no custom nutrition provided
@@ -93,9 +95,13 @@ class MealService:
                         if change.unit is not None:
                             item.unit = change.unit
                         if change.custom_nutrition is not None:
-                            # Recalculate macros from custom nutrition (calories derived automatically)
+                            # Recalculate macros from custom nutrition.
                             item_name = change.name or item.name
-                            item_quantity = change.quantity or item.quantity
+                            item_quantity = (
+                                change.quantity
+                                if change.quantity is not None
+                                else item.quantity
+                            )
                             item_unit = change.unit or item.unit
                             quantity_grams = convert_quantity_to_grams(
                                 item_quantity, item_unit, item_name
@@ -107,6 +113,10 @@ class MealService:
                                 carbs=change.custom_nutrition.carbs_per_100g
                                 * scale_factor,
                                 fat=change.custom_nutrition.fat_per_100g * scale_factor,
+                                fiber=change.custom_nutrition.fiber_per_100g
+                                * scale_factor,
+                                sugar=change.custom_nutrition.sugar_per_100g
+                                * scale_factor,
                             )
                             item.is_custom = True
                         logger.info(f"Updated food item: {change.id}")
