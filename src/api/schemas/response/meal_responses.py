@@ -25,6 +25,14 @@ class MealStatusEnum(str, Enum):
     failed = "failed"
 
 
+class ValueInsightCategoryEnum(str, Enum):
+    """Meal value insight category."""
+
+    benefit = "benefit"
+    caution = "caution"
+    balance = "balance"
+
+
 # Translation Response DTOs
 
 
@@ -136,6 +144,30 @@ class FoodLabelMetadataResponse(BaseModel):
     label_notes: List[str] = Field(default_factory=list)
 
 
+class MealValueBulletResponse(BaseModel):
+    """Short meal-level value insight."""
+
+    text: str = Field(..., max_length=120)
+    category: ValueInsightCategoryEnum
+
+
+class IngredientValueInsightResponse(BaseModel):
+    """Short ingredient-level value insight."""
+
+    ingredient_name: str = Field(..., description="Ingredient display name")
+    text: str = Field(..., max_length=120)
+    category: ValueInsightCategoryEnum
+
+
+class MealValueInsightsResponse(BaseModel):
+    """Value insights shown on meal detail."""
+
+    meal_bullets: List[MealValueBulletResponse] = Field(default_factory=list)
+    ingredient_insights: List[IngredientValueInsightResponse] = Field(
+        default_factory=list
+    )
+
+
 class FoodItemResponse(BaseModel):
     """Response DTO for food item information."""
 
@@ -189,6 +221,9 @@ class DetailedMealResponse(SimpleMealResponse):
     )
     food_label_metadata: Optional[FoodLabelMetadataResponse] = Field(
         None, description="Nutrition Facts metadata for food-label scans"
+    )
+    value_insights: Optional[MealValueInsightsResponse] = Field(
+        None, description="AI-generated meal and ingredient value insights"
     )
     # Recipe details (populated for AI suggestions, null for scanned/manual meals)
     description: Optional[str] = Field(None, description="Meal description")

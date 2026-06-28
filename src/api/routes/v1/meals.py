@@ -23,7 +23,7 @@ from fastapi import (
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.base_dependencies import get_image_store
+from src.api.base_dependencies import get_cache_service, get_image_store
 from src.api.exceptions import handle_exception, ValidationException
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
@@ -57,6 +57,8 @@ from src.app.queries.meal import (
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
+from src.domain.services.meal_value_insight_service import MealValueInsightService
+from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import EventBus
 from src.api.dependencies.guest_quota import get_guest_quota_service
 from src.api.services.guest_parse_quota import (
@@ -507,6 +509,7 @@ async def get_meal(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
+    cache_service: CacheService | None = Depends(get_cache_service),
 ):
     """Get detailed information about a specific meal.
 
@@ -526,9 +529,45 @@ async def get_meal(
 
     # Get language from Accept-Language header via middleware
     language = get_request_language(request)
+    value_insights = await MealValueInsightService().build_ai(
+        dish_name=meal.dish_name,
+        nutrition=meal.nutrition,
+        ingredient_names_by_id=_translated_food_item_names(meal, language),
+        language=language,
+        cache_service=cache_service,
+    )
 
     # Use mapper to convert to response with translation support
-    return MealMapper.to_detailed_response(meal, image_url, target_language=language)
+    return MealMapper.to_detailed_response(
+        meal,
+        image_url,
+        target_language=language,
+        value_insights=value_insights,
+    )
+
+
+def _translated_food_item_names(meal, language: str) -> dict[str, str]:
+    if language == "en" or not getattr(meal, "translations", None):
+        return {}
+    translation = meal.translations.get(language)
+    if not translation:
+        return {}
+    names_by_id = {
+        str(item.food_item_id): item.name
+        for item in translation.food_items
+        if item.name
+    }
+    if names_by_id:
+        return names_by_id
+    food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+    if translation.meal_ingredients and len(translation.meal_ingredients) == len(
+        food_items
+    ):
+        return {
+            str(item.id): translation.meal_ingredients[index]
+            for index, item in enumerate(food_items)
+        }
+    return {}
 
 
 @router.delete("/{meal_id}")

@@ -16,6 +16,7 @@ from src.api.schemas.response import (
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
+from src.domain.services.meal_value_insight_contract import MealValueInsights
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
 # Status mapping from domain to API
@@ -59,6 +60,7 @@ class MealMapper:
         meal: Meal,
         image_url: str | None = None,
         target_language: str | None = None,
+        value_insights: MealValueInsights | None = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -198,6 +200,8 @@ class MealMapper:
                     for i, fi in enumerate(food_items):
                         fi.name = tr.meal_ingredients[i]
 
+        value_insights_response = MealMapper._value_insights_response(value_insights)
+
         # --- Build translations dict for the response ---
         translations_response = None
         if meal.translations:
@@ -239,12 +243,38 @@ class MealMapper:
             total_nutrition=total_nutrition,
             translations=translations_response,
             food_label_metadata=MealMapper._food_label_metadata(meal),
+            value_insights=value_insights_response,
             description=getattr(meal, "description", None),
             instructions=instructions,
             prep_time_min=getattr(meal, "prep_time_min", None),
             cook_time_min=getattr(meal, "cook_time_min", None),
             cuisine_type=getattr(meal, "cuisine_type", None),
             origin_country=getattr(meal, "origin_country", None),
+        )
+
+    @staticmethod
+    def _value_insights_response(insights: MealValueInsights | None):
+        from src.api.schemas.response.meal_responses import (
+            IngredientValueInsightResponse,
+            MealValueBulletResponse,
+            MealValueInsightsResponse,
+        )
+
+        if not insights:
+            return None
+        return MealValueInsightsResponse(
+            meal_bullets=[
+                MealValueBulletResponse(text=item.text, category=item.category)
+                for item in insights.meal_bullets
+            ],
+            ingredient_insights=[
+                IngredientValueInsightResponse(
+                    ingredient_name=item.ingredient_name,
+                    text=item.text,
+                    category=item.category,
+                )
+                for item in insights.ingredient_insights
+            ],
         )
 
     @staticmethod
