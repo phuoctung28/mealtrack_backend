@@ -14,7 +14,8 @@ from src.app.commands.meal import EditMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealEditedEvent
 from src.app.services.cache_invalidation_service import CacheInvalidationService
-from src.domain.model.meal import MealStatus
+from src.domain.model.meal import FoodItemTranslation, MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 
@@ -38,7 +39,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         async with self.uow as uow:
             try:
                 # 1. Validate meal exists
-                meal = await uow.meals.find_by_id(command.meal_id)
+                meal = await uow.meals.find_by_id(
+                    command.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
+                )
                 if not meal:
                     raise ResourceNotFoundException("Meal not found")
 
@@ -56,6 +59,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                     meal.nutrition.food_items if meal.nutrition else [],
                     command.food_item_changes,
                 )
+                self._realign_translations_after_food_item_changes(
+                    meal, updated_food_items
+                )
 
                 # 3. Recalculate nutrition
                 updated_nutrition = self._calculate_total_nutrition(updated_food_items)
@@ -68,11 +74,14 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
                 # 5. Persist changes
                 saved_meal = await uow.meals.save(updated_meal)
+                await self._save_realigned_translations(uow, updated_meal.translations)
                 await uow.commit()
 
                 meal_date = (saved_meal.created_at or utc_now()).date()
                 if self.cache_invalidation:
-                    await self.cache_invalidation.after_meal_write(saved_meal.user_id, meal_date)
+                    await self.cache_invalidation.after_meal_write(
+                        saved_meal.user_id, meal_date
+                    )
 
                 # 6. Calculate nutrition delta for event
                 nutrition_delta = self._calculate_nutrition_delta(
@@ -119,7 +128,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 await uow.rollback()
                 logger.warning(f"Validation error editing meal: {str(e)}")
                 raise ValidationException(str(e)) from None
-            except Exception as e:
+            except Exception:
                 await uow.rollback()
                 raise
 
@@ -151,6 +160,65 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 logger.warning(f"Unknown action: {change.action}")
 
         return list(food_items_dict.values())
+
+    def _realign_translations_after_food_item_changes(self, meal, updated_food_items):
+        """Keep cached translations aligned to the edited food item order."""
+        if not meal.translations or not meal.nutrition or not meal.nutrition.food_items:
+            return
+
+        previous_food_items = meal.nutrition.food_items
+        for translation in meal.translations.values():
+            translated_names_by_id = self._translated_names_by_id(
+                translation, previous_food_items
+            )
+            if not translated_names_by_id:
+                continue
+
+            realigned_ingredients = []
+            realigned_food_items = []
+            for item in updated_food_items:
+                translated_name = translated_names_by_id.get(str(item.id), item.name)
+                realigned_ingredients.append(translated_name)
+                realigned_food_items.append(
+                    FoodItemTranslation(
+                        food_item_id=str(item.id),
+                        name=translated_name,
+                    )
+                )
+
+            translation.meal_ingredients = realigned_ingredients
+            translation.food_items = realigned_food_items
+
+    def _translated_names_by_id(self, translation, previous_food_items):
+        translated_names_by_id = {
+            str(item.food_item_id): item.name
+            for item in translation.food_items
+            if item.name
+        }
+        if translated_names_by_id:
+            return translated_names_by_id
+
+        if translation.meal_ingredients and len(translation.meal_ingredients) == len(
+            previous_food_items
+        ):
+            return {
+                str(item.id): translation.meal_ingredients[index]
+                for index, item in enumerate(previous_food_items)
+                if translation.meal_ingredients[index]
+            }
+
+        return {}
+
+    async def _save_realigned_translations(self, uow, translations):
+        if not translations:
+            return
+
+        translation_repo = getattr(uow, "meal_translations", None)
+        if translation_repo is None:
+            return
+
+        for translation in translations.values():
+            await translation_repo.save(translation)
 
     def _calculate_total_nutrition(self, food_items):
         """Calculate total nutrition from food items using nutrition service."""
