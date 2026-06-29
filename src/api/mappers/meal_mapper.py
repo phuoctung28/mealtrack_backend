@@ -156,6 +156,8 @@ class MealMapper:
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),
                         name=item.name,
+                        display_name=item.name,
+                        canonical_name=item.name,
                         category=None,
                         quantity=item.quantity,
                         unit=item.unit,
@@ -176,6 +178,7 @@ class MealMapper:
         if target_language and target_language != "en" and meal.translations:
             tr = meal.translations.get(target_language)
             if tr:
+                translation_language = target_language
                 # Apply each translated field independently if it exists
                 # (lenient check - scanned meals may not have instructions)
                 if tr.dish_name:
@@ -187,16 +190,31 @@ class MealMapper:
                     for item in tr.food_items
                     if item.name
                 }
-                if translated_names_by_id:
-                    for fi in food_items:
-                        translated_name = translated_names_by_id.get(str(fi.id))
-                        if translated_name:
-                            fi.name = translated_name
-                elif tr.meal_ingredients and len(tr.meal_ingredients) == len(
+                legacy_names_by_id = {}
+                if tr.meal_ingredients and len(tr.meal_ingredients) == len(
                     food_items
                 ):
+                    legacy_names_by_id = {
+                        str(fi.id): tr.meal_ingredients[index]
+                        for index, fi in enumerate(food_items)
+                        if tr.meal_ingredients[index]
+                    }
+                if translated_names_by_id:
+                    for fi in food_items:
+                        translated_name = translated_names_by_id.get(
+                            str(fi.id)
+                        ) or legacy_names_by_id.get(str(fi.id))
+                        if translated_name:
+                            fi.name = translated_name
+                            fi.display_name = translated_name
+                elif legacy_names_by_id:
                     for i, fi in enumerate(food_items):
                         fi.name = tr.meal_ingredients[i]
+                        fi.display_name = tr.meal_ingredients[i]
+            else:
+                translation_language = None
+        else:
+            translation_language = None
 
         # --- Build translations dict for the response ---
         translations_response = None
@@ -239,6 +257,7 @@ class MealMapper:
             total_nutrition=total_nutrition,
             translations=translations_response,
             food_label_metadata=MealMapper._food_label_metadata(meal),
+            translation_language=translation_language,
             description=getattr(meal, "description", None),
             instructions=instructions,
             prep_time_min=getattr(meal, "prep_time_min", None),
