@@ -11,6 +11,12 @@ import pytest
 from src.api.mappers.meal_mapper import STATUS_MAPPING, MealMapper
 from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
 from src.domain.model.meal import FoodItemTranslation, MealTranslation
+from src.domain.services.meal_value_insight_contract import (
+    IngredientValueInsight,
+    MealValueInsights,
+    ValueInsight,
+    parse_ai_result,
+)
 
 
 class TestMealMapper:
@@ -823,3 +829,276 @@ class TestMealMapper:
         assert result.total_nutrition.protein == 30
         assert result.total_nutrition.carbs == 45
         assert result.total_nutrition.fat == 12
+
+    def test_to_detailed_response_serializes_value_insights(self):
+        """Detailed responses serialize provided value insights."""
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/insights.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Egg Rice Bowl",
+            ready_at=datetime(2025, 1, 15, 17, 0),
+            created_at=datetime(2025, 1, 15, 16, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=31, carbs=54, fat=14, fiber=7),
+                confidence_score=0.92,
+                food_items=[
+                    FoodItem(
+                        id="egg-1",
+                        name="Egg",
+                        quantity=2,
+                        unit="piece",
+                        macros=Macros(protein=16, carbs=1, fat=10),
+                        confidence=0.9,
+                    ),
+                    FoodItem(
+                        id="rice-1",
+                        name="Rice",
+                        quantity=180,
+                        unit="g",
+                        macros=Macros(protein=4, carbs=52, fat=1),
+                        confidence=0.9,
+                    ),
+                    FoodItem(
+                        id="sauce-1",
+                        name="Sauce",
+                        quantity=20,
+                        unit="g",
+                        macros=Macros(protein=0, carbs=8, fat=0),
+                        confidence=0.9,
+                    ),
+                ],
+            ),
+        )
+
+        result = MealMapper.to_detailed_response(
+            meal,
+            value_insights=MealValueInsights(
+                meal_bullets=[
+                    ValueInsight(
+                        text="Strong protein helps fullness; add plants for more volume.",
+                        category="benefit",
+                        highlights=["fullness"],
+                    )
+                ],
+                ingredient_insights=[
+                    IngredientValueInsight(
+                        ingredient_name="Rice",
+                        text="Rice gives carbs for steady energy; portion size shapes fullness.",
+                        category="balance",
+                        highlights=["steady energy"],
+                    )
+                ],
+            ),
+        )
+
+        assert result.value_insights is not None
+        assert len(result.value_insights.meal_bullets) <= 2
+        assert len(result.value_insights.ingredient_insights) <= 2
+        assert all(len(item.text) <= 120 for item in result.value_insights.meal_bullets)
+        assert all(
+            len(item.text) <= 120 for item in result.value_insights.ingredient_insights
+        )
+        assert {item.category.value for item in result.value_insights.meal_bullets} <= {
+            "benefit",
+            "caution",
+            "balance",
+        }
+        assert result.value_insights.ingredient_insights[0].ingredient_name == "Rice"
+
+    def test_to_detailed_response_serializes_translated_insight_names(self):
+        """Ingredient insight labels can follow translated response names."""
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/translated.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Chicken and Rice",
+            ready_at=datetime(2025, 1, 15, 17, 0),
+            created_at=datetime(2025, 1, 15, 16, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=44, carbs=43, fat=5.4),
+                food_items=[
+                    FoodItem(
+                        id="item-1",
+                        name="Chicken Breast",
+                        quantity=200,
+                        unit="g",
+                        macros=Macros(protein=40, carbs=0, fat=5),
+                    ),
+                    FoodItem(
+                        id="item-2",
+                        name="Rice",
+                        quantity=150,
+                        unit="g",
+                        macros=Macros(protein=4, carbs=43, fat=0.4),
+                    ),
+                ],
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm gà",
+                    food_items=[
+                        FoodItemTranslation(food_item_id="item-1", name="Ức gà"),
+                        FoodItemTranslation(food_item_id="item-2", name="Cơm"),
+                    ],
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(
+            meal,
+            target_language="vi",
+            value_insights=MealValueInsights(
+                meal_bullets=[
+                    ValueInsight(
+                        text="Giàu protein giúp no lâu và ít béo giúp nhẹ bụng.",
+                        category="benefit",
+                        highlights=["no lâu"],
+                    )
+                ],
+                ingredient_insights=[
+                    IngredientValueInsight(
+                        ingredient_name="Ức gà",
+                        text="Ức gà bổ sung protein nạc giúp phục hồi và ít béo giúp nhẹ bụng.",
+                        category="benefit",
+                        highlights=["phục hồi"],
+                    )
+                ],
+            ),
+        )
+
+        assert result.value_insights is not None
+        assert result.value_insights.ingredient_insights[0].ingredient_name == "Ức gà"
+
+    def test_meal_value_insight_service_parses_bounded_ai_output(self):
+        """AI insight output is capped to the v1 response bounds."""
+        insights = parse_ai_result(
+            {
+                "meal_bullets": [
+                    {
+                        "text": "Egg gives protein for fullness and fat for satiety.",
+                        "category": "benefit",
+                        "highlights": ["fullness"],
+                    },
+                    {
+                        "text": "Add vegetables for fiber-supported digestion and volume for fullness.",
+                        "category": "balance",
+                        "highlights": ["digestion"],
+                    },
+                    {
+                        "text": "This third item should be ignored.",
+                        "category": "caution",
+                        "highlights": ["third item"],
+                    },
+                ],
+                "ingredient_insights": [
+                    {
+                        "ingredient_name": "Egg",
+                        "text": "Provides protein for fullness and richness for satisfaction.",
+                        "category": "benefit",
+                        "highlights": ["fullness"],
+                    },
+                    {
+                        "ingredient_name": "Rice",
+                        "text": "Rice offers carbs for energy and starch for quick fuel.",
+                        "category": "balance",
+                        "highlights": ["energy"],
+                    },
+                    {
+                        "ingredient_name": "Sauce",
+                        "text": "This third ingredient should be ignored.",
+                        "category": "caution",
+                        "highlights": ["third ingredient"],
+                    },
+                ],
+            }
+        )
+
+        assert insights is not None
+        assert len(insights.meal_bullets) <= 2
+        assert len(insights.ingredient_insights) <= 2
+        assert all(len(item.text) <= 120 for item in insights.meal_bullets)
+        assert all(len(item.text) <= 120 for item in insights.ingredient_insights)
+
+    def test_meal_value_insight_service_keeps_one_body_effect_highlight(self):
+        """Highlights spotlight body effects, not macro keywords."""
+        insights = parse_ai_result(
+            {
+                "meal_bullets": [
+                    {
+                        "text": "Egg adds protein that supports fullness after this meal.",
+                        "category": "benefit",
+                        "highlights": ["fullness"],
+                    }
+                ],
+                "ingredient_insights": [
+                    {
+                        "ingredient_name": "Rice",
+                        "text": "Rice is high in carbs and low in protein, so fullness may fade sooner.",
+                        "category": "caution",
+                        "highlights": ["fullness may fade sooner"],
+                    }
+                ],
+            }
+        )
+
+        assert insights is not None
+        assert insights.meal_bullets[0].highlights == ["fullness"]
+        assert insights.ingredient_insights[0].category == "caution"
+        assert insights.ingredient_insights[0].highlights == [
+            "fullness may fade sooner"
+        ]
+
+    def test_meal_value_insight_service_strips_category_labels_from_text(self):
+        """AI category labels are metadata and should not appear in copy."""
+        insights = parse_ai_result(
+            {
+                "meal_bullets": [
+                    {
+                        "text": "Benefit: High protein supports fullness.",
+                        "category": "benefit",
+                        "highlights": ["fullness"],
+                    }
+                ],
+                "ingredient_insights": [
+                    {
+                        "ingredient_name": "Rice",
+                        "text": "Balance: High carbs provide quick fuel.",
+                        "category": "balance",
+                        "highlights": ["quick fuel"],
+                    }
+                ],
+            }
+        )
+
+        assert insights is not None
+        assert insights.meal_bullets[0].text == "High protein supports fullness."
+        assert insights.ingredient_insights[0].text == (
+            "High carbs provide quick fuel."
+        )
+
+    def test_meal_value_insight_service_omits_invalid_ai_output(self):
+        """Invalid AI output does not produce deterministic copy."""
+        insights = parse_ai_result(
+            {"meal_bullets": [{"text": "", "category": "benefit"}]}
+        )
+
+        assert insights is None

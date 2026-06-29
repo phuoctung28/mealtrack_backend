@@ -27,6 +27,11 @@ def get_task_manager() -> BackgroundTaskManager:
     return _instance
 
 
+def get_optional_task_manager() -> BackgroundTaskManager | None:
+    """Return the process-wide instance if lifespan startup completed."""
+    return _instance
+
+
 def set_task_manager(manager: BackgroundTaskManager) -> None:
     """Register the process-wide instance. Called once during lifespan startup."""
     global _instance

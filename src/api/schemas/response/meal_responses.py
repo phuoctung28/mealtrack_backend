@@ -24,6 +24,14 @@ class MealStatusEnum(StrEnum):
     failed = "failed"
 
 
+class ValueInsightCategoryEnum(StrEnum):
+    """Meal value insight category."""
+
+    benefit = "benefit"
+    caution = "caution"
+    balance = "balance"
+
+
 # Translation Response DTOs
 
 
@@ -135,6 +143,55 @@ class FoodLabelMetadataResponse(BaseModel):
     label_notes: list[str] = Field(default_factory=list)
 
 
+class MealValueBulletResponse(BaseModel):
+    """Short meal-level value insight."""
+
+    text: str = Field(..., max_length=120)
+    category: ValueInsightCategoryEnum
+    highlights: list[str] = Field(
+        default_factory=list,
+        max_length=1,
+        description="Exact localized substrings to bold",
+    )
+
+
+class IngredientValueInsightResponse(BaseModel):
+    """Short ingredient-level value insight."""
+
+    ingredient_name: str = Field(..., description="Ingredient display name")
+    text: str = Field(..., max_length=120)
+    category: ValueInsightCategoryEnum
+    highlights: list[str] = Field(
+        default_factory=list,
+        max_length=1,
+        description="Exact localized substrings to bold",
+    )
+
+
+class MealValueInsightsResponse(BaseModel):
+    """Value insights shown on meal detail."""
+
+    meal_bullets: list[MealValueBulletResponse] = Field(default_factory=list)
+    ingredient_insights: list[IngredientValueInsightResponse] = Field(
+        default_factory=list
+    )
+
+
+class MealValueInsightsStatusResponse(BaseModel):
+    """Cache status for meal value insights."""
+
+    status: str = Field(
+        ...,
+        description="Insight freshness: fresh, generating, or unavailable",
+    )
+    value_insights: MealValueInsightsResponse | None = Field(
+        None, description="Fresh insights when available"
+    )
+    version: str | None = Field(
+        None, description="Stable fingerprint for the meal insight payload"
+    )
+
+
 class FoodItemResponse(BaseModel):
     """Response DTO for food item information."""
 
@@ -194,6 +251,9 @@ class DetailedMealResponse(SimpleMealResponse):
     )
     food_label_metadata: FoodLabelMetadataResponse | None = Field(
         None, description="Nutrition Facts metadata for food-label scans"
+    )
+    value_insights: MealValueInsightsResponse | None = Field(
+        None, description="AI-generated meal and ingredient value insights"
     )
     translation_language: str | None = Field(
         None, description="Language code applied to localized response fields"
