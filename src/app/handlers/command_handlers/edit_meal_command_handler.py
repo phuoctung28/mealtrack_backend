@@ -16,10 +16,10 @@ from src.app.events.meal import MealEditedEvent
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import FoodItemTranslation, MealStatus
 from src.domain.model.meal_projection import MealProjection
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
-from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -219,19 +219,18 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             for item in translation.food_items
             if item.name
         }
-        if translated_names_by_id:
-            return translated_names_by_id
 
         if translation.meal_ingredients and len(translation.meal_ingredients) == len(
             previous_food_items
         ):
-            return {
+            translated_names_by_id.update({
                 str(item.id): translation.meal_ingredients[index]
                 for index, item in enumerate(previous_food_items)
-                if translation.meal_ingredients[index]
-            }
+                if str(item.id) not in translated_names_by_id
+                and translation.meal_ingredients[index]
+            })
 
-        return {}
+        return translated_names_by_id
 
     async def _save_realigned_translations(self, uow, translations):
         if not translations:
