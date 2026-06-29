@@ -23,6 +23,7 @@ from fastapi import (
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.dependencies.task_manager import get_task_manager
 from src.api.base_dependencies import get_cache_service, get_image_store
 from src.api.exceptions import handle_exception, ValidationException
 from src.api.middleware.accept_language import get_request_language
@@ -59,7 +60,7 @@ from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.domain.services.meal_value_insight_service import MealValueInsightService
 from src.infra.cache.cache_service import CacheService
-from src.infra.event_bus import EventBus
+from src.infra.event_bus import BackgroundTaskManager, EventBus
 from src.api.dependencies.guest_quota import get_guest_quota_service
 from src.api.services.guest_parse_quota import (
     GuestParseQuotaService,
@@ -112,6 +113,7 @@ async def analyze_meal_image_immediate(
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
     cache_service: CacheService | None = Depends(get_cache_service),
+    task_manager: BackgroundTaskManager = Depends(get_task_manager),
 ):
     """
     Send meal photo and return immediate meal analysis with nutritional data.
@@ -196,7 +198,8 @@ async def analyze_meal_image_immediate(
         if meal.image:
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        value_insights = await _build_value_insights_for_meal(
+        _schedule_value_insight_generation(
+            task_manager,
             meal,
             language=language,
             cache_service=cache_service,
@@ -206,7 +209,6 @@ async def analyze_meal_image_immediate(
             meal,
             image_url,
             target_language=language,
-            value_insights=value_insights,
         )
 
     except Exception as e:
@@ -220,6 +222,7 @@ async def create_manual_meal(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
     cache_service: CacheService | None = Depends(get_cache_service),
+    task_manager: BackgroundTaskManager = Depends(get_task_manager),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
@@ -278,7 +281,8 @@ async def create_manual_meal(
             user_id,
             _elapsed_ms,
         )
-        await _build_value_insights_for_meal(
+        _schedule_value_insight_generation(
+            task_manager,
             meal,
             language=get_request_language(request),
             cache_service=cache_service,
@@ -576,6 +580,25 @@ async def _build_value_insights_for_meal(
     )
 
 
+def _schedule_value_insight_generation(
+    task_manager: BackgroundTaskManager,
+    meal,
+    *,
+    language: str,
+    cache_service: CacheService | None,
+) -> None:
+    if cache_service is None:
+        return
+    task_manager.spawn(
+        f"meal-value-insights:{meal.meal_id}",
+        _build_value_insights_for_meal(
+            meal,
+            language=language,
+            cache_service=cache_service,
+        ),
+    )
+
+
 def _translated_food_item_names(meal, language: str) -> dict[str, str]:
     if language == "en" or not getattr(meal, "translations", None):
         return {}
@@ -650,6 +673,7 @@ async def update_meal_ingredients(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
     cache_service: CacheService | None = Depends(get_cache_service),
+    task_manager: BackgroundTaskManager = Depends(get_task_manager),
 ):
     """
     Update meal ingredients and portions.
@@ -696,7 +720,8 @@ async def update_meal_ingredients(
     logger.info("Sending command to event bus: %s", command)
     result = await event_bus.send(command)
     meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
-    await _build_value_insights_for_meal(
+    _schedule_value_insight_generation(
+        task_manager,
         meal,
         language=get_request_language(http_request),
         cache_service=cache_service,
