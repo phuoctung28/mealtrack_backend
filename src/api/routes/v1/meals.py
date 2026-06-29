@@ -29,7 +29,7 @@ from src.api.base_dependencies import (
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.dependencies.guest_quota import get_guest_quota_service
-from src.api.dependencies.task_manager import get_task_manager
+from src.api.dependencies.task_manager import get_optional_task_manager
 from src.api.exceptions import ValidationException, handle_exception
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.middleware.accept_language import get_request_language
@@ -123,7 +123,7 @@ async def analyze_meal_image_immediate(
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
     cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
@@ -238,7 +238,7 @@ async def create_manual_meal(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
     cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
@@ -553,7 +553,7 @@ async def get_meal(
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
     cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
@@ -613,7 +613,7 @@ async def get_meal_value_insights(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
     cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
@@ -688,7 +688,7 @@ async def _build_value_insights_for_meal(
 
 
 def _schedule_value_insight_generation(
-    task_manager: BackgroundTaskManager,
+    task_manager: BackgroundTaskManager | None,
     meal,
     *,
     language: str,
@@ -696,7 +696,7 @@ def _schedule_value_insight_generation(
     text_translation_service: DeepLTranslationPort | None,
     ai_manager: MealInsightAIPort,
 ) -> None:
-    if cache_service is None:
+    if cache_service is None or task_manager is None:
         return
     task_manager.spawn(
         f"meal-value-insights:{meal.meal_id}",
@@ -784,7 +784,7 @@ async def update_meal_ingredients(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
     cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
