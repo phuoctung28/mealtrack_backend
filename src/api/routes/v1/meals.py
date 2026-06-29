@@ -15,60 +15,67 @@ from fastapi import (
     File,
     Header,
     HTTPException,
-    UploadFile,
     Query,
     Request,
+    UploadFile,
     status,
 )
 
+from src.api.base_dependencies import (
+    get_cache_service,
+    get_deepl_text_translation_service,
+    get_image_store,
+)
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.dependencies.guest_quota import get_guest_quota_service
 from src.api.dependencies.task_manager import get_task_manager
-from src.api.base_dependencies import get_cache_service, get_image_store
-from src.api.exceptions import handle_exception, ValidationException
+from src.api.exceptions import ValidationException, handle_exception
+from src.api.mappers.meal_mapper import MealMapper
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
-from src.api.mappers.meal_mapper import MealMapper
+from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.request.meal_requests import (
-    EditMealIngredientsRequest,
     CreateManualMealFromFoodsRequest,
+    EditMealIngredientsRequest,
     ParseMealTextRequest,
 )
 from src.api.schemas.response import DetailedMealResponse, ManualMealCreationResponse
-from src.api.schemas.response.meal_responses import ParseMealTextResponse
-from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
+from src.api.schemas.response.meal_responses import ParseMealTextResponse
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
-from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
+from src.api.services.guest_parse_quota import (
+    GuestParseQuotaService,
+    QuotaAlreadyUsedError,
+    QuotaInFlightError,
+    QuotaUnavailableError,
+    validate_install_id,
+)
+from src.app.commands.meal import CustomNutritionData, EditMealCommand, FoodItemChange
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
     CustomNutrition,
     ManualMealItem,
 )
-from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
-from src.app.queries.meal import (
-    GetMealByIdQuery,
-    GetDailyMacrosQuery,
-    GetStreakQuery,
-    GetDailyBreakdownQuery,
-)
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
-from src.domain.services.prompts.input_sanitizer import sanitize_user_description
+from src.app.queries.meal import (
+    GetDailyBreakdownQuery,
+    GetDailyMacrosQuery,
+    GetMealByIdQuery,
+    GetStreakQuery,
+)
 from src.domain.services.meal_value_insight_service import MealValueInsightService
+from src.domain.services.prompts.input_sanitizer import sanitize_user_description
+from src.domain.services.translation.deepl_text_translation_service import (
+    DeepLTextTranslationService,
+)
 from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import BackgroundTaskManager, EventBus
-from src.api.dependencies.guest_quota import get_guest_quota_service
-from src.api.services.guest_parse_quota import (
-    GuestParseQuotaService,
-    QuotaAlreadyUsedError,
-    QuotaUnavailableError,
-    QuotaInFlightError,
-    validate_install_id,
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
@@ -114,6 +121,9 @@ async def analyze_meal_image_immediate(
     image_store=Depends(get_image_store),
     cache_service: CacheService | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    text_translation_service: DeepLTextTranslationService | None = Depends(
+        get_deepl_text_translation_service
+    ),
 ):
     """
     Send meal photo and return immediate meal analysis with nutritional data.
@@ -203,6 +213,7 @@ async def analyze_meal_image_immediate(
             meal,
             language=language,
             cache_service=cache_service,
+            text_translation_service=text_translation_service,
         )
 
         return MealMapper.to_detailed_response(
@@ -223,6 +234,9 @@ async def create_manual_meal(
     event_bus: EventBus = Depends(get_configured_event_bus),
     cache_service: CacheService | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    text_translation_service: DeepLTextTranslationService | None = Depends(
+        get_deepl_text_translation_service
+    ),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
@@ -286,6 +300,7 @@ async def create_manual_meal(
             meal,
             language=get_request_language(request),
             cache_service=cache_service,
+            text_translation_service=text_translation_service,
         )
 
         return ManualMealCreationResponse(
@@ -531,6 +546,9 @@ async def get_meal(
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
     cache_service: CacheService | None = Depends(get_cache_service),
+    text_translation_service: DeepLTextTranslationService | None = Depends(
+        get_deepl_text_translation_service
+    ),
 ):
     """Get detailed information about a specific meal.
 
@@ -554,6 +572,7 @@ async def get_meal(
         meal,
         language=language,
         cache_service=cache_service,
+        text_translation_service=text_translation_service,
     )
 
     # Use mapper to convert to response with translation support
@@ -570,11 +589,14 @@ async def _build_value_insights_for_meal(
     *,
     language: str,
     cache_service: CacheService | None,
+    text_translation_service: DeepLTextTranslationService | None,
 ):
-    return await MealValueInsightService().build_ai(
+    return await MealValueInsightService(
+        text_translation_service=text_translation_service,
+    ).build_ai(
         dish_name=meal.dish_name,
         nutrition=meal.nutrition,
-        ingredient_names_by_id=_translated_food_item_names(meal, language),
+        ingredient_names_by_id={},
         language=language,
         cache_service=cache_service,
     )
@@ -586,6 +608,7 @@ def _schedule_value_insight_generation(
     *,
     language: str,
     cache_service: CacheService | None,
+    text_translation_service: DeepLTextTranslationService | None,
 ) -> None:
     if cache_service is None:
         return
@@ -595,6 +618,7 @@ def _schedule_value_insight_generation(
             meal,
             language=language,
             cache_service=cache_service,
+            text_translation_service=text_translation_service,
         ),
     )
 
@@ -674,6 +698,9 @@ async def update_meal_ingredients(
     event_bus: EventBus = Depends(get_configured_event_bus),
     cache_service: CacheService | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
+    text_translation_service: DeepLTextTranslationService | None = Depends(
+        get_deepl_text_translation_service
+    ),
 ):
     """
     Update meal ingredients and portions.
@@ -725,6 +752,7 @@ async def update_meal_ingredients(
         meal,
         language=get_request_language(http_request),
         cache_service=cache_service,
+        text_translation_service=text_translation_service,
     )
     return result
 
