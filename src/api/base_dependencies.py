@@ -396,6 +396,13 @@ def get_deepl_text_translation_service():
     return _deepl_text_translation_service
 
 
+def get_ai_model_manager():
+    """Get provider-agnostic AI manager singleton."""
+    from src.infra.services.ai.ai_model_manager import AIModelManager
+
+    return AIModelManager.get_instance()
+
+
 # IngredientNutritionResolver singleton reuses fatsecret and food references.
 _ingredient_nutrition_resolver = None
 

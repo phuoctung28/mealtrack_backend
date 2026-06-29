@@ -18,10 +18,10 @@ class FakeCache:
     def __init__(self):
         self.values = {}
 
-    async def get_json(self, key):
+    async def get(self, key):
         return self.values.get(key)
 
-    async def set_json(self, key, value, ttl):
+    async def set(self, key, value, ttl):
         self.values[key] = value
         return True
 

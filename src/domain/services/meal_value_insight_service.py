@@ -6,6 +6,9 @@ import logging
 from typing import Any
 
 from src.domain.model.ai.model_purpose import ModelPurpose
+from src.domain.ports.cache_port import CachePort
+from src.domain.ports.deepl_translation_port import DeepLTranslationPort
+from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.model.nutrition import Nutrition
 from src.domain.services.meal_value_insight_contract import (
     IngredientValueInsight,
@@ -14,10 +17,6 @@ from src.domain.services.meal_value_insight_contract import (
     parse_ai_result,
     serialize_insights,
 )
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
-)
-from src.infra.services.ai.ai_model_manager import AIModelManager
 from src.observability import log_event
 
 INSIGHT_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7
@@ -32,8 +31,8 @@ class MealValueInsightService:
 
     def __init__(
         self,
-        ai_manager: AIModelManager | None = None,
-        text_translation_service: DeepLTextTranslationService | None = None,
+        ai_manager: MealInsightAIPort | None = None,
+        text_translation_service: DeepLTranslationPort | None = None,
     ) -> None:
         self._ai_manager = ai_manager
         self._text_translation_service = text_translation_service
@@ -46,7 +45,7 @@ class MealValueInsightService:
         ingredient_names_by_id: dict[str, str] | None = None,
         language: str = "en",
         user_context: dict[str, Any] | None = None,
-        cache_service: Any | None = None,
+        cache_service: CachePort | None = None,
     ) -> MealValueInsights | None:
         """Generate validated AI insights, falling back without blocking detail view."""
         if not nutrition:
@@ -79,8 +78,9 @@ class MealValueInsightService:
             )
 
         try:
-            ai_manager = self._ai_manager or AIModelManager.get_instance()
-            result = await ai_manager.generate(
+            if self._ai_manager is None:
+                raise RuntimeError("meal insight AI manager is not configured")
+            result = await self._ai_manager.generate(
                 purpose=ModelPurpose.GENERAL,
                 prompt=self._prompt(summary),
                 system_message=self._system_message(),
@@ -131,7 +131,7 @@ class MealValueInsightService:
         ingredient_names_by_id: dict[str, str] | None = None,
         language: str = "en",
         user_context: dict[str, Any] | None = None,
-        cache_service: Any | None = None,
+        cache_service: CachePort | None = None,
     ) -> MealValueInsights | None:
         if not nutrition or cache_service is None:
             return None
@@ -368,7 +368,7 @@ class MealValueInsightService:
         insights: MealValueInsights,
         *,
         target_language: str,
-        cache_service: Any | None,
+        cache_service: CachePort | None,
         localized_cache_key: str,
     ) -> MealValueInsights:
         if target_language == "en" or self._text_translation_service is None:
@@ -432,21 +432,21 @@ class MealValueInsightService:
         )
         return parse_ai_result(serialize_insights(localized))
 
-    async def _get_cached(self, cache_service: Any | None, key: str):
+    async def _get_cached(self, cache_service: CachePort | None, key: str):
         if cache_service is None:
             return None
-        cached = await cache_service.get_json(key)
+        cached = await cache_service.get(key)
         return parse_ai_result(cached)
 
     async def _set_cached(
         self,
-        cache_service: Any | None,
+        cache_service: CachePort | None,
         key: str,
         insights: MealValueInsights,
     ) -> None:
         if cache_service is None:
             return
-        await cache_service.set_json(
+        await cache_service.set(
             key,
             serialize_insights(insights),
             INSIGHT_CACHE_TTL_SECONDS,

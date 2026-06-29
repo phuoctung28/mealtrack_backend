@@ -21,6 +21,7 @@ from fastapi import (
 )
 
 from src.api.base_dependencies import (
+    get_ai_model_manager,
     get_cache_service,
     get_deepl_text_translation_service,
     get_image_store,
@@ -73,11 +74,10 @@ from src.app.queries.meal import (
     GetStreakQuery,
 )
 from src.domain.services.meal_value_insight_service import MealValueInsightService
+from src.domain.ports.cache_port import CachePort
+from src.domain.ports.deepl_translation_port import DeepLTranslationPort
+from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
-)
-from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import BackgroundTaskManager, EventBus
 
 logger = logging.getLogger(__name__)
@@ -122,11 +122,12 @@ async def analyze_meal_image_immediate(
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
-    cache_service: CacheService | None = Depends(get_cache_service),
+    cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
-    text_translation_service: DeepLTextTranslationService | None = Depends(
+    text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """
     Send meal photo and return immediate meal analysis with nutritional data.
@@ -217,6 +218,7 @@ async def analyze_meal_image_immediate(
             language=language,
             cache_service=cache_service,
             text_translation_service=text_translation_service,
+            ai_manager=ai_manager,
         )
 
         return MealMapper.to_detailed_response(
@@ -235,11 +237,12 @@ async def create_manual_meal(
     payload: CreateManualMealFromFoodsRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
-    cache_service: CacheService | None = Depends(get_cache_service),
+    cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
-    text_translation_service: DeepLTextTranslationService | None = Depends(
+    text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
@@ -304,6 +307,7 @@ async def create_manual_meal(
             language=get_request_language(request),
             cache_service=cache_service,
             text_translation_service=text_translation_service,
+            ai_manager=ai_manager,
         )
 
         return ManualMealCreationResponse(
@@ -548,11 +552,12 @@ async def get_meal(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
-    cache_service: CacheService | None = Depends(get_cache_service),
+    cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
-    text_translation_service: DeepLTextTranslationService | None = Depends(
+    text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """Get detailed information about a specific meal.
 
@@ -589,6 +594,7 @@ async def get_meal(
             language=language,
             cache_service=cache_service,
             text_translation_service=text_translation_service,
+            ai_manager=ai_manager,
         )
 
     # Use mapper to convert to response with translation support
@@ -606,11 +612,12 @@ async def get_meal_value_insights(
     meal_id: str,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
-    cache_service: CacheService | None = Depends(get_cache_service),
+    cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
-    text_translation_service: DeepLTextTranslationService | None = Depends(
+    text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """Return current value-insight cache status for a meal."""
     meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
@@ -645,6 +652,7 @@ async def get_meal_value_insights(
             language=language,
             cache_service=cache_service,
             text_translation_service=text_translation_service,
+            ai_manager=ai_manager,
         )
         return MealValueInsightsStatusResponse(
             status="generating",
@@ -663,10 +671,12 @@ async def _build_value_insights_for_meal(
     meal,
     *,
     language: str,
-    cache_service: CacheService | None,
-    text_translation_service: DeepLTextTranslationService | None,
+    cache_service: CachePort | None,
+    text_translation_service: DeepLTranslationPort | None,
+    ai_manager: MealInsightAIPort,
 ):
     return await MealValueInsightService(
+        ai_manager=ai_manager,
         text_translation_service=text_translation_service,
     ).build_ai(
         dish_name=meal.dish_name,
@@ -682,8 +692,9 @@ def _schedule_value_insight_generation(
     meal,
     *,
     language: str,
-    cache_service: CacheService | None,
-    text_translation_service: DeepLTextTranslationService | None,
+    cache_service: CachePort | None,
+    text_translation_service: DeepLTranslationPort | None,
+    ai_manager: MealInsightAIPort,
 ) -> None:
     if cache_service is None:
         return
@@ -694,6 +705,7 @@ def _schedule_value_insight_generation(
             language=language,
             cache_service=cache_service,
             text_translation_service=text_translation_service,
+            ai_manager=ai_manager,
         ),
     )
 
@@ -771,11 +783,12 @@ async def update_meal_ingredients(
     http_request: Request,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
-    cache_service: CacheService | None = Depends(get_cache_service),
+    cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager = Depends(get_task_manager),
-    text_translation_service: DeepLTextTranslationService | None = Depends(
+    text_translation_service: DeepLTranslationPort | None = Depends(
         get_deepl_text_translation_service
     ),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """
     Update meal ingredients and portions.
@@ -828,6 +841,7 @@ async def update_meal_ingredients(
         language=get_request_language(http_request),
         cache_service=cache_service,
         text_translation_service=text_translation_service,
+        ai_manager=ai_manager,
     )
     return result
 
