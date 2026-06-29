@@ -111,6 +111,7 @@ async def analyze_meal_image_immediate(
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
+    cache_service: CacheService | None = Depends(get_cache_service),
 ):
     """
     Send meal photo and return immediate meal analysis with nutritional data.
@@ -195,8 +196,17 @@ async def analyze_meal_image_immediate(
         if meal.image:
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
+        value_insights = await _build_value_insights_for_meal(
+            meal,
+            language=language,
+            cache_service=cache_service,
+        )
+
         return MealMapper.to_detailed_response(
-            meal, image_url, target_language=language
+            meal,
+            image_url,
+            target_language=language,
+            value_insights=value_insights,
         )
 
     except Exception as e:
@@ -205,9 +215,11 @@ async def analyze_meal_image_immediate(
 
 @router.post("/manual", response_model=ManualMealCreationResponse)
 async def create_manual_meal(
+    request: Request,
     payload: CreateManualMealFromFoodsRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
+    cache_service: CacheService | None = Depends(get_cache_service),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
@@ -265,6 +277,11 @@ async def create_manual_meal(
             "manual_save timing: user=%s total_handler_ms=%.1f",
             user_id,
             _elapsed_ms,
+        )
+        await _build_value_insights_for_meal(
+            meal,
+            language=get_request_language(request),
+            cache_service=cache_service,
         )
 
         return ManualMealCreationResponse(
@@ -529,10 +546,8 @@ async def get_meal(
 
     # Get language from Accept-Language header via middleware
     language = get_request_language(request)
-    value_insights = await MealValueInsightService().build_ai(
-        dish_name=meal.dish_name,
-        nutrition=meal.nutrition,
-        ingredient_names_by_id=_translated_food_item_names(meal, language),
+    value_insights = await _build_value_insights_for_meal(
+        meal,
         language=language,
         cache_service=cache_service,
     )
@@ -543,6 +558,21 @@ async def get_meal(
         image_url,
         target_language=language,
         value_insights=value_insights,
+    )
+
+
+async def _build_value_insights_for_meal(
+    meal,
+    *,
+    language: str,
+    cache_service: CacheService | None,
+):
+    return await MealValueInsightService().build_ai(
+        dish_name=meal.dish_name,
+        nutrition=meal.nutrition,
+        ingredient_names_by_id=_translated_food_item_names(meal, language),
+        language=language,
+        cache_service=cache_service,
     )
 
 
@@ -615,9 +645,11 @@ async def get_daily_macros(
 @router.put("/{meal_id}/ingredients", response_model=None)
 async def update_meal_ingredients(
     meal_id: str,
-    request: EditMealIngredientsRequest,
+    payload: EditMealIngredientsRequest,
+    http_request: Request,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
+    cache_service: CacheService | None = Depends(get_cache_service),
 ):
     """
     Update meal ingredients and portions.
@@ -628,7 +660,7 @@ async def update_meal_ingredients(
     logger.info("Updating meal ingredients for meal %s", meal_id)
     # Convert request to command
     food_item_changes = []
-    for change_request in request.food_item_changes:
+    for change_request in payload.food_item_changes:
         custom_nutrition = None
         if change_request.custom_nutrition:
             custom_nutrition = CustomNutritionData(
@@ -655,14 +687,20 @@ async def update_meal_ingredients(
     command = EditMealCommand(
         meal_id=meal_id,
         user_id=user_id,
-        dish_name=request.dish_name,
-        created_at=request.created_at,
-        meal_type=request.meal_type,
+        dish_name=payload.dish_name,
+        created_at=payload.created_at,
+        meal_type=payload.meal_type,
         food_item_changes=food_item_changes,
     )
 
     logger.info("Sending command to event bus: %s", command)
     result = await event_bus.send(command)
+    meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
+    await _build_value_insights_for_meal(
+        meal,
+        language=get_request_language(http_request),
+        cache_service=cache_service,
+    )
     return result
 
 
