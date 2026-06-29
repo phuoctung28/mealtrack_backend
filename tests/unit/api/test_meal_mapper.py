@@ -702,15 +702,17 @@ class TestMealMapper:
             value_insights=MealValueInsights(
                 meal_bullets=[
                     ValueInsight(
-                        text="Strong protein base; add plants for more volume.",
+                        text="Strong protein helps fullness; add plants for more volume.",
                         category="benefit",
+                        highlights=["fullness"],
                     )
                 ],
                 ingredient_insights=[
                     IngredientValueInsight(
                         ingredient_name="Rice",
-                        text="Main carb source; portion size drives much of the energy.",
+                        text="Rice gives carbs for steady energy; portion size shapes fullness.",
                         category="balance",
+                        highlights=["steady energy"],
                     )
                 ],
             ),
@@ -785,15 +787,17 @@ class TestMealMapper:
             value_insights=MealValueInsights(
                 meal_bullets=[
                     ValueInsight(
-                        text="Giàu protein, phù hợp để giúp bữa ăn no lâu hơn.",
+                        text="Giàu protein giúp no lâu và ít béo giúp nhẹ bụng.",
                         category="benefit",
+                        highlights=["no lâu"],
                     )
                 ],
                 ingredient_insights=[
                     IngredientValueInsight(
                         ingredient_name="Ức gà",
-                        text="Bổ sung nhiều protein nạc cho bữa ăn.",
+                        text="Ức gà bổ sung protein nạc giúp phục hồi và ít béo giúp nhẹ bụng.",
                         category="benefit",
+                        highlights=["phục hồi"],
                     )
                 ],
             ),
@@ -808,33 +812,39 @@ class TestMealMapper:
             {
                 "meal_bullets": [
                     {
-                        "text": "Egg gives this meal useful protein and fat, while rice supplies quick energy.",
+                        "text": "Egg gives protein for fullness and fat for satiety.",
                         "category": "benefit",
+                        "highlights": ["fullness"],
                     },
                     {
-                        "text": "Add vegetables if you want more fiber and volume from this bowl.",
+                        "text": "Add vegetables for fiber-supported digestion and volume for fullness.",
                         "category": "balance",
+                        "highlights": ["digestion"],
                     },
                     {
                         "text": "This third item should be ignored.",
                         "category": "caution",
+                        "highlights": ["third item"],
                     },
                 ],
                 "ingredient_insights": [
                     {
                         "ingredient_name": "Egg",
-                        "text": "Provides protein and richness, so it can help the meal feel more satisfying.",
+                        "text": "Provides protein for fullness and richness for satisfaction.",
                         "category": "benefit",
+                        "highlights": ["fullness"],
                     },
                     {
                         "ingredient_name": "Rice",
-                        "text": "Main carb source; portion size shapes most of the energy.",
+                        "text": "Rice offers carbs for energy and starch for quick fuel.",
                         "category": "balance",
+                        "highlights": ["energy"],
                     },
                     {
                         "ingredient_name": "Sauce",
                         "text": "This third ingredient should be ignored.",
                         "category": "caution",
+                        "highlights": ["third ingredient"],
                     },
                 ],
             }
@@ -845,6 +855,63 @@ class TestMealMapper:
         assert len(insights.ingredient_insights) <= 2
         assert all(len(item.text) <= 120 for item in insights.meal_bullets)
         assert all(len(item.text) <= 120 for item in insights.ingredient_insights)
+
+    def test_meal_value_insight_service_keeps_one_body_effect_highlight(self):
+        """Highlights spotlight body effects, not macro keywords."""
+        insights = parse_ai_result(
+            {
+                "meal_bullets": [
+                    {
+                        "text": "Egg adds protein that supports fullness after this meal.",
+                        "category": "benefit",
+                        "highlights": ["fullness"],
+                    }
+                ],
+                "ingredient_insights": [
+                    {
+                        "ingredient_name": "Rice",
+                        "text": "Rice is high in carbs and low in protein, so fullness may fade sooner.",
+                        "category": "caution",
+                        "highlights": ["fullness may fade sooner"],
+                    }
+                ],
+            }
+        )
+
+        assert insights is not None
+        assert insights.meal_bullets[0].highlights == ["fullness"]
+        assert insights.ingredient_insights[0].category == "caution"
+        assert insights.ingredient_insights[0].highlights == [
+            "fullness may fade sooner"
+        ]
+
+    def test_meal_value_insight_service_strips_category_labels_from_text(self):
+        """AI category labels are metadata and should not appear in copy."""
+        insights = parse_ai_result(
+            {
+                "meal_bullets": [
+                    {
+                        "text": "Benefit: High protein supports fullness.",
+                        "category": "benefit",
+                        "highlights": ["fullness"],
+                    }
+                ],
+                "ingredient_insights": [
+                    {
+                        "ingredient_name": "Rice",
+                        "text": "Balance: High carbs provide quick fuel.",
+                        "category": "balance",
+                        "highlights": ["quick fuel"],
+                    }
+                ],
+            }
+        )
+
+        assert insights is not None
+        assert insights.meal_bullets[0].text == "High protein supports fullness."
+        assert insights.ingredient_insights[0].text == (
+            "High carbs provide quick fuel."
+        )
 
     def test_meal_value_insight_service_omits_invalid_ai_output(self):
         """Invalid AI output does not produce deterministic copy."""

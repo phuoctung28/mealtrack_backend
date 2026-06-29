@@ -149,6 +149,11 @@ class MealValueBulletResponse(BaseModel):
 
     text: str = Field(..., max_length=120)
     category: ValueInsightCategoryEnum
+    highlights: List[str] = Field(
+        default_factory=list,
+        max_length=1,
+        description="Exact localized substrings to bold",
+    )
 
 
 class IngredientValueInsightResponse(BaseModel):
@@ -157,6 +162,11 @@ class IngredientValueInsightResponse(BaseModel):
     ingredient_name: str = Field(..., description="Ingredient display name")
     text: str = Field(..., max_length=120)
     category: ValueInsightCategoryEnum
+    highlights: List[str] = Field(
+        default_factory=list,
+        max_length=1,
+        description="Exact localized substrings to bold",
+    )
 
 
 class MealValueInsightsResponse(BaseModel):
@@ -165,6 +175,21 @@ class MealValueInsightsResponse(BaseModel):
     meal_bullets: List[MealValueBulletResponse] = Field(default_factory=list)
     ingredient_insights: List[IngredientValueInsightResponse] = Field(
         default_factory=list
+    )
+
+
+class MealValueInsightsStatusResponse(BaseModel):
+    """Cache status for meal value insights."""
+
+    status: str = Field(
+        ...,
+        description="Insight freshness: fresh, generating, or unavailable",
+    )
+    value_insights: Optional[MealValueInsightsResponse] = Field(
+        None, description="Fresh insights when available"
+    )
+    version: Optional[str] = Field(
+        None, description="Stable fingerprint for the meal insight payload"
     )
 
 

@@ -254,6 +254,10 @@ class MealMapper:
 
     @staticmethod
     def _value_insights_response(insights: MealValueInsights | None):
+        return MealMapper.to_value_insights_response(insights)
+
+    @staticmethod
+    def to_value_insights_response(insights: MealValueInsights | None):
         from src.api.schemas.response.meal_responses import (
             IngredientValueInsightResponse,
             MealValueBulletResponse,
@@ -264,7 +268,11 @@ class MealMapper:
             return None
         return MealValueInsightsResponse(
             meal_bullets=[
-                MealValueBulletResponse(text=item.text, category=item.category)
+                MealValueBulletResponse(
+                    text=item.text,
+                    category=item.category,
+                    highlights=item.highlights[:1],
+                )
                 for item in insights.meal_bullets
             ],
             ingredient_insights=[
@@ -272,6 +280,7 @@ class MealMapper:
                     ingredient_name=item.ingredient_name,
                     text=item.text,
                     category=item.category,
+                    highlights=item.highlights[:1],
                 )
                 for item in insights.ingredient_insights
             ],
