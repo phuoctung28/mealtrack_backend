@@ -2,9 +2,9 @@
 Unit tests for MealMapper.
 """
 
+import json
 import uuid
 from datetime import datetime
-import json
 
 import pytest
 
@@ -150,8 +150,13 @@ class TestMealMapper:
         assert result.total_nutrition.fat == 5.4
         assert len(result.food_items) == 2
         assert result.food_items[0].name == "Chicken Breast"
+        assert result.food_items[0].display_name == "Chicken Breast"
+        assert result.food_items[0].canonical_name == "Chicken Breast"
         assert result.food_items[0].fdc_id == 123456
         assert result.food_items[1].name == "Rice"
+        assert result.food_items[1].display_name == "Rice"
+        assert result.food_items[1].canonical_name == "Rice"
+        assert result.translation_language is None
         assert result.image_url == "https://example.com/image.jpg"
         # total_weight_grams is calculated from food items
         assert result.total_weight_grams == 350 or result.total_weight_grams is None
@@ -217,6 +222,183 @@ class TestMealMapper:
 
         assert result.dish_name == "Cơm gà"
         assert [item.name for item in result.food_items] == ["Ức gà", "Cơm"]
+        assert [item.display_name for item in result.food_items] == ["Ức gà", "Cơm"]
+        assert [item.canonical_name for item in result.food_items] == [
+            "Chicken Breast",
+            "Rice",
+        ]
+        assert result.translation_language == "vi"
+
+    def test_to_detailed_response_falls_back_per_item_to_safe_legacy_translation(
+        self,
+    ):
+        """Missing ID translations can use legacy names when order is still aligned."""
+        food_items = [
+            FoodItem(
+                id="item-1",
+                name="Chicken Breast",
+                quantity=200,
+                unit="g",
+                macros=Macros(protein=40, carbs=0, fat=5),
+            ),
+            FoodItem(
+                id="item-2",
+                name="Rice",
+                quantity=150,
+                unit="g",
+                macros=Macros(protein=4, carbs=43, fat=0.4),
+            ),
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/detailed.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Chicken and Rice",
+            ready_at=datetime(2025, 1, 15, 14, 0),
+            created_at=datetime(2025, 1, 15, 13, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=44, carbs=43, fat=5.4),
+                food_items=food_items,
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm gà",
+                    meal_ingredients=["Ức gà", "Cơm"],
+                    food_items=[
+                        FoodItemTranslation(
+                            food_item_id="item-1",
+                            name="Gà",
+                        )
+                    ],
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert [item.name for item in result.food_items] == ["Gà", "Cơm"]
+        assert [item.display_name for item in result.food_items] == ["Gà", "Cơm"]
+        assert [item.canonical_name for item in result.food_items] == [
+            "Chicken Breast",
+            "Rice",
+        ]
+        assert result.translation_language == "vi"
+
+    def test_to_detailed_response_keeps_canonical_name_with_legacy_translation(self):
+        """Legacy ordered fallback localizes display fields only."""
+        food_items = [
+            FoodItem(
+                id="item-1",
+                name="Chicken Breast",
+                quantity=200,
+                unit="g",
+                macros=Macros(protein=40, carbs=0, fat=5),
+            ),
+            FoodItem(
+                id="item-2",
+                name="Rice",
+                quantity=150,
+                unit="g",
+                macros=Macros(protein=4, carbs=43, fat=0.4),
+            ),
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/detailed.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Chicken and Rice",
+            ready_at=datetime(2025, 1, 15, 14, 0),
+            created_at=datetime(2025, 1, 15, 13, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=44, carbs=43, fat=5.4),
+                food_items=food_items,
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm gà",
+                    meal_ingredients=["Ức gà", "Cơm"],
+                    food_items=[],
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert [item.name for item in result.food_items] == ["Ức gà", "Cơm"]
+        assert [item.display_name for item in result.food_items] == ["Ức gà", "Cơm"]
+        assert [item.canonical_name for item in result.food_items] == [
+            "Chicken Breast",
+            "Rice",
+        ]
+        assert result.translation_language == "vi"
+
+    def test_to_detailed_response_ignores_stale_legacy_translation_count(self):
+        """Stale ordered fallback must not translate by the wrong index."""
+        food_items = [
+            FoodItem(
+                id="item-2",
+                name="Rice",
+                quantity=150,
+                unit="g",
+                macros=Macros(protein=4, carbs=43, fat=0.4),
+            )
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/detailed.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Rice",
+            ready_at=datetime(2025, 1, 15, 14, 0),
+            created_at=datetime(2025, 1, 15, 13, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=4, carbs=43, fat=0.4),
+                food_items=food_items,
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm",
+                    meal_ingredients=["Ức gà", "Cơm"],
+                    food_items=[],
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert result.food_items[0].name == "Rice"
+        assert result.food_items[0].display_name == "Rice"
+        assert result.food_items[0].canonical_name == "Rice"
+        assert result.translation_language == "vi"
 
     def test_to_detailed_response_with_custom_food_item(self):
         """Test detailed response with custom food item."""
