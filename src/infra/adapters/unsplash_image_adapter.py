@@ -9,8 +9,6 @@ Compliance: https://help.unsplash.com/en/articles/2511245-unsplash-api-guideline
 """
 
 import logging
-from typing import Optional
-from urllib.parse import urlparse
 
 import httpx
 
@@ -21,14 +19,13 @@ from src.infra.config.settings import settings
 logger = logging.getLogger(__name__)
 
 UNSPLASH_API_URL = "https://api.unsplash.com/search/photos"
-UNSPLASH_API_HOST = "api.unsplash.com"
 UTM_PARAMS = "utm_source=nutree&utm_medium=referral"
 
 
 class UnsplashImageAdapter(FoodImageSearchPort):
     """Searches Unsplash for food photos. Returns None if key missing or request fails."""
 
-    async def search(self, query: str) -> Optional[FoodImageResult]:
+    async def search(self, query: str) -> FoodImageResult | None:
         access_key = settings.UNSPLASH_ACCESS_KEY
         if not access_key:
             logger.debug("UNSPLASH_ACCESS_KEY not configured, skipping Unsplash search")
@@ -83,26 +80,11 @@ class UnsplashImageAdapter(FoodImageSearchPort):
 
     @staticmethod
     async def trigger_download(download_location: str) -> None:
-        """Fire Unsplash download event (required by API guidelines)."""
-        access_key = settings.UNSPLASH_ACCESS_KEY
-        if not access_key or not download_location:
-            return
-        # SSRF guard: download_location is client-supplied and the request
-        # carries our API key, so only call genuine https://api.unsplash.com URLs.
-        # hostname (not netloc) defeats userinfo/suffix bypasses like
-        # api.unsplash.com@evil.com or api.unsplash.com.evil.com.
-        parsed = urlparse(download_location)
-        if parsed.scheme != "https" or parsed.hostname != UNSPLASH_API_HOST:
-            logger.warning(
-                "Unsplash download trigger rejected non-Unsplash URL: %s",
-                download_location,
-            )
-            return
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.get(
-                    download_location,
-                    headers={"Authorization": f"Client-ID {access_key}"},
-                )
-        except Exception as e:
-            logger.warning(f"Unsplash download trigger failed: {e}")
+        """Ignore client-supplied Unsplash callbacks.
+
+        The mobile client can only send the URL it received earlier from
+        discovery. Replaying that URL server-side would let request data
+        influence an outbound request carrying our API key.
+        """
+        if download_location:
+            logger.info("Skipping client-supplied Unsplash download callback")
