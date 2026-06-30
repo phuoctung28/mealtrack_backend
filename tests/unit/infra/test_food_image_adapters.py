@@ -50,6 +50,16 @@ class TestUnsplashAdapter:
             mock_settings.UNSPLASH_ACCESS_KEY = "test-key"
             await UnsplashImageAdapter.trigger_download("")
 
+    async def test_trigger_download_ignores_client_supplied_location(self):
+        with patch(
+            "src.infra.adapters.unsplash_image_adapter.httpx.AsyncClient"
+        ) as client_mock:
+            await UnsplashImageAdapter.trigger_download(
+                "https://api.unsplash.com/photos/photo-1/download?ixid=abc"
+            )
+
+        client_mock.assert_not_called()
+
 
 class TestFoodImageServiceSingleton:
     def setup_method(self):
