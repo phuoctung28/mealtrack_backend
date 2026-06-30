@@ -6,14 +6,11 @@ import logging
 from typing import Any
 
 from src.domain.model.ai.model_purpose import ModelPurpose
-from src.domain.ports.cache_port import CachePort
-from src.domain.ports.deepl_translation_port import DeepLTranslationPort
-from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.model.nutrition import Nutrition
+from src.domain.ports.cache_port import CachePort
+from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.meal_value_insight_contract import (
-    IngredientValueInsight,
     MealValueInsights,
-    ValueInsight,
     parse_ai_result,
     serialize_insights,
 )
@@ -32,10 +29,8 @@ class MealValueInsightService:
     def __init__(
         self,
         ai_manager: MealInsightAIPort | None = None,
-        text_translation_service: DeepLTranslationPort | None = None,
     ) -> None:
         self._ai_manager = ai_manager
-        self._text_translation_service = text_translation_service
 
     async def build_ai(
         self,
@@ -56,26 +51,19 @@ class MealValueInsightService:
             dish_name=dish_name,
             nutrition=nutrition,
             ingredient_names_by_id=ingredient_names_by_id or {},
-            language="en",
+            language=target_language,
             user_context=user_context or {},
         )
         cache_key = self._cache_key(summary)
-        localized_cache_key = self._localized_cache_key(cache_key, target_language)
-        if target_language != "en":
-            cached_localized = await self._get_cached(
-                cache_service, localized_cache_key
-            )
-            if cached_localized:
-                return cached_localized
-
         cached = await self._get_cached(cache_service, cache_key)
         if cached:
-            return await self._localize_insights(
-                cached,
-                target_language=target_language,
-                cache_service=cache_service,
-                localized_cache_key=localized_cache_key,
+            logger.info(
+                "meal_value_insights.cache_hit language=%s key=%s shape=%s",
+                target_language,
+                cache_key,
+                self._shape(cached),
             )
+            return cached
 
         try:
             if self._ai_manager is None:
@@ -88,6 +76,12 @@ class MealValueInsightService:
                 max_tokens=450,
             )
             insights = parse_ai_result(result)
+            logger.info(
+                "meal_value_insights.ai_generated language=%s key=%s shape=%s",
+                target_language,
+                cache_key,
+                self._shape(insights),
+            )
         except Exception as exc:
             logger.warning(
                 "Meal value insight AI generation failed: %s", type(exc).__name__
@@ -116,12 +110,13 @@ class MealValueInsightService:
 
         if insights:
             await self._set_cached(cache_service, cache_key, insights)
-        return await self._localize_insights(
-            insights,
-            target_language=target_language,
-            cache_service=cache_service,
-            localized_cache_key=localized_cache_key,
-        )
+            logger.info(
+                "meal_value_insights.cache_saved language=%s key=%s shape=%s",
+                target_language,
+                cache_key,
+                self._shape(insights),
+            )
+        return insights
 
     async def get_cached_ai(
         self,
@@ -141,27 +136,25 @@ class MealValueInsightService:
             dish_name=dish_name,
             nutrition=nutrition,
             ingredient_names_by_id=ingredient_names_by_id or {},
-            language="en",
+            language=target_language,
             user_context=user_context or {},
         )
         cache_key = self._cache_key(summary)
-        localized_cache_key = self._localized_cache_key(cache_key, target_language)
-        if target_language != "en":
-            cached_localized = await self._get_cached(
-                cache_service, localized_cache_key
-            )
-            if cached_localized:
-                return cached_localized
-
         cached = await self._get_cached(cache_service, cache_key)
         if cached is None:
+            logger.info(
+                "meal_value_insights.get_cached.cache_miss language=%s key=%s",
+                target_language,
+                cache_key,
+            )
             return None
-        return await self._localize_insights(
-            cached,
-            target_language=target_language,
-            cache_service=cache_service,
-            localized_cache_key=localized_cache_key,
+        logger.info(
+            "meal_value_insights.get_cached.cache_hit language=%s key=%s shape=%s",
+            target_language,
+            cache_key,
+            self._shape(cached),
         )
+        return cached
 
     def version(
         self,
@@ -179,13 +172,10 @@ class MealValueInsightService:
             dish_name=dish_name,
             nutrition=nutrition,
             ingredient_names_by_id=ingredient_names_by_id or {},
-            language="en",
+            language=target_language,
             user_context=user_context or {},
         )
-        cache_key = self._cache_key(summary)
-        if target_language == "en":
-            return cache_key
-        return self._localized_cache_key(cache_key, target_language)
+        return self._cache_key(summary)
 
     def _summary(
         self,
@@ -354,83 +344,19 @@ class MealValueInsightService:
     def _cache_key(self, summary: dict[str, Any]) -> str:
         payload = json.dumps(summary, ensure_ascii=False, sort_keys=True)
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
-        return f"meal-value-insights:v8:{digest}"
-
-    def _localized_cache_key(self, canonical_cache_key: str, language: str) -> str:
-        return f"{canonical_cache_key}:lang:{language}"
+        return f"meal-value-insights:v10:{digest}"
 
     def _target_language(self, language: str) -> str:
         normalized = (language or "en").split("-")[0].lower()
         return normalized if normalized in SUPPORTED_INSIGHT_LANGUAGES else "en"
 
-    async def _localize_insights(
-        self,
-        insights: MealValueInsights,
-        *,
-        target_language: str,
-        cache_service: CachePort | None,
-        localized_cache_key: str,
-    ) -> MealValueInsights:
-        if target_language == "en" or self._text_translation_service is None:
-            return insights
-
-        localized = await self._translate_insights(insights, target_language)
-        if localized is None:
-            return insights
-        await self._set_cached(cache_service, localized_cache_key, localized)
-        return localized
-
-    async def _translate_insights(
-        self,
-        insights: MealValueInsights,
-        target_language: str,
-    ) -> MealValueInsights | None:
-        texts: list[str] = []
-        for item in insights.meal_bullets:
-            texts.extend([item.text, *item.highlights[:1]])
-        for item in insights.ingredient_insights:
-            texts.extend([item.ingredient_name, item.text, *item.highlights[:1]])
-
-        translated = await self._text_translation_service.translate_texts(
-            texts,
-            target_language,
+    def _shape(self, insights: MealValueInsights | None) -> str:
+        if insights is None:
+            return "none"
+        return (
+            f"meal={len(insights.meal_bullets)},"
+            f"ingredient={len(insights.ingredient_insights)}"
         )
-        while len(translated) < len(texts):
-            translated.append(texts[len(translated)])
-        if translated == texts:
-            return None
-
-        index = 0
-        meal_bullets = []
-        for item in insights.meal_bullets:
-            highlight_count = len(item.highlights[:1])
-            meal_bullets.append(
-                ValueInsight(
-                    text=translated[index],
-                    category=item.category,
-                    highlights=translated[index + 1 : index + 1 + highlight_count],
-                )
-            )
-            index += 1 + highlight_count
-
-        ingredient_insights = []
-        for item in insights.ingredient_insights:
-            highlight_count = len(item.highlights[:1])
-            ingredient_insights.append(
-                IngredientValueInsight(
-                    ingredient_name=translated[index],
-                    text=translated[index + 1],
-                    category=item.category,
-                    highlights=translated[index + 2 : index + 2 + highlight_count],
-                )
-            )
-            index += 2 + highlight_count
-
-        localized = MealValueInsights(
-            meal_bullets=meal_bullets,
-            ingredient_insights=ingredient_insights,
-        )
-        return parse_ai_result(serialize_insights(localized))
 
     async def _get_cached(self, cache_service: CachePort | None, key: str):
         if cache_service is None:

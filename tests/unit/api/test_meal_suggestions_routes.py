@@ -1,5 +1,7 @@
 """Cover meal_suggestions routes with TestClient + rate limiter state."""
 
+from datetime import datetime
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -14,7 +16,10 @@ from src.api.routes.v1 import meal_suggestions as ms_mod
 from src.app.commands.meal_suggestion import (
     DiscoverMealsCommand,
     GenerateMealRecipesCommand,
+    SaveMealSuggestionCommand,
 )
+from src.app.queries.meal import GetMealByIdQuery
+from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_suggestion.meal_suggestion import (
     Ingredient,
     MacroEstimate,
@@ -23,6 +28,7 @@ from src.domain.model.meal_suggestion.meal_suggestion import (
     RecipeStep,
 )
 from src.domain.model.meal_suggestion.suggestion_session import SuggestionSession
+from tests.fixtures.factories.nutrition_factory import NutritionFactory
 
 
 class _BusOk:
@@ -83,10 +89,26 @@ def test_generate_meal_suggestions_endpoint_removed(ms_client):
 
 def test_save_meal_suggestion_ok(ms_client):
     client, bus = ms_client
+    meal_id = "11111111-1111-4111-8111-111111111111"
+    user_id = "22222222-2222-4222-8222-222222222222"
 
     class _BusSave:
         async def send(self, msg):
-            return "meal-uuid-1"
+            if isinstance(msg, SaveMealSuggestionCommand):
+                return meal_id
+            if isinstance(msg, GetMealByIdQuery):
+                return Meal(
+                    meal_id=meal_id,
+                    user_id=user_id,
+                    status=MealStatus.READY,
+                    created_at=datetime(2026, 4, 11, 12, 0, 0),
+                    ready_at=datetime(2026, 4, 11, 12, 0, 1),
+                    image=None,
+                    dish_name="Saved",
+                    meal_type="lunch",
+                    nutrition=NutritionFactory.create_nutrition(),
+                )
+            raise AssertionError(f"unexpected bus message: {type(msg)!r}")
 
     # replace bus on app
     client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusSave()
@@ -104,7 +126,10 @@ def test_save_meal_suggestion_ok(ms_client):
     }
     r = client.post("/v1/meal-suggestions/save", json=payload)
     assert r.status_code == 200
-    assert r.json()["meal_id"] == "meal-uuid-1"
+    data = r.json()
+    assert data["meal_id"] == meal_id
+    assert data["meal_detail"]["meal_id"] == meal_id
+    assert data["meal_detail"]["food_items"]
 
 
 def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):

@@ -92,43 +92,33 @@ def _request(language: str = "en") -> Request:
             "method": "GET",
             "path": "/",
             "headers": [(b"accept-language", language.encode("utf-8"))],
+            "state": {"language": language},
         }
     )
 
 
 @pytest.mark.asyncio
-async def test_non_english_reuses_canonical_ai_result_and_caches_translation():
+async def test_non_english_generates_requested_language_without_deepl():
     ai_manager = AsyncMock()
     ai_manager.generate.return_value = {
         "meal_bullets": [
             {
-                "text": "Egg adds protein for fullness and fat for satiety.",
+                "text": "Trứng cung cấp protein giúp no lâu.",
                 "category": "benefit",
-                "highlights": ["fullness"],
+                "highlights": ["no lâu"],
             }
         ],
         "ingredient_insights": [
             {
-                "ingredient_name": "Egg",
-                "text": "Egg offers protein for recovery and fat for satisfaction.",
+                "ingredient_name": "Trứng",
+                "text": "Trứng có protein hỗ trợ phục hồi.",
                 "category": "balance",
-                "highlights": ["recovery"],
+                "highlights": ["phục hồi"],
             }
         ],
     }
-    text_service = AsyncMock()
-    text_service.translate_texts.return_value = [
-        "Trứng bổ sung protein giúp no và chất béo giúp hài lòng.",
-        "no",
-        "Trứng",
-        "Trứng cung cấp protein để phục hồi và chất béo để no lâu.",
-        "phục hồi",
-    ]
     cache = FakeCache()
-    service = MealValueInsightService(
-        ai_manager=ai_manager,
-        text_translation_service=text_service,
-    )
+    service = MealValueInsightService(ai_manager=ai_manager)
 
     result = await service.build_ai(
         dish_name="Egg bowl",
@@ -138,16 +128,14 @@ async def test_non_english_reuses_canonical_ai_result_and_caches_translation():
     )
 
     assert result is not None
-    assert (
-        result.meal_bullets[0].text
-        == "Trứng bổ sung protein giúp no và chất béo giúp hài lòng."
-    )
-    assert result.meal_bullets[0].highlights == ["no"]
+    assert result.meal_bullets[0].text == "Trứng cung cấp protein giúp no lâu."
+    assert result.meal_bullets[0].highlights == ["no lâu"]
     assert result.ingredient_insights[0].ingredient_name == "Trứng"
     assert result.ingredient_insights[0].highlights == ["phục hồi"]
     ai_manager.generate.assert_awaited_once()
-    text_service.translate_texts.assert_awaited_once()
-    assert len(cache.values) == 2
+    prompt = ai_manager.generate.await_args.kwargs["prompt"]
+    assert '"language": "vi"' in prompt
+    assert len(cache.values) == 1
 
 
 def test_version_matches_current_cache_key_for_english():
@@ -168,6 +156,25 @@ def test_version_matches_current_cache_key_for_english():
     )
 
     assert version == expected
+
+
+def test_versions_are_separate_per_language():
+    service = MealValueInsightService()
+
+    english = service.version(
+        dish_name="Egg bowl",
+        nutrition=_nutrition(),
+        language="en",
+    )
+    vietnamese = service.version(
+        dish_name="Egg bowl",
+        nutrition=_nutrition(),
+        language="vi",
+    )
+
+    assert english != vietnamese
+    assert english.startswith("meal-value-insights:v10:")
+    assert vietnamese.startswith("meal-value-insights:v10:")
 
 
 def test_summary_groups_repeated_ingredients_for_overview():
@@ -224,7 +231,6 @@ async def test_value_insights_endpoint_returns_fresh_cached_payload():
         event_bus=FakeEventBus(meal),
         cache_service=cache,
         task_manager=AsyncMock(),
-        text_translation_service=None,
     )
 
     assert response.status == "fresh"
@@ -237,7 +243,7 @@ async def test_value_insights_endpoint_returns_fresh_cached_payload():
 
 
 @pytest.mark.asyncio
-async def test_localized_cache_hit_skips_ai_and_deepl():
+async def test_language_specific_cache_hit_skips_ai_and_deepl():
     cached = MealValueInsights(
         meal_bullets=[
             ValueInsight(
@@ -248,23 +254,21 @@ async def test_localized_cache_hit_skips_ai_and_deepl():
         ],
         ingredient_insights=[],
     )
-    canonical_key = MealValueInsightService()._cache_key(
+    cache_key = MealValueInsightService()._cache_key(
         MealValueInsightService()._summary(
             dish_name="Egg bowl",
             nutrition=_nutrition(),
             ingredient_names_by_id={},
-            language="en",
+            language="vi",
             user_context={},
         )
     )
     cache = FakeCache()
-    cache.values[f"{canonical_key}:lang:vi"] = serialize_insights(cached)
+    cache.values[cache_key] = serialize_insights(cached)
     ai_manager = AsyncMock()
-    text_service = AsyncMock()
 
     result = await MealValueInsightService(
         ai_manager=ai_manager,
-        text_translation_service=text_service,
     ).build_ai(
         dish_name="Egg bowl",
         nutrition=_nutrition(),
@@ -278,7 +282,6 @@ async def test_localized_cache_hit_skips_ai_and_deepl():
         == "Trứng bổ sung protein giúp no và chất béo giúp hài lòng."
     )
     ai_manager.generate.assert_not_called()
-    text_service.translate_texts.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -309,7 +312,7 @@ async def test_cached_only_hit_returns_cached_result():
         ],
         ingredient_insights=[],
     )
-    canonical_key = MealValueInsightService()._cache_key(
+    cache_key = MealValueInsightService()._cache_key(
         MealValueInsightService()._summary(
             dish_name="Egg bowl",
             nutrition=_nutrition(),
@@ -319,7 +322,7 @@ async def test_cached_only_hit_returns_cached_result():
         )
     )
     cache = FakeCache()
-    cache.values[canonical_key] = serialize_insights(cached)
+    cache.values[cache_key] = serialize_insights(cached)
     ai_manager = AsyncMock()
 
     result = await MealValueInsightService(ai_manager=ai_manager).get_cached_ai(
@@ -337,37 +340,83 @@ async def test_cached_only_hit_returns_cached_result():
 
 
 @pytest.mark.asyncio
-async def test_deepl_english_fallback_is_not_cached_as_localized_result():
-    ai_manager = AsyncMock()
-    ai_manager.generate.return_value = {
-        "meal_bullets": [
-            {
-                "text": "Egg adds protein for fullness and fat for satiety.",
-                "category": "benefit",
-                "highlights": ["fullness"],
-            }
+async def test_english_cache_does_not_satisfy_vietnamese_cache_lookup():
+    cached = MealValueInsights(
+        meal_bullets=[
+            ValueInsight(
+                text="Egg adds protein for fullness and fat for satiety.",
+                category="benefit",
+                highlights=["fullness"],
+            )
         ],
-        "ingredient_insights": [],
-    }
-    text_service = AsyncMock()
-    text_service.translate_texts.return_value = [
-        "Egg adds protein for fullness and fat for satiety.",
-        "fullness",
-    ]
+        ingredient_insights=[],
+    )
+    service = MealValueInsightService()
+    english_key = service._cache_key(
+        service._summary(
+            dish_name="Egg bowl",
+            nutrition=_nutrition(),
+            ingredient_names_by_id={},
+            language="en",
+            user_context={},
+        )
+    )
     cache = FakeCache()
+    cache.values[english_key] = serialize_insights(cached)
 
-    result = await MealValueInsightService(
-        ai_manager=ai_manager,
-        text_translation_service=text_service,
-    ).build_ai(
+    result = await service.get_cached_ai(
         dish_name="Egg bowl",
         nutrition=_nutrition(),
         language="vi",
         cache_service=cache,
     )
 
-    assert result is not None
-    assert result.meal_bullets[0].text == (
-        "Egg adds protein for fullness and fat for satiety."
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_value_insights_endpoint_generates_when_only_other_language_cached():
+    meal = SimpleNamespace(
+        meal_id="meal-1",
+        dish_name="Egg bowl",
+        nutrition=_nutrition(),
     )
-    assert len(cache.values) == 1
+    english_insights = MealValueInsights(
+        meal_bullets=[
+            ValueInsight(
+                text="Egg adds protein for fullness and fat for satiety.",
+                category="benefit",
+                highlights=["fullness"],
+            )
+        ],
+        ingredient_insights=[],
+    )
+    service = MealValueInsightService()
+    english_key = service.version(
+        dish_name=meal.dish_name,
+        nutrition=meal.nutrition,
+        language="en",
+    )
+    vietnamese_key = service.version(
+        dish_name=meal.dish_name,
+        nutrition=meal.nutrition,
+        language="vi",
+    )
+    cache = FakeCache()
+    cache.values[english_key] = serialize_insights(english_insights)
+    task_manager = AsyncMock()
+
+    response = await get_meal_value_insights(
+        request=_request("vi"),
+        meal_id=meal.meal_id,
+        user_id="user-1",
+        event_bus=FakeEventBus(meal),
+        cache_service=cache,
+        task_manager=task_manager,
+        ai_manager=AsyncMock(),
+    )
+
+    assert response.status == "generating"
+    assert response.value_insights is None
+    assert response.version == vietnamese_key
+    task_manager.spawn.assert_called_once()

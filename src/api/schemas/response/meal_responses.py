@@ -321,5 +321,8 @@ class ManualMealCreationResponse(BaseModel):
     status: str = Field(..., description="Creation status")
     message: str = Field(..., description="Success message")
     created_at: datetime = Field(..., description="Creation timestamp")
+    meal_detail: DetailedMealResponse | None = Field(
+        None, description="Created meal detail for immediate client-side caching"
+    )
 
     model_config = ConfigDict(json_encoders={datetime: _serialize_datetime_utc})

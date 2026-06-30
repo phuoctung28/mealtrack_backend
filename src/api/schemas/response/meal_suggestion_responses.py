@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from src.api.schemas.response.meal_responses import DetailedMealResponse
+
 
 class MacrosSchema(BaseModel):
     """Macronutrient information."""
@@ -148,6 +150,9 @@ class SaveMealSuggestionResponse(BaseModel):
     meal_id: str = Field(..., description="ID of the created meal")
     message: str = Field(..., description="Success message")
     meal_date: str = Field(..., description="Date the meal was saved for (YYYY-MM-DD)")
+    meal_detail: DetailedMealResponse | None = Field(
+        None, description="Created meal detail for immediate client-side caching"
+    )
 
     class Config:
         json_schema_extra = {
@@ -155,5 +160,6 @@ class SaveMealSuggestionResponse(BaseModel):
                 "meal_id": "meal_123",
                 "message": "Meal suggestion saved successfully",
                 "meal_date": "2024-01-15",
+                "meal_detail": None,
             }
         }
