@@ -74,6 +74,71 @@ def test_meals_analyze_rejects_invalid_file_type(client: TestClient):
     assert r.json()["detail"]["error_code"] == "INVALID_FILE_TYPE"
 
 
+def test_meals_analyze_rejects_food_label_mode(client: TestClient):
+    r = client.post(
+        "/v1/meals/image/analyze?scan_mode=food_label",
+        files={"file": ("x.jpg", b"abc", "image/jpeg")},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"]["error_code"] == "INVALID_SCAN_MODE"
+
+
+def test_food_label_analyze_uses_food_label_mode(client: TestClient):
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.model.meal import Meal, MealImage, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    class _FoodLabelBus:
+        async def send(self, msg):
+            assert msg.scan_mode == "food_label"
+            return Meal(
+                meal_id=str(uuid4()),
+                user_id=str(uuid4()),
+                status=MealStatus.READY,
+                created_at=datetime(2026, 7, 2, 12, 0),
+                ready_at=datetime(2026, 7, 2, 12, 0),
+                image=MealImage(
+                    image_id=str(uuid4()),
+                    format="jpeg",
+                    size_bytes=3,
+                    url="https://example.com/label.jpg",
+                ),
+                dish_name="Unnamed Food",
+                source="food_label",
+                food_label_metadata={
+                    "product_name": "Protein Bar",
+                    "serving_size": {"display_text": "1 bar (55g)", "grams": 55},
+                    "servings_per_package": 8,
+                    "confidence": 0.92,
+                },
+                nutrition=Nutrition(
+                    macros=Macros(protein=3, carbs=37, fat=8),
+                    food_items=[
+                        FoodItem(
+                            id="label-item",
+                            name="Protein Bar",
+                            quantity=55,
+                            unit="g",
+                            macros=Macros(protein=3, carbs=37, fat=8),
+                        )
+                    ],
+                ),
+            )
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _FoodLabelBus()
+
+    r = client.post(
+        "/v1/meals/food-label/analyze",
+        files={"file": ("x.jpg", b"abc", "image/jpeg")},
+    )
+    assert r.status_code == 200
+    assert r.json()["source"] == "food_label"
+    assert r.json()["food_label_metadata"]["servings_per_package"] == 8
+
+
 def test_meals_analyze_rejects_invalid_target_date(client: TestClient):
     r = client.post(
         "/v1/meals/image/analyze?target_date=2024-99-99",
@@ -157,6 +222,76 @@ def test_scan_by_url_non_food_returns_not_food_image(client: TestClient):
 
     assert r.status_code == 400
     assert r.json()["detail"]["error_code"] == "NOT_FOOD_IMAGE"
+
+
+def test_scan_by_url_rejects_food_label_mode(client: TestClient):
+    payload = {
+        "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
+        "image_id": "abc",
+        "scan_mode": "food_label",
+    }
+    r = client.post("/v1/meals/scan-by-url", json=payload)
+
+    assert r.status_code == 400
+    assert r.json()["detail"]["error_code"] == "INVALID_SCAN_MODE"
+
+
+def test_food_label_scan_by_url_uses_food_label_mode(client: TestClient):
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.model.meal import Meal, MealImage, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    class _FoodLabelBus:
+        async def send(self, msg):
+            assert msg.scan_mode == "food_label"
+            return Meal(
+                meal_id=str(uuid4()),
+                user_id=str(uuid4()),
+                status=MealStatus.READY,
+                created_at=datetime(2026, 7, 2, 12, 0),
+                ready_at=datetime(2026, 7, 2, 12, 0),
+                image=MealImage(
+                    image_id=str(uuid4()),
+                    format="jpeg",
+                    size_bytes=3,
+                    url=msg.image_url,
+                ),
+                dish_name="Unnamed Food",
+                source="food_label",
+                food_label_metadata={
+                    "product_name": "Protein Bar",
+                    "serving_size": {"display_text": "1 bar (55g)", "grams": 55},
+                    "servings_per_package": 8,
+                    "confidence": 0.92,
+                },
+                nutrition=Nutrition(
+                    macros=Macros(protein=3, carbs=37, fat=8),
+                    food_items=[
+                        FoodItem(
+                            id="label-item",
+                            name="Protein Bar",
+                            quantity=55,
+                            unit="g",
+                            macros=Macros(protein=3, carbs=37, fat=8),
+                        )
+                    ],
+                ),
+            )
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _FoodLabelBus()
+
+    payload = {
+        "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
+        "image_id": "abc",
+    }
+    r = client.post("/v1/meals/food-label/scan-by-url", json=payload)
+
+    assert r.status_code == 200
+    assert r.json()["source"] == "food_label"
+    assert r.json()["food_label_metadata"]["servings_per_package"] == 8
 
 
 def test_upload_token_returns_signed_params(client: TestClient):

@@ -270,6 +270,7 @@ class UploadMealImageImmediatelyHandler(
                     dish_name=MealDefaults.UNNAMED_FOOD_NAME,
                     ready_at=utc_now(),
                     raw_gpt_json=self.gpt_parser.extract_raw_json(analysis_result),
+                    food_label_metadata=label_metadata,
                     nutrition=nutrition,
                 )
 

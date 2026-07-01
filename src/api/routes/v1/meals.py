@@ -97,6 +97,106 @@ STATUS_MAPPING = {
 }
 
 
+def _parse_target_date(target_date: str | None):
+    if not target_date:
+        return None
+    try:
+        return datetime.strptime(target_date, "%Y-%m-%d").date()
+    except ValueError as e:
+        raise ValidationException(
+            message="Invalid date format. Use YYYY-MM-DD format.",
+            error_code="INVALID_DATE_FORMAT",
+            details={"date": target_date},
+        ) from e
+
+
+async def _analyze_uploaded_image(
+    *,
+    request: Request,
+    file: UploadFile,
+    user_id: str,
+    target_date: str | None,
+    user_description: str | None,
+    scan_mode: str,
+    event_bus: EventBus,
+    image_store,
+    cache_service: CachePort | None,
+    task_manager: BackgroundTaskManager | None,
+    ai_manager: MealInsightAIPort,
+) -> DetailedMealResponse:
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise ValidationException(
+            message=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed.",
+            error_code="INVALID_FILE_TYPE",
+            details={
+                "content_type": file.content_type,
+                "allowed": ALLOWED_CONTENT_TYPES,
+            },
+        )
+
+    contents = await file.read()
+
+    if len(contents) > MAX_FILE_SIZE:
+        raise ValidationException(
+            message=f"File size exceeds maximum allowed ({MAX_FILE_SIZE // (1024 * 1024)} MB)",
+            error_code="FILE_SIZE_EXCEEDS_MAXIMUM",
+            details={"size": len(contents), "max_size": MAX_FILE_SIZE},
+        )
+
+    parsed_target_date = _parse_target_date(target_date)
+    sanitized_description = (
+        sanitize_user_description(user_description) if user_description else None
+    )
+    language = get_request_language(request)
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id=user_id,
+        file_contents=contents,
+        content_type=file.content_type,
+        target_date=parsed_target_date,
+        user_description=sanitized_description,
+        language=language,
+        scan_mode=scan_mode,
+    )
+
+    try:
+        meal = await event_bus.send(command)
+    except (RuntimeError, ValueError) as e:
+        error_msg = str(e)
+        logger.warning("Meal image analysis failed: %s", error_msg)
+        raise ValidationException(
+            message="Could not identify food in the image. Please try again with a food photo.",
+            error_code="NOT_FOOD_IMAGE",
+            details={"error_message": error_msg},
+        ) from e
+
+    if meal.status.value == "FAILED":
+        error_message = meal.error_message or "Analysis failed"
+        raise ValidationException(
+            message=f"Failed to analyze meal image: {error_message}",
+            error_code="FAILED_TO_ANALYZE_MEAL_IMAGE",
+            details={"error_message": error_message},
+        )
+
+    image_url = None
+    if meal.image:
+        image_url = meal.image.url or image_store.get_url(meal.image.image_id)
+
+    _schedule_value_insight_generation(
+        task_manager,
+        meal,
+        language=language,
+        cache_service=cache_service,
+        ai_manager=ai_manager,
+    )
+
+    return MealMapper.to_detailed_response(
+        meal,
+        image_url,
+        target_language=language,
+    )
+
+
 @router.post(
     "/image/analyze",
     status_code=status.HTTP_200_OK,
@@ -116,7 +216,7 @@ async def analyze_meal_image_immediate(
     ),
     scan_mode: str = Query(
         "scanner",
-        description="scanner for meal photos, food_label for Nutrition Facts labels",
+        description="scanner for meal photos. Use /food-label/analyze for Nutrition Facts labels.",
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
@@ -131,96 +231,65 @@ async def analyze_meal_image_immediate(
     Language preference is read from Accept-Language header.
     """
     try:
-        if file.content_type not in ALLOWED_CONTENT_TYPES:
+        if scan_mode != "scanner":
             raise ValidationException(
-                message=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed.",
-                error_code="INVALID_FILE_TYPE",
-                details={
-                    "content_type": file.content_type,
-                    "allowed": ALLOWED_CONTENT_TYPES,
-                },
-            )
-
-        contents = await file.read()
-
-        if len(contents) > MAX_FILE_SIZE:
-            raise ValidationException(
-                message=f"File size exceeds maximum allowed ({MAX_FILE_SIZE // (1024 * 1024)} MB)",
-                error_code="FILE_SIZE_EXCEEDS_MAXIMUM",
-                details={"size": len(contents), "max_size": MAX_FILE_SIZE},
-            )
-
-        if scan_mode not in {"scanner", "food_label"}:
-            raise ValidationException(
-                message="scan_mode must be scanner or food_label",
+                message="Use /v1/meals/food-label/analyze for Nutrition Facts labels.",
                 error_code="INVALID_SCAN_MODE",
                 details={"scan_mode": scan_mode},
             )
 
-        parsed_target_date = None
-        if target_date:
-            try:
-                parsed_target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-            except ValueError as e:
-                raise ValidationException(
-                    message="Invalid date format. Use YYYY-MM-DD format.",
-                    error_code="INVALID_DATE_FORMAT",
-                    details={"date": target_date},
-                ) from e
-
-        sanitized_description = None
-        if user_description:
-            sanitized_description = sanitize_user_description(user_description)
-
-        language = get_request_language(request)
-
-        command = UploadMealImageImmediatelyCommand(
+        return await _analyze_uploaded_image(
+            request=request,
+            file=file,
             user_id=user_id,
-            file_contents=contents,
-            content_type=file.content_type,
-            target_date=parsed_target_date,
-            user_description=sanitized_description,
-            language=language,
-            scan_mode=scan_mode,
-        )
-
-        try:
-            meal = await event_bus.send(command)
-        except (RuntimeError, ValueError) as e:
-            error_msg = str(e)
-            logger.warning("Meal image analysis failed: %s", error_msg)
-            raise ValidationException(
-                message="Could not identify food in the image. Please try again with a food photo.",
-                error_code="NOT_FOOD_IMAGE",
-                details={"error_message": error_msg},
-            ) from e
-
-        if meal.status.value == "FAILED":
-            error_message = meal.error_message or "Analysis failed"
-            raise ValidationException(
-                message=f"Failed to analyze meal image: {error_message}",
-                error_code="FAILED_TO_ANALYZE_MEAL_IMAGE",
-                details={"error_message": error_message},
-            )
-
-        image_url = None
-        if meal.image:
-            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
-
-        _schedule_value_insight_generation(
-            task_manager,
-            meal,
-            language=language,
+            target_date=target_date,
+            user_description=user_description,
+            scan_mode="scanner",
+            event_bus=event_bus,
+            image_store=image_store,
             cache_service=cache_service,
+            task_manager=task_manager,
             ai_manager=ai_manager,
         )
 
-        return MealMapper.to_detailed_response(
-            meal,
-            image_url,
-            target_language=language,
-        )
+    except Exception as e:
+        raise handle_exception(e) from e
 
+
+@router.post(
+    "/food-label/analyze",
+    status_code=status.HTTP_200_OK,
+    response_model=DetailedMealResponse,
+)
+@limiter.limit("10/minute")
+async def analyze_food_label_image_immediate(
+    request: Request,
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+    target_date: str | None = Query(
+        None, description="Target date in YYYY-MM-DD format for meal association"
+    ),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+    image_store=Depends(get_image_store),
+    cache_service: CachePort | None = Depends(get_cache_service),
+    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
+):
+    """Analyze a packaged-food Nutrition Facts label."""
+    try:
+        return await _analyze_uploaded_image(
+            request=request,
+            file=file,
+            user_id=user_id,
+            target_date=target_date,
+            user_description=None,
+            scan_mode="food_label",
+            event_bus=event_bus,
+            image_store=image_store,
+            cache_service=cache_service,
+            task_manager=task_manager,
+            ai_manager=ai_manager,
+        )
     except Exception as e:
         raise handle_exception(e) from e
 

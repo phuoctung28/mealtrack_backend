@@ -3,6 +3,7 @@ Mapper for meal-related DTOs and domain models.
 """
 
 import json
+from typing import Any
 
 from src.api.schemas.response import (
     DetailedMealResponse,
@@ -307,10 +308,26 @@ class MealMapper:
 
     @staticmethod
     def _food_label_metadata(meal: Meal) -> FoodLabelMetadataResponse | None:
-        if meal.source != "food_label" or not meal.raw_gpt_json:
+        if meal.source != "food_label":
+            return None
+        metadata = getattr(meal, "food_label_metadata", None)
+        if isinstance(metadata, dict):
+            response = MealMapper._food_label_metadata_from_dict(metadata)
+            if response is not None:
+                return response
+        if not meal.raw_gpt_json:
             return None
         try:
             data = json.loads(meal.raw_gpt_json)
+        except json.JSONDecodeError:
+            return None
+        return MealMapper._food_label_metadata_from_dict(data)
+
+    @staticmethod
+    def _food_label_metadata_from_dict(
+        data: dict[str, Any],
+    ) -> FoodLabelMetadataResponse | None:
+        try:
             serving_size = data.get("serving_size") or {}
             return FoodLabelMetadataResponse(
                 product_name=data["product_name"],
@@ -324,7 +341,7 @@ class MealMapper:
                 confidence=float(data.get("confidence", 0.5)),
                 label_notes=list(data.get("label_notes") or []),
             )
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        except (KeyError, TypeError, ValueError):
             return None
 
     @staticmethod
