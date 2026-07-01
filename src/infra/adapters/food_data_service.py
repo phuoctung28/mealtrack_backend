@@ -19,7 +19,9 @@ class FoodDataService(FoodDataServicePort):
         api_key: str | None = None,
         client: httpx.AsyncClient | None = None,
     ):
-        self.api_key = api_key or os.getenv("USDA_FDC_API_KEY", "")
+        self.api_key = (
+            api_key if api_key is not None else os.getenv("USDA_FDC_API_KEY", "")
+        )
         self._client = client
 
     async def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:

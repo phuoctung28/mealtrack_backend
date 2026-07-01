@@ -74,7 +74,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                 "elapsed_ms=%d name_present=%s is_estimate=%s",
                 barcode_ref,
                 source,
-                result.get("provider_source") or result.get("source"),
+                source,
                 elapsed_ms(),
                 bool(result.get("name")),
                 bool(result.get("is_estimate")),
@@ -393,8 +393,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         """Cache verified API result to food_reference table."""
         if not result.get("name"):
             logger.warning(
-                "Skipping cache for barcode_ref=%s: name is required",
-                redact_barcode(result.get("barcode")),
+                "Skipping barcode cache: name is required",
             )
             return
         payload = dict(result)
@@ -413,7 +412,6 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                 await upserted
         except Exception as exc:
             logger.warning(
-                "Failed to cache barcode_ref=%s error=%s",
-                redact_barcode(payload.get("barcode")),
+                "Failed to cache barcode result error=%s",
                 type(exc).__name__,
             )
