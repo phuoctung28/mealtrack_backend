@@ -1,9 +1,9 @@
 # Backend Database Guide
 
-**Last Updated:** June 17, 2026
+**Last Updated:** June 27, 2026
 **Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
-**Migrations:** Alembic via deployment entrypoint/pre-deploy flow
-**Tables:** 36 ORM table declarations across core, normalized tracking, referral, notification, and cache models
+**Migrations:** Alembic via `migrations/versions/` and `migrations/run.py`
+**Tables:** 39 ORM model files across core, normalized tracking, referral, notification, and cache models
 
 ---
 
@@ -111,6 +111,9 @@ instead of the request/runtime session factory.
 | **referral_conversions** | Referral conversion audit | referrer_user_id, referred_user_id, status, commission fields |
 | **referral_wallets** | Referral wallet totals | user_id, balance, total_earned, total_withdrawn |
 | **payout_requests** | Referral payout workflow | user_id, amount, payment_method, typed masked destination, payment_details snapshot, status |
+| **affiliate_event_outbox** | Cross-service affiliate lifecycle dispatch | event_id, event_type, status, attempts, next_attempt_at |
+| **ai_handshake_guest_trial_quotas** | Guest trial quota state | install_hash, used_at, expires_at |
+| **promo_codes** / **promo_code_redemptions** | Promotional entitlement tracking | code, source_offering_id, redemption state |
 
 ---
 
@@ -162,15 +165,20 @@ alembic revision --autogenerate -m "description"  # Create new
 alembic downgrade -1                              # Rollback one
 ```
 
-Deployments run migrations before application startup through `docker-entrypoint.sh`
-for non-production environments or through a production pre-deploy job. Use
-timestamp naming for new migrations and keep app runtime URLs separate from
+Migration files live under `migrations/versions/`. Non-production Docker startup
+runs `python migrations/run.py`; production Render deploys should run the same
+command as a pre-deploy step before promoting the web service. Use timestamp
+naming for new migrations and keep app runtime URLs separate from
 migration/admin URLs.
 
 **Recent migrations:**
 
 | Version | Changes |
 |---------|---------|
+| 20260624000001 | Add journey_progress_seed_percent for existing-user journey progress seeding |
+| 20260620000001 | Add source_offering_id to promo codes |
+| 20260619000001 | Add ai_handshake_guest_trial_quotas for one-shot guest quota state |
+| 20260616000001 | Add beverage-specific columns to hydration entries |
 | 20260610000001 | Add affiliate_event_outbox for cross-service affiliate lifecycle dispatch |
 | 20260609000006 | Add normalized read-path indexes for active FCM tokens, notification reschedule/delete, and stale processing reclaim |
 | 20260609000005 | Add normalized food serving/nutrient tables, payout typed workflow fields, notification context schema version |

@@ -2,18 +2,21 @@
 Mapper for meal-related DTOs and domain models.
 """
 
-from typing import List, Optional
+import json
 
 from src.api.schemas.response import (
-    SimpleMealResponse,
     DetailedMealResponse,
-    MealListResponse,
     FoodItemResponse,
+    FoodLabelMetadataResponse,
+    FoodLabelServingSizeResponse,
+    MealListResponse,
     NutritionResponse,
+    SimpleMealResponse,
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
-from src.domain.model.nutrition import FoodItem, Nutrition, Macros, Micros
+from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
+from src.domain.services.meal_value_insight_contract import MealValueInsights
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
 # Status mapping from domain to API
@@ -46,6 +49,7 @@ class MealMapper:
             dish_name=meal.dish_name,
             emoji=meal.emoji,
             meal_type=meal.meal_type,
+            source=meal.source,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at,
@@ -54,8 +58,9 @@ class MealMapper:
     @staticmethod
     def to_detailed_response(
         meal: Meal,
-        image_url: Optional[str] = None,
-        target_language: Optional[str] = None,
+        image_url: str | None = None,
+        target_language: str | None = None,
+        value_insights: MealValueInsights | None = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -70,8 +75,8 @@ class MealMapper:
             DetailedMealResponse DTO
         """
         from src.api.schemas.response.meal_responses import (
-            MacrosResponse,
             CustomNutritionResponse,
+            MacrosResponse,
             MealTranslationResponse,
             TranslatedFoodItemResponse,
         )
@@ -142,11 +147,19 @@ class MealMapper:
                             fat_per_100g=(
                                 item.macros.fat * scale_factor if item.macros else 0.0
                             ),
+                            fiber_per_100g=(
+                                item.macros.fiber * scale_factor if item.macros else 0.0
+                            ),
+                            sugar_per_100g=(
+                                item.macros.sugar * scale_factor if item.macros else 0.0
+                            ),
                         )
 
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),
                         name=item.name,
+                        display_name=item.name,
+                        canonical_name=item.name,
                         category=None,
                         quantity=item.quantity,
                         unit=item.unit,
@@ -167,15 +180,45 @@ class MealMapper:
         if target_language and target_language != "en" and meal.translations:
             tr = meal.translations.get(target_language)
             if tr:
+                translation_language = target_language
                 # Apply each translated field independently if it exists
                 # (lenient check - scanned meals may not have instructions)
                 if tr.dish_name:
                     dish_name = tr.dish_name
                 if tr.meal_instruction:
                     instructions = tr.meal_instruction
-                if tr.meal_ingredients and len(tr.meal_ingredients) == len(food_items):
+                translated_names_by_id = {
+                    str(item.food_item_id): item.name
+                    for item in tr.food_items
+                    if item.name
+                }
+                legacy_names_by_id = {}
+                if tr.meal_ingredients and len(tr.meal_ingredients) == len(
+                    food_items
+                ):
+                    legacy_names_by_id = {
+                        str(fi.id): tr.meal_ingredients[index]
+                        for index, fi in enumerate(food_items)
+                        if tr.meal_ingredients[index]
+                    }
+                if translated_names_by_id:
+                    for fi in food_items:
+                        translated_name = translated_names_by_id.get(
+                            str(fi.id)
+                        ) or legacy_names_by_id.get(str(fi.id))
+                        if translated_name:
+                            fi.name = translated_name
+                            fi.display_name = translated_name
+                elif legacy_names_by_id:
                     for i, fi in enumerate(food_items):
                         fi.name = tr.meal_ingredients[i]
+                        fi.display_name = tr.meal_ingredients[i]
+            else:
+                translation_language = None
+        else:
+            translation_language = None
+
+        value_insights_response = MealMapper._value_insights_response(value_insights)
 
         # --- Build translations dict for the response ---
         translations_response = None
@@ -204,6 +247,7 @@ class MealMapper:
             dish_name=dish_name,
             emoji=meal.emoji,
             meal_type=meal.meal_type,
+            source=meal.source,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at,
@@ -216,6 +260,9 @@ class MealMapper:
             ),
             total_nutrition=total_nutrition,
             translations=translations_response,
+            food_label_metadata=MealMapper._food_label_metadata(meal),
+            value_insights=value_insights_response,
+            translation_language=translation_language,
             description=getattr(meal, "description", None),
             instructions=instructions,
             prep_time_min=getattr(meal, "prep_time_min", None),
@@ -225,7 +272,63 @@ class MealMapper:
         )
 
     @staticmethod
-    def _normalize_instructions(instructions: Optional[list]) -> Optional[list]:
+    def _value_insights_response(insights: MealValueInsights | None):
+        return MealMapper.to_value_insights_response(insights)
+
+    @staticmethod
+    def to_value_insights_response(insights: MealValueInsights | None):
+        from src.api.schemas.response.meal_responses import (
+            IngredientValueInsightResponse,
+            MealValueBulletResponse,
+            MealValueInsightsResponse,
+        )
+
+        if not insights:
+            return None
+        return MealValueInsightsResponse(
+            meal_bullets=[
+                MealValueBulletResponse(
+                    text=item.text,
+                    category=item.category,
+                    highlights=item.highlights[:1],
+                )
+                for item in insights.meal_bullets
+            ],
+            ingredient_insights=[
+                IngredientValueInsightResponse(
+                    ingredient_name=item.ingredient_name,
+                    text=item.text,
+                    category=item.category,
+                    highlights=item.highlights[:1],
+                )
+                for item in insights.ingredient_insights
+            ],
+        )
+
+    @staticmethod
+    def _food_label_metadata(meal: Meal) -> FoodLabelMetadataResponse | None:
+        if meal.source != "food_label" or not meal.raw_gpt_json:
+            return None
+        try:
+            data = json.loads(meal.raw_gpt_json)
+            serving_size = data.get("serving_size") or {}
+            return FoodLabelMetadataResponse(
+                product_name=data["product_name"],
+                brand=data.get("brand"),
+                serving_size=FoodLabelServingSizeResponse(
+                    display_text=serving_size["display_text"],
+                    grams=float(serving_size["grams"]),
+                ),
+                servings_per_package=float(data["servings_per_package"]),
+                label_calories_per_serving=data.get("label_calories_per_serving"),
+                confidence=float(data.get("confidence", 0.5)),
+                label_notes=list(data.get("label_notes") or []),
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    @staticmethod
+    def _normalize_instructions(instructions: list | None) -> list | None:
         """Normalize instructions to structured format.
 
         Converts legacy List[str] to List[dict] with {instruction, duration_minutes}.
@@ -243,11 +346,11 @@ class MealMapper:
 
     @staticmethod
     def to_meal_list_response(
-        meals: List[Meal],
+        meals: list[Meal],
         total: int,
         page: int = 1,
         page_size: int = 10,
-        image_urls: Optional[dict] = None,
+        image_urls: dict | None = None,
     ) -> MealListResponse:
         """
         Convert list of Meal domain models to MealListResponse DTO.
@@ -316,14 +419,12 @@ class MealMapper:
         Returns:
             FoodItem domain model
         """
-        # Extract calories and macros from nutrition dict if present
-        calories = item_dict.get("calories", 0)
+        # Extract macros from nutrition dict if present; calories are derived.
         macros = Macros(protein=0, carbs=0, fat=0)
         micros = None
 
         if "nutrition" in item_dict and item_dict["nutrition"]:
             nutrition_data = item_dict["nutrition"]
-            calories = nutrition_data.get("calories", 0)
             macros = Macros(
                 protein=nutrition_data.get("protein_g", 0),
                 carbs=nutrition_data.get("carbs_g", 0),
@@ -355,12 +456,12 @@ class MealMapper:
         Returns:
             DailyNutritionResponse DTO
         """
+        from src.api.exceptions import ResourceNotFoundException
         from src.api.schemas.response.daily_nutrition_response import (
+            HydrationSummaryResponse,
             MacrosResponse,
             WeeklyContextResponse,
-            HydrationSummaryResponse,
         )
-        from src.api.exceptions import ResourceNotFoundException
 
         # Extract data - require actual user targets, no hardcoded defaults
         target_calories = daily_macros_data.get("target_calories")

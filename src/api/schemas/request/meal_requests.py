@@ -3,6 +3,7 @@ Meal-related request DTOs.
 """
 
 import warnings
+from datetime import datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -142,7 +143,13 @@ class AnalyzeMealImageRequest(BaseModel):
 def _has_macro_over_100(nutrition) -> bool:
     return any(
         getattr(nutrition, field, 0) > 100
-        for field in ("protein_per_100g", "carbs_per_100g", "fat_per_100g")
+        for field in (
+            "protein_per_100g",
+            "carbs_per_100g",
+            "fat_per_100g",
+            "fiber_per_100g",
+            "sugar_per_100g",
+        )
     )
 
 
@@ -162,12 +169,18 @@ class ManualMealCustomNutritionRequest(BaseModel):
     protein_per_100g: float = Field(..., ge=0, description="Protein per 100g")
     carbs_per_100g: float = Field(..., ge=0, description="Carbohydrates per 100g")
     fat_per_100g: float = Field(..., ge=0, description="Fat per 100g")
+    fiber_per_100g: float = Field(0.0, ge=0, description="Fiber per 100g")
+    sugar_per_100g: float = Field(0.0, ge=0, description="Sugar per 100g")
 
     @property
     def calories_per_100g(self) -> float:
-        """Derive calories from macros: P*4 + C*4 + F*9."""
+        """Derive calories from macros using fiber-aware formula."""
+        net_carbs = max(0.0, self.carbs_per_100g - self.fiber_per_100g)
         return round(
-            self.protein_per_100g * 4 + self.carbs_per_100g * 4 + self.fat_per_100g * 9,
+            self.protein_per_100g * 4
+            + net_carbs * 4
+            + self.fiber_per_100g * 2
+            + self.fat_per_100g * 9,
             2,
         )
 
@@ -226,8 +239,8 @@ class CreateManualMealFromFoodsRequest(BaseModel):
             ):
                 continue
 
-            is_legacy_prompt_payload = (
-                source in prompt_sources or not _is_gram_unit(item.unit or "")
+            is_legacy_prompt_payload = source in prompt_sources or not _is_gram_unit(
+                item.unit or ""
             )
             if not is_legacy_prompt_payload:
                 raise ValueError(
@@ -270,7 +283,7 @@ class FoodItemChangeRequest(BaseModel):
 class CustomNutritionRequest(BaseModel):
     """Request DTO for custom nutrition data.
 
-    Calories always derived from macros: P*4 + C*4 + F*9.
+    Calories always derived from macros using the canonical fiber-aware formula.
     """
 
     protein_per_100g: float = Field(
@@ -280,12 +293,22 @@ class CustomNutritionRequest(BaseModel):
         ..., ge=0, le=100, description="Carbohydrates per 100g in grams"
     )
     fat_per_100g: float = Field(..., ge=0, le=100, description="Fat per 100g in grams")
+    fiber_per_100g: float = Field(
+        0.0, ge=0, le=100, description="Fiber per 100g in grams"
+    )
+    sugar_per_100g: float = Field(
+        0.0, ge=0, le=100, description="Sugar per 100g in grams"
+    )
 
     @property
     def calories_per_100g(self) -> float:
-        """Derive calories from macros: P*4 + C*4 + F*9."""
+        """Derive calories from macros using fiber-aware formula."""
+        net_carbs = max(0.0, self.carbs_per_100g - self.fiber_per_100g)
         return round(
-            self.protein_per_100g * 4 + self.carbs_per_100g * 4 + self.fat_per_100g * 9,
+            self.protein_per_100g * 4
+            + net_carbs * 4
+            + self.fiber_per_100g * 2
+            + self.fat_per_100g * 9,
             2,
         )
 
@@ -295,6 +318,8 @@ class CustomNutritionRequest(BaseModel):
                 "protein_per_100g": 31.0,
                 "carbs_per_100g": 0.0,
                 "fat_per_100g": 3.6,
+                "fiber_per_100g": 0.0,
+                "sugar_per_100g": 0.0,
             }
         }
 
@@ -303,16 +328,35 @@ class EditMealIngredientsRequest(BaseModel):
     """Request DTO for editing meal ingredients."""
 
     dish_name: Optional[str] = Field(
-        None, min_length=1, max_length=200, description="Updated meal name"
+        None, min_length=0, max_length=200, description="Updated meal name"
+    )
+    created_at: Optional[datetime] = Field(
+        None, description="Updated meal log timestamp"
+    )
+    meal_type: Optional[str] = Field(
+        None, description="Updated meal type derived from the user's local log time"
     )
     food_item_changes: list[FoodItemChangeRequest] = Field(
-        ..., min_items=1, description="List of ingredient changes"
+        default_factory=list, description="List of ingredient changes"
     )
+
+    @model_validator(mode="after")
+    def validate_has_change(self):
+        if (
+            self.dish_name is None
+            and self.created_at is None
+            and self.meal_type is None
+            and not self.food_item_changes
+        ):
+            raise ValueError("At least one meal edit field is required")
+        return self
 
     class Config:
         json_schema_extra = {
             "example": {
                 "dish_name": "Updated Grilled Chicken Salad",
+                "created_at": "2026-06-28T12:30:00Z",
+                "meal_type": "lunch",
                 "food_item_changes": [
                     {
                         "action": "update",

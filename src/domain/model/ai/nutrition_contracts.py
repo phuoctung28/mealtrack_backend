@@ -114,6 +114,43 @@ class BeverageMetadata(BaseModel):
     label_source: Literal["nutrition_panel", "front_label", "estimate"] = "estimate"
 
 
+class FoodLabelServingSize(BaseModel):
+    """Serving-size details read from a packaged nutrition label."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_text: str = Field(..., min_length=1, max_length=80)
+    grams: float = Field(..., gt=0, le=MAX_FOOD_ITEM_QUANTITY)
+
+    @field_validator("display_text")
+    @classmethod
+    def validate_display_text(cls, value: str) -> str:
+        return _strip_required_text(value)
+
+
+class FoodLabelNutritionResponse(BaseModel):
+    """Structured nutrition facts label response."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    is_food_label: bool = Field(True, description="Whether a Nutrition Facts label is visible")
+    product_name: str = Field(..., min_length=1, max_length=200)
+    brand: str | None = Field(None, max_length=100)
+    serving_size: FoodLabelServingSize
+    servings_per_package: float = Field(..., gt=0, le=1000)
+    label_calories_per_serving: float | None = Field(None, ge=0, le=5000)
+    macros_per_serving: AIVisionNutritionMacros
+    confidence: float = Field(0.5, ge=0, le=1)
+    label_notes: list[str] = Field(default_factory=list, max_length=6)
+
+    @field_validator("product_name", "brand")
+    @classmethod
+    def validate_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _strip_required_text(value)
+
+
 class VisionNutritionResponse(BaseModel):
     """Structured image meal-analysis response."""
 

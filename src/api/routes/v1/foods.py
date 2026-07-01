@@ -1,5 +1,5 @@
 """
-Foods API routes: search and details via USDA, barcode lookup via OpenFoodFacts.
+Foods API routes: manual search/autocomplete, details, and barcode lookup.
 
 Uses a lightweight singleton event bus to avoid re-initializing
 heavy services (Cloudinary, AI providers, etc.) on every request.
@@ -14,6 +14,8 @@ from src.api.schemas.response.barcode_product_response import BarcodeProductResp
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.domain.exceptions.barcode_exceptions import InvalidBarcodeError
+from src.domain.services.barcode import normalize_gtin
 
 router = APIRouter(prefix="/v1/foods", tags=["Foods"])
 
@@ -24,10 +26,28 @@ async def search_foods(
     q: str = Query(..., min_length=1),
     limit: int = Query(20, ge=1, le=50),
 ):
-    """Search foods using lightweight singleton event bus."""
+    """Search foods for manual logging using the lightweight event bus."""
     event_bus = get_food_search_event_bus()
     language = get_request_language(request)
     query = SearchFoodsQuery(query=q, limit=limit, language=language)
+    return await event_bus.send(query)
+
+
+@router.get("/autocomplete")
+async def autocomplete_foods(
+    request: Request,
+    q: str = Query(..., min_length=1),
+    limit: int = Query(10, ge=1, le=20),
+):
+    """Autocomplete foods for manual logging using the search provider path."""
+    event_bus = get_food_search_event_bus()
+    language = get_request_language(request)
+    query = SearchFoodsQuery(
+        query=q,
+        limit=limit,
+        language=language,
+        autocomplete=True,
+    )
     return await event_bus.send(query)
 
 
@@ -47,10 +67,20 @@ async def lookup_barcode(
     barcode: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Look up product by barcode from OpenFoodFacts."""
+    """Look up product by barcode from structured providers and estimates."""
     event_bus = get_food_search_event_bus()
     language = get_request_language(request)
-    query = LookupBarcodeQuery(barcode=barcode, language=language)
+    try:
+        lookup_keys = normalize_gtin(barcode)
+    except InvalidBarcodeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    query = LookupBarcodeQuery(
+        barcode=lookup_keys.gtin_14,
+        language=language,
+        scanned_barcode=lookup_keys.raw,
+        aliases=lookup_keys.aliases,
+    )
     result = await event_bus.send(query)
 
     if result is None:

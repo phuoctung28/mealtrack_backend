@@ -1,5 +1,5 @@
 """
-Query to search foods via external database (USDA FDC).
+Query to search foods via the configured manual logging provider.
 """
 
 from dataclasses import dataclass
@@ -12,3 +12,4 @@ class SearchFoodsQuery(Query):
     query: str
     limit: int = 20
     language: str = "en"
+    autocomplete: bool = False

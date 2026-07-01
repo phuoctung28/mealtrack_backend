@@ -59,3 +59,18 @@ class FoodDataServicePort(ABC):
             Exception: If the provider returns an error or the request fails.
         """
         pass
+
+    @abstractmethod
+    async def get_branded_food_by_gtin(
+        self, gtin_aliases: List[str]
+    ) -> Dict[str, Any] | None:
+        """
+        Search branded foods by GTIN/UPC aliases and return an exact provider row.
+
+        Args:
+            gtin_aliases: Normalized barcode aliases to compare against FDC gtinUpc.
+
+        Returns:
+            A provider-native branded food row when gtinUpc matches exactly, else None.
+        """
+        pass

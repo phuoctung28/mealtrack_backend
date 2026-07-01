@@ -115,3 +115,60 @@ async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
     assert result.meal_id == uow._saved_meals[0].meal_id
     assert result.source == "scanner"
     assert result.image.url == _IMAGE_URL
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    _install_fake_image_download(monkeypatch)
+    uow = _make_uow()
+    cache = MagicMock()
+    cache.after_meal_write = AsyncMock()
+    handler = ScanByUrlCommandHandler(
+        uow=uow,
+        event_bus=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+        cache_invalidation=cache,
+    )
+    handler.vision_service.analyze_food_label = AsyncMock(
+        return_value={"is_food_label": True, "product_name": "Protein Bar"}
+    )
+    handler.gpt_parser.parse_food_label_to_nutrition.return_value = Nutrition(
+        macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
+        food_items=[
+            FoodItem(
+                id="label-item",
+                name="Protein Bar",
+                quantity=55,
+                unit="g",
+                macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
+                is_custom=True,
+            )
+        ],
+    )
+    handler.gpt_parser.parse_food_label_metadata.return_value = {"is_food_label": True}
+    handler.gpt_parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
+    handler.gpt_parser.parse_is_food = MagicMock()
+
+    result = await handler.handle(
+        ScanByUrlCommand(
+            user_id=_USER_ID,
+            image_url=_IMAGE_URL,
+            public_id="mealtrack/00000000-0000-0000-0000-000000000002",
+            scan_mode="food_label",
+        )
+    )
+
+    handler.vision_service.analyze_food_label.assert_awaited_once_with(
+        b"fake-image-bytes"
+    )
+    uow.meals.save.assert_awaited_once()
+    handler.gpt_parser.parse_is_food.assert_not_called()
+    cache.after_meal_write.assert_awaited_once()
+    assert result.source == "food_label"
+    assert result.dish_name == "Unnamed Food"
+    assert result.emoji is None
+    assert result.nutrition.food_items[0].quantity == 55
+    handler.gpt_parser.parse_food_label_name.assert_not_called()

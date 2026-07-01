@@ -568,6 +568,8 @@ class TestAddFoodItemStrategy:
             protein_per_100g=10.0,
             carbs_per_100g=20.0,
             fat_per_100g=5.0,
+            fiber_per_100g=4.0,
+            sugar_per_100g=8.0,
         )
 
         test_cases = [
@@ -591,11 +593,13 @@ class TestAddFoodItemStrategy:
 
             # Assert
             added_item = list(food_items_dict.values())[0]
-            # calories derived: (10*scale)*4 + (20*scale)*4 + (5*scale)*9 = 165*scale
-            assert added_item.calories == pytest.approx(165.0 * scale, rel=0.01)
+            # calories derived: protein + net carbs + fiber + fat = 157*scale
+            assert added_item.calories == pytest.approx(157.0 * scale, rel=0.01)
             assert added_item.macros.protein == pytest.approx(10.0 * scale, rel=0.01)
             assert added_item.macros.carbs == pytest.approx(20.0 * scale, rel=0.01)
             assert added_item.macros.fat == pytest.approx(5.0 * scale, rel=0.01)
+            assert added_item.macros.fiber == pytest.approx(4.0 * scale, rel=0.01)
+            assert added_item.macros.sugar == pytest.approx(8.0 * scale, rel=0.01)
 
     @pytest.mark.asyncio
     async def test_add_priority_custom_nutrition_over_service(self):

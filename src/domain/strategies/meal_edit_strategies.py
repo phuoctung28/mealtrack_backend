@@ -23,7 +23,8 @@ def _validate_quantity_grams(quantity_grams: float, quantity: float, unit: str) 
     """Raise ValueError if quantity in grams exceeds the realistic limit."""
     if quantity_grams > MAX_QUANTITY_GRAMS:
         raise ValueError(
-            f"Quantity {quantity} {unit} ({quantity_grams:.0f}g) exceeds maximum allowed ({MAX_QUANTITY_GRAMS:.0f}g)"
+            f"Quantity {quantity} {unit} ({quantity_grams:.0f}g) exceeds "
+            f"maximum allowed ({MAX_QUANTITY_GRAMS:.0f}g)"
         )
 
 
@@ -93,6 +94,8 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     protein=change.custom_nutrition.protein_per_100g * scale_factor,
                     carbs=change.custom_nutrition.carbs_per_100g * scale_factor,
                     fat=change.custom_nutrition.fat_per_100g * scale_factor,
+                    fiber=change.custom_nutrition.fiber_per_100g * scale_factor,
+                    sugar=change.custom_nutrition.sugar_per_100g * scale_factor,
                 ),
                 micros=existing_item.micros,
                 confidence=0.8,
@@ -136,7 +139,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             else:
                 # Fallback to simple scaling
                 logger.warning(
-                    f"Could not fetch nutrition for unit change, using scaling"
+                    "Could not fetch nutrition for unit change, using scaling"
                 )
                 self._apply_simple_scaling(
                     food_items_dict, change, existing_item, new_quantity, new_unit
@@ -182,6 +185,8 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                 protein=existing_item.macros.protein * scale_factor,
                 carbs=existing_item.macros.carbs * scale_factor,
                 fat=existing_item.macros.fat * scale_factor,
+                fiber=existing_item.macros.fiber * scale_factor,
+                sugar=existing_item.macros.sugar * scale_factor,
             ),
             micros=existing_item.micros,
             confidence=existing_item.confidence,
@@ -279,6 +284,8 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 protein=custom_nutrition.protein_per_100g * scale_factor,
                 carbs=custom_nutrition.carbs_per_100g * scale_factor,
                 fat=custom_nutrition.fat_per_100g * scale_factor,
+                fiber=custom_nutrition.fiber_per_100g * scale_factor,
+                sugar=custom_nutrition.sugar_per_100g * scale_factor,
             ),
             confidence=0.8,
             fdc_id=None,

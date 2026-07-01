@@ -11,3 +11,5 @@ from src.app.events.base import Query
 class LookupBarcodeQuery(Query):
     barcode: str
     language: str = "en"
+    scanned_barcode: str | None = None
+    aliases: tuple[str, ...] = ()

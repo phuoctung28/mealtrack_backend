@@ -1,10 +1,7 @@
-"""
-SearchFoodsQueryHandler - Individual handler file.
-Auto-extracted for better maintainability.
-"""
+"""Search foods for manual logging using the configured provider."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
@@ -17,22 +14,22 @@ logger = logging.getLogger(__name__)
 
 
 @handles(SearchFoodsQuery)
-class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
-    """Handler for searching foods in the database."""
+class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
+    """Handler for FatSecret-backed food search and autocomplete."""
 
     def __init__(
         self,
         cache_service,
         mapping_service: FoodMappingService,
-        fat_secret_service: Optional[Any] = None,
-        translation_service: Optional[DeepLTextTranslationService] = None,
+        fat_secret_service: Any | None = None,
+        translation_service: DeepLTextTranslationService | None = None,
     ):
         self.cache_service = cache_service
         self.mapping_service = mapping_service
         self.fat_secret_service = fat_secret_service
         self.translation_service = translation_service
 
-    async def handle(self, event: SearchFoodsQuery) -> Dict[str, Any]:
+    async def handle(self, event: SearchFoodsQuery) -> dict[str, Any]:
         if not event.query or not event.query.strip():
             return {"results": [], "query": event.query, "total": 0}
 
@@ -44,6 +41,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         cached = await self.cache_service.get_cached_search(cache_key)
         if cached is not None:
             processed_cached = self._process_search_results(cached)
+            processed_cached = processed_cached[: event.limit]
             for item in processed_cached:
                 if "source" not in item:
                     item["source"] = "fatsecret"
@@ -73,7 +71,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
 
     async def _search_localized(
         self, query: str, limit: int, language: str, cache_key: str
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search with localization: try native region first, fallback only if empty."""
         from src.infra.adapters.fat_secret_service import LANGUAGE_TO_REGION
 
@@ -131,8 +129,8 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         return results
 
     def _process_search_results(
-        self, raw_results: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, raw_results: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Process search results: deduplicate and capitalize names."""
         if not raw_results:
             return raw_results

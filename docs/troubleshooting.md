@@ -1,6 +1,6 @@
 # Backend Troubleshooting Guide
 
-**Last Updated:** June 17, 2026
+**Last Updated:** June 27, 2026
 
 ---
 
@@ -12,7 +12,7 @@
 
 **Diagnosis:**
 ```bash
-python -c "from src.app.commands.meal import CreateMealCommand"
+python -c "from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand"
 ```
 
 **Solutions:**
@@ -94,7 +94,7 @@ redis-cli ping
 
 **Diagnosis:**
 ```bash
-SQLALCHEMY_ECHO=true python src/api/main.py
+SQLALCHEMY_ECHO=true uvicorn src.api.main:app --reload
 ```
 
 **Solutions:**
@@ -111,7 +111,7 @@ SQLALCHEMY_ECHO=true python src/api/main.py
 
 **Diagnosis:**
 ```bash
-grep -r "@handles" src/app/handlers/
+rg "@handles" src/app/handlers/
 ```
 
 **Solutions:**
@@ -124,13 +124,13 @@ grep -r "@handles" src/app/handlers/
 
 ### External Service Timeouts
 
-**Problem:** Gemini/Cloudinary/Firebase requests timeout
+**Problem:** OpenAI, Cloudflare Workers AI, Cloudinary, Firebase, RevenueCat, affiliate, or search provider requests timeout
 
 **Solutions:**
-1. Increase timeout (max 30s for FastAPI)
-2. Implement retry logic with exponential backoff
-3. Cache responses where possible
-4. Add circuit breaker for repeated failures
+1. Verify provider-specific timeout settings in `src/infra/config/settings.py`.
+2. Check circuit-breaker logs for `[AI-ATTEMPT-FAILED]` and `[AI-FALLBACK-SUCCESS]`.
+3. Cache only optional read/cost-optimization data where DB/API fallback is correct.
+4. Keep required integrations fail-fast or backed by durable retry state such as an outbox.
 
 ---
 
@@ -192,7 +192,7 @@ rg "log_event|increment_metric|gauge_metric|distribution_metric" src
 **Solutions:**
 1. Set `SENTRY_ENABLE_LOGS=true` for Sentry Logs ingestion.
 2. Set `SENTRY_ENABLE_METRICS=true` for application metric ingestion.
-3. Emit structured logs and metrics through `src.infra.monitoring`; Python `logging.info(...)` is not the same as a Sentry Logs facade call.
+3. Emit structured logs and metrics through `src.observability`; Python `logging.info(...)` is not the same as a Sentry Logs facade call.
 4. Keep attributes allowlisted and scalar. Non-allowlisted, `None`, list, and dict attributes are dropped before reaching Sentry.
 
 ---
@@ -232,7 +232,7 @@ See related: `code-standards.md`, `testing-standards.md`, `system-architecture.m
 
 ---
 
-## Database Connection Issues
+## Neon Connection Mode Issues
 
 ### asyncpg prepared statement error in pooler mode
 **Symptom:** `asyncpg.exceptions.InvalidSQLStatementNameError: prepared statement ... does not exist`  

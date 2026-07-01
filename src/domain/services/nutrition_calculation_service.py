@@ -407,6 +407,7 @@ class NutritionCalculationService:
 
         food_items = []
         total_protein = total_carbs = total_fat = 0.0
+        total_fiber = total_sugar = 0.0
 
         for item in items:
             if not item.custom_nutrition:
@@ -419,16 +420,26 @@ class NutritionCalculationService:
             protein = item.custom_nutrition.protein_per_100g * factor
             carbs = item.custom_nutrition.carbs_per_100g * factor
             fat = item.custom_nutrition.fat_per_100g * factor
+            fiber = item.custom_nutrition.fiber_per_100g * factor
+            sugar = item.custom_nutrition.sugar_per_100g * factor
             total_protein += protein
             total_carbs += carbs
             total_fat += fat
+            total_fiber += fiber
+            total_sugar += sugar
             food_items.append(
                 FoodItem(
                     id=uuid4(),
                     name=item_name,
                     quantity=item.quantity,
                     unit=item.unit,
-                    macros=Macros(protein=protein, carbs=carbs, fat=fat),
+                    macros=Macros(
+                        protein=protein,
+                        carbs=carbs,
+                        fat=fat,
+                        fiber=fiber,
+                        sugar=sugar,
+                    ),
                     micros=None,
                     confidence=1.0,
                     fdc_id=getattr(item, "fdc_id", None),
@@ -440,6 +451,8 @@ class NutritionCalculationService:
                 protein=round(total_protein, 1),
                 carbs=round(total_carbs, 1),
                 fat=round(total_fat, 1),
+                fiber=round(total_fiber, 1),
+                sugar=round(total_sugar, 1),
             ),
             food_items=food_items,
             confidence_score=1.0,

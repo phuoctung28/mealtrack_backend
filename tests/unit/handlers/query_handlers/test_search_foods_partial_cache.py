@@ -80,3 +80,46 @@ async def test_empty_localized_result_runs_fallback():
     await handler.handle(query)
 
     assert fat_secret.search_foods.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_english_search_calls_fatsecret_first():
+    """Manual food search should use FatSecret directly on cache miss."""
+    handler, fat_secret, cache = _make_handler(
+        localized_results=[{"description": "Chicken breast", "source": "fatsecret"}]
+    )
+
+    query = SearchFoodsQuery(query="chicken", language="en", limit=7)
+    result = await handler.handle(query)
+
+    cache.get_cached_search.assert_awaited_once_with("chicken")
+    fat_secret.search_foods.assert_awaited_once_with("chicken", max_results=7)
+    assert result["results"][0]["source"] == "fatsecret"
+
+
+@pytest.mark.asyncio
+async def test_cached_search_respects_requested_limit():
+    cache = MagicMock()
+    cache.get_cached_search = AsyncMock(
+        return_value=[
+            {"description": "Rice", "source": "fatsecret"},
+            {"description": "Rice noodles", "source": "fatsecret"},
+        ]
+    )
+    cache.cache_search = AsyncMock()
+    fat_secret = MagicMock()
+    fat_secret.search_foods = AsyncMock()
+    mapping = MagicMock()
+    mapping.map_search_item.side_effect = lambda x: x
+    handler = SearchFoodsQueryHandler(
+        cache_service=cache,
+        mapping_service=mapping,
+        fat_secret_service=fat_secret,
+    )
+
+    result = await handler.handle(
+        SearchFoodsQuery(query="rice", language="en", limit=1, autocomplete=True)
+    )
+
+    assert len(result["results"]) == 1
+    fat_secret.search_foods.assert_not_awaited()

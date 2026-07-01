@@ -55,7 +55,9 @@ def _fake_settings_with_cf_text_and_vision():
     )
     settings.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = True
     settings.CLOUDFLARE_WORKERS_AI_VISION_MODEL = "cf-vision-model"
-    settings.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = "meal_scan,ingredient_scan"
+    settings.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = (
+        "meal_scan,food_label_scan,ingredient_scan"
+    )
     return settings
 
 
@@ -65,8 +67,13 @@ def test_openai_provider_receives_prompt_cache_settings(mock_circuit_breaker):
     settings.OPENAI_PROMPT_CACHE_RETENTION = "in_memory"
     settings.OPENAI_PROMPT_CACHE_KEY_PREFIX = "mealtrack-test"
 
-    with patch("src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker", return_value=mock_circuit_breaker):
-        with patch("src.infra.services.ai.ai_model_manager.OpenAIProvider") as provider_cls:
+    with patch(
+        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+        return_value=mock_circuit_breaker,
+    ):
+        with patch(
+            "src.infra.services.ai.ai_model_manager.OpenAIProvider"
+        ) as provider_cls:
             AIModelManager(settings=settings)
 
     provider_cls.assert_called_once()
@@ -84,7 +91,9 @@ def test_text_purposes_prefer_cf_and_fallback_to_openai(mock_circuit_breaker):
         return_value=mock_circuit_breaker,
     ):
         with patch("src.infra.services.ai.ai_model_manager.OpenAIProvider"):
-            with patch("src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider"):
+            with patch(
+                "src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider"
+            ):
                 manager = AIModelManager(settings=settings)
 
     for purpose in {
@@ -109,10 +118,16 @@ def test_image_scan_purposes_prefer_openai_and_fallback_to_cf(mock_circuit_break
         return_value=mock_circuit_breaker,
     ):
         with patch("src.infra.services.ai.ai_model_manager.OpenAIProvider"):
-            with patch("src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider"):
+            with patch(
+                "src.infra.services.ai.ai_model_manager.CloudflareWorkersAIProvider"
+            ):
                 manager = AIModelManager(settings=settings)
 
-    for purpose in {ModelPurpose.MEAL_SCAN, ModelPurpose.INGREDIENT_SCAN}:
+    for purpose in {
+        ModelPurpose.MEAL_SCAN,
+        ModelPurpose.FOOD_LABEL_SCAN,
+        ModelPurpose.INGREDIENT_SCAN,
+    }:
         assert manager.get_fallback_chain(purpose)[:2] == [
             "openai-vision-model",
             "cf-vision-model",
@@ -140,7 +155,10 @@ def mock_circuit_breaker():
 def mock_openai_provider():
     provider = Mock()
     provider.provider_name = "openai"
-    provider.supported_capabilities = {AICapability.VISION, AICapability.TEXT_GENERATION}
+    provider.supported_capabilities = {
+        AICapability.VISION,
+        AICapability.TEXT_GENERATION,
+    }
     provider.generate_with_vision = AsyncMock(return_value={"result": "vision_success"})
     provider.extract_error_code = Mock(return_value=503)
     return provider
@@ -151,15 +169,28 @@ def mock_cf_vision_provider():
     provider = Mock()
     provider.provider_name = "cloudflare-workers-ai"
     provider.supported_capabilities = {AICapability.VISION}
-    provider.generate_with_vision = AsyncMock(return_value={"result": "cf_vision_success"})
+    provider.generate_with_vision = AsyncMock(
+        return_value={"result": "cf_vision_success"}
+    )
     provider.extract_error_code = Mock(return_value=503)
     return provider
 
 
-def _build_manager(mock_circuit_breaker, mock_openai_provider, extra_providers=None, cf_vision_model=None):
+def _build_manager(
+    mock_circuit_breaker,
+    mock_openai_provider,
+    extra_providers=None,
+    cf_vision_model=None,
+):
     """Construct AIModelManager with injected mocks bypassing real provider init."""
-    with patch("src.infra.services.ai.ai_model_manager.OpenAIProvider", return_value=mock_openai_provider):
-        with patch("src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker", return_value=mock_circuit_breaker):
+    with patch(
+        "src.infra.services.ai.ai_model_manager.OpenAIProvider",
+        return_value=mock_openai_provider,
+    ):
+        with patch(
+            "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+            return_value=mock_circuit_breaker,
+        ):
             mgr = AIModelManager(settings=_fake_settings())
 
     # Replace internals with mocks
@@ -188,7 +219,9 @@ def manager(mock_circuit_breaker, mock_openai_provider):
 
 
 @pytest.fixture
-def manager_with_cf_vision(mock_circuit_breaker, mock_openai_provider, mock_cf_vision_provider):
+def manager_with_cf_vision(
+    mock_circuit_breaker, mock_openai_provider, mock_cf_vision_provider
+):
     return _build_manager(
         mock_circuit_breaker,
         mock_openai_provider,
@@ -200,7 +233,11 @@ def manager_with_cf_vision(mock_circuit_breaker, mock_openai_provider, mock_cf_v
 class TestVisionFailureKindRouting:
     @pytest.mark.asyncio
     async def test_schema_fail_advances_without_circuit_break(
-        self, manager_with_cf_vision, mock_openai_provider, mock_circuit_breaker, mock_cf_vision_provider
+        self,
+        manager_with_cf_vision,
+        mock_openai_provider,
+        mock_circuit_breaker,
+        mock_cf_vision_provider,
     ):
         """Schema validation failure must advance to next provider without tripping circuit breaker."""
         mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
@@ -225,13 +262,23 @@ class TestVisionFailureKindRouting:
 
         assert result == {"result": "openai_vision_success"}
         mock_openai_provider.generate_with_vision.assert_awaited()
-        assert mock_cf_vision_provider.generate_with_vision.await_args.kwargs["schema"] is VisionNutritionResponse
-        assert mock_openai_provider.generate_with_vision.await_args.kwargs["schema"] is VisionNutritionResponse
+        assert (
+            mock_cf_vision_provider.generate_with_vision.await_args.kwargs["schema"]
+            is VisionNutritionResponse
+        )
+        assert (
+            mock_openai_provider.generate_with_vision.await_args.kwargs["schema"]
+            is VisionNutritionResponse
+        )
         mock_circuit_breaker.record_failure.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_json_parse_fail_advances_without_circuit_break(
-        self, manager_with_cf_vision, mock_openai_provider, mock_circuit_breaker, mock_cf_vision_provider
+        self,
+        manager_with_cf_vision,
+        mock_openai_provider,
+        mock_circuit_breaker,
+        mock_cf_vision_provider,
     ):
         """JSON parse failure must advance to next provider without tripping circuit breaker."""
         mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)

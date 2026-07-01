@@ -102,7 +102,7 @@ Event handlers return `None` (side effects only — notifications, jobs, etc.).
 # Initialize once at app startup — prevents memory leaks from dynamic class generation
 event_bus = PyMediatorEventBus()
 
-result = await event_bus.send(CreateMealCommand(...))   # command/query
+result = await event_bus.send(CreateManualMealCommand(...))   # command/query
 await event_bus.publish(MealCreatedEvent(...))          # fire-and-forget
 ```
 
@@ -121,7 +121,7 @@ async def create_meal(
     request: CreateMealRequest,
     event_bus: EventBus = Depends(get_event_bus),
 ):
-    meal = await event_bus.send(CreateMealCommand(user_id=user.id, ...))
+    meal = await event_bus.send(CreateManualMealCommand(user_id=user.id, ...))
     return meal
 ```
 

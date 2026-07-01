@@ -2,9 +2,8 @@
 Meal-related response DTOs.
 """
 
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Optional, List, Union, Dict
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,17 +11,25 @@ from pydantic import BaseModel, ConfigDict, Field
 def _serialize_datetime_utc(v: datetime) -> str:
     """Serialize datetime to ISO format with UTC timezone suffix."""
     if v.tzinfo is None:
-        v = v.replace(tzinfo=timezone.utc)
+        v = v.replace(tzinfo=UTC)
     return v.isoformat()
 
 
-class MealStatusEnum(str, Enum):
+class MealStatusEnum(StrEnum):
     """Enum for meal processing status."""
 
     pending = "pending"
     analyzing = "analyzing"
     ready = "ready"
     failed = "failed"
+
+
+class ValueInsightCategoryEnum(StrEnum):
+    """Meal value insight category."""
+
+    benefit = "benefit"
+    caution = "caution"
+    balance = "balance"
 
 
 # Translation Response DTOs
@@ -40,21 +47,21 @@ class ParsedFoodItem(BaseModel):
     fat: float = Field(..., ge=0, description="Fat in grams")
     fiber: float = Field(0, ge=0, description="Fiber in grams")
     sugar: float = Field(0, ge=0, description="Sugar in grams")
-    data_source: Optional[str] = Field(
+    data_source: str | None = Field(
         None, description="Data source: usda, fatsecret, or ai_estimate"
     )
-    fdc_id: Optional[int] = Field(None, description="USDA FDC ID when available")
+    fdc_id: int | None = Field(None, description="USDA FDC ID when available")
 
 
 class ParseMealTextResponse(BaseModel):
     """Response DTO for parsed meal text."""
 
-    items: List[ParsedFoodItem] = Field(..., description="Parsed food items")
+    items: list[ParsedFoodItem] = Field(..., description="Parsed food items")
     total_calories: float = Field(..., description="Total calories")
     total_protein: float = Field(..., description="Total protein in grams")
     total_carbs: float = Field(..., description="Total carbohydrates in grams")
     total_fat: float = Field(..., description="Total fat in grams")
-    emoji: Optional[str] = Field(None, description="AI-assigned dish emoji")
+    emoji: str | None = Field(None, description="AI-assigned dish emoji")
 
 
 class TranslatedFoodItemResponse(BaseModel):
@@ -62,7 +69,7 @@ class TranslatedFoodItemResponse(BaseModel):
 
     id: str = Field(..., description="Food item ID")
     name: str = Field(..., description="Translated food item name")
-    description: Optional[str] = Field(None, description="Translated description")
+    description: str | None = Field(None, description="Translated description")
 
 
 class MealTranslationResponse(BaseModel):
@@ -70,16 +77,16 @@ class MealTranslationResponse(BaseModel):
 
     language: str = Field(..., description="ISO 639-1 language code")
     dish_name: str = Field(..., description="Translated dish name")
-    meal_instruction: Optional[List[dict]] = Field(
+    meal_instruction: list[dict] | None = Field(
         None, description="Translated instructions: [{instruction, duration_minutes}]"
     )
-    meal_ingredients: Optional[List[str]] = Field(
+    meal_ingredients: list[str] | None = Field(
         None, description="Translated ingredient names in food-item order"
     )
-    food_items: List[TranslatedFoodItemResponse] = Field(
+    food_items: list[TranslatedFoodItemResponse] = Field(
         default_factory=list, description="Translated food items (legacy)"
     )
-    translated_at: Optional[datetime] = Field(
+    translated_at: datetime | None = Field(
         None, description="When translation was performed"
     )
 
@@ -113,6 +120,76 @@ class CustomNutritionResponse(BaseModel):
     protein_per_100g: float = Field(..., description="Protein per 100g")
     carbs_per_100g: float = Field(..., description="Carbs per 100g")
     fat_per_100g: float = Field(..., description="Fat per 100g")
+    fiber_per_100g: float = Field(0, ge=0, description="Fiber per 100g")
+    sugar_per_100g: float = Field(0, ge=0, description="Sugar per 100g")
+
+
+class FoodLabelServingSizeResponse(BaseModel):
+    """Serving-size metadata extracted from a Nutrition Facts label."""
+
+    display_text: str = Field(..., description="Serving size text from label")
+    grams: float = Field(..., gt=0, description="Serving size in grams")
+
+
+class FoodLabelMetadataResponse(BaseModel):
+    """Client-facing metadata for a food-label scan."""
+
+    product_name: str = Field(..., description="Product name")
+    brand: str | None = Field(None, description="Brand when visible")
+    serving_size: FoodLabelServingSizeResponse
+    servings_per_package: float = Field(..., gt=0)
+    label_calories_per_serving: float | None = Field(None, ge=0)
+    confidence: float = Field(..., ge=0, le=1)
+    label_notes: list[str] = Field(default_factory=list)
+
+
+class MealValueBulletResponse(BaseModel):
+    """Short meal-level value insight."""
+
+    text: str = Field(..., max_length=120)
+    category: ValueInsightCategoryEnum
+    highlights: list[str] = Field(
+        default_factory=list,
+        max_length=1,
+        description="Exact localized substrings to bold",
+    )
+
+
+class IngredientValueInsightResponse(BaseModel):
+    """Short ingredient-level value insight."""
+
+    ingredient_name: str = Field(..., description="Ingredient display name")
+    text: str = Field(..., max_length=120)
+    category: ValueInsightCategoryEnum
+    highlights: list[str] = Field(
+        default_factory=list,
+        max_length=1,
+        description="Exact localized substrings to bold",
+    )
+
+
+class MealValueInsightsResponse(BaseModel):
+    """Value insights shown on meal detail."""
+
+    meal_bullets: list[MealValueBulletResponse] = Field(default_factory=list)
+    ingredient_insights: list[IngredientValueInsightResponse] = Field(
+        default_factory=list
+    )
+
+
+class MealValueInsightsStatusResponse(BaseModel):
+    """Cache status for meal value insights."""
+
+    status: str = Field(
+        ...,
+        description="Insight freshness: fresh, generating, or unavailable",
+    )
+    value_insights: MealValueInsightsResponse | None = Field(
+        None, description="Fresh insights when available"
+    )
+    version: str | None = Field(
+        None, description="Stable fingerprint for the meal insight payload"
+    )
 
 
 class FoodItemResponse(BaseModel):
@@ -120,17 +197,23 @@ class FoodItemResponse(BaseModel):
 
     id: str = Field(..., description="Food item ID")
     name: str = Field(..., description="Food item name")
-    category: Optional[str] = Field(None, description="Food category")
+    display_name: str | None = Field(
+        None, description="Localized display name for the requested language"
+    )
+    canonical_name: str | None = Field(
+        None, description="Canonical source food item name"
+    )
+    category: str | None = Field(None, description="Food category")
     quantity: float = Field(..., description="Quantity")
     unit: str = Field(..., description="Unit of measurement")
-    description: Optional[str] = Field(None, description="Description")
-    nutrition: Optional[NutritionResponse] = Field(
+    description: str | None = Field(None, description="Description")
+    nutrition: NutritionResponse | None = Field(
         None, description="Nutrition information"
     )
-    custom_nutrition: Optional[CustomNutritionResponse] = Field(
+    custom_nutrition: CustomNutritionResponse | None = Field(
         None, description="Custom nutrition per 100g for custom ingredients"
     )
-    fdc_id: Optional[int] = Field(None, description="USDA FDC ID if available")
+    fdc_id: int | None = Field(None, description="USDA FDC ID if available")
     is_custom: bool = Field(False, description="Whether this is a custom ingredient")
 
 
@@ -139,15 +222,16 @@ class SimpleMealResponse(BaseModel):
 
     meal_id: str = Field(..., description="Meal ID")
     status: MealStatusEnum = Field(..., description="Processing status")
-    dish_name: Optional[str] = Field(None, description="Identified dish name")
-    emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
-    meal_type: Optional[str] = Field(
+    dish_name: str | None = Field(None, description="Identified dish name")
+    emoji: str | None = Field(None, description="AI-assigned food emoji")
+    meal_type: str | None = Field(
         None, description="Meal type (breakfast, lunch, dinner, snack)"
     )
-    ready_at: Optional[datetime] = Field(None, description="When analysis completed")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
+    source: str | None = Field(None, description="Meal source")
+    ready_at: datetime | None = Field(None, description="When analysis completed")
+    error_message: str | None = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Creation timestamp")
-    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+    updated_at: datetime | None = Field(None, description="Last update timestamp")
 
     model_config = ConfigDict(json_encoders={datetime: _serialize_datetime_utc})
 
@@ -155,31 +239,40 @@ class SimpleMealResponse(BaseModel):
 class DetailedMealResponse(SimpleMealResponse):
     """Response DTO for detailed meal information with nutrition."""
 
-    food_items: List[FoodItemResponse] = Field(
+    food_items: list[FoodItemResponse] = Field(
         default_factory=list, description="Food items in the meal"
     )
-    image_url: Optional[str] = Field(None, description="Meal image URL")
-    total_calories: Optional[float] = Field(None, ge=0, description="Total calories")
-    total_weight_grams: Optional[float] = Field(None, gt=0, description="Total weight")
-    total_nutrition: Optional[MacrosResponse] = Field(None, description="Total macros")
-    translations: Optional[Dict[str, MealTranslationResponse]] = Field(
+    image_url: str | None = Field(None, description="Meal image URL")
+    total_calories: float | None = Field(None, ge=0, description="Total calories")
+    total_weight_grams: float | None = Field(None, gt=0, description="Total weight")
+    total_nutrition: MacrosResponse | None = Field(None, description="Total macros")
+    translations: dict[str, MealTranslationResponse] | None = Field(
         None, description="Translations keyed by language code"
     )
+    food_label_metadata: FoodLabelMetadataResponse | None = Field(
+        None, description="Nutrition Facts metadata for food-label scans"
+    )
+    value_insights: MealValueInsightsResponse | None = Field(
+        None, description="AI-generated meal and ingredient value insights"
+    )
+    translation_language: str | None = Field(
+        None, description="Language code applied to localized response fields"
+    )
     # Recipe details (populated for AI suggestions, null for scanned/manual meals)
-    description: Optional[str] = Field(None, description="Meal description")
-    instructions: Optional[List[dict]] = Field(
+    description: str | None = Field(None, description="Meal description")
+    instructions: list[dict] | None = Field(
         None, description="Structured recipe steps: [{instruction, duration_minutes}]"
     )
-    prep_time_min: Optional[int] = Field(None, description="Prep time in minutes")
-    cook_time_min: Optional[int] = Field(None, description="Cook time in minutes")
-    cuisine_type: Optional[str] = Field(None, description="Cuisine type")
-    origin_country: Optional[str] = Field(None, description="Country of origin")
+    prep_time_min: int | None = Field(None, description="Prep time in minutes")
+    cook_time_min: int | None = Field(None, description="Cook time in minutes")
+    cuisine_type: str | None = Field(None, description="Cuisine type")
+    origin_country: str | None = Field(None, description="Country of origin")
 
 
 class MealListResponse(BaseModel):
     """Response DTO for paginated meal list."""
 
-    meals: List[Union[SimpleMealResponse, DetailedMealResponse]] = Field(
+    meals: list[SimpleMealResponse | DetailedMealResponse] = Field(
         ..., description="List of meals"
     )
     total: int = Field(..., ge=0, description="Total number of meals")
@@ -194,7 +287,7 @@ class MealPhotoAnalysisResponse(BaseModel):
     meal_id: str = Field(..., description="ID of the analyzed meal")
     status: MealStatusEnum = Field(..., description="Analysis status")
     message: str = Field(..., description="Status message")
-    estimated_completion_seconds: Optional[int] = Field(
+    estimated_completion_seconds: int | None = Field(
         None, description="Estimated seconds until completion"
     )
 
@@ -202,7 +295,7 @@ class MealPhotoAnalysisResponse(BaseModel):
 class MealSearchResponse(BaseModel):
     """Response DTO for meal search results."""
 
-    results: List[SimpleMealResponse] = Field(..., description="Search results")
+    results: list[SimpleMealResponse] = Field(..., description="Search results")
     query: str = Field(..., description="Original search query")
     total_results: int = Field(..., ge=0, description="Total matching results")
 
@@ -228,5 +321,8 @@ class ManualMealCreationResponse(BaseModel):
     status: str = Field(..., description="Creation status")
     message: str = Field(..., description="Success message")
     created_at: datetime = Field(..., description="Creation timestamp")
+    meal_detail: DetailedMealResponse | None = Field(
+        None, description="Created meal detail for immediate client-side caching"
+    )
 
     model_config = ConfigDict(json_encoders={datetime: _serialize_datetime_utc})

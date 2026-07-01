@@ -1,8 +1,8 @@
 # Backend Codebase Summary
 
-**Generated:** June 22, 2026
+**Generated:** June 27, 2026
 **Status:** Production-ready snapshot of the live backend codebase
-**Runtime:** FastAPI 0.115+ on Python 3.11+ with async SQLAlchemy 2.0
+**Runtime:** FastAPI 0.136.3 on Python 3.13.2 with async SQLAlchemy 2.0
 
 ---
 
@@ -10,20 +10,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Source files | 620 Python files in `src/` |
-| Source LOC | ~52.6K LOC in `src/` |
-| Test files | 291 Python files in `tests/` |
+| Source files | 627 Python files in `src/` |
+| Source LOC | 53,972 LOC in `src/` |
+| Test files | 306 Python files in `tests/` |
 | Collected tests | 1,600+ collected tests |
-| API routers | 26 router registrations in `src/api/main.py` |
-| API endpoints | 83 endpoint decorators under `src/api/routes/` |
-| CQRS command files | 51 |
-| CQRS query files | 50 |
-| CQRS event files | 15 |
-| CQRS handler files | 87 |
-| Domain service files | 50 |
-| Port files | 26 |
-| Database model files | 47 |
-| ORM table declarations | 36 |
+| API router files | 28 route files under `src/api/routes/`; 26 contain endpoint decorators |
+| API endpoints | 85 endpoint decorators under `src/api/routes/` |
+| CQRS command files | 37 |
+| CQRS query files | 34 |
+| CQRS event files | 10 |
+| CQRS handler files | 75 |
+| Domain service files | 46 |
+| Port files | 25 |
+| Database model files | 39 |
+| ORM table declarations | 39 |
 
 ---
 
@@ -31,10 +31,10 @@
 
 | Layer | Files | LOC | Notes |
 |-------|-------|-----|-------|
-| API | 89 | ~10.4K | Routes, middleware, schemas, dependency wiring, and API mappers |
-| Application | 208 | ~11.0K | Commands, queries, handlers, and orchestration services |
-| Domain | 160 | ~15.5K | Entities, services, ports, policies, and bounded contexts |
-| Infrastructure | 154 | ~15.0K | Database, cache, adapters, observability, and service integrations |
+| API | 91 | 10,624 | Routes, middleware, schemas, dependency wiring, and API mappers |
+| Application | 207 | 11,192 | Commands, queries, handlers, and orchestration services |
+| Domain | 166 | 16,283 | Entities, services, ports, policies, and bounded contexts |
+| Infrastructure | 154 | 15,134 | Database, cache, adapters, observability, and service integrations |
 
 ---
 
@@ -54,7 +54,7 @@ The current HTTP surface includes:
 
 - Runtime DB access uses PostgreSQL/Neon via `src/infra/database/config_async.py` and `asyncpg`.
 - Redis is optional and used for cache-aside and AI-context caching, not as the source of truth.
-- Database migrations are Alembic-managed and run before app startup through the entrypoint/pre-deploy flow.
+- Database migrations live in `migrations/versions/` and are applied with standard Alembic commands.
 - The event bus is a singleton PyMediator registry wired from `src/api/dependencies/event_bus.py`.
 
 ---
@@ -63,17 +63,17 @@ The current HTTP surface includes:
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `src/api/routes/v1/` | 17 | 60+ REST endpoints |
-| `src/api/schemas/` | 34 | Pydantic DTOs |
-| `src/app/commands/` | 30 | Write operations |
-| `src/app/queries/` | 31 | Read operations |
-| `src/app/handlers/` | 51+ | CQRS handlers |
-| `src/domain/model/` | 44 | Domain entities (8 bounded contexts) |
-| `src/domain/services/` | 50+ | Domain services |
-| `src/infra/database/models/` | 13+ | Database tables |
-| `src/infra/repositories/` | 10+ | Data access |
-| `src/infra/services/` | 8+ | External services |
-| `tests/` | 92 | 681+ tests (70%+ coverage) |
+| `src/api/routes/v1/` | 25 | Versioned REST route modules |
+| `src/api/schemas/` | 35 | Pydantic DTOs |
+| `src/app/commands/` | 50 | Write-operation command packages |
+| `src/app/queries/` | 52 | Read-operation query packages |
+| `src/app/handlers/` | 86 | CQRS handler packages |
+| `src/domain/model/` | 63 | Domain entities and value objects |
+| `src/domain/services/` | 54 | Domain services and policies |
+| `src/infra/database/models/` | 48 | ORM model packages and table declarations |
+| `src/infra/repositories/` | 23 | Data access adapters |
+| `src/infra/services/` | 27 | Infrastructure services and AI providers |
+| `tests/` | 306 | Unit, architecture, migration, and explicit integration tests |
 
 ---
 
@@ -95,7 +95,7 @@ The current HTTP surface includes:
 
 - **FastAPI app:** `src/api/main.py`
 - **CLI**: `python -m src.api.main` or `uvicorn src.api.main:app --reload`
-- **Tests:** `pytest` or `pytest -m unit`
+- **Tests:** `pytest` for the default non-integration suite; explicit integration tests must override the default ignore/marker config
 - **Migrations:** `alembic upgrade head` or `alembic revision --autogenerate -m "..."`
 
 ---
@@ -108,7 +108,7 @@ The current HTTP surface includes:
 | MealCoreService | Meal lifecycle & state machine |
 | NutritionCalculationService | Nutrition aggregation from food items |
 | SuggestionOrchestrationService | Session-based meal suggestions (4h Redis TTL) |
-| MealGenerationService | Multi-model Gemini for meal generation |
+| MealGenerationService | OpenAI-first meal generation with configured Cloudflare fallback |
 | TranslationService | 7-language support (en, vi, es, fr, de, ja, zh) |
 | MealDiscoveryService | Image-based meal discovery |
 

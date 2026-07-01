@@ -5,64 +5,71 @@ Response DTOs for API endpoints.
 # Daily nutrition responses
 from .daily_nutrition_response import (
     DailyNutritionResponse,
+)
+from .daily_nutrition_response import (
     MacrosResponse as DailyMacrosResponse,
 )
 
 # Ingredient recognition responses
 from .ingredient_recognition_responses import (
-    IngredientRecognitionResponse,
     IngredientCategoryEnum,
+    IngredientRecognitionResponse,
 )
 
 # Ingredient responses
 # Macros responses
 # Meal responses
 from .meal_responses import (
-    SimpleMealResponse,
     DetailedMealResponse,
+    FoodItemResponse,
+    FoodLabelMetadataResponse,
+    FoodLabelServingSizeResponse,
+    MacrosResponse,
+    ManualMealCreationResponse,
     MealListResponse,
     MealPhotoAnalysisResponse,
     MealSearchResponse,
-    NutritionSummaryResponse,
-    MacrosResponse,
-    NutritionResponse,
-    FoodItemResponse,
-    ManualMealCreationResponse,
     MealStatusEnum,
+    MealValueInsightsStatusResponse,
+    NutritionResponse,
+    NutritionSummaryResponse,
+    SimpleMealResponse,
+)
+from .meal_suggestion_responses import (
+    MacrosSchema as MealSuggestionMacrosSchema,
 )
 
 # Meal suggestion responses
 from .meal_suggestion_responses import (
     MealSuggestionItem,
-    MacrosSchema as MealSuggestionMacrosSchema,
 )
 
 # Onboarding responses
 from .onboarding_responses import (
     OnboardingFieldResponse,
+    OnboardingResponse,
+    OnboardingResponseResponse,
     OnboardingSectionResponse,
     OnboardingSectionsResponse,
-    OnboardingResponseResponse,
-    OnboardingResponse,
 )
 
 # TDEE responses
 from .tdee_responses import (
-    TdeeCalculationResponse,
     BatchTdeeCalculationResponse,
-    TdeeComparisonResponse,
-    TdeeHistoryResponse,
-    TdeeErrorResponse,
     MacroTargetsResponse,
+    TdeeCalculationResponse,
+    TdeeComparisonResponse,
+    TdeeErrorResponse,
+    TdeeHistoryResponse,
 )
 
 # User responses
 from .user_responses import (
-    UserProfileResponse,
-    UserSyncResponse,
-    UserStatusResponse,
-    UserUpdateResponse,
     UserMetricsResponse,
+    UserProfileResponse,
+    UserStatusResponse,
+    UserSyncResponse,
+    UserUpdateResponse,
 )
 
 __all__ = [
@@ -76,7 +83,10 @@ __all__ = [
     "MacrosResponse",
     "NutritionResponse",
     "FoodItemResponse",
+    "FoodLabelMetadataResponse",
+    "FoodLabelServingSizeResponse",
     "ManualMealCreationResponse",
+    "MealValueInsightsStatusResponse",
     "MealStatusEnum",
     # TDEE
     "TdeeCalculationResponse",

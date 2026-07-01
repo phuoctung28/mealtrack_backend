@@ -6,11 +6,12 @@ Uses the core DeepLTextTranslationService internally for actual API calls.
 Checks the meal_translation table first; only calls DeepL when a fully-
 cached translation does not yet exist.
 """
+
 import asyncio
 import inspect
 import logging
 
-from src.domain.model.meal import Meal, MealTranslation
+from src.domain.model.meal import FoodItemTranslation, Meal, MealTranslation
 from src.domain.model.nutrition import FoodItem
 from src.domain.ports.meal_translation_repository_port import (
     MealTranslationRepositoryPort,
@@ -71,7 +72,8 @@ class DeepLMealTranslationService:
             if existing and existing.is_fully_cached():
                 logger.debug(
                     "Translation cache hit: meal=%s lang=%s",
-                    meal.meal_id, target_language
+                    meal.meal_id,
+                    target_language,
                 )
                 return existing
 
@@ -82,7 +84,9 @@ class DeepLMealTranslationService:
                     if isinstance(step, dict):
                         normalised_steps.append(step)
                     elif isinstance(step, str):
-                        normalised_steps.append({"instruction": step, "duration_minutes": None})
+                        normalised_steps.append(
+                            {"instruction": step, "duration_minutes": None}
+                        )
 
             ingredient_names = [item.name for item in food_items if item.name]
             instruction_texts = [s.get("instruction", "") for s in normalised_steps]
@@ -103,10 +107,20 @@ class DeepLMealTranslationService:
             translated_dish_name = translated[0]
 
             n = len(ingredient_names)
-            translated_ingredients = translated[1:1 + n]
+            translated_ingredients = translated[1 : 1 + n]
+            translated_food_items = [
+                FoodItemTranslation(
+                    food_item_id=str(item.id),
+                    name=translated_name,
+                )
+                for item, translated_name in zip(
+                    food_items, translated_ingredients, strict=False
+                )
+                if item.name
+            ]
 
             m = len(instruction_texts)
-            translated_instruction_texts = translated[1 + n:1 + n + m]
+            translated_instruction_texts = translated[1 + n : 1 + n + m]
 
             translated_instruction_list: list | None = None
             if normalised_steps:
@@ -125,7 +139,7 @@ class DeepLMealTranslationService:
                 meal_id=meal.meal_id,
                 language=target_language,
                 dish_name=translated_dish_name,
-                food_items=[],  # Ingredients stored in meal_ingredients, not child table
+                food_items=translated_food_items,
                 meal_instruction=translated_instruction_list,
                 meal_ingredients=translated_ingredients,
                 translated_at=utc_now(),
@@ -134,14 +148,18 @@ class DeepLMealTranslationService:
             saved = await self._save(translation)
             logger.info(
                 "DeepL translation saved: meal=%s lang=%s dish='%s'",
-                meal.meal_id, target_language, translated_dish_name
+                meal.meal_id,
+                target_language,
+                translated_dish_name,
             )
             return saved
 
         except Exception as exc:
             logger.warning(
                 "DeepL translation failed for meal=%s lang=%s: %s",
-                meal.meal_id, target_language, exc
+                meal.meal_id,
+                target_language,
+                exc,
             )
             return None
 

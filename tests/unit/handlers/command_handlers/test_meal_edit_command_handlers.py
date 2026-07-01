@@ -4,14 +4,19 @@ Unit tests for meal edit command handlers.
 
 import pytest
 
-from src.api.exceptions import ValidationException, ResourceNotFoundException
+from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.meal import (
-    EditMealCommand,
     AddCustomIngredientCommand,
-    FoodItemChange,
     CustomNutritionData,
+    EditMealCommand,
+    FoodItemChange,
 )
 from src.app.events.meal import MealEditedEvent
+from src.app.handlers.command_handlers.edit_meal_command_handler import (
+    EditMealCommandHandler,
+)
+from src.domain.model.meal import MealTranslation
+from src.infra.database.models import MealORM
 
 
 @pytest.mark.unit
@@ -197,6 +202,27 @@ class TestEditMealCommandHandler:
         assert "Added New Ingredient" in summary
 
     @pytest.mark.asyncio
+    async def test_edit_meal_allows_clearing_dish_name(
+        self, event_bus, sample_meal_with_nutrition, test_session
+    ):
+        """Test metadata edit can clear meal name."""
+        meal = sample_meal_with_nutrition
+
+        command = EditMealCommand(
+            meal_id=meal.meal_id,
+            dish_name="",
+            food_item_changes=[],
+        )
+
+        result = await event_bus.send(command)
+
+        assert result["success"] is True
+        saved_meal = (
+            test_session.query(MealORM).filter(MealORM.meal_id == meal.meal_id).one()
+        )
+        assert saved_meal.dish_name == ""
+
+    @pytest.mark.asyncio
     async def test_edit_meal_unauthorized_user(
         self, event_bus, sample_meal_with_nutrition
     ):
@@ -279,6 +305,35 @@ class TestEditMealCommandHandler:
         with pytest.raises(ResourceNotFoundException, match="Meal not found"):
             await event_bus.send(command)
 
+    def test_realigns_legacy_translation_list_after_remove(
+        self, sample_meal_with_nutrition
+    ):
+        """Removing an item should not drop every translated ingredient to English."""
+        meal = sample_meal_with_nutrition
+        original_items = meal.nutrition.food_items
+        translated_names = [
+            f"vi ingredient {index}" for index, _ in enumerate(original_items)
+        ]
+        meal.translations = {
+            "vi": MealTranslation(
+                meal_id=meal.meal_id,
+                language="vi",
+                dish_name="Bữa ăn",
+                food_items=[],
+                meal_ingredients=translated_names,
+            )
+        }
+        updated_items = original_items[1:]
+        handler = EditMealCommandHandler(uow=None)
+
+        handler._realign_translations_after_food_item_changes(meal, updated_items)
+
+        translation = meal.translations["vi"]
+        assert translation.meal_ingredients == translated_names[1:]
+        assert len(translation.food_items) == len(updated_items)
+        assert translation.food_items[0].food_item_id == str(original_items[1].id)
+        assert translation.food_items[0].name == translated_names[1]
+
 
 @pytest.mark.unit
 class TestAddCustomIngredientCommandHandler:
@@ -291,7 +346,6 @@ class TestAddCustomIngredientCommandHandler:
         """Test successful custom ingredient addition."""
         # Arrange
         meal = sample_meal_with_nutrition
-        original_calories = meal.nutrition.calories
 
         command = AddCustomIngredientCommand(
             meal_id=meal.meal_id,

@@ -24,3 +24,4 @@ class UploadMealImageImmediatelyCommand(Command):
     target_date: Optional[date] = None
     user_description: Optional[str] = None  # User-provided context for better accuracy
     language: str = "en"  # ISO 639-1 language code from Accept-Language header
+    scan_mode: str = "scanner"

@@ -160,6 +160,19 @@ class IngredientIdentificationStrategy(MealAnalysisStrategy):
         return "IngredientIdentification"
 
 
+class FoodLabelAnalysisStrategy(MealAnalysisStrategy):
+    """Strategy for extracting packaged food Nutrition Facts labels."""
+
+    def get_analysis_prompt(self) -> str:
+        return SystemPrompts.FOOD_LABEL_ANALYSIS
+
+    def get_user_message(self) -> str:
+        return "Extract the visible Nutrition Facts label for one serving:"
+
+    def get_strategy_name(self) -> str:
+        return "FoodLabelAnalysis"
+
+
 class UserContextAwareAnalysisStrategy(MealAnalysisStrategy):
     """
     Analysis strategy that incorporates user-provided context.
@@ -225,6 +238,11 @@ class AnalysisStrategyFactory:
     def create_ingredient_identification_strategy() -> MealAnalysisStrategy:
         """Create an ingredient identification strategy for photo recognition."""
         return IngredientIdentificationStrategy()
+
+    @staticmethod
+    def create_food_label_strategy() -> MealAnalysisStrategy:
+        """Create a packaged food-label extraction strategy."""
+        return FoodLabelAnalysisStrategy()
 
     @staticmethod
     def create_user_context_strategy(user_description: str) -> MealAnalysisStrategy:

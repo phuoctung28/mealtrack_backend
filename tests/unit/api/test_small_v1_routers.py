@@ -1,4 +1,5 @@
 """Thin v1 routers: foods, activities, cheat_days, ingredients — mocked buses / auth."""
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -6,7 +7,7 @@ from fastapi.testclient import TestClient
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exception_handlers import register_exception_handlers
-from src.api.exceptions import ValidationException
+from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.routes.v1 import activities as activities_mod
 from src.api.routes.v1 import cheat_days as cheat_days_mod
 from src.api.routes.v1 import foods as foods_mod
@@ -16,6 +17,7 @@ from src.api.routes.v1 import ingredients as ingredients_mod
 def _make_app(*routers):
     """Create a test FastAPI app with global exception handlers registered."""
     app = FastAPI()
+    app.add_middleware(AcceptLanguageMiddleware)
     register_exception_handlers(app)
     for router in routers:
         app.include_router(router)
@@ -46,6 +48,21 @@ def test_foods_search(foods_app, monkeypatch):
     assert r.json()["query"] == "rice"
 
 
+def test_foods_autocomplete_uses_search_query(foods_app, monkeypatch):
+    bus = _Bus({"query": "ric", "results": [], "total": 0})
+    monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: bus)
+    r = TestClient(foods_app).get(
+        "/v1/foods/autocomplete?q=ric&limit=5",
+        headers={"Accept-Language": "vi"},
+    )
+    assert r.status_code == 200
+    assert r.json()["query"] == "ric"
+    assert bus.sent[0].query == "ric"
+    assert bus.sent[0].limit == 5
+    assert bus.sent[0].language == "vi"
+    assert bus.sent[0].autocomplete is True
+
+
 def test_foods_search_500(foods_app, monkeypatch):
     class _Bad:
         async def send(self, msg):
@@ -67,7 +84,7 @@ def test_foods_details(foods_app, monkeypatch):
 def test_foods_barcode_found(foods_app, monkeypatch):
     bus = _Bus(
         {
-            "barcode": "123",
+            "barcode": "036000291452",
             "name": "Product",
             "brand": None,
             "protein_100g": 1.0,
@@ -81,7 +98,7 @@ def test_foods_barcode_found(foods_app, monkeypatch):
     )
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: bus)
     foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
-    r = TestClient(foods_app).get("/v1/foods/barcode/123")
+    r = TestClient(foods_app).get("/v1/foods/barcode/036000291452")
     assert r.status_code == 200
 
 
@@ -89,8 +106,19 @@ def test_foods_barcode_404(foods_app, monkeypatch):
     bus = _Bus(None)
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: bus)
     foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
-    r = TestClient(foods_app).get("/v1/foods/barcode/unknown")
+    r = TestClient(foods_app).get("/v1/foods/barcode/036000291452")
     assert r.status_code == 404
+
+
+def test_foods_barcode_invalid_returns_400_before_event_bus(foods_app, monkeypatch):
+    bus = _Bus(None)
+    monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: bus)
+    foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
+
+    r = TestClient(foods_app).get("/v1/foods/barcode/unknown")
+
+    assert r.status_code == 400
+    assert bus.sent == []
 
 
 @pytest.fixture
@@ -218,7 +246,9 @@ def test_cheat_days_handle_exception(cheat_app):
             raise RuntimeError("db")
 
     cheat_app.dependency_overrides[get_configured_event_bus] = lambda: _Bad()
-    r = TestClient(cheat_app, raise_server_exceptions=False).post("/v1/cheat-days?date=2026-06-15")
+    r = TestClient(cheat_app, raise_server_exceptions=False).post(
+        "/v1/cheat-days?date=2026-06-15"
+    )
     assert r.status_code == 500
 
 
@@ -229,5 +259,7 @@ def test_foods_barcode_generic_exception(foods_app, monkeypatch):
 
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: _Bad())
     foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
-    r = TestClient(foods_app, raise_server_exceptions=False).get("/v1/foods/barcode/xyz")
+    r = TestClient(foods_app, raise_server_exceptions=False).get(
+        "/v1/foods/barcode/036000291452"
+    )
     assert r.status_code == 500

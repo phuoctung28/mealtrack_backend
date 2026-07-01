@@ -11,6 +11,7 @@ import httpx
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.domain.constants import MealDefaults
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
 from src.domain.parsers.vision_response_parser import (
@@ -116,7 +117,11 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             )
 
             # Vision analysis via bytes path (never sends URL to the AI provider)
-            if command.user_description:
+            if command.scan_mode == "food_label":
+                vision_result = await self.vision_service.analyze_food_label(
+                    image_bytes
+                )
+            elif command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,
                 )
@@ -131,6 +136,54 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 vision_result = await self.vision_service.analyze(image_bytes)
 
             vision_elapsed = time.time() - start
+
+            if command.scan_mode == "food_label":
+                nutrition = self.gpt_parser.parse_food_label_to_nutrition(vision_result)
+                label_metadata = self.gpt_parser.parse_food_label_metadata(
+                    vision_result
+                )
+                if not label_metadata.get("is_food_label", True):
+                    raise ValueError(
+                        "Nutrition Facts label could not be read. "
+                        "Please retake the label photo and try again."
+                    )
+
+                meal = Meal(
+                    meal_id=str(uuid4()),
+                    user_id=command.user_id,
+                    status=MealStatus.READY,
+                    created_at=meal_datetime,
+                    meal_type=meal_type,
+                    image=MealImage(
+                        image_id=image_id,
+                        format="jpeg",
+                        size_bytes=len(raw_bytes),
+                        url=command.image_url,
+                    ),
+                    source="food_label",
+                    dish_name=MealDefaults.UNNAMED_FOOD_NAME,
+                    ready_at=utc_now(),
+                    raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
+                    nutrition=nutrition,
+                )
+
+                async with self.uow as uow:
+                    saved_meal = await uow.meals.save(meal)
+                    await uow.commit()
+
+                logger.info(
+                    "[SCAN-BY-URL-FOOD-LABEL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",
+                    saved_meal.meal_id,
+                    vision_elapsed,
+                    time.time() - start,
+                )
+
+                if self.cache_invalidation:
+                    await self.cache_invalidation.after_meal_write(
+                        command.user_id, meal_date
+                    )
+
+                return saved_meal
 
             if not self.gpt_parser.parse_is_food(vision_result):
                 self._capture_rejected_scan(

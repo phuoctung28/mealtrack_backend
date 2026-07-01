@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
-**Last Updated:** June 18, 2026
-**Services:** Firebase, Cloudinary, Google Gemini, OpenAI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Cloudflare Workers AI, Google Imagen, Pollinations, nutree-affiliate
+**Last Updated:** June 27, 2026
+**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
@@ -28,7 +28,7 @@
 - Notifications rescheduled automatically on timezone changes — triggered from `UpdateTimezoneCommandHandler` and `RegisterFcmTokenCommandHandler`
 - Cron push entrypoint (`src/cron/push.py`) owns all push scheduling: precompute notification rows, schedule trial-expiry rows, claim due rows, batch-send, mark sent, clean expired rows
 - Cron dispatch helper (`CronNotificationDispatchService`) uses database row claiming (`pending` → `processing`) plus stale-processing recovery instead of a background loop or leader lock
-- APNs diagnostics surfaced at `/health/notifications` via `apns_diagnostics()` to verify `interruption-level` placement
+- APNs diagnostics surfaced at `/v1/health/notifications` via `apns_diagnostics()` to verify `interruption-level` placement
 
 ---
 
@@ -46,33 +46,25 @@
 
 ---
 
-## Google Gemini
+## AI Provider Routing
 
-**Purpose:** AI Meal Analysis + Content Generation (primary AI provider)
-
-### Multi-Model Strategy (Rate Distribution)
-
-| Purpose | Model | Env Key |
-|---------|-------|---------|
-| General / Recipe / Barcode | `gemini-2.5-flash` | `GEMINI_MODEL` |
-| Meal / ingredient image scan | `gemini-3.1-flash-lite` → `gemini-3.5-flash` → `gemini-2.5-flash` | code fallback chain |
-| Meal names | `gemini-2.5-flash-lite` | `GEMINI_MODEL_NAMES` |
-| Recipe generation | `gemini-2.5-flash-lite` | `GEMINI_MODEL_RECIPE` |
+**Purpose:** Text generation, structured output, and vision analysis.
 
 ### Provider Fallback Architecture
 
 `AIModelManager` orchestrates providers through `AIProviderPort`. Each purpose has a fallback chain; models are tried in order until one succeeds. The circuit breaker opens after 5 failures within 60s and allows retry after 30s.
 
-**Default text chain (e.g. RECIPE) when CF text enabled:**
+**Default model:** `gpt-5.4-mini-2026-03-17` for text and vision when `OPENAI_API_KEY` is configured.
+
+**Text chain when Cloudflare text routing is configured:**
 ```
 @cf/meta/llama-3.3-70b-instruct-fp8-fast  →  gpt-5.4-mini-2026-03-17
 ```
 
-**Vision chains (OpenAI-first even when CF vision is enabled):**
+**Vision chain when Cloudflare vision fallback is configured:**
 ```
 gpt-5.4-mini-2026-03-17  →  @cf/google/gemma-4-26b-a4b-it
 ```
-When CF vision is disabled, vision chains stay OpenAI-only.
 
 **Text purposes routed through Cloudflare by default:**
 ```
@@ -95,7 +87,7 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 | Daily multi-meal | 3000 |
 | Single meal | 1500 |
 
-**Config:** `GOOGLE_API_KEY`
+**Config:** `OPENAI_API_KEY`, `OPENAI_TEXT_MODEL`, `OPENAI_VISION_MODEL`, `CLOUDFLARE_WORKERS_AI_*`
 
 ---
 
@@ -113,9 +105,33 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 
 ---
 
+## Barcode Food Data Cascade
+
+**Purpose:** Resolve packaged-food barcode scans while keeping uncertain web/LLM results out of the canonical food catalog.
+
+Source order:
+1. `food_reference` cache using canonical GTIN aliases.
+2. FatSecret exact barcode lookup.
+3. OpenFoodFacts exact barcode lookup.
+4. USDA FoodData Central Branded exact `gtinUpc` lookup.
+5. Brave Search + AI as an identity/estimate hint only.
+6. AI estimate as last resort.
+
+Reliability rules:
+- GTIN validation happens before provider calls; invalid values return 400.
+- Exact FatSecret/OpenFoodFacts/USDA hits are cacheable verified external data.
+- Brave-only nutrition and name-only provider matches are returned as editable estimates and are not cached.
+- Barcode logs and metrics must not include full raw barcode values; use source, reason, and redacted correlation only.
+
+Config:
+- `USDA_FDC_API_KEY` enables USDA FoodData Central branded-food exact-match fallback.
+- `BRAVE_SEARCH_API_KEY` enables Brave Search estimate fallback.
+
+---
+
 ## Cloudflare Workers AI (Text + Vision)
 
-**Purpose:** Primary AI provider for text tasks. Optional fallback for image scanning after OpenAI.
+**Purpose:** Optional routed provider for configured text purposes and optional fallback for image scanning after OpenAI.
 
 **Two independent routing paths:**
 - **Text path:** LangChain adapter (`ChatCloudflareWorkersAI`) for text-generation purposes.
@@ -127,8 +143,8 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 - Vision: Posts `messages[].content[].image_url` (base64 data URL) directly to the Workers AI REST endpoint. Response is normalized from `result.response` or `result.choices[0].message.content`.
 - Cloudflare model IDs stored raw (`@cf/...`) in fallback chains; `AIModelManager` routes to the CF provider via an explicit ownership map.
 - If `CLOUDFLARE_AI_GATEWAY_ID` is set, LangChain passes it as the `ai_gateway` field to Workers AI.
-- Returns the same `dict` shape as `GeminiProvider` — handlers are provider-agnostic.
-- Circuit breaker trips on 429/5xx/timeout, same as Gemini.
+- Returns the same normalized `dict` shape as other AI providers — handlers are provider-agnostic.
+- Circuit breaker trips on 429/5xx/timeout.
 - Vision model: `@cf/google/gemma-4-26b-a4b-it` (Vision=Yes, messages/image_url contract). Deprecated model `@cf/unum/uform-gen2-qwen-500m` must not be used.
 
 ### Env Vars
@@ -146,7 +162,6 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 | `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision as image-analysis fallback after OpenAI |
 | `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
 | `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Image purposes that include CF vision as fallback |
-| `CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED` | `false` | Route Gemini vision calls through CF AI Gateway (requires `CLOUDFLARE_AI_GATEWAY_ID` + `CLOUDFLARE_ACCOUNT_ID`) |
 
 ### Production Rollout (Vision)
 
@@ -181,7 +196,7 @@ CLOUDFLARE_WORKERS_AI_ENABLED=false
 
 ### Cloudflare AI Gateway
 
-Vision calls for both Workers AI and Gemini route through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) when `CLOUDFLARE_AI_GATEWAY_ID` is set (Workers AI) or `CLOUDFLARE_AI_GATEWAY_GEMINI_VISION_ENABLED=true` (Gemini).
+Workers AI calls route through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) when `CLOUDFLARE_AI_GATEWAY_ID` is set.
 
 Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 
@@ -191,7 +206,20 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 
 **Workers AI gateway routing** (Pattern B): the existing REST URL (`api.cloudflare.com`) is unchanged — CF routes internally when `cf-aig-gateway-id` header is present. No URL changes needed.
 
-**Gemini gateway routing:** uses `google-genai` SDK (`genai.Client` with `HttpOptions(base_url=...)`) — NOT LangChain. Gemini text calls with `cached_content` bypass the gateway (Google-side cache objects break when proxied).
+---
+
+## Food, Translation, Image, and Email Providers
+
+| Service | Purpose | Config |
+|---------|---------|--------|
+| DeepL | Meal and suggestion translation | `DEEPL_API_KEY` |
+| USDA FoodData Central | Manual meal food search/details | `USDA_FDC_API_KEY` |
+| FatSecret | Barcode and ingredient nutrition fallback | `FATSECRET_CLIENT_ID`, `FATSECRET_CLIENT_SECRET` |
+| OpenFoodFacts | Barcode product lookup | none |
+| Brave Search | Barcode nutrition and image validation fallback | `BRAVE_SEARCH_API_KEY` |
+| Pexels / Unsplash | Meal discovery food photos | `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY` |
+| Pollinations / Google Imagen | Generated image fallback adapters | provider-specific adapter config |
+| Resend | Lifecycle and webhook-triggered email | `RESEND_API_KEY`, `EMAIL_ENABLED`, `EMAIL_FROM` |
 
 ---
 
@@ -252,7 +280,7 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 |------|--------------|
 | Food search/details | Cache; stable-ish data with high reuse |
 | Nutrition lookup | Cache; expensive lookup chain with bounded stale window |
-| Gemini explicit cache names | Cache; cost optimization only, fall back to uncached calls |
+| AI provider cache names | Cache; cost optimization only, fall back to uncached calls |
 | Daily/weekly nutrition read models | Conditional cache; short TTL plus write/event invalidation |
 | Auth UID mapping | Process-local TTL cache, not Redis |
 | Notification precompute and FCM token ownership | Do not cache; database is source of truth |
@@ -264,7 +292,7 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 
 **Purpose:** Error tracking, Sentry Logs, operational metrics, performance profiling, crash reporting
 
-- Sentry is an infrastructure connector only. Runtime code calls `src.infra.monitoring` facade functions; direct `sentry_sdk` imports belong only in `src/infra/monitoring/sentry.py`.
+- Sentry is an infrastructure connector only. Runtime code calls `src.observability` facade functions; direct `sentry_sdk` imports belong only in `src/infra/monitoring/sentry.py`.
 - FastAPI, Starlette, SQLAlchemy, and logging integrations are initialized before the `FastAPI` app is created.
 - Sentry Logs are emitted only through the provider-neutral `log_event(...)` facade when `SENTRY_ENABLE_LOGS=true`.
 - Operational metrics are emitted only through provider-neutral metric facade calls when `SENTRY_ENABLE_METRICS=true`.
@@ -367,15 +395,13 @@ GET /v1/health/notifications   # FCM health
 |---------|--------------|----------|
 | Firebase Auth | Fail fast (401) | Requests rejected |
 | PostgreSQL | Fail fast (503) | Requests rejected |
-| Gemini | Circuit breaker → try fallback | Falls through to next model in chain |
-| Workers AI | Circuit breaker (429/5xx/timeout) | Trips same circuit breaker; chain exhausted → AIUnavailableError |
+| AI provider stack | Circuit breaker → try fallback | Falls through to next model in chain; exhausted chain raises AIUnavailableError |
+| Workers AI | Circuit breaker (429/5xx/timeout) | Optional routed provider; disable with env flags |
 | Cloudinary | Degrade (fallback URL) | Continue with best-effort image |
-| RevenueCat | Degrade (assume premium from cache) | Continue with last-known status |
+| RevenueCat | Webhook/cache degradation | Continue with last-known subscription state where available; premium route gates are not yet enforced |
 | PostHog | Degrade (log warning) | Continue without analytics |
 | Redis | Degrade (bypass cache) | Continue without caching |
 | Sentry | Degrade (log locally) | Continue with local logging |
-
----
 
 ---
 
