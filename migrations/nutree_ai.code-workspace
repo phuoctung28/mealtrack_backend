@@ -4,12 +4,6 @@
             "path": ".."
         },
         {
-            "path": "../../nutree-affiliate"
-        },
-        {
-            "path": "../../plans"
-        },
-        {
             "path": "../../nutree/nutree_ai"
         }
     ]

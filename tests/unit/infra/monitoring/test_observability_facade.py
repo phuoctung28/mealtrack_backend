@@ -120,6 +120,30 @@ def test_cache_hit_is_safe_observability_attribute_and_tag():
     assert filter_safe_tags(attributes)["cache_hit"] == "true"
 
 
+def test_meal_scan_rejection_image_context_is_safe_but_not_tagged():
+    attributes = {
+        "component": "meal_scan",
+        "operation": "scan_by_url",
+        "ai_purpose": "meal_scan",
+        "image_id": "img-123",
+        "image_url": "https://res.cloudinary.com/test/image/upload/v1/mealtrack/img-123.jpg",
+        "rejection_reason": "parser_not_food",
+        "raw_image_bytes": b"do not export",
+    }
+
+    safe_attributes = filter_safe_attributes(attributes)
+
+    assert safe_attributes == {
+        "component": "meal_scan",
+        "operation": "scan_by_url",
+        "ai_purpose": "meal_scan",
+        "image_id": "img-123",
+        "image_url": "https://res.cloudinary.com/test/image/upload/v1/mealtrack/img-123.jpg",
+        "rejection_reason": "parser_not_food",
+    }
+    assert "image_url" not in filter_safe_tags(attributes)
+
+
 def test_noop_connector_methods_do_not_raise():
     from src.infra.monitoring.connectors import NoopObservabilityConnector
 
