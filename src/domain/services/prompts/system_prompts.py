@@ -167,7 +167,7 @@ RESPONSE FORMAT — return exactly this structure:
     {
       "name": "Food name in English",
       "quantity_g": 150.0,
-      "macros": {"protein": 46.0, "carbs": 0.0, "fat": 5.5},
+      "macros": {"protein_g": 46.0, "carbs_g": 0.0, "fat_g": 5.5, "fiber_g": 0.0, "sugar_g": 0.0},
       "confidence": 0.92
     }
   ],
@@ -175,26 +175,13 @@ RESPONSE FORMAT — return exactly this structure:
   "beverage_metadata": null
 }
 
-PACKAGED BEVERAGE DETECTION:
-- If the image shows a packaged drink (can, bottle, carton, cup with brand logo/label), set `is_food=false`, populate `beverage_metadata`, and leave `foods` EMPTY.
-- Brand: read from front label, max 100 characters. Examples: Coca-Cola, Aquarius, Pocari Sweat, Pepsi, Red Bull.
-- Volume: read from label when visible. When not visible, use heuristics: standard can=330ml, slim/short can=250ml, small PET bottle=500ml, large PET bottle=1500ml.
-- Nutrition panel: extract `kcal_per_100ml` and `sugar_per_100ml` from the visible panel.
-  When panel is not visible, use these brand defaults and set `label_source="estimate"`:
-    Coca-Cola Original → 42 kcal / 10.6g sugar per 100ml
-    Aquarius Lemon → 19 kcal / 4.6g sugar per 100ml
-    Pocari Sweat → 25 kcal / 6.2g sugar per 100ml
-    Plain water / sparkling water → 0 kcal / 0g sugar per 100ml
-  When panel is visible, set `label_source="nutrition_panel"`.
-  When brand is readable but panel is not, set `label_source="estimate"`.
-  When only front label is readable, set `label_source="front_label"`.
-- Container type: "can", "bottle", "cup", "carton", or "unknown".
-- Set `emoji="🥤"` for all packaged beverage responses.
-
 FOOD GUARD:
-- If the image contains no edible food AND is not a packaged beverage, return:
+- Treat visible edible or drinkable items intended for intake as food, including meals, snacks, desserts, pastries, caloric drinks, smoothies, milk tea, juice, soda, and packaged drinks.
+- Treat visually plausible edible items as food even when they are bakery pastries, desserts, donuts, display-case items, partially cropped, behind glass, or decorative-looking. If uncertain but likely edible or drinkable, set `is_food=true` with lower confidence instead of rejecting.
+- If the image contains no visible edible or drinkable item intended for intake, return:
   {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "confidence": 0.95, "beverage_metadata": null}
 - Do not invent food, ingredients, portions, or nutrition for non-food images.
+- For meal scan, keep `beverage_metadata` null. Drinks should be represented as normal `foods` entries.
 
 IDENTIFICATION RULES:
 - Identify every visible distinct food component in the image.
@@ -221,12 +208,13 @@ NUTRITION CALCULATION:
 - Macros must be internally plausible for the food and portion shown.
 - All macro values in grams. Confidence between 0.0 (guessing) and 1.0 (clear image, known food).
 - Fat must be ≥0.5g for any cooked or dressed food. Pure raw vegetables: fat may be 0.
+- For drinks, estimate the visible consumed volume in grams/ml and report drink macros as a normal food item.
 
 EMOJI SELECTION — one emoji for the overall dish:
   🍜 noodle soup | 🍝 dry pasta/noodles | 🍚 rice dish | 🍛 curry
   🍲 stew/hotpot | 🥗 salad/bowl | 🍖 grilled meat | 🥘 braised
   🥟 dumplings/rolls | 🥪 sandwich | 🍳 eggs | 🥣 porridge | 🍗 fried chicken
-  🥤 packaged beverage
+  🍩 pastry/dessert | 🥤 packaged beverage
 
 ---
 
@@ -236,70 +224,25 @@ WORKED EXAMPLE 1 — Chicken rice bowl image:
   "dish_name": "Grilled Chicken Rice Bowl",
   "emoji": "🍚",
   "foods": [
-    {"name": "cooked white rice", "quantity_g": 180.0, "macros": {"protein": 4.3, "carbs": 51.0, "fat": 0.4}, "confidence": 0.93},
-    {"name": "grilled chicken breast", "quantity_g": 150.0, "macros": {"protein": 46.5, "carbs": 0.0, "fat": 5.4}, "confidence": 0.95},
-    {"name": "steamed broccoli", "quantity_g": 80.0, "macros": {"protein": 2.8, "carbs": 5.6, "fat": 0.3}, "confidence": 0.9},
-    {"name": "soy sauce", "quantity_g": 10.0, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}, "confidence": 0.74}
+    {"name": "cooked white rice", "quantity_g": 180.0, "macros": {"protein_g": 4.3, "carbs_g": 51.0, "fat_g": 0.4, "fiber_g": 0.6, "sugar_g": 0.1}, "confidence": 0.93},
+    {"name": "grilled chicken breast", "quantity_g": 150.0, "macros": {"protein_g": 46.5, "carbs_g": 0.0, "fat_g": 5.4, "fiber_g": 0.0, "sugar_g": 0.0}, "confidence": 0.95},
+    {"name": "steamed broccoli", "quantity_g": 80.0, "macros": {"protein_g": 2.8, "carbs_g": 5.6, "fat_g": 0.3, "fiber_g": 2.6, "sugar_g": 1.4}, "confidence": 0.9},
+    {"name": "soy sauce", "quantity_g": 10.0, "macros": {"protein_g": 1.0, "carbs_g": 0.8, "fat_g": 0.0, "fiber_g": 0.0, "sugar_g": 0.1}, "confidence": 0.74}
   ],
   "confidence": 0.88,
   "beverage_metadata": null
 }
 
-WORKED EXAMPLE 2 — Coca-Cola 330ml can with visible nutrition panel:
+WORKED EXAMPLE 2 — Coca-Cola 330ml can:
 {
-  "is_food": false,
+  "is_food": true,
   "dish_name": "Coca-Cola 330ml Can",
   "emoji": "🥤",
-  "foods": [],
-  "confidence": 0.95,
-  "beverage_metadata": {
-    "is_packaged_beverage": true,
-    "brand": "Coca-Cola",
-    "product_name": "Coca-Cola Original",
-    "container_type": "can",
-    "volume_ml": 330,
-    "sugar_per_100ml": 10.6,
-    "kcal_per_100ml": 42.0,
-    "label_source": "nutrition_panel"
-  }
-}
-
-WORKED EXAMPLE 3 — Aquarius 500ml PET bottle with visible nutrition panel:
-{
-  "is_food": false,
-  "dish_name": "Aquarius Lemon 500ml",
-  "emoji": "🥤",
-  "foods": [],
-  "confidence": 0.92,
-  "beverage_metadata": {
-    "is_packaged_beverage": true,
-    "brand": "Aquarius",
-    "product_name": "Aquarius Lemon",
-    "container_type": "bottle",
-    "volume_ml": 500,
-    "sugar_per_100ml": 4.6,
-    "kcal_per_100ml": 19.0,
-    "label_source": "nutrition_panel"
-  }
-}
-
-WORKED EXAMPLE 4 — Pocari Sweat bottle where nutrition panel is hidden:
-{
-  "is_food": false,
-  "dish_name": "Pocari Sweat",
-  "emoji": "🥤",
-  "foods": [],
-  "confidence": 0.88,
-  "beverage_metadata": {
-    "is_packaged_beverage": true,
-    "brand": "Pocari Sweat",
-    "product_name": "Pocari Sweat",
-    "container_type": "bottle",
-    "volume_ml": 500,
-    "sugar_per_100ml": 6.2,
-    "kcal_per_100ml": 25.0,
-    "label_source": "estimate"
-  }
+  "foods": [
+    {"name": "Coca-Cola", "quantity_g": 330.0, "macros": {"protein_g": 0.0, "carbs_g": 35.0, "fat_g": 0.0, "fiber_g": 0.0, "sugar_g": 35.0}, "confidence": 0.9}
+  ],
+  "confidence": 0.9,
+  "beverage_metadata": null
 }
 
 Return ONLY valid JSON matching the structure above."""
@@ -352,7 +295,7 @@ Return ONLY valid JSON matching the structure above."""
   {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
-    PROMPT_VERSION = "2026-06-16"
+    PROMPT_VERSION = "2026-06-27"
 
     BARCODE_AI_ESTIMATE = (
         "You are a nutrition expert. This barcode was scanned in a food tracking app. "

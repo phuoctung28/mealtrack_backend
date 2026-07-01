@@ -169,13 +169,12 @@ class VisionNutritionResponse(BaseModel):
 
     @model_validator(mode="after")
     def require_foods_for_food_images(self) -> "VisionNutritionResponse":
-        if (
-            self.is_food
-            and not self.foods
-            and not (
-                self.beverage_metadata and self.beverage_metadata.is_packaged_beverage
+        if self.beverage_metadata is not None:
+            raise ValueError(
+                "beverage_metadata is not accepted for meal scan output; "
+                "drinks must be represented as normal foods"
             )
-        ):
+        if self.is_food and not self.foods:
             raise ValueError(
                 "foods must contain at least one item when is_food is true"
             )

@@ -1,7 +1,6 @@
-"""Unit tests for scan-by-url beverage routing."""
+"""Unit tests for scan-by-url beverage meal behavior."""
 
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID
 
 import pytest
 
@@ -9,8 +8,10 @@ from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.handlers.command_handlers.scan_by_url_command_handler import (
     ScanByUrlCommandHandler,
 )
+from src.domain.parsers.vision_response_parser import VisionResponseParser
 
 _IMAGE_URL = "https://res.cloudinary.com/test/image/upload/v1/mealtrack/drink.jpg"
+_PUBLIC_ID = "mealtrack/1325c7ca-e012-4df3-b0b4-55bfaeb55eb0"
 _USER_ID = "00000000-0000-0000-0000-000000000001"
 
 
@@ -21,11 +22,18 @@ def _make_uow() -> MagicMock:
     uow.users = MagicMock()
     uow.users.get_user_timezone = AsyncMock(return_value="UTC")
     uow.meals = MagicMock()
-    uow.meals.save = AsyncMock(side_effect=lambda meal: meal)
-    uow.meals.find_by_id = AsyncMock()
+    saved_meals = []
+
+    async def capture_meal(meal):
+        saved_meals.append(meal)
+        return meal
+
+    uow.meals.save = AsyncMock(side_effect=capture_meal)
+    uow.meals.find_by_id = AsyncMock(side_effect=lambda mid, **kw: saved_meals[-1])
     uow.hydration_entries = MagicMock()
     uow.hydration_entries.add = AsyncMock(side_effect=lambda entry: entry)
     uow.commit = AsyncMock()
+    uow._saved_meals = saved_meals
     return uow
 
 
@@ -53,7 +61,7 @@ def _install_fake_image_download(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_scan_by_url_beverage_creates_hydration_entry_not_meal(monkeypatch):
+async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
     _install_fake_image_download(monkeypatch)
     uow = _make_uow()
     cache = MagicMock()
@@ -71,45 +79,41 @@ async def test_scan_by_url_beverage_creates_hydration_entry_not_meal(monkeypatch
         return_value={
             "structured_data": {
                 "is_food": True,
-                "foods": [],
-                "beverage_metadata": {
-                    "is_packaged_beverage": True,
-                    "brand": "Coca-Cola",
-                    "volume_ml": 330,
-                    "kcal_per_100ml": 42.0,
-                    "sugar_per_100ml": 10.6,
-                    "label_source": "nutrition_panel",
-                },
+                "dish_name": "Coca-Cola",
+                "foods": [
+                    {
+                        "name": "Coca-Cola",
+                        "quantity_g": 330,
+                        "macros": {
+                            "protein_g": 0,
+                            "carbs_g": 35,
+                            "fat_g": 0,
+                            "fiber_g": 0,
+                            "sugar_g": 35,
+                        },
+                    }
+                ],
+                "beverage_metadata": None,
             }
         }
     )
+    handler.gpt_parser = VisionResponseParser()
 
     result = await handler.handle(
         ScanByUrlCommand(
             user_id=_USER_ID,
             image_url=_IMAGE_URL,
-            public_id="mealtrack/drink",
+            public_id=_PUBLIC_ID,
         )
     )
 
-    uow.hydration_entries.add.assert_awaited_once()
-    added_entry = uow.hydration_entries.add.call_args[0][0]
-    assert added_entry.source == "scan_beverage"
-    assert added_entry.drink_name_snapshot == "Coca-Cola"
-    assert added_entry.volume_ml == 330
-    assert added_entry.image_url == _IMAGE_URL
-    assert added_entry.legacy_meal_id is None
-    assert added_entry.drink_id == "scanned"
-    UUID(added_entry.id)
+    uow.hydration_entries.add.assert_not_called()
+    uow.meals.save.assert_awaited_once()
+    cache.after_meal_write.assert_awaited_once()
+    cache.after_hydration_write.assert_not_called()
 
-    uow.meals.save.assert_not_called()
-    handler.gpt_parser.parse_is_food.assert_not_called()
-    cache.after_hydration_write.assert_awaited_once()
-    cache.after_meal_write.assert_not_called()
-
-    assert result.meal_id == added_entry.id
-    assert result.meal_type == "hydration"
-    assert result.source == "scan_beverage"
+    assert result.meal_id == uow._saved_meals[0].meal_id
+    assert result.source == "scanner"
     assert result.image.url == _IMAGE_URL
 
 

@@ -39,6 +39,9 @@ SAFE_CONTEXT_KEYS = frozenset(
         "fallback_to",       # model now being tried
         "content_len_bucket",  # e.g. "0-100", "100-500", "500-2000", "2000+"
         "error_code",        # numeric/string error code (context only, not a tag)
+        "image_id",          # uploaded image identifier for reviewable scan failures
+        "image_url",         # uploaded Cloudinary URL for reviewable scan failures
+        "rejection_reason",  # bounded reason for expected-but-reviewable rejects
     }
 )
 

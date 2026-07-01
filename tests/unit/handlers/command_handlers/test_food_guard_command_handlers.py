@@ -67,3 +67,62 @@ async def test_scan_by_url_rejects_non_food_before_meal_creation(monkeypatch):
 
     handler.gpt_parser.parse_to_nutrition.assert_not_called()
     uow.meals.save.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_captures_rejected_image_for_review(monkeypatch):
+    """Expected non-food 400s still create a reviewable Sentry message with image URL."""
+    from src.app.handlers.command_handlers import scan_by_url_command_handler as module
+
+    class FakeResponse:
+        content = b"fake-image-bytes"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url):
+            return FakeResponse()
+
+    capture_message = MagicMock()
+    monkeypatch.setattr(module.httpx, "AsyncClient", lambda timeout: FakeClient())
+    monkeypatch.setattr(module, "compress_image", lambda raw_bytes: raw_bytes)
+    monkeypatch.setattr(module, "capture_message", capture_message)
+
+    uow = _uow_with_timezone()
+    handler = ScanByUrlCommandHandler(uow=uow, event_bus=MagicMock())
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(
+        return_value={"structured_data": {"is_food": False, "foods": []}}
+    )
+    handler.gpt_parser = MagicMock()
+    handler.gpt_parser.parse_is_food.return_value = False
+
+    image_url = "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg"
+    command = ScanByUrlCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        image_url=image_url,
+        public_id="mealtrack/abc",
+    )
+
+    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+        await handler.handle(command)
+
+    capture_message.assert_called_once_with(
+        "meal_scan.image_rejected",
+        level="warning",
+        context={
+            "component": "meal_scan",
+            "operation": "scan_by_url",
+            "ai_purpose": "meal_scan",
+            "image_id": "abc",
+            "image_url": image_url,
+            "rejection_reason": "parser_not_food",
+        },
+    )

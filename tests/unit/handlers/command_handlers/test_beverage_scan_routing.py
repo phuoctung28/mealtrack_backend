@@ -1,12 +1,10 @@
-"""Unit tests for beverage scan routing in UploadMealImageImmediatelyHandler.
+"""Unit tests for beverage scan behavior in UploadMealImageImmediatelyHandler.
 
-Verifies that packaged beverage images are routed to hydration_entries
-instead of the standard meal path, and that food scans are unchanged.
+Verifies that packaged beverage images now follow the standard meal path.
 """
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID
 
 import pytest
 
@@ -16,6 +14,7 @@ from src.app.commands.meal.upload_meal_image_immediately_command import (
 from src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler import (
     UploadMealImageImmediatelyHandler,
 )
+from src.domain.parsers.vision_response_parser import VisionResponseParser
 
 _CLOUDINARY_URL = "https://res.cloudinary.com/test/image/upload/v1/mealtrack/drink.jpg"
 _USER_ID = "00000000-0000-0000-0000-000000000001"
@@ -54,9 +53,12 @@ def _make_command(user_id: str = _USER_ID) -> UploadMealImageImmediatelyCommand:
 
 
 @pytest.mark.asyncio
-async def test_beverage_scan_creates_hydration_entry_not_meal():
-    """When vision returns is_packaged_beverage=True, write hydration entry, not a standard meal."""
+async def test_packaged_beverage_scan_creates_standard_meal_not_hydration_entry():
+    """Packaged beverages scanned through meal scan should persist as meals."""
     mock_uow = _make_uow()
+    mock_uow.meals.find_by_id = AsyncMock(
+        side_effect=lambda mid, **kw: mock_uow._saved_meals[-1]
+    )
     cache = MagicMock()
     cache.after_hydration_write = AsyncMock()
     cache.after_meal_write = AsyncMock()
@@ -68,133 +70,41 @@ async def test_beverage_scan_creates_hydration_entry_not_meal():
     )
     handler.image_store = MagicMock()
     handler.image_store.save_async = AsyncMock(return_value=_CLOUDINARY_URL)
-    handler.gpt_parser = MagicMock()
 
     bev_analysis = {
         "structured_data": {
             "is_food": True,
             "dish_name": "Coca-Cola",
-            "foods": [],
+            "foods": [
+                {
+                    "name": "Coca-Cola",
+                    "quantity_g": 330,
+                    "macros": {
+                        "protein_g": 0,
+                        "carbs_g": 35,
+                        "fat_g": 0,
+                        "fiber_g": 0,
+                        "sugar_g": 35,
+                    },
+                }
+            ],
             "confidence": 0.9,
-            "beverage_metadata": {
-                "is_packaged_beverage": True,
-                "brand": "Coca-Cola",
-                "product_name": "Coca-Cola Original",
-                "volume_ml": 330,
-                "kcal_per_100ml": 42.0,
-                "sugar_per_100ml": 10.6,
-                "label_source": "nutrition_panel",
-            },
+            "beverage_metadata": None,
         }
     }
     handler.vision_service = MagicMock()
     handler.vision_service.analyze = AsyncMock(return_value=bev_analysis)
+    handler.gpt_parser = VisionResponseParser()
 
     result = await handler.handle(_make_command())
 
-    # Hydration entry must be created
-    mock_uow.hydration_entries.add.assert_called_once()
-    added_entry = mock_uow.hydration_entries.add.call_args[0][0]
-    assert added_entry.source == "scan_beverage"
-    assert added_entry.drink_name_snapshot == "Coca-Cola"
-    assert added_entry.volume_ml == 330
-    assert added_entry.image_url == _CLOUDINARY_URL
-
-    # Beverage scan should be hydration-only: no legacy meal row/link.
-    assert len(mock_uow._saved_meals) == 0
-    assert added_entry.legacy_meal_id is None
-    assert added_entry.drink_id == "scanned"
-    UUID(added_entry.id)
-
-    # Cache invalidation: after_hydration_write called, NOT after_meal_write
-    cache.after_hydration_write.assert_called_once()
-    cache.after_meal_write.assert_not_called()
-
-    # Return value keeps the meal-shaped API response but points at hydration entry.
-    assert result.meal_id == added_entry.id
-    assert result.meal_type == "hydration"
-    assert result.source == "scan_beverage"
-    assert result.image.url == _CLOUDINARY_URL
-
-
-@pytest.mark.asyncio
-async def test_beverage_scan_emits_warning_for_estimate_label_source(caplog):
-    """When label_source='estimate', a WARNING is logged with brand and kcal."""
-    mock_uow = _make_uow()
-    cache = MagicMock()
-    cache.after_hydration_write = AsyncMock()
-
-    handler = UploadMealImageImmediatelyHandler(
-        uow=mock_uow,
-        event_bus=MagicMock(),
-        cache_invalidation=cache,
-    )
-    handler.image_store = MagicMock()
-    handler.image_store.save_async = AsyncMock(return_value=_CLOUDINARY_URL)
-    handler.gpt_parser = MagicMock()
-
-    bev_analysis = {
-        "structured_data": {
-            "is_food": True,
-            "beverage_metadata": {
-                "is_packaged_beverage": True,
-                "brand": "Unknown Brand",
-                "volume_ml": 500,
-                "kcal_per_100ml": 30.0,
-                "sugar_per_100ml": 6.0,
-                "label_source": "estimate",
-            },
-        }
-    }
-    handler.vision_service = MagicMock()
-    handler.vision_service.analyze = AsyncMock(return_value=bev_analysis)
-
-    import logging
-
-    with caplog.at_level(logging.WARNING):
-        await handler.handle(_make_command())
-
-    assert "BEVERAGE-KCAL-ESTIMATE" in caplog.text
-    assert "Unknown Brand" in caplog.text
-
-
-@pytest.mark.asyncio
-async def test_beverage_scan_hydration_weight_conservative_for_estimate():
-    """Beverages with label_source='estimate' get hydration_weight=0.70."""
-    mock_uow = _make_uow()
-    cache = MagicMock()
-    cache.after_hydration_write = AsyncMock()
-
-    handler = UploadMealImageImmediatelyHandler(
-        uow=mock_uow,
-        event_bus=MagicMock(),
-        cache_invalidation=cache,
-    )
-    handler.image_store = MagicMock()
-    handler.image_store.save_async = AsyncMock(return_value=_CLOUDINARY_URL)
-    handler.gpt_parser = MagicMock()
-
-    bev_analysis = {
-        "structured_data": {
-            "is_food": True,
-            "beverage_metadata": {
-                "is_packaged_beverage": True,
-                "brand": "Mystery Drink",
-                "volume_ml": 1000,
-                "kcal_per_100ml": 20.0,
-                "sugar_per_100ml": 4.0,
-                "label_source": "estimate",
-            },
-        }
-    }
-    handler.vision_service = MagicMock()
-    handler.vision_service.analyze = AsyncMock(return_value=bev_analysis)
-
-    await handler.handle(_make_command())
-
-    added_entry = mock_uow.hydration_entries.add.call_args[0][0]
-    # volume=1000, hydration_weight=0.70 → credited_ml=700
-    assert added_entry.credited_ml == 700
+    mock_uow.hydration_entries.add.assert_not_called()
+    assert len(mock_uow._saved_meals) == 1
+    assert mock_uow._saved_meals[0].source == "scanner"
+    assert mock_uow._saved_meals[0].dish_name == "Coca-Cola"
+    cache.after_meal_write.assert_called_once()
+    cache.after_hydration_write.assert_not_called()
+    assert result.meal_id == mock_uow._saved_meals[0].meal_id
 
 
 @pytest.mark.asyncio
@@ -304,3 +214,99 @@ async def test_food_scan_with_beverage_metadata_false_follows_food_path():
     mock_uow.hydration_entries.add.assert_not_called()
     cache.after_meal_write.assert_called_once()
     cache.after_hydration_write.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_zero_calorie_drink_does_not_create_hydration_entry_from_meal_scan():
+    """Zero-calorie drinks should not be silently routed to hydration from meal scan."""
+    mock_uow = _make_uow()
+    cache = MagicMock()
+    cache.after_meal_write = AsyncMock()
+    cache.after_hydration_write = AsyncMock()
+
+    handler = UploadMealImageImmediatelyHandler(
+        uow=mock_uow,
+        event_bus=MagicMock(),
+        cache_invalidation=cache,
+    )
+    handler.image_store = MagicMock()
+    handler.image_store.save_async = AsyncMock(return_value=_CLOUDINARY_URL)
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food": True,
+                "dish_name": "Water bottle",
+                "foods": [
+                    {
+                        "name": "water",
+                        "quantity_g": 500,
+                        "macros": {
+                            "protein_g": 0,
+                            "carbs_g": 0,
+                            "fat_g": 0,
+                            "fiber_g": 0,
+                            "sugar_g": 0,
+                        },
+                    }
+                ],
+                "confidence": 0.9,
+                "beverage_metadata": None,
+            }
+        }
+    )
+
+    nutrition = SimpleNamespace(
+        food_items=[SimpleNamespace(name="water")],
+        calories=0,
+        macros=SimpleNamespace(protein=0, carbs=0, fat=0, fiber=0, sugar=0),
+    )
+    handler.gpt_parser = MagicMock()
+    handler.gpt_parser.parse_is_food.return_value = True
+    handler.gpt_parser.parse_to_nutrition.return_value = nutrition
+    handler.gpt_parser.parse_dish_name.return_value = "Water bottle"
+
+    with pytest.raises(ValueError, match="No edible food detected"):
+        await handler.handle(_make_command())
+
+    mock_uow.hydration_entries.add.assert_not_called()
+    mock_uow.meals.save.assert_not_called()
+    cache.after_hydration_write.assert_not_called()
+    cache.after_meal_write.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_upload_scan_captures_rejected_image_for_review(monkeypatch):
+    """Expected non-food 400s still create a reviewable Sentry message with image URL."""
+    from src.app.handlers.command_handlers import (
+        upload_meal_image_immediately_command_handler as module,
+    )
+
+    capture_message = MagicMock()
+    monkeypatch.setattr(module, "capture_message", capture_message)
+
+    mock_uow = _make_uow()
+    handler = UploadMealImageImmediatelyHandler(
+        uow=mock_uow,
+        event_bus=MagicMock(),
+    )
+    handler.image_store = MagicMock()
+    handler.image_store.save_async = AsyncMock(return_value=_CLOUDINARY_URL)
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(
+        return_value={"structured_data": {"is_food": False, "foods": []}}
+    )
+    handler.gpt_parser = MagicMock()
+    handler.gpt_parser.parse_is_food.return_value = False
+
+    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+        await handler.handle(_make_command())
+
+    capture_message.assert_called_once()
+    _, kwargs = capture_message.call_args
+    assert kwargs["level"] == "warning"
+    assert kwargs["context"]["component"] == "meal_scan"
+    assert kwargs["context"]["operation"] == "upload_meal_image_immediate"
+    assert kwargs["context"]["image_url"] == _CLOUDINARY_URL
+    assert kwargs["context"]["rejection_reason"] == "parser_not_food"
+    assert kwargs["context"]["image_id"]

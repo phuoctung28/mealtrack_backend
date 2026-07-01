@@ -38,6 +38,8 @@ env/
 .serena/
 # Environment variables
 .env
+.env*
+!.env.example
 
 
 # Firebase credentials (NEVER commit these!)

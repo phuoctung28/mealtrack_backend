@@ -11,18 +11,15 @@ from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.constants import MealDefaults
-from src.domain.model.hydration import HydrationEntry
+from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
-from src.domain.model.nutrition.macros import Macros
-from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.parsers.vision_response_parser import (
     VisionResponseParser as GPTResponseParser,
 )
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.hydration_write_service import build_beverage_scan_params
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
 )
@@ -37,8 +34,7 @@ from src.domain.utils.timezone_utils import (
     utc_now,
 )
 from src.infra.config.settings import get_settings
-from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
-from src.observability import distribution_metric, increment_metric
+from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +120,10 @@ class UploadMealImageImmediatelyHandler(
                 ):
                     logger.warning(
                         "[PHASE-1-NO-RETRY] meal=%s kind=%s attempt=%d/%d",
-                        meal_id, e.kind.value, attempt, max_attempts,
+                        meal_id,
+                        e.kind.value,
+                        attempt,
+                        max_attempts,
                     )
                     raise
                 logger.warning(
@@ -141,6 +140,26 @@ class UploadMealImageImmediatelyHandler(
     def _validate_cloudinary_url(self, url: str) -> bool:
         """Validate that the Cloudinary response is a valid HTTPS URL."""
         return url is not None and url.startswith("https://")
+
+    def _capture_rejected_scan(
+        self,
+        *,
+        image_id: str,
+        image_url: str,
+        reason: str,
+    ) -> None:
+        capture_message(
+            "meal_scan.image_rejected",
+            level="warning",
+            context={
+                "component": "meal_scan",
+                "operation": "upload_meal_image_immediate",
+                "ai_purpose": "meal_scan",
+                "image_id": image_id,
+                "image_url": image_url,
+                "rejection_reason": reason,
+            },
+        )
 
     async def _handle_parallel_upload(
         self,
@@ -178,8 +197,17 @@ class UploadMealImageImmediatelyHandler(
 
         try:
             analysis_result = await self._run_vision_analysis(command, image_id)
-        except Exception:
+        except Exception as exc:
             # Image uploaded but analysis failed - acceptable orphan in Cloudinary
+            if (
+                isinstance(exc, AIVisionError)
+                and exc.kind == AIVisionFailureKind.no_food
+            ):
+                self._capture_rejected_scan(
+                    image_id=image_id,
+                    image_url=image_url,
+                    reason="vision_no_food",
+                )
             increment_metric(
                 "ai.vision.request.count",
                 attributes={"status": "failure", "ai_purpose": "meal_scan"},
@@ -255,19 +283,13 @@ class UploadMealImageImmediatelyHandler(
 
             return saved_meal
 
-        # Step 5a: Beverage scan routing — redirect packaged beverages to hydration_entries
-        structured_data = (
-            analysis_result.get("structured_data", {})
-            if isinstance(analysis_result, dict)
-            else {}
-        )
-        bev_meta = structured_data.get("beverage_metadata") if structured_data else None
-
-        if bev_meta and bev_meta.get("is_packaged_beverage"):
-            return await self._handle_beverage_scan(command, image_url, analysis_result)
-
-        # Step 5b: Parse nutrition and validate food detected
+        # Step 5: Parse nutrition and validate food detected.
         if not self.gpt_parser.parse_is_food(analysis_result):
+            self._capture_rejected_scan(
+                image_id=image_id,
+                image_url=image_url,
+                reason="parser_not_food",
+            )
             raise ValueError(
                 "Image does not appear to contain food. "
                 "Please take a photo of food and try again."
@@ -283,6 +305,11 @@ class UploadMealImageImmediatelyHandler(
             and nutrition.calories > 0
         )
         if not has_food:
+            self._capture_rejected_scan(
+                image_id=image_id,
+                image_url=image_url,
+                reason="nutrition_empty_or_zero_calorie",
+            )
             raise ValueError(
                 "No edible food detected in the image. "
                 "Please take a photo of food and try again."
@@ -368,117 +395,6 @@ class UploadMealImageImmediatelyHandler(
             await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
 
         return final_meal
-
-    async def _handle_beverage_scan(
-        self,
-        command: UploadMealImageImmediatelyCommand,
-        image_url: str,
-        analysis_result: dict[str, Any],
-    ) -> Meal:
-        """Route a packaged-beverage scan to hydration_entries instead of meals.
-
-        Follows the hydration-only LogCaloricDrinkCommandHandler pattern:
-        1. Create a HydrationEntry with no legacy meal row/link.
-        2. Invalidate hydration caches (not meal caches).
-        3. Return a transient Meal domain object so the API response shape is unchanged.
-        """
-        structured_data = analysis_result.get("structured_data", {}) or {}
-        bev_meta = structured_data.get("beverage_metadata", {}) or {}
-
-        params = build_beverage_scan_params(
-            user_id=command.user_id,
-            bev_meta=bev_meta,
-            image_url=image_url,
-        )
-
-        # Warn when nutrition data is estimated rather than read from a label
-        if params.label_source == "estimate":
-            logger.warning(
-                "[BEVERAGE-KCAL-ESTIMATE] drink=%s kcal_total=%.1f label_source=%s",
-                params.drink_name,
-                params.kcal_total,
-                params.label_source,
-            )
-
-        # Derive macros: treat kcal as pure carb/fat split (sugar → carbs, rest → fat)
-        # Use sugar_g_total for carbs since beverages are predominantly sugar-sourced carbs.
-        fat_g = max(0.0, (params.kcal_total - params.sugar_g_total * 4) / 9)
-        carbs_g = params.sugar_g_total  # sugar is the dominant carbohydrate in beverages
-
-        nutrition = Nutrition(
-            macros=Macros(
-                protein=0.0,
-                carbs=round(carbs_g, 1),
-                fat=round(fat_g, 1),
-                fiber=0.0,
-                sugar=round(params.sugar_g_total, 1),
-            ),
-            food_items=None,
-        )
-
-        async with self.uow as uow:
-            user_timezone = await uow.users.get_user_timezone(command.user_id)
-            if not user_timezone or not is_valid_timezone(user_timezone):
-                user_timezone = "UTC"
-
-            now = utc_now()
-            meal_date = command.target_date if command.target_date else now.date()
-            if command.target_date and command.target_date != now.date():
-                meal_datetime = noon_utc_for_date(meal_date, user_timezone)
-            else:
-                meal_datetime = now
-
-            entry_id = str(uuid4())
-            hydration_entry = await uow.hydration_entries.add(
-                HydrationEntry(
-                    id=entry_id,
-                    user_id=command.user_id,
-                    drink_id="scanned",
-                    drink_name_snapshot=params.drink_name,
-                    emoji_snapshot=params.emoji,
-                    volume_ml=params.volume_ml,
-                    credited_ml=params.credited_ml,
-                    carbs_g=nutrition.macros.carbs,
-                    fat_g=nutrition.macros.fat,
-                    sugar_g=nutrition.macros.sugar,
-                    logged_at=meal_datetime,
-                    source="scan_beverage",
-                    legacy_meal_id=None,
-                    image_url=image_url,
-                )
-            )
-            await uow.commit()
-
-            logger.info(
-                "[BEVERAGE-SCAN-CREATED] entry=%s drink=%s volume_ml=%d credited_ml=%d",
-                hydration_entry.id,
-                params.drink_name,
-                params.volume_ml,
-                params.credited_ml,
-            )
-
-        if self.cache_invalidation:
-            await self.cache_invalidation.after_hydration_write(command.user_id, meal_date)
-
-        return Meal(
-            meal_id=hydration_entry.id,
-            user_id=command.user_id,
-            status=MealStatus.READY,
-            created_at=meal_datetime,
-            ready_at=meal_datetime,
-            image=MealImage(
-                image_id=str(uuid4()),
-                format="jpeg" if "jpeg" in command.content_type else "png",
-                size_bytes=len(command.file_contents),
-                url=image_url,
-            ),
-            dish_name=params.drink_name,
-            emoji=params.emoji,
-            meal_type="hydration",
-            source="scan_beverage",
-            quantity=params.credited_ml,
-            nutrition=nutrition,
-        )
 
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
