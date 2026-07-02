@@ -268,6 +268,10 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(
         default=MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
     )
+    FOOD_LABEL_OCR_FIRST_ENABLED: bool = Field(
+        default=False,
+        description="Enable deterministic OCR-first parsing for food-label scans",
+    )
 
     # Affiliate integration
     AFFILIATE_INTEGRATION_ENABLED: bool = Field(

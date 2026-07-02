@@ -19,6 +19,7 @@ from src.domain.parsers.vision_response_parser import (
 )
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.services.food_label_ocr_parser import FoodLabelOcrParser
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
 )
@@ -32,7 +33,8 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.observability import capture_message
+from src.infra.config.settings import get_settings
+from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         gpt_parser: GPTResponseParser = None,
         meal_translation_service: DeepLMealTranslationService | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
+        food_label_ocr_parser: FoodLabelOcrParser | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -56,6 +59,26 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.gpt_parser = gpt_parser
         self.meal_translation_service = meal_translation_service
         self.cache_invalidation = cache_invalidation
+        self.food_label_ocr_parser = food_label_ocr_parser or FoodLabelOcrParser()
+
+    def _record_ocr_metric(
+        self,
+        name: str,
+        *,
+        reason: str | None = None,
+        elapsed_ms: float | None = None,
+    ) -> None:
+        attributes = {"component": "food_label_ocr"}
+        if reason:
+            attributes["reason"] = reason
+        increment_metric(name, attributes=attributes)
+        if elapsed_ms is not None:
+            distribution_metric(
+                "food_label_ocr.parse_latency_ms",
+                elapsed_ms,
+                unit="millisecond",
+                attributes=attributes,
+            )
 
     def _capture_rejected_scan(
         self,
@@ -118,9 +141,40 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             # Vision analysis via bytes path (never sends URL to the AI provider)
             if command.scan_mode == "food_label":
-                vision_result = await self.vision_service.analyze_food_label(
-                    image_bytes
-                )
+                ocr_started = time.time()
+                ocr_enabled = get_settings().FOOD_LABEL_OCR_FIRST_ENABLED
+                has_ocr_text = bool(command.ocr_text_lines)
+                if ocr_enabled and has_ocr_text:
+                    self._record_ocr_metric("food_label_ocr.attempt")
+                    ocr_result = self.food_label_ocr_parser.parse(
+                        command.ocr_text_lines
+                    )
+                    elapsed_ms = (time.time() - ocr_started) * 1000
+                    if ocr_result.succeeded:
+                        self._record_ocr_metric(
+                            "food_label_ocr.success",
+                            elapsed_ms=elapsed_ms,
+                        )
+                        self._record_ocr_metric("food_label_ocr.ai_avoided")
+                        vision_result = {"structured_data": ocr_result.structured_data}
+                    else:
+                        reason = ",".join(ocr_result.failure_reasons[:3])
+                        self._record_ocr_metric(
+                            "food_label_ocr.fallback_to_ai",
+                            reason=reason or "unknown",
+                            elapsed_ms=elapsed_ms,
+                        )
+                        vision_result = await self.vision_service.analyze_food_label(
+                            image_bytes
+                        )
+                else:
+                    self._record_ocr_metric(
+                        "food_label_ocr.skipped",
+                        reason="disabled" if not ocr_enabled else "no_ocr_text",
+                    )
+                    vision_result = await self.vision_service.analyze_food_label(
+                        image_bytes
+                    )
             elif command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,

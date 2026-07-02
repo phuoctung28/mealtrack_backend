@@ -217,6 +217,7 @@ def test_scan_by_url_non_food_returns_not_food_image(client: TestClient):
     payload = {
         "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
         "image_id": "abc",
+        "ocr_text_lines": ["Nutrition Facts", "Protein 12g"],
     }
     r = client.post("/v1/meals/scan-by-url", json=payload)
 
@@ -247,6 +248,7 @@ def test_food_label_scan_by_url_uses_food_label_mode(client: TestClient):
     class _FoodLabelBus:
         async def send(self, msg):
             assert msg.scan_mode == "food_label"
+            assert msg.ocr_text_lines == ["Nutrition Facts", "Protein 12g"]
             return Meal(
                 meal_id=str(uuid4()),
                 user_id=str(uuid4()),
@@ -286,6 +288,7 @@ def test_food_label_scan_by_url_uses_food_label_mode(client: TestClient):
     payload = {
         "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
         "image_id": "abc",
+        "ocr_text_lines": ["Nutrition Facts", "Protein 12g"],
     }
     r = client.post("/v1/meals/food-label/scan-by-url", json=payload)
 

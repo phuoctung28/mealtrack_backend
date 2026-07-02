@@ -34,6 +34,7 @@ class FoodLabelScanByUrlRequest(BaseModel):
     image_url: str
     image_id: str
     target_date: str | None = None
+    ocr_text_lines: list[str] | None = None
 
 
 def _validate_cloudinary_url(image_url: str, image_id: str) -> None:
@@ -75,6 +76,7 @@ async def _scan_by_url(
     target_date: str | None,
     user_description: str | None,
     scan_mode: str,
+    ocr_text_lines: list[str] | None = None,
 ) -> DetailedMealResponse:
     _validate_cloudinary_url(image_url, image_id)
 
@@ -93,6 +95,7 @@ async def _scan_by_url(
         target_date=parsed_target_date,
         language=language,
         scan_mode=scan_mode,
+        ocr_text_lines=ocr_text_lines,
     )
 
     try:
@@ -179,6 +182,7 @@ async def scan_food_label_by_url(
             target_date=body.target_date,
             user_description=None,
             scan_mode="food_label",
+            ocr_text_lines=body.ocr_text_lines,
             event_bus=event_bus,
         )
     except ValidationException:
