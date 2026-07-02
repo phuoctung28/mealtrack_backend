@@ -133,7 +133,9 @@ class FoodLabelNutritionResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    is_food_label: bool = Field(True, description="Whether a Nutrition Facts label is visible")
+    is_food_label: bool = Field(
+        True, description="Whether a Nutrition Facts label is visible"
+    )
     product_name: str = Field(..., min_length=1, max_length=200)
     brand: str | None = Field(None, max_length=100)
     serving_size: FoodLabelServingSize
@@ -141,7 +143,7 @@ class FoodLabelNutritionResponse(BaseModel):
     label_calories_per_serving: float | None = Field(None, ge=0, le=5000)
     macros_per_serving: AIVisionNutritionMacros
     confidence: float = Field(0.5, ge=0, le=1)
-    label_notes: list[str] = Field(default_factory=list, max_length=6)
+    label_notes: list[str] = Field(default_factory=list)
 
     @field_validator("product_name", "brand")
     @classmethod
@@ -149,6 +151,24 @@ class FoodLabelNutritionResponse(BaseModel):
         if value is None:
             return None
         return _strip_required_text(value)
+
+    @field_validator("label_notes", mode="before")
+    @classmethod
+    def normalize_label_notes(cls, value: Any) -> Any:
+        if value is None or not isinstance(value, list):
+            return value
+
+        notes: list[Any] = []
+        for note in value:
+            if isinstance(note, str):
+                stripped = note.strip()
+                if not stripped:
+                    continue
+                notes.append(stripped)
+            else:
+                notes.append(note)
+
+        return notes
 
 
 class VisionNutritionResponse(BaseModel):

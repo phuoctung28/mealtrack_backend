@@ -2,9 +2,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from pydantic import ValidationError
 
 from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.domain.ports.ai_provider_port import AICapability
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.langchain_openai_adapter import LangChainOpenAIResult
 from src.infra.services.ai.providers.openai_provider import OpenAIProvider
 
@@ -171,6 +173,34 @@ async def test_generate_with_vision_calls_adapter_with_prompt_cache_kwargs():
         "mealtrack-test:meal_scan:"
     )
     assert call_kwargs["request_kwargs"]["prompt_cache_retention"] == "in_memory"
+
+
+@pytest.mark.asyncio
+async def test_generate_with_vision_classifies_validation_errors():
+    provider = _provider()
+    validation_error = None
+    try:
+        VisionNutritionResponse.model_validate({"foods": []})
+    except ValidationError as exc:
+        validation_error = exc
+    assert validation_error is not None
+    provider._langchain.generate_vision_structured = AsyncMock(
+        side_effect=validation_error
+    )
+
+    with pytest.raises(AIVisionError) as exc_info:
+        await provider.generate_with_vision(
+            model="gpt-5.4-mini-2026-03-17",
+            prompt="Identify food.",
+            image_data=b"image-bytes",
+            system_message="Return canonical JSON.",
+            schema=VisionNutritionResponse,
+            purpose_hint="meal_scan",
+        )
+
+    assert exc_info.value.kind == AIVisionFailureKind.schema_validation
+    assert exc_info.value.provider == "openai"
+    assert exc_info.value.model == "gpt-5.4-mini-2026-03-17"
 
 
 @pytest.mark.asyncio

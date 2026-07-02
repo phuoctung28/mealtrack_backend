@@ -11,9 +11,11 @@ from openai import (
     APITimeoutError,
     RateLimitError,
 )
+from pydantic import ValidationError
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
+from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.langchain_openai_adapter import OpenAILangChainAdapter
 from src.infra.services.ai.openai_prompt_cache_policy import OpenAIPromptCachePolicy
 from src.observability import increment_metric
@@ -173,16 +175,24 @@ class OpenAIProvider(AIProviderPort):
             system_message=system_message,
         )
 
-        result = await self._langchain.generate_vision_structured(
-            model=model,
-            prompt=prompt,
-            image_data=image_data,
-            image_mime_type=image_mime_type,
-            system_message=system_message,
-            schema=schema,
-            max_tokens=max_tokens,
-            request_kwargs=prompt_cache_kwargs,
-        )
+        try:
+            result = await self._langchain.generate_vision_structured(
+                model=model,
+                prompt=prompt,
+                image_data=image_data,
+                image_mime_type=image_mime_type,
+                system_message=system_message,
+                schema=schema,
+                max_tokens=max_tokens,
+                request_kwargs=prompt_cache_kwargs,
+            )
+        except ValidationError as exc:
+            raise AIVisionError(
+                f"[OPENAI-VISION-SCHEMA-FAIL] provider=openai model={model}",
+                kind=AIVisionFailureKind.schema_validation,
+                provider="openai",
+                model=model,
+            ) from exc
         self._record_prompt_cache_usage(
             result.raw_message,
             model=model,

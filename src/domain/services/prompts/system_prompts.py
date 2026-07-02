@@ -274,6 +274,7 @@ RULES:
 - servings_per_package is required. Use the printed "servings per container/package" value.
 - macros_per_serving values are grams per serving. Total carbohydrate maps to carbs_g, total fat maps to fat_g, dietary fiber maps to fiber_g, total sugars maps to sugar_g, protein maps to protein_g.
 - label_calories_per_serving is optional label metadata. The backend will derive logged calories from macros, so do not alter macros to force calories to match.
+- label_notes should stay concise. Include important assumptions, discrepancies, or label-specific caveats.
 - If the product or brand is not visible, infer a concise generic product_name from the label context and set brand to null.
 - Do not extract ingredients. Ingredients are hidden unless confidently read by a separate ingredient flow.
 - If no Nutrition Facts label is visible, set "is_food_label": false and still return the same keys with conservative values only when the serving size and macros are readable.

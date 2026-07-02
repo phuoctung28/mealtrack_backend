@@ -4,7 +4,10 @@ import logging
 import threading
 from typing import Any, Optional
 
-from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
+    AIUnavailableError,
+)
 from src.domain.model.ai.model_purpose import ModelPurpose
 from src.domain.ports.ai_provider_port import AICapability
 from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
@@ -164,7 +167,9 @@ class AIModelManager:
         ):
             return
 
-        vision_enabled = getattr(settings, "CLOUDFLARE_WORKERS_AI_VISION_ENABLED", False)
+        vision_enabled = getattr(
+            settings, "CLOUDFLARE_WORKERS_AI_VISION_ENABLED", False
+        )
         vision_model = getattr(settings, "CLOUDFLARE_WORKERS_AI_VISION_MODEL", "")
         vision_purposes = getattr(settings, "CLOUDFLARE_WORKERS_AI_VISION_PURPOSES", "")
 
@@ -207,14 +212,20 @@ class AIModelManager:
 
     def _append_cf_to_text_chains(self, cf_model: str, text_purposes_csv: str) -> None:
         """Prepend raw CF model id to configured text-purpose chains."""
-        configured = {p.strip().lower() for p in text_purposes_csv.split(",") if p.strip()}
+        configured = {
+            p.strip().lower() for p in text_purposes_csv.split(",") if p.strip()
+        }
         for purpose in ModelPurpose:
             if purpose.value in configured:
                 self._prepend_model_for_purposes(cf_model, {purpose})
 
-    def _append_cf_to_vision_chains(self, cf_model: str, vision_purposes_csv: str) -> None:
+    def _append_cf_to_vision_chains(
+        self, cf_model: str, vision_purposes_csv: str
+    ) -> None:
         """Append CF vision model to configured vision-purpose chains."""
-        configured = {p.strip().lower() for p in vision_purposes_csv.split(",") if p.strip()}
+        configured = {
+            p.strip().lower() for p in vision_purposes_csv.split(",") if p.strip()
+        }
         valid_values = {mp.value for mp in ModelPurpose}
         unknown = configured - valid_values
         if unknown:
@@ -323,7 +334,14 @@ class AIModelManager:
                     f"model={model} | error={last_error[:100]}"
                 )
 
-        log_event("warning", "ai.provider.failure", attributes={"component": "ai_model_manager", "attempt_count": len(attempted)})
+        log_event(
+            "warning",
+            "ai.provider.failure",
+            attributes={
+                "component": "ai_model_manager",
+                "attempt_count": len(attempted),
+            },
+        )
         raise AIUnavailableError(
             f"All models failed for {purpose.value}",
             attempted_models=attempted,
@@ -347,6 +365,8 @@ class AIModelManager:
 
         attempted = []
         last_error = None
+        deterministic_failures: list[AIVisionError] = []
+        has_transient_failure = False
 
         for model in available:
             provider = self._get_provider_for_model(model)
@@ -402,11 +422,14 @@ class AIModelManager:
                     AIVisionFailureKind.schema_validation,
                     AIVisionFailureKind.json_parse,
                 ):
+                    deterministic_failures.append(e)
                     # Deterministic failure — schema/parse errors won't fix with same model;
                     # skip circuit breaker recording and advance to next provider
                     logger.warning(
                         "[AI-VISION-SCHEMA-FAIL] purpose=%s model=%s kind=%s",
-                        purpose.value, model, e.kind.value,
+                        purpose.value,
+                        model,
+                        e.kind.value,
                     )
                     metric_name = (
                         "ai.vision.schema_validation_failure.count"
@@ -436,6 +459,7 @@ class AIModelManager:
                     continue
 
                 # Transient/unknown — use circuit breaker as before
+                has_transient_failure = True
                 error_code = provider.extract_error_code(e)
                 if self._circuit_breaker.should_trip(error_code):
                     self._circuit_breaker.record_failure(model)
@@ -449,16 +473,50 @@ class AIModelManager:
                 )
                 logger.warning(
                     "[AI-ATTEMPT-FAILED] purpose=%s model=%s error=%s",
-                    purpose.value, model, last_error[:100],
+                    purpose.value,
+                    model,
+                    last_error[:100],
                 )
 
         increment_metric(
             "ai.vision.request.failure.count",
             attributes={"ai_purpose": purpose.value, "attempt_count": len(attempted)},
         )
-        log_event("warning", "ai.provider.failure", attributes={"component": "ai_model_manager", "attempt_count": len(attempted)})
+        if deterministic_failures and not has_transient_failure:
+            log_event(
+                "warning",
+                "ai.vision.output_validation.failure",
+                attributes={
+                    "component": "ai_model_manager",
+                    "attempt_count": len(attempted),
+                    "ai_purpose": purpose.value,
+                },
+            )
+            raise AIOutputValidationError(
+                "Invalid AI structured output",
+                purpose=purpose.value,
+                attempt_count=len(attempted),
+                validation_details=[
+                    _vision_failure_detail(failure)
+                    for failure in deterministic_failures[:5]
+                ],
+            )
+        log_event(
+            "warning",
+            "ai.provider.failure",
+            attributes={
+                "component": "ai_model_manager",
+                "attempt_count": len(attempted),
+            },
+        )
         raise AIUnavailableError(
             f"All vision models failed for {purpose.value}",
             attempted_models=attempted,
             last_error=last_error,
         )
+
+
+def _vision_failure_detail(error: AIVisionError) -> str:
+    provider = error.provider or "vision-provider"
+    model = error.model or "unknown-model"
+    return f"{provider}/{model}: {error.kind.value}"
