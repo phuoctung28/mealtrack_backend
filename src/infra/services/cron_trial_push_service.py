@@ -51,9 +51,11 @@ class CronTrialPushService:
 
     async def _schedule_due_pushes(self, now: datetime) -> int:
         async with AsyncUnitOfWork() as uow:
-            # Active subs whose trial converts to paid within the next day.
-            subs = await uow.subscriptions.find_expiring_in_window(
-                from_days=0, to_days=_LOOKAHEAD_DAYS, now=now
+            # Trial users whose access converts to paid soon and who have not
+            # confirmed the trial-end discount purchase. Cancelled trials remain
+            # eligible while access is still active.
+            subs = await uow.subscriptions.find_trial_end_offer_candidates(
+                lookahead_days=_LOOKAHEAD_DAYS, now=now
             )
             if not subs:
                 return 0
@@ -187,6 +189,7 @@ class CronTrialPushService:
                 "calories_consumed": 0,
                 "gender": (pref or {}).get("gender", "male"),
                 "language_code": (pref or {}).get("language", "en"),
+                "campaign": "trial_end_discount",
             },
             "created_at": utc_now(),
             "expires_at": scheduled_utc + timedelta(days=2),

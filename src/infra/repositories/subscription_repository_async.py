@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.ports.subscription_repository_port import SubscriptionRepositoryPort
@@ -109,6 +109,38 @@ class AsyncSubscriptionRepository(SubscriptionRepositoryPort):
         )
         return list(result.scalars().all())
 
+    async def find_trial_end_offer_candidates(
+        self,
+        lookahead_days: int,
+        now: datetime | None = None,
+        fallback_trial_window_days: int = 7,
+    ) -> list[Subscription]:
+        """Trial users charging soon who have not confirmed the discount purchase."""
+        reference = now or utc_now()
+        upper = reference + timedelta(days=lookahead_days)
+        fallback_lower = reference - timedelta(days=fallback_trial_window_days)
+        result = await self.session.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.status.in_(["active", "cancelled"]),
+                    Subscription.expires_at > reference,
+                    Subscription.expires_at < upper,
+                    Subscription.trial_end_discount_claimed_at.is_(None),
+                    or_(
+                        func.lower(Subscription.period_type) == "trial",
+                        and_(
+                            or_(
+                                Subscription.period_type.is_(None),
+                                Subscription.period_type == "",
+                            ),
+                            Subscription.purchased_at >= fallback_lower,
+                        ),
+                    ),
+                )
+            )
+        )
+        return list(result.scalars().all())
+
     async def cancel(self, subscription_id: str, reason: str = None) -> bool:
         """Cancel a subscription."""
         subscription = await self.find_by_id(subscription_id)
@@ -116,7 +148,7 @@ class AsyncSubscriptionRepository(SubscriptionRepositoryPort):
             subscription.status = "cancelled"
             subscription.updated_at = utc_now()
             if reason:
-                subscription.cancellation_reason = reason
+                subscription.cancel_reason = reason
             await self.session.flush()
             return True
         return False

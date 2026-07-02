@@ -2,7 +2,7 @@
 Subscription model for tracking user subscriptions.
 """
 
-from sqlalchemy import Column, String, DateTime, Boolean, Enum, ForeignKey, Index
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, String
 from sqlalchemy.orm import relationship
 
 from src.domain.utils.timezone_utils import utc_now
@@ -47,7 +47,13 @@ class Subscription(Base, BaseMixin):
     purchased_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
-
+    period_type = Column(String(32), nullable=True)
+    trial_started_at = Column(DateTime(timezone=True), nullable=True)
+    trial_expires_at = Column(DateTime(timezone=True), nullable=True)
+    cancel_reason = Column(String(64), nullable=True)
+    trial_end_discount_claimed_at = Column(DateTime(timezone=True), nullable=True)
+    trial_end_discount_product_id = Column(String(255), nullable=True)
+    trial_end_discount_identifier = Column(String(255), nullable=True)
 
     # Store metadata
     store_transaction_id = Column(String(255), nullable=True)
@@ -61,6 +67,13 @@ class Subscription(Base, BaseMixin):
         Index("idx_user_id_status", "user_id", "status"),
         Index("idx_expires_at", "expires_at"),
         Index("idx_revenuecat_subscriber_id", "revenuecat_subscriber_id"),
+        Index(
+            "idx_subscription_trial_offer_candidates",
+            "status",
+            "expires_at",
+            "period_type",
+            "trial_end_discount_claimed_at",
+        ),
     )
 
     def is_active(self) -> bool:

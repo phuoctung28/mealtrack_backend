@@ -16,12 +16,13 @@ from sqlalchemy import select, text
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
-from src.observability import increment_metric
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
+from src.infra.config.settings import settings
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
+from src.observability import increment_metric
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
@@ -43,6 +44,8 @@ POSTHOG_LIFECYCLE_EVENTS = {
     "RENEWAL": "subscription_renewed",
     "PRODUCT_CHANGE": "subscription_product_changed",
 }
+
+_TRIAL_PERIOD_TYPE = "trial"
 
 
 def _get_email_service() -> EmailService:
@@ -94,7 +97,10 @@ async def revenuecat_webhook(
     async with AsyncUnitOfWork() as uow:
         if event_type == "TRANSFER":
             await handle_transfer(uow, event)
-            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
+            increment_metric(
+                "webhook.revenuecat.processed",
+                attributes={"event_type": event_type, "status": "success"},
+            )
             return {"status": "success"}
 
         user = await find_user_for_revenuecat_event(uow, event)
@@ -133,7 +139,10 @@ async def revenuecat_webhook(
         elif event_type == "REFUND":
             await handle_refund(uow, user, event)
 
-    increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type or "unknown", "status": "success"})
+    increment_metric(
+        "webhook.revenuecat.processed",
+        attributes={"event_type": event_type or "unknown", "status": "success"},
+    )
     return {"status": "success"}
 
 
@@ -246,6 +255,98 @@ def _preferred_transfer_target(transferred_to: list[str]) -> str | None:
     )
 
 
+def _normalized_csv(value: str | None) -> set[str]:
+    """Parse comma-separated env values into lowercase lookup keys."""
+    if not value:
+        return set()
+    return {item.strip().lower() for item in value.split(",") if item.strip()}
+
+
+def _normalized_period_type(event: dict) -> str | None:
+    raw = event.get("period_type")
+    if not isinstance(raw, str):
+        return None
+    normalized = raw.strip().lower()
+    return normalized or None
+
+
+def _discount_identifier_from_event(event: dict) -> str | None:
+    for key in (
+        "discount_identifier",
+        "offer_identifier",
+        "promotional_offer_id",
+        "presented_offering_id",
+    ):
+        value = event.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _is_trial_end_discount_claim(event: dict) -> bool:
+    product_id = event.get("product_id")
+    discount_identifier = _discount_identifier_from_event(event)
+    product_ids = _normalized_csv(settings.TRIAL_END_DISCOUNT_PRODUCT_IDS)
+    discount_identifiers = _normalized_csv(settings.TRIAL_END_DISCOUNT_IDENTIFIERS)
+
+    if isinstance(product_id, str) and product_id.strip().lower() in product_ids:
+        return True
+    if (
+        discount_identifier
+        and discount_identifier.strip().lower() in discount_identifiers
+    ):
+        return True
+    return False
+
+
+def _apply_revenuecat_lifecycle_state(
+    subscription: Subscription | None,
+    event: dict,
+) -> None:
+    """Persist RevenueCat lifecycle fields used by trial push and winback flows."""
+    if subscription is None:
+        return
+
+    period_type = _normalized_period_type(event)
+    purchased_at = parse_timestamp(event.get("purchased_at_ms"))
+    expires_at = parse_timestamp(event.get("expiration_at_ms"))
+    cancel_reason = event.get("cancel_reason")
+
+    if period_type:
+        subscription.period_type = period_type
+    if period_type == _TRIAL_PERIOD_TYPE:
+        if purchased_at and not subscription.trial_started_at:
+            subscription.trial_started_at = purchased_at
+        if expires_at:
+            subscription.trial_expires_at = expires_at
+    if isinstance(cancel_reason, str) and cancel_reason.strip():
+        subscription.cancel_reason = cancel_reason.strip()
+
+    if _is_trial_end_discount_claim(event):
+        subscription.trial_end_discount_claimed_at = purchased_at or utc_now()
+        subscription.trial_end_discount_product_id = event.get("product_id")
+        subscription.trial_end_discount_identifier = _discount_identifier_from_event(
+            event
+        )
+
+
+def _should_send_backend_cancellation_email(user) -> bool:
+    """Legacy sender is disabled unless explicitly selected as the email owner."""
+    owner = (settings.CANCELLATION_EMAIL_OWNER or "").strip().lower()
+    return owner == "backend" and settings.EMAIL_ENABLED and not user.email_opt_out
+
+
+def _timestamp_ms(value: datetime | None) -> int | None:
+    if value is None:
+        return None
+    return int(value.timestamp() * 1000)
+
+
+def _days_until(value: datetime | None) -> int | None:
+    if value is None:
+        return None
+    return (value - utc_now()).days
+
 
 async def handle_purchase(uow, user, event):
     """Handle initial purchase."""
@@ -272,6 +373,7 @@ async def handle_purchase(uow, user, event):
         store_transaction_id=event.get("transaction_id"),
         is_sandbox=event.get("environment") == "SANDBOX",
     )
+    _apply_revenuecat_lifecycle_state(subscription, event)
 
     uow.session.add(subscription)
     logger.info(f"User {user.id} purchased {subscription.product_id}")
@@ -284,8 +386,11 @@ async def handle_purchase(uow, user, event):
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
             "period_type": event.get("period_type"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
-            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
+            "occurred_at": (
+                parse_timestamp(event.get("purchased_at_ms")) or utc_now()
+            ).isoformat(),
         },
         event_id=event.get("id"),
     )
@@ -301,6 +406,7 @@ async def handle_renewal(uow, user, event):
         subscription.expires_at = parse_timestamp(event.get("expiration_at_ms"))
         subscription.status = "active"
         subscription.updated_at = utc_now()
+        _apply_revenuecat_lifecycle_state(subscription, event)
         logger.info(
             f"User {user.id} renewed subscription until {subscription.expires_at}"
         )
@@ -315,8 +421,11 @@ async def handle_renewal(uow, user, event):
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
             "period_type": event.get("period_type"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
-            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
+            "occurred_at": (
+                parse_timestamp(event.get("purchased_at_ms")) or utc_now()
+            ).isoformat(),
         },
         event_id=event.get("id"),
     )
@@ -348,6 +457,7 @@ async def handle_cancellation(uow, user, event):
         subscription.status = "cancelled"
         subscription.cancelled_at = utc_now()
         subscription.updated_at = utc_now()
+        _apply_revenuecat_lifecycle_state(subscription, event)
         # Note: User still has access until expires_at
         logger.info(
             f"User {user.id} cancelled subscription (expires {subscription.expires_at})"
@@ -361,20 +471,28 @@ async def handle_cancellation(uow, user, event):
         {
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
             "occurred_at": utc_now().isoformat(),
         },
         event_id=event.get("id"),
     )
 
-    # Send cancellation email
-    if not user.email_opt_out:
+    # Cancellation email is owned by PostHog Workflows by default. Keep this
+    # legacy sender gated for rollback only.
+    if _should_send_backend_cancellation_email(user):
         try:
             email_service = _get_email_service()
             await email_service.send_cancellation_email(user)
             logger.info(f"Cancellation email sent to user {user.id}")
         except Exception as e:
             logger.error(f"Failed to send cancellation email to {user.id}: {e}")
+    else:
+        logger.info(
+            "Backend cancellation email skipped for user %s; owner=%s",
+            user.id,
+            settings.CANCELLATION_EMAIL_OWNER,
+        )
 
 
 async def handle_expiration(uow, user, event):
@@ -384,6 +502,7 @@ async def handle_expiration(uow, user, event):
     if subscription:
         subscription.status = "expired"
         subscription.updated_at = utc_now()
+        _apply_revenuecat_lifecycle_state(subscription, event)
         logger.info(f"User {user.id} subscription expired")
 
     await capture_subscription_lifecycle_event(user, event, "EXPIRATION", subscription)
@@ -392,7 +511,8 @@ async def handle_expiration(uow, user, event):
         {
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
             "occurred_at": utc_now().isoformat(),
         },
         event_id=event.get("id"),
@@ -406,6 +526,7 @@ async def handle_billing_issue(uow, user, event):
     if subscription:
         subscription.status = "billing_issue"
         subscription.updated_at = utc_now()
+        _apply_revenuecat_lifecycle_state(subscription, event)
         logger.warning(f"Billing issue for user {user.id}")
 
     await capture_subscription_lifecycle_event(
@@ -422,6 +543,7 @@ async def handle_product_change(uow, user, event):
         subscription.expires_at = parse_timestamp(event.get("expiration_at_ms"))
         subscription.status = "active"
         subscription.updated_at = utc_now()
+        _apply_revenuecat_lifecycle_state(subscription, event)
         logger.info(f"User {user.id} changed to {subscription.product_id}")
 
     await capture_subscription_lifecycle_event(
@@ -435,6 +557,7 @@ async def handle_refund(uow, user, event):
     if subscription:
         subscription.status = "refunded"
         subscription.updated_at = utc_now()
+        _apply_revenuecat_lifecycle_state(subscription, event)
         logger.info(f"User {user.id} subscription refunded")
 
     await capture_subscription_lifecycle_event(user, event, "REFUND", subscription)
@@ -443,7 +566,8 @@ async def handle_refund(uow, user, event):
         {
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
             "occurred_at": utc_now().isoformat(),
         },
         event_id=event.get("id"),
@@ -469,8 +593,27 @@ async def capture_subscription_lifecycle_event(
         "subscription_status": getattr(subscription, "status", None),
         "expiration_at_ms": event.get("expiration_at_ms"),
         "purchased_at_ms": event.get("purchased_at_ms"),
-        "cancel_reason": event.get("cancel_reason"),
-        "period_type": event.get("period_type"),
+        "cancel_reason": event.get("cancel_reason")
+        or getattr(subscription, "cancel_reason", None),
+        "period_type": _normalized_period_type(event)
+        or getattr(subscription, "period_type", None),
+        "trial_expires_at_ms": _timestamp_ms(
+            getattr(subscription, "trial_expires_at", None)
+        ),
+        "days_until_expiration": _days_until(
+            parse_timestamp(event.get("expiration_at_ms"))
+            or getattr(subscription, "expires_at", None)
+        ),
+        "trial_end_discount_claimed": bool(
+            getattr(subscription, "trial_end_discount_claimed_at", None)
+        ),
+        "trial_end_discount_product_id": getattr(
+            subscription, "trial_end_discount_product_id", None
+        ),
+        "trial_end_discount_identifier": getattr(
+            subscription, "trial_end_discount_identifier", None
+        ),
+        "cancellation_email_owner": settings.CANCELLATION_EMAIL_OWNER,
         "is_sandbox": event.get("environment") == "SANDBOX",
     }
     await PostHogAdapter().capture(
@@ -540,6 +683,7 @@ async def get_or_create_subscription(uow, user, event):
             store_transaction_id=event.get("transaction_id"),
             is_sandbox=event.get("environment") == "SANDBOX",
         )
+        _apply_revenuecat_lifecycle_state(subscription, event)
         uow.session.add(subscription)
         await uow.session.flush()
 

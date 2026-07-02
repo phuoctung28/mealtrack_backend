@@ -1,6 +1,6 @@
 # Backend External Services Integration
 
-**Last Updated:** June 27, 2026
+**Last Updated:** July 2, 2026
 **Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
@@ -24,7 +24,7 @@
 - `FirebaseService` rejects blank title/body before building APNs payloads and mobile `data` fields
 - Multi-device support via `user_fcm_tokens` table
 - Deduplication across workers via `notification_sent_log` table (migration 047)
-- Trial-expiry pushes at T-2d and T-1d via `CronTrialPushService` (`src/infra/services/cron_trial_push_service.py`)
+- Trial-expiry pushes use `CronTrialPushService` (`src/infra/services/cron_trial_push_service.py`) to schedule one service reminder about 2 hours before trial charge. Eligibility includes active and cancelled-but-unexpired trials that have not confirmed the trial-end discount purchase.
 - Notifications rescheduled automatically on timezone changes — triggered from `UpdateTimezoneCommandHandler` and `RegisterFcmTokenCommandHandler`
 - Cron push entrypoint (`src/cron/push.py`) owns all push scheduling: precompute notification rows, schedule trial-expiry rows, claim due rows, batch-send, mark sent, clean expired rows
 - Cron dispatch helper (`CronNotificationDispatchService`) uses database row claiming (`pending` → `processing`) plus stale-processing recovery instead of a background loop or leader lock
@@ -219,7 +219,7 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 | Brave Search | Barcode nutrition and image validation fallback | `BRAVE_SEARCH_API_KEY` |
 | Pexels / Unsplash | Meal discovery food photos | `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY` |
 | Pollinations / Google Imagen | Generated image fallback adapters | provider-specific adapter config |
-| Resend | Lifecycle and webhook-triggered email | `RESEND_API_KEY`, `EMAIL_ENABLED`, `EMAIL_FROM` |
+| Resend | Legacy backend lifecycle email sender. Cancellation winback email is owned by PostHog Workflows unless `CANCELLATION_EMAIL_OWNER=backend` is explicitly set. | `RESEND_API_KEY`, `EMAIL_ENABLED`, `EMAIL_FROM`, `CANCELLATION_EMAIL_OWNER` |
 
 ---
 
@@ -228,6 +228,7 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 **Purpose:** Subscription Management
 
 - Webhook sync to local `subscriptions` table
+- Trial lifecycle fields are persisted from webhook events: `period_type`, trial start/end, cancellation reason, and trial-end discount claim markers.
 - Premium status check with Redis cache fallback
 - Signature verification via constant-time HMAC comparison
 - Webhook events handled in `src/api/routes/v1/webhooks.py`:
@@ -236,16 +237,16 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 |-------|--------|
 | `INITIAL_PURCHASE` | Create subscription record, credit referral wallet |
 | `RENEWAL` | Update expiry, reset billing-issue flag |
-| `CANCELLATION` | Set status to `cancelled` |
+| `CANCELLATION` | Set status to `cancelled`; access remains valid until `expires_at` |
 | `EXPIRATION` | Set status to `expired` |
 | `BILLING_ISSUE` | Set status to `billing_issue` |
 | `PRODUCT_CHANGE` | Update product ID and expiry |
 | `REFUND` | Set status to `refunded`, revoke referral credit |
 | `TRANSFER` | Re-point subscription to new subscriber ID |
 
-- PostHog lifecycle mirroring for CANCELLATION, EXPIRATION, BILLING_ISSUE, REFUND, RENEWAL, PRODUCT_CHANGE events (configurable via `POSTHOG_API_KEY`)
+- PostHog lifecycle mirroring for CANCELLATION, EXPIRATION, BILLING_ISSUE, REFUND, RENEWAL, PRODUCT_CHANGE events (configurable via `POSTHOG_API_KEY`). Mirrored properties include period type, cancel reason, days until expiration, trial expiration time, and whether the trial-end discount has been claimed.
 
-**Config:** `REVENUECAT_SECRET_API_KEY`, `REVENUECAT_WEBHOOK_SECRET`
+**Config:** `REVENUECAT_SECRET_API_KEY`, `REVENUECAT_WEBHOOK_SECRET`, `TRIAL_END_DISCOUNT_PRODUCT_IDS`, `TRIAL_END_DISCOUNT_IDENTIFIERS`
 
 **Status:** Premium feature gates planned, not currently enforced on routes
 
@@ -253,11 +254,12 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 
 ## PostHog
 
-**Purpose:** Product analytics — subscription lifecycle event capture
+**Purpose:** Product analytics and lifecycle workflow triggers
 
 - `src/infra/adapters/posthog_adapter.py`: fire-and-forget async capture via `httpx` (3s timeout)
 - Only sends events when `POSTHOG_API_KEY` is set; silently skips otherwise
-- Currently captures subscription lifecycle events mirrored from RevenueCat webhooks
+- Captures subscription lifecycle events mirrored from RevenueCat webhooks.
+- Cancellation winback email should run as a PostHog Workflow using the mirrored `subscription_cancelled` event. The backend webhook sender is legacy/rollback-only and disabled unless explicitly configured.
 
 **Config:** `POSTHOG_API_KEY`, `POSTHOG_HOST` (default: `https://app.posthog.com`)
 
