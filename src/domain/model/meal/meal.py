@@ -41,6 +41,7 @@ class Meal:
     ready_at: datetime | None = None
     error_message: str | None = None
     raw_gpt_json: str | None = None
+    food_label_metadata: dict | None = None
     # Edit tracking fields
     updated_at: datetime | None = None
     last_edited_at: datetime | None = None
@@ -123,6 +124,7 @@ class Meal:
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=self.raw_gpt_json,
+            food_label_metadata=self.food_label_metadata,
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
@@ -146,6 +148,7 @@ class Meal:
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=raw_gpt_json,
+            food_label_metadata=self.food_label_metadata,
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
@@ -177,6 +180,7 @@ class Meal:
             raw_gpt_json=(
                 raw_gpt_json if raw_gpt_json is not None else self.raw_gpt_json
             ),
+            food_label_metadata=self.food_label_metadata,
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
@@ -206,6 +210,7 @@ class Meal:
             ready_at=self.ready_at,
             error_message=error_message,
             raw_gpt_json=self.raw_gpt_json,
+            food_label_metadata=self.food_label_metadata,
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
@@ -235,6 +240,7 @@ class Meal:
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=self.raw_gpt_json,
+            food_label_metadata=self.food_label_metadata,
             updated_at=utc_now(),
             last_edited_at=utc_now(),
             edit_count=self.edit_count + 1,
@@ -258,6 +264,7 @@ class Meal:
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=self.raw_gpt_json,
+            food_label_metadata=self.food_label_metadata,
             updated_at=utc_now(),
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,

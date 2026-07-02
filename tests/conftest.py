@@ -102,6 +102,7 @@ class TestMealRepository:
             existing_meal.ready_at = meal.ready_at
             existing_meal.error_message = meal.error_message
             existing_meal.raw_ai_response = meal.raw_gpt_json
+            existing_meal.food_label_metadata = meal.food_label_metadata
             existing_meal.updated_at = meal.updated_at or utc_now()
             existing_meal.last_edited_at = meal.last_edited_at
             existing_meal.edit_count = meal.edit_count
