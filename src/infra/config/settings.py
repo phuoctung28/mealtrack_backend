@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str | None = Field(default=None)
     EMAIL_FROM: str = Field(default="Nutree <hello@nutree.app>")
     EMAIL_ENABLED: bool = Field(default=False)
+    CANCELLATION_EMAIL_OWNER: str = Field(
+        default="posthog",
+        description="Cancellation email owner. Use 'posthog' or 'off'; 'backend' only enables the legacy webhook sender.",
+    )
 
     # External APIs & integrations
     DEEPL_API_KEY: str | None = Field(
@@ -162,6 +166,14 @@ class Settings(BaseSettings):
     )
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
+    TRIAL_END_DISCOUNT_PRODUCT_IDS: str = Field(
+        default="",
+        description="Comma-separated RevenueCat product IDs that confirm the D3/trial-end discount was claimed.",
+    )
+    TRIAL_END_DISCOUNT_IDENTIFIERS: str = Field(
+        default="",
+        description="Comma-separated RevenueCat offer/discount identifiers that confirm the D3/trial-end discount was claimed.",
+    )
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
     CLOUDINARY_API_KEY: str | None = Field(default=None)
     CLOUDINARY_API_SECRET: str | None = Field(default=None)
@@ -235,7 +247,8 @@ class Settings(BaseSettings):
         default="", description="Cloudflare API token with Workers AI permission"
     )
     CLOUDFLARE_AI_GATEWAY_ID: str = Field(
-        default="", description="AI Gateway ID for routing Workers AI requests (optional)"
+        default="",
+        description="AI Gateway ID for routing Workers AI requests (optional)",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_MODEL: str = Field(
         default="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
@@ -249,7 +262,8 @@ class Settings(BaseSettings):
         default=True, description="Enable Workers AI JSON Mode for structured responses"
     )
     CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS: int = Field(
-        default=60, description="HTTP timeout for Workers AI requests (thinking models need ≥60s)"
+        default=60,
+        description="HTTP timeout for Workers AI requests (thinking models need ≥60s)",
     )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,

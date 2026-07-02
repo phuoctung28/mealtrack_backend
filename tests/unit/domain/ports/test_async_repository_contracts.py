@@ -60,6 +60,7 @@ def test_repository_ports_are_async_contracts():
             "find_active_by_user_id",
             "find_expiring_soon",
             "find_expiring_in_window",
+            "find_trial_end_offer_candidates",
             "cancel",
             "reactivate",
             "update_payment_status",

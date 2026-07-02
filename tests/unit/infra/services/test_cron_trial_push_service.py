@@ -24,7 +24,7 @@ def _make_sub(user_id: str, expires_at: datetime, status: str = "active"):
 def _patch_uow_with_subs(subs):
     """Build an async context-manager mock wired to return `subs`."""
     uow_cm = MagicMock()
-    uow_cm.subscriptions.find_expiring_in_window = AsyncMock(return_value=subs)
+    uow_cm.subscriptions.find_trial_end_offer_candidates = AsyncMock(return_value=subs)
     uow_cm.session = MagicMock()
     uow_cm.session.execute = AsyncMock(return_value=MagicMock(rowcount=len(subs)))
     uow_cm.session.flush = AsyncMock()
@@ -43,23 +43,29 @@ async def test_schedules_row_for_active_expiring_sub_with_token():
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
-    with patch(
-        "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
-        return_value=uow_ctx,
-    ), patch.object(
-        CronTrialPushService,
-        "_fetch_prefs",
-        AsyncMock(return_value={
-            user_id: {
-                "language": "en",
-                "timezone": "Asia/Ho_Chi_Minh",
-                "gender": "male",
-            }
-        }),
-    ), patch.object(
-        CronTrialPushService,
-        "_fetch_fcm_tokens",
-        AsyncMock(return_value={user_id: ["tok1", "tok2"]}),
+    with (
+        patch(
+            "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
+            return_value=uow_ctx,
+        ),
+        patch.object(
+            CronTrialPushService,
+            "_fetch_prefs",
+            AsyncMock(
+                return_value={
+                    user_id: {
+                        "language": "en",
+                        "timezone": "Asia/Ho_Chi_Minh",
+                        "gender": "male",
+                    }
+                }
+            ),
+        ),
+        patch.object(
+            CronTrialPushService,
+            "_fetch_fcm_tokens",
+            AsyncMock(return_value={user_id: ["tok1", "tok2"]}),
+        ),
     ):
         n = await svc.check_and_schedule_pushes(NOW_UTC)
         assert n >= 1
@@ -73,23 +79,29 @@ async def test_skips_user_without_fcm_token():
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
-    with patch(
-        "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
-        return_value=uow_ctx,
-    ), patch.object(
-        CronTrialPushService,
-        "_fetch_prefs",
-        AsyncMock(return_value={
-            user_id: {
-                "language": "en",
-                "timezone": "UTC",
-                "gender": "male",
-            }
-        }),
-    ), patch.object(
-        CronTrialPushService,
-        "_fetch_fcm_tokens",
-        AsyncMock(return_value={}),  # no tokens
+    with (
+        patch(
+            "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
+            return_value=uow_ctx,
+        ),
+        patch.object(
+            CronTrialPushService,
+            "_fetch_prefs",
+            AsyncMock(
+                return_value={
+                    user_id: {
+                        "language": "en",
+                        "timezone": "UTC",
+                        "gender": "male",
+                    }
+                }
+            ),
+        ),
+        patch.object(
+            CronTrialPushService,
+            "_fetch_fcm_tokens",
+            AsyncMock(return_value={}),  # no tokens
+        ),
     ):
         n = await svc.check_and_schedule_pushes(NOW_UTC)
         assert n == 0
@@ -117,7 +129,7 @@ async def test_runs_single_schedule_pass():
 
 @pytest.mark.asyncio
 async def test_queries_next_day_charge_window():
-    """Subs charging within the next day are considered (from_days=0, to_days=1)."""
+    """Trial-end offer candidates charging within the next day are considered."""
     svc = CronTrialPushService()
     uow_ctx, uow = _patch_uow_with_subs([])
     with patch(
@@ -125,8 +137,8 @@ async def test_queries_next_day_charge_window():
         return_value=uow_ctx,
     ):
         await svc.check_and_schedule_pushes(NOW_UTC)
-    uow.subscriptions.find_expiring_in_window.assert_awaited_once_with(
-        from_days=0, to_days=1, now=NOW_UTC
+    uow.subscriptions.find_trial_end_offer_candidates.assert_awaited_once_with(
+        lookahead_days=1, now=NOW_UTC
     )
 
 
@@ -140,7 +152,9 @@ async def test_language_resolution_falls_back_to_users_language_code():
     row.timezone = "Asia/Ho_Chi_Minh"
     row.gender = "female"
     row.language_code = "vi"
-    session.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=[row])))
+    session.execute = AsyncMock(
+        return_value=MagicMock(fetchall=MagicMock(return_value=[row]))
+    )
 
     out = await CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "vi"
@@ -155,7 +169,9 @@ async def test_language_resolution_pref_overrides_user():
     row.timezone = "UTC"
     row.gender = "male"
     row.language_code = "vi"
-    session.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=[row])))
+    session.execute = AsyncMock(
+        return_value=MagicMock(fetchall=MagicMock(return_value=[row]))
+    )
 
     out = await CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"
@@ -170,7 +186,9 @@ async def test_language_resolution_unknown_falls_back_to_en():
     row.timezone = "UTC"
     row.gender = "male"
     row.language_code = "de"
-    session.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=[row])))
+    session.execute = AsyncMock(
+        return_value=MagicMock(fetchall=MagicMock(return_value=[row]))
+    )
 
     out = await CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"
@@ -198,6 +216,7 @@ def test_build_row_schedules_two_hours_before_charge():
     assert row["context"]["language_code"] == "vi"
     assert row["context"]["gender"] == "female"
     assert row["context"]["fcm_tokens"] == ["tok1"]
+    assert row["context"]["campaign"] == "trial_end_discount"
     assert row["expires_at"] == row["scheduled_for_utc"] + timedelta(days=2)
 
 

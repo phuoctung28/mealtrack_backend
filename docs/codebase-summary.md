@@ -1,6 +1,6 @@
 # Backend Codebase Summary
 
-**Generated:** June 27, 2026
+**Generated:** July 2, 2026
 **Status:** Production-ready snapshot of the live backend codebase
 **Runtime:** FastAPI 0.136.3 on Python 3.13.2 with async SQLAlchemy 2.0
 
@@ -80,11 +80,11 @@ The current HTTP surface includes:
 ## Recent Features (June 2026)
 
 - **Canonical AI Nutrition Contracts + Validation Retry:** `src/domain/model/ai/nutrition_contracts.py` defines image and text nutrition contracts with bounded food counts, strict quantity validation, and backend-calorie authority; invalid structured meal image/text output now retries exactly once before a controlled `AIOutputValidationError`, while ingredient recognition keeps its unstructured `{name, confidence, category}` contract and the legacy parser no longer silently drops invalid AI food items.
-- **Notification / Push Overhaul:** Platform-specific payload builders (`src/infra/services/push/`); Android high-priority FCM, APNs Time Sensitive with `interruption-level` in payload body; trial-expiry pushes at T-2d and T-1d; notifications rescheduled on timezone changes; cron push (`src/cron/push.py`) precomputes notification rows, schedules trial-expiry rows, dispatches due rows through database row claiming, and cleans expired rows
-- **RevenueCat Webhook Expansion:** Full lifecycle coverage (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER); referral credit/revoke on purchase/refund; PostHog lifecycle mirroring
-- **PostHog Analytics Adapter:** `src/infra/adapters/posthog_adapter.py` — fire-and-forget async capture; enabled by `POSTHOG_API_KEY`
+- **Notification / Push Overhaul:** Platform-specific payload builders (`src/infra/services/push/`); Android high-priority FCM, APNs Time Sensitive with `interruption-level` in payload body; trial-expiry push schedules one pre-charge service reminder; notifications rescheduled on timezone changes; cron push (`src/cron/push.py`) precomputes notification rows, schedules trial-expiry rows, dispatches due rows through database row claiming, and cleans expired rows
+- **RevenueCat Webhook Expansion:** Full lifecycle coverage (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER); referral credit/revoke on purchase/refund; trial period/cancel/discount-claim fields persisted for D3 offer eligibility; PostHog lifecycle mirroring
+- **PostHog Analytics Adapter:** `src/infra/adapters/posthog_adapter.py` — fire-and-forget async capture; enabled by `POSTHOG_API_KEY`; intended owner for cancellation winback email workflows
 - **Parallel Recipe Generator:** `src/domain/services/meal_suggestion/parallel_recipe_generator.py` with per-recipe attempt logic in `recipe_attempt_builder.py`; 3-phase pipeline: name generation → parallel recipe generation → translation
-- **Cron Lifecycle Email Service:** `src/cron/email.py` runs re-engagement and trial-expiry lifecycle emails via `CronLifecycleEmailService`
+- **Lifecycle Email Ownership:** Legacy backend lifecycle email code remains in-tree but production infra disables it; cancellation winback email is intended to run in PostHog Workflows.
 - **Configurable Referral Commission:** `REFERRAL_COMMISSIONS` env var (JSON dict, per-currency, default 2 USD)
 - **Variable-Length Referral Codes:** 3–15 character codes
 - **AI Handshake Guest Trial Quota (Postgres):** `src/api/services/guest_parse_quota.py` + table `ai_handshake_guest_trial_quotas`; enforces one-shot AI trial per guest install HMAC hash using Postgres row-level locking (INSERT+conflict → SELECT FOR UPDATE); Redis not required for this endpoint.

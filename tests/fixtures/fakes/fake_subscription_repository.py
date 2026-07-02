@@ -65,6 +65,32 @@ class FakeSubscriptionRepository(SubscriptionRepositoryPort):
             and lower <= sub.expires_at < upper
         ]
 
+    async def find_trial_end_offer_candidates(
+        self,
+        lookahead_days: int,
+        now: datetime | None = None,
+        fallback_trial_window_days: int = 7,
+    ) -> list[Subscription]:
+        """Trial users charging soon who have not claimed the trial-end offer."""
+        reference = now or datetime.now()
+        upper = reference + timedelta(days=lookahead_days)
+        fallback_lower = reference - timedelta(days=fallback_trial_window_days)
+        return [
+            sub
+            for sub in self._subscriptions.values()
+            if sub.status in ("active", "cancelled")
+            and sub.expires_at is not None
+            and reference < sub.expires_at < upper
+            and getattr(sub, "trial_end_discount_claimed_at", None) is None
+            and (
+                getattr(sub, "period_type", None) == "trial"
+                or (
+                    not getattr(sub, "period_type", None)
+                    and getattr(sub, "purchased_at", fallback_lower) >= fallback_lower
+                )
+            )
+        ]
+
     async def cancel(self, subscription_id: str, reason: str = None) -> bool:
         """Cancel a subscription."""
         if subscription_id in self._subscriptions:

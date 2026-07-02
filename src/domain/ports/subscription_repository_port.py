@@ -32,7 +32,9 @@ class SubscriptionRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    async def find_expiring_soon(self, days_until_expiry: int = 7) -> list[Subscription]:
+    async def find_expiring_soon(
+        self, days_until_expiry: int = 7
+    ) -> list[Subscription]:
         """Find subscriptions expiring within specified days."""
         pass
 
@@ -47,6 +49,21 @@ class SubscriptionRepositoryPort(ABC):
 
         `now` lets callers pin the reference moment for deterministic tests and
         consistent window boundaries within a single scheduler run.
+        """
+        pass
+
+    @abstractmethod
+    async def find_trial_end_offer_candidates(
+        self,
+        lookahead_days: int,
+        now: datetime | None = None,
+        fallback_trial_window_days: int = 7,
+    ) -> list[Subscription]:
+        """Trial subscriptions charging soon and still eligible for the end-trial offer.
+
+        Includes cancelled subscriptions while their access window is still active.
+        `fallback_trial_window_days` covers older rows synced before RevenueCat
+        period_type was persisted.
         """
         pass
 

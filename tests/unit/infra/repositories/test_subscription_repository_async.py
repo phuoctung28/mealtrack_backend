@@ -67,3 +67,21 @@ async def test_find_expiring_soon_returns_active_future_rows():
     assert "subscriptions.status" in compiled
     assert "subscriptions.expires_at <= " in compiled
     assert "subscriptions.expires_at > " in compiled
+
+
+@pytest.mark.asyncio
+async def test_find_trial_end_offer_candidates_allows_cancelled_unexpired_trials():
+    rows = [MagicMock(id="sub-trial")]
+    session = _AsyncSession(rows)
+    repo = AsyncSubscriptionRepository(session)
+    now = datetime(2026, 6, 9, tzinfo=UTC)
+
+    result = await repo.find_trial_end_offer_candidates(lookahead_days=1, now=now)
+
+    assert result == rows
+    compiled = str(session.statement)
+    assert "subscriptions.status IN" in compiled
+    assert "subscriptions.expires_at > " in compiled
+    assert "subscriptions.expires_at < " in compiled
+    assert "trial_end_discount_claimed_at IS NULL" in compiled
+    assert "lower(subscriptions.period_type)" in compiled

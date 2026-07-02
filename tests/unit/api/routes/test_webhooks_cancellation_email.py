@@ -1,5 +1,6 @@
 """Tests for cancellation email in RevenueCat webhook."""
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,7 +12,9 @@ from src.domain.ports.email_service_port import EmailResult
 @pytest.fixture
 def mock_email_service():
     service = AsyncMock()
-    service.send_cancellation_email.return_value = EmailResult(success=True, message_id="msg_123")
+    service.send_cancellation_email.return_value = EmailResult(
+        success=True, message_id="msg_123"
+    )
     return service
 
 
@@ -36,7 +39,9 @@ def mock_uow():
 
 
 @pytest.mark.asyncio
-async def test_cancellation_sends_email(mock_uow, mock_user, mock_email_service):
+async def test_cancellation_skips_backend_email_by_default(
+    mock_uow, mock_user, mock_email_service
+):
     event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
 
     with patch(
@@ -45,17 +50,46 @@ async def test_cancellation_sends_email(mock_uow, mock_user, mock_email_service)
     ):
         await handle_cancellation(mock_uow, mock_user, event)
 
+        mock_email_service.send_cancellation_email.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_sends_legacy_backend_email_when_explicitly_enabled(
+    mock_uow, mock_user, mock_email_service
+):
+    event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
+
+    with (
+        patch.dict(
+            os.environ,
+            {"CANCELLATION_EMAIL_OWNER": "backend", "EMAIL_ENABLED": "true"},
+        ),
+        patch(
+            "src.api.routes.v1.webhooks._get_email_service",
+            return_value=mock_email_service,
+        ),
+    ):
+        await handle_cancellation(mock_uow, mock_user, event)
+
         mock_email_service.send_cancellation_email.assert_called_once_with(mock_user)
 
 
 @pytest.mark.asyncio
-async def test_cancellation_skips_email_if_opted_out(mock_uow, mock_user, mock_email_service):
+async def test_cancellation_skips_email_if_opted_out(
+    mock_uow, mock_user, mock_email_service
+):
     mock_user.email_opt_out = True
     event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
 
-    with patch(
-        "src.api.routes.v1.webhooks._get_email_service",
-        return_value=mock_email_service,
+    with (
+        patch.dict(
+            os.environ,
+            {"CANCELLATION_EMAIL_OWNER": "backend", "EMAIL_ENABLED": "true"},
+        ),
+        patch(
+            "src.api.routes.v1.webhooks._get_email_service",
+            return_value=mock_email_service,
+        ),
     ):
         await handle_cancellation(mock_uow, mock_user, event)
 
