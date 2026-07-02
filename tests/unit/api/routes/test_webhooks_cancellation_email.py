@@ -1,12 +1,12 @@
 """Tests for cancellation email in RevenueCat webhook."""
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.api.routes.v1.webhooks import handle_cancellation
 from src.domain.ports.email_service_port import EmailResult
-from src.infra.config.settings import settings
 
 
 @pytest.fixture
@@ -60,8 +60,10 @@ async def test_cancellation_sends_legacy_backend_email_when_explicitly_enabled(
     event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
 
     with (
-        patch.object(settings, "CANCELLATION_EMAIL_OWNER", "backend"),
-        patch.object(settings, "EMAIL_ENABLED", True),
+        patch.dict(
+            os.environ,
+            {"CANCELLATION_EMAIL_OWNER": "backend", "EMAIL_ENABLED": "true"},
+        ),
         patch(
             "src.api.routes.v1.webhooks._get_email_service",
             return_value=mock_email_service,
@@ -80,8 +82,10 @@ async def test_cancellation_skips_email_if_opted_out(
     event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
 
     with (
-        patch.object(settings, "CANCELLATION_EMAIL_OWNER", "backend"),
-        patch.object(settings, "EMAIL_ENABLED", True),
+        patch.dict(
+            os.environ,
+            {"CANCELLATION_EMAIL_OWNER": "backend", "EMAIL_ENABLED": "true"},
+        ),
         patch(
             "src.api.routes.v1.webhooks._get_email_service",
             return_value=mock_email_service,

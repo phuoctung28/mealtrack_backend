@@ -17,7 +17,6 @@ from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
-from src.infra.config.settings import settings
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -262,6 +261,21 @@ def _normalized_csv(value: str | None) -> set[str]:
     return {item.strip().lower() for item in value.split(",") if item.strip()}
 
 
+def _env_csv(name: str) -> set[str]:
+    return _normalized_csv(os.getenv(name, ""))
+
+
+def _cancellation_email_owner() -> str:
+    return os.getenv("CANCELLATION_EMAIL_OWNER", "posthog").strip().lower()
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _normalized_period_type(event: dict) -> str | None:
     raw = event.get("period_type")
     if not isinstance(raw, str):
@@ -286,8 +300,8 @@ def _discount_identifier_from_event(event: dict) -> str | None:
 def _is_trial_end_discount_claim(event: dict) -> bool:
     product_id = event.get("product_id")
     discount_identifier = _discount_identifier_from_event(event)
-    product_ids = _normalized_csv(settings.TRIAL_END_DISCOUNT_PRODUCT_IDS)
-    discount_identifiers = _normalized_csv(settings.TRIAL_END_DISCOUNT_IDENTIFIERS)
+    product_ids = _env_csv("TRIAL_END_DISCOUNT_PRODUCT_IDS")
+    discount_identifiers = _env_csv("TRIAL_END_DISCOUNT_IDENTIFIERS")
 
     if isinstance(product_id, str) and product_id.strip().lower() in product_ids:
         return True
@@ -332,8 +346,11 @@ def _apply_revenuecat_lifecycle_state(
 
 def _should_send_backend_cancellation_email(user) -> bool:
     """Legacy sender is disabled unless explicitly selected as the email owner."""
-    owner = (settings.CANCELLATION_EMAIL_OWNER or "").strip().lower()
-    return owner == "backend" and settings.EMAIL_ENABLED and not user.email_opt_out
+    return (
+        _cancellation_email_owner() == "backend"
+        and _env_bool("EMAIL_ENABLED")
+        and not user.email_opt_out
+    )
 
 
 def _timestamp_ms(value: datetime | None) -> int | None:
@@ -491,7 +508,7 @@ async def handle_cancellation(uow, user, event):
         logger.info(
             "Backend cancellation email skipped for user %s; owner=%s",
             user.id,
-            settings.CANCELLATION_EMAIL_OWNER,
+            _cancellation_email_owner(),
         )
 
 
@@ -613,7 +630,7 @@ async def capture_subscription_lifecycle_event(
         "trial_end_discount_identifier": getattr(
             subscription, "trial_end_discount_identifier", None
         ),
-        "cancellation_email_owner": settings.CANCELLATION_EMAIL_OWNER,
+        "cancellation_email_owner": _cancellation_email_owner(),
         "is_sandbox": event.get("environment") == "SANDBOX",
     }
     await PostHogAdapter().capture(

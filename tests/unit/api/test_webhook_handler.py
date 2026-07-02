@@ -2,6 +2,7 @@
 Unit tests for RevenueCat webhook handler.
 """
 
+import os
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,7 +21,6 @@ from src.api.routes.v1.webhooks import (
     parse_timestamp,
     revenuecat_webhook,
 )
-from src.infra.config.settings import settings
 
 
 class TestWebhookHelpers:
@@ -363,10 +363,13 @@ class TestWebhookHandler:
         }
 
         with (
-            patch.object(
-                settings,
-                "TRIAL_END_DISCOUNT_PRODUCT_IDS",
-                "nutree_trial_end_discount_yearly",
+            patch.dict(
+                os.environ,
+                {
+                    "TRIAL_END_DISCOUNT_PRODUCT_IDS": (
+                        "nutree_trial_end_discount_yearly"
+                    )
+                },
             ),
             patch(
                 "src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id",
