@@ -23,14 +23,16 @@ Mobile → POST /v1/meals/image/analyze or /v1/meals/scan-by-url
          ↓
 UploadMealImageImmediatelyHandler or ScanByUrlCommandHandler
   1. Get image bytes (multipart upload or Cloudinary URL download)
-  2. For `scan_mode="food_label"`, call `VisionAIService.analyze_food_label(...)`
-     and persist `Meal(source="food_label")`
-  3. Otherwise call `VisionAIService.analyze(...)`
-  4. Validate `is_food`
-  5. Parse normal nutrition foods
-  6. Persist `Meal(source="scanner")`
-  7. Invalidate meal caches
+  2. Call `VisionAIService.analyze(...)`
+  3. Validate `is_food`
+  4. Parse normal nutrition foods
+  5. Persist `Meal(source="scanner")`
+  6. Invalidate meal caches
 ```
+
+Food-label scans do not use this image-AI flow. Clients upload through the
+signed Cloudinary flow, run native OCR, then call
+`/v1/meals/food-label/scan-by-url` with `ocr_text_lines`.
 
 Meal scan must not create `hydration_entries`.
 

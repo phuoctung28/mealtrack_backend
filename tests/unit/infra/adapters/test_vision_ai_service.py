@@ -151,29 +151,6 @@ async def test_analyze_with_strategy_allows_max_token_override():
 
 
 @pytest.mark.asyncio
-async def test_analyze_food_label_uses_food_label_schema():
-    service = _make_service(
-        response={
-            "product_name": "Cereal",
-            "serving_size": {"display_text": "55g", "grams": 55},
-            "servings_per_package": 8,
-            "macros_per_serving": {"protein_g": 3, "carbs_g": 37, "fat_g": 8},
-            "confidence": 0.91,
-        }
-    )
-
-    image = _make_jpeg(400, 300)
-    await service.analyze_food_label(image)
-
-    from src.domain.model.ai.nutrition_contracts import FoodLabelNutritionResponse
-
-    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
-    assert call_kwargs["purpose"].value == "food_label_scan"
-    assert call_kwargs["schema"] is FoodLabelNutritionResponse
-    assert "Nutrition Facts label" in call_kwargs["system_message"]
-
-
-@pytest.mark.asyncio
 async def test_analyze_by_url_passes_meal_analyze_max_tokens():
     """URL analysis must fetch bytes and pass the meal-analysis token budget."""
     service = _make_service()

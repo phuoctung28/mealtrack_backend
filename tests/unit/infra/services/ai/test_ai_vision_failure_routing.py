@@ -56,9 +56,7 @@ def _fake_settings_with_cf_text_and_vision():
     )
     settings.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = True
     settings.CLOUDFLARE_WORKERS_AI_VISION_MODEL = "cf-vision-model"
-    settings.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = (
-        "meal_scan,food_label_scan,ingredient_scan"
-    )
+    settings.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = "meal_scan,ingredient_scan"
     return settings
 
 
@@ -126,7 +124,6 @@ def test_image_scan_purposes_prefer_openai_and_fallback_to_cf(mock_circuit_break
 
     for purpose in {
         ModelPurpose.MEAL_SCAN,
-        ModelPurpose.FOOD_LABEL_SCAN,
         ModelPurpose.INGREDIENT_SCAN,
     }:
         assert manager.get_fallback_chain(purpose)[:2] == [

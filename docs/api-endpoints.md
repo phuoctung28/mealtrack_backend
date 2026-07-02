@@ -1,6 +1,6 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** June 27, 2026
+**Last Updated:** July 2, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
@@ -36,6 +36,7 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | POST | `/v1/meals/image/analyze` | Analyze meal from image (immediate upload) |
 | GET | `/v1/meals/upload-token` | Create signed direct-upload token |
 | POST | `/v1/meals/scan-by-url` | Analyze meal from an existing image URL |
+| POST | `/v1/meals/food-label/scan-by-url` | Analyze Nutrition Facts label from an existing image URL |
 | POST | `/v1/meals/manual` | Create meal from USDA foods |
 | POST | `/v1/meals/parse-text` | Parse meal from text description |
 | POST | `/v1/meals/parse-text/guest-trial` | One-shot guest text parse trial |
@@ -46,6 +47,13 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/meals/{meal_id}` | Get meal details |
 | DELETE | `/v1/meals/{meal_id}` | Delete meal (soft delete) |
 | PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients |
+
+### Food Label OCR Contract
+
+- `/v1/meals/food-label/scan-by-url` requires `ocr_text_lines` from native client OCR.
+- The backend parses OCR text deterministically and does not send food-label images to AI analysis.
+- Missing OCR text, sparse text, missing fields, and conflicting values fail cleanly without AI fallback.
+- The backend remains source of truth for validation and derives calories from macros; clients must not calculate label nutrition.
 
 ---
 

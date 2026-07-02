@@ -9,6 +9,7 @@ from src.app.handlers.command_handlers.scan_by_url_command_handler import (
     ScanByUrlCommandHandler,
 )
 from src.domain.parsers.vision_response_parser import VisionResponseParser
+from src.domain.services.food_label_ocr_parser import FoodLabelOcrParser
 
 _IMAGE_URL = "https://res.cloudinary.com/test/image/upload/v1/mealtrack/drink.jpg"
 _PUBLIC_ID = "mealtrack/1325c7ca-e012-4df3-b0b4-55bfaeb55eb0"
@@ -118,9 +119,31 @@ async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
-    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+async def test_scan_by_url_food_label_requires_ocr_text(monkeypatch):
+    _install_fake_image_download(monkeypatch)
+    uow = _make_uow()
+    handler = ScanByUrlCommandHandler(
+        uow=uow,
+        event_bus=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+    )
 
+    with pytest.raises(ValueError, match="label text could not be read"):
+        await handler.handle(
+            ScanByUrlCommand(
+                user_id=_USER_ID,
+                image_url=_IMAGE_URL,
+                public_id="mealtrack/00000000-0000-0000-0000-000000000002",
+                scan_mode="food_label",
+            )
+        )
+
+    uow.meals.save.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_food_label_uses_ocr_only(monkeypatch):
     _install_fake_image_download(monkeypatch)
     uow = _make_uow()
     cache = MagicMock()
@@ -129,46 +152,57 @@ async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
         uow=uow,
         event_bus=MagicMock(),
         vision_service=MagicMock(),
-        gpt_parser=MagicMock(),
+        gpt_parser=VisionResponseParser(),
         cache_invalidation=cache,
+        food_label_ocr_parser=FoodLabelOcrParser(),
     )
-    handler.vision_service.analyze_food_label = AsyncMock(
-        return_value={"is_food_label": True, "product_name": "Protein Bar"}
-    )
-    handler.gpt_parser.parse_food_label_to_nutrition.return_value = Nutrition(
-        macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-        food_items=[
-            FoodItem(
-                id="label-item",
-                name="Protein Bar",
-                quantity=55,
-                unit="g",
-                macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-                is_custom=True,
-            )
-        ],
-    )
-    handler.gpt_parser.parse_food_label_metadata.return_value = {"is_food_label": True}
-    handler.gpt_parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
-    handler.gpt_parser.parse_is_food = MagicMock()
 
     result = await handler.handle(
         ScanByUrlCommand(
             user_id=_USER_ID,
             image_url=_IMAGE_URL,
-            public_id="mealtrack/00000000-0000-0000-0000-000000000002",
+            public_id="mealtrack/00000000-0000-0000-0000-000000000003",
             scan_mode="food_label",
+            ocr_text_lines=[
+                "ACME Protein Bar",
+                "Nutrition Facts",
+                "8 servings per container",
+                "Serving size 1 bar (55g)",
+                "Calories 210",
+                "Total Fat 7g",
+                "Total Carbohydrate 24g",
+                "Dietary Fiber 5g",
+                "Total Sugars 8g",
+                "Protein 12g",
+            ],
         )
     )
 
-    handler.vision_service.analyze_food_label.assert_awaited_once_with(
-        b"fake-image-bytes"
-    )
-    uow.meals.save.assert_awaited_once()
-    handler.gpt_parser.parse_is_food.assert_not_called()
-    cache.after_meal_write.assert_awaited_once()
     assert result.source == "food_label"
-    assert result.dish_name == "Unnamed Food"
-    assert result.emoji is None
-    assert result.nutrition.food_items[0].quantity == 55
-    handler.gpt_parser.parse_food_label_name.assert_not_called()
+    assert result.food_label_metadata["product_name"] == "ACME Protein Bar"
+    assert result.nutrition.food_items[0].quantity == pytest.approx(55)
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_food_label_ocr_failure_does_not_call_ai(monkeypatch):
+    _install_fake_image_download(monkeypatch)
+    uow = _make_uow()
+    handler = ScanByUrlCommandHandler(
+        uow=uow,
+        event_bus=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+    )
+
+    with pytest.raises(ValueError, match="could not be parsed"):
+        await handler.handle(
+            ScanByUrlCommand(
+                user_id=_USER_ID,
+                image_url=_IMAGE_URL,
+                public_id="mealtrack/00000000-0000-0000-0000-000000000004",
+                scan_mode="food_label",
+                ocr_text_lines=["Nutrition Facts", "Calories 120"],
+            )
+        )
+
+    uow.meals.save.assert_not_awaited()
