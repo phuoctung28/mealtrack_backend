@@ -259,38 +259,6 @@ async def analyze_meal_image_immediate(
         raise handle_exception(e) from e
 
 
-@router.post(
-    "/food-label/analyze",
-    status_code=status.HTTP_410_GONE,
-)
-@limiter.limit("10/minute")
-async def analyze_food_label_image_immediate(
-    request: Request,
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
-    target_date: str | None = Query(
-        None, description="Target date in YYYY-MM-DD format for meal association"
-    ),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-    image_store=Depends(get_image_store),
-    cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
-    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
-):
-    """Deprecated food-label image analysis endpoint."""
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail={
-            "message": (
-                "Food-label scans require client OCR text. "
-                "Upload the image with /v1/meals/upload-token, then call "
-                "/v1/meals/food-label/scan-by-url with ocr_text_lines."
-            ),
-            "error_code": "FOOD_LABEL_IMAGE_ANALYSIS_DEPRECATED",
-        },
-    )
-
-
 @router.post("/manual", response_model=ManualMealCreationResponse)
 async def create_manual_meal(
     request: Request,

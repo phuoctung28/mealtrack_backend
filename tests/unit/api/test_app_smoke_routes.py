@@ -83,15 +83,6 @@ def test_meals_analyze_rejects_food_label_mode(client: TestClient):
     assert r.json()["detail"]["error_code"] == "INVALID_SCAN_MODE"
 
 
-def test_food_label_analyze_is_deprecated(client: TestClient):
-    r = client.post(
-        "/v1/meals/food-label/analyze",
-        files={"file": ("x.jpg", b"abc", "image/jpeg")},
-    )
-    assert r.status_code == 410
-    assert r.json()["detail"]["error_code"] == "FOOD_LABEL_IMAGE_ANALYSIS_DEPRECATED"
-
-
 def test_meals_analyze_rejects_invalid_target_date(client: TestClient):
     r = client.post(
         "/v1/meals/image/analyze?target_date=2024-99-99",

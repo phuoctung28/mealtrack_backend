@@ -34,7 +34,6 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/v1/meals/image/analyze` | Analyze meal from image (immediate upload) |
-| POST | `/v1/meals/food-label/analyze` | Deprecated; returns 410 |
 | GET | `/v1/meals/upload-token` | Create signed direct-upload token |
 | POST | `/v1/meals/scan-by-url` | Analyze meal from an existing image URL |
 | POST | `/v1/meals/food-label/scan-by-url` | Analyze Nutrition Facts label from an existing image URL |
