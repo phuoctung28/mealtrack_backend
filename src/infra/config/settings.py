@@ -260,7 +260,7 @@ class Settings(BaseSettings):
         description="Workers AI model for image analysis (must support vision input)",
     )
     CLOUDFLARE_WORKERS_AI_VISION_PURPOSES: str = Field(
-        default="meal_scan,food_label_scan,ingredient_scan",
+        default="meal_scan,ingredient_scan",
         description="Comma-separated ModelPurpose values where Workers AI vision is included in routing",
     )
     # Meal analysis settings
@@ -268,11 +268,6 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(
         default=MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
     )
-    FOOD_LABEL_OCR_FIRST_ENABLED: bool = Field(
-        default=False,
-        description="Enable deterministic OCR-first parsing for food-label scans",
-    )
-
     # Affiliate integration
     AFFILIATE_INTEGRATION_ENABLED: bool = Field(
         default=False,

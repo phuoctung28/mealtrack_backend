@@ -34,7 +34,7 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/v1/meals/image/analyze` | Analyze meal from image (immediate upload) |
-| POST | `/v1/meals/food-label/analyze` | Analyze Nutrition Facts label from image upload |
+| POST | `/v1/meals/food-label/analyze` | Deprecated; returns 410 |
 | GET | `/v1/meals/upload-token` | Create signed direct-upload token |
 | POST | `/v1/meals/scan-by-url` | Analyze meal from an existing image URL |
 | POST | `/v1/meals/food-label/scan-by-url` | Analyze Nutrition Facts label from an existing image URL |
@@ -51,9 +51,9 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 
 ### Food Label OCR Contract
 
-- `/v1/meals/food-label/scan-by-url` accepts optional `ocr_text_lines` from native client OCR.
-- When `FOOD_LABEL_OCR_FIRST_ENABLED=true`, the backend attempts deterministic parsing before AI image analysis.
-- OCR parse failures, sparse text, missing fields, and conflicting values fall back to the existing AI image path.
+- `/v1/meals/food-label/scan-by-url` requires `ocr_text_lines` from native client OCR.
+- The backend parses OCR text deterministically and does not send food-label images to AI analysis.
+- Missing OCR text, sparse text, missing fields, and conflicting values fail cleanly without AI fallback.
 - The backend remains source of truth for validation and derives calories from macros; clients must not calculate label nutrition.
 
 ---

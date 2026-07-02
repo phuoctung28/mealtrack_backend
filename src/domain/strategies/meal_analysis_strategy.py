@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.domain.services.prompts.system_prompts import SystemPrompts
 
@@ -51,7 +51,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
     Basic meal analysis strategy without additional context.
     """
 
-    def __init__(self, optimized_prompt_enabled: Optional[bool] = None):
+    def __init__(self, optimized_prompt_enabled: bool | None = None):
         if optimized_prompt_enabled is None:
             optimized_prompt_enabled = True
         self.optimized_prompt_enabled = bool(optimized_prompt_enabled)
@@ -95,7 +95,7 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
     Ingredient-aware meal analysis strategy.
     """
 
-    def __init__(self, ingredients: List[Dict[str, Any]]):
+    def __init__(self, ingredients: list[dict[str, Any]]):
         self.ingredients = ingredients
         logger.info(
             f"Created IngredientAwareAnalysisStrategy with {len(ingredients)} ingredients"
@@ -160,19 +160,6 @@ class IngredientIdentificationStrategy(MealAnalysisStrategy):
         return "IngredientIdentification"
 
 
-class FoodLabelAnalysisStrategy(MealAnalysisStrategy):
-    """Strategy for extracting packaged food Nutrition Facts labels."""
-
-    def get_analysis_prompt(self) -> str:
-        return SystemPrompts.FOOD_LABEL_ANALYSIS
-
-    def get_user_message(self) -> str:
-        return "Extract the visible Nutrition Facts label for one serving:"
-
-    def get_strategy_name(self) -> str:
-        return "FoodLabelAnalysis"
-
-
 class UserContextAwareAnalysisStrategy(MealAnalysisStrategy):
     """
     Analysis strategy that incorporates user-provided context.
@@ -212,7 +199,7 @@ class AnalysisStrategyFactory:
 
     @staticmethod
     def create_basic_strategy(
-        optimized_prompt_enabled: Optional[bool] = None,
+        optimized_prompt_enabled: bool | None = None,
     ) -> MealAnalysisStrategy:
         """Create a basic analysis strategy."""
         return BasicAnalysisStrategy(optimized_prompt_enabled=optimized_prompt_enabled)
@@ -224,7 +211,7 @@ class AnalysisStrategyFactory:
 
     @staticmethod
     def create_ingredient_strategy(
-        ingredients: List[Dict[str, Any]],
+        ingredients: list[dict[str, Any]],
     ) -> MealAnalysisStrategy:
         """Create an ingredient-aware analysis strategy."""
         return IngredientAwareAnalysisStrategy(ingredients)
@@ -240,11 +227,6 @@ class AnalysisStrategyFactory:
         return IngredientIdentificationStrategy()
 
     @staticmethod
-    def create_food_label_strategy() -> MealAnalysisStrategy:
-        """Create a packaged food-label extraction strategy."""
-        return FoodLabelAnalysisStrategy()
-
-    @staticmethod
     def create_user_context_strategy(user_description: str) -> MealAnalysisStrategy:
         """Create a user-context-aware analysis strategy.
 
@@ -258,9 +240,9 @@ class AnalysisStrategyFactory:
 
     @staticmethod
     def create_combined_strategy(
-        portion_size: Optional[float] = None,
-        unit: Optional[str] = None,
-        ingredients: Optional[List[Dict[str, Any]]] = None,
+        portion_size: float | None = None,
+        unit: str | None = None,
+        ingredients: list[dict[str, Any]] | None = None,
     ) -> MealAnalysisStrategy:
         """
         Create a combined strategy with both portion and ingredient context.

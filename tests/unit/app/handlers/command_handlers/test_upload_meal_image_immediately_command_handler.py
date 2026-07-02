@@ -35,7 +35,6 @@ def _make_handler(vision_analyze_mock, max_attempts: int = 3):
 
     vision_service = Mock()
     vision_service.analyze = vision_analyze_mock
-    vision_service.analyze_food_label = AsyncMock()
 
     handler = UploadMealImageImmediatelyHandler(
         uow=Mock(),
@@ -146,88 +145,14 @@ class TestVisionRetryRouting:
         assert analyze_mock.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_food_label_mode_uses_label_analyzer(self):
-        """Food-label scans route through the label-specific analyzer."""
+    async def test_food_label_mode_is_rejected_by_immediate_upload(self):
+        """Food-label scans require OCR text through the scan-by-url endpoint."""
         analyze_mock = AsyncMock()
         handler = _make_handler(analyze_mock, max_attempts=3)
         command = _make_command()
         command.scan_mode = "food_label"
-        handler.vision_service.analyze_food_label = AsyncMock(
-            return_value={"is_food_label": True}
-        )
 
-        result = await handler._run_vision_analysis(command, meal_id="meal-abc")
+        with pytest.raises(ValueError, match="require client OCR text"):
+            await handler.handle(command)
 
-        assert result == {"is_food_label": True}
-        handler.vision_service.analyze_food_label.assert_awaited_once_with(
-            command.file_contents
-        )
         analyze_mock.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_food_label_parallel_upload_persists_ready_label_meal(self):
-        from src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler import (
-            UploadMealImageImmediatelyHandler,
-        )
-        from src.domain.model.nutrition import FoodItem, Macros, Nutrition
-
-        command = _make_command()
-        command.scan_mode = "food_label"
-        uow = _make_uow()
-        image_store = Mock()
-        image_store.save_async = AsyncMock(return_value="https://cdn.test/label.jpg")
-        vision_service = Mock()
-        vision_service.analyze_food_label = AsyncMock(
-            return_value={"is_food_label": True, "product_name": "Protein Bar"}
-        )
-        parser = Mock()
-        parser.parse_food_label_to_nutrition.return_value = Nutrition(
-            macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-            food_items=[
-                FoodItem(
-                    id="label-item",
-                    name="Protein Bar",
-                    quantity=55,
-                    unit="g",
-                    macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-                    is_custom=True,
-                )
-            ],
-        )
-        label_metadata = {
-            "is_food_label": True,
-            "product_name": "Protein Bar",
-            "serving_size": {"display_text": "1 bar (55g)", "grams": 55},
-            "servings_per_package": 8,
-            "confidence": 0.92,
-        }
-        parser.parse_food_label_metadata.return_value = label_metadata
-        parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
-        parser.parse_is_food = Mock()
-        cache = Mock()
-        cache.after_meal_write = AsyncMock()
-
-        handler = UploadMealImageImmediatelyHandler(
-            uow=uow,
-            event_bus=Mock(),
-            image_store=image_store,
-            vision_service=vision_service,
-            gpt_parser=parser,
-            fast_path_policy=_make_fast_path_policy(),
-            cache_invalidation=cache,
-        )
-
-        meal = await handler._handle_parallel_upload(command)
-
-        assert meal.status.value == "READY"
-        assert meal.source == "food_label"
-        assert meal.dish_name == "Unnamed Food"
-        assert meal.emoji is None
-        assert meal.food_label_metadata == label_metadata
-        assert meal.nutrition.food_items[0].quantity == 55
-        uow.meals.save.assert_awaited_once()
-        saved_meal = uow.meals.save.await_args.args[0]
-        assert saved_meal.food_label_metadata == label_metadata
-        cache.after_meal_write.assert_awaited_once()
-        parser.parse_is_food.assert_not_called()
-        parser.parse_food_label_name.assert_not_called()

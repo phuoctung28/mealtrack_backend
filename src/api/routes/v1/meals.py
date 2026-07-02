@@ -216,7 +216,7 @@ async def analyze_meal_image_immediate(
     ),
     scan_mode: str = Query(
         "scanner",
-        description="scanner for meal photos. Use /food-label/analyze for Nutrition Facts labels.",
+        description="scanner for meal photos. Use /food-label/scan-by-url with OCR text for Nutrition Facts labels.",
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
@@ -233,7 +233,10 @@ async def analyze_meal_image_immediate(
     try:
         if scan_mode != "scanner":
             raise ValidationException(
-                message="Use /v1/meals/food-label/analyze for Nutrition Facts labels.",
+                message=(
+                    "Use /v1/meals/food-label/scan-by-url with OCR text "
+                    "for Nutrition Facts labels."
+                ),
                 error_code="INVALID_SCAN_MODE",
                 details={"scan_mode": scan_mode},
             )
@@ -258,8 +261,7 @@ async def analyze_meal_image_immediate(
 
 @router.post(
     "/food-label/analyze",
-    status_code=status.HTTP_200_OK,
-    response_model=DetailedMealResponse,
+    status_code=status.HTTP_410_GONE,
 )
 @limiter.limit("10/minute")
 async def analyze_food_label_image_immediate(
@@ -275,23 +277,18 @@ async def analyze_food_label_image_immediate(
     task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
-    """Analyze a packaged-food Nutrition Facts label."""
-    try:
-        return await _analyze_uploaded_image(
-            request=request,
-            file=file,
-            user_id=user_id,
-            target_date=target_date,
-            user_description=None,
-            scan_mode="food_label",
-            event_bus=event_bus,
-            image_store=image_store,
-            cache_service=cache_service,
-            task_manager=task_manager,
-            ai_manager=ai_manager,
-        )
-    except Exception as e:
-        raise handle_exception(e) from e
+    """Deprecated food-label image analysis endpoint."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "message": (
+                "Food-label scans require client OCR text. "
+                "Upload the image with /v1/meals/upload-token, then call "
+                "/v1/meals/food-label/scan-by-url with ocr_text_lines."
+            ),
+            "error_code": "FOOD_LABEL_IMAGE_ANALYSIS_DEPRECATED",
+        },
+    )
 
 
 @router.post("/manual", response_model=ManualMealCreationResponse)

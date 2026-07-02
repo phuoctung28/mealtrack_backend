@@ -119,72 +119,32 @@ async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
-    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
-
+async def test_scan_by_url_food_label_requires_ocr_text(monkeypatch):
     _install_fake_image_download(monkeypatch)
     uow = _make_uow()
-    cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
     handler = ScanByUrlCommandHandler(
         uow=uow,
         event_bus=MagicMock(),
         vision_service=MagicMock(),
         gpt_parser=MagicMock(),
-        cache_invalidation=cache,
     )
-    handler.vision_service.analyze_food_label = AsyncMock(
-        return_value={"is_food_label": True, "product_name": "Protein Bar"}
-    )
-    handler.gpt_parser.parse_food_label_to_nutrition.return_value = Nutrition(
-        macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-        food_items=[
-            FoodItem(
-                id="label-item",
-                name="Protein Bar",
-                quantity=55,
-                unit="g",
-                macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-                is_custom=True,
+
+    with pytest.raises(ValueError, match="label text could not be read"):
+        await handler.handle(
+            ScanByUrlCommand(
+                user_id=_USER_ID,
+                image_url=_IMAGE_URL,
+                public_id="mealtrack/00000000-0000-0000-0000-000000000002",
+                scan_mode="food_label",
             )
-        ],
-    )
-    handler.gpt_parser.parse_food_label_metadata.return_value = {"is_food_label": True}
-    handler.gpt_parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
-    handler.gpt_parser.parse_is_food = MagicMock()
-
-    result = await handler.handle(
-        ScanByUrlCommand(
-            user_id=_USER_ID,
-            image_url=_IMAGE_URL,
-            public_id="mealtrack/00000000-0000-0000-0000-000000000002",
-            scan_mode="food_label",
         )
-    )
 
-    handler.vision_service.analyze_food_label.assert_awaited_once_with(
-        b"fake-image-bytes"
-    )
-    uow.meals.save.assert_awaited_once()
-    handler.gpt_parser.parse_is_food.assert_not_called()
-    cache.after_meal_write.assert_awaited_once()
-    assert result.source == "food_label"
-    assert result.dish_name == "Unnamed Food"
-    assert result.emoji is None
-    assert result.nutrition.food_items[0].quantity == 55
-    handler.gpt_parser.parse_food_label_name.assert_not_called()
+    uow.meals.save.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_scan_by_url_food_label_uses_ocr_when_enabled(monkeypatch):
-    from src.app.handlers.command_handlers import scan_by_url_command_handler as module
-
+async def test_scan_by_url_food_label_uses_ocr_only(monkeypatch):
     _install_fake_image_download(monkeypatch)
-    monkeypatch.setattr(
-        module,
-        "get_settings",
-        lambda: type("Settings", (), {"FOOD_LABEL_OCR_FIRST_ENABLED": True})(),
-    )
     uow = _make_uow()
     cache = MagicMock()
     cache.after_meal_write = AsyncMock()
@@ -196,7 +156,6 @@ async def test_scan_by_url_food_label_uses_ocr_when_enabled(monkeypatch):
         cache_invalidation=cache,
         food_label_ocr_parser=FoodLabelOcrParser(),
     )
-    handler.vision_service.analyze_food_label = AsyncMock()
 
     result = await handler.handle(
         ScanByUrlCommand(
@@ -219,23 +178,14 @@ async def test_scan_by_url_food_label_uses_ocr_when_enabled(monkeypatch):
         )
     )
 
-    handler.vision_service.analyze_food_label.assert_not_awaited()
     assert result.source == "food_label"
     assert result.food_label_metadata["product_name"] == "ACME Protein Bar"
     assert result.nutrition.food_items[0].quantity == pytest.approx(55)
 
 
 @pytest.mark.asyncio
-async def test_scan_by_url_food_label_falls_back_to_ai_on_ocr_failure(monkeypatch):
-    from src.app.handlers.command_handlers import scan_by_url_command_handler as module
-    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
-
+async def test_scan_by_url_food_label_ocr_failure_does_not_call_ai(monkeypatch):
     _install_fake_image_download(monkeypatch)
-    monkeypatch.setattr(
-        module,
-        "get_settings",
-        lambda: type("Settings", (), {"FOOD_LABEL_OCR_FIRST_ENABLED": True})(),
-    )
     uow = _make_uow()
     handler = ScanByUrlCommandHandler(
         uow=uow,
@@ -243,35 +193,16 @@ async def test_scan_by_url_food_label_falls_back_to_ai_on_ocr_failure(monkeypatc
         vision_service=MagicMock(),
         gpt_parser=MagicMock(),
     )
-    handler.vision_service.analyze_food_label = AsyncMock(
-        return_value={"is_food_label": True, "product_name": "Fallback Bar"}
-    )
-    handler.gpt_parser.parse_food_label_to_nutrition.return_value = Nutrition(
-        macros=Macros(protein=10, carbs=20, fat=5),
-        food_items=[
-            FoodItem(
-                id="fallback-item",
-                name="Fallback Bar",
-                quantity=55,
-                unit="g",
-                macros=Macros(protein=10, carbs=20, fat=5),
-                is_custom=True,
+
+    with pytest.raises(ValueError, match="could not be parsed"):
+        await handler.handle(
+            ScanByUrlCommand(
+                user_id=_USER_ID,
+                image_url=_IMAGE_URL,
+                public_id="mealtrack/00000000-0000-0000-0000-000000000004",
+                scan_mode="food_label",
+                ocr_text_lines=["Nutrition Facts", "Calories 120"],
             )
-        ],
-    )
-    handler.gpt_parser.parse_food_label_metadata.return_value = {"is_food_label": True}
-    handler.gpt_parser.extract_raw_json.return_value = "{}"
-
-    await handler.handle(
-        ScanByUrlCommand(
-            user_id=_USER_ID,
-            image_url=_IMAGE_URL,
-            public_id="mealtrack/00000000-0000-0000-0000-000000000004",
-            scan_mode="food_label",
-            ocr_text_lines=["Nutrition Facts", "Calories 120"],
         )
-    )
 
-    handler.vision_service.analyze_food_label.assert_awaited_once_with(
-        b"fake-image-bytes"
-    )
+    uow.meals.save.assert_not_awaited()

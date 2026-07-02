@@ -33,7 +33,6 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.infra.config.settings import get_settings
 from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
@@ -142,39 +141,36 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             # Vision analysis via bytes path (never sends URL to the AI provider)
             if command.scan_mode == "food_label":
                 ocr_started = time.time()
-                ocr_enabled = get_settings().FOOD_LABEL_OCR_FIRST_ENABLED
-                has_ocr_text = bool(command.ocr_text_lines)
-                if ocr_enabled and has_ocr_text:
-                    self._record_ocr_metric("food_label_ocr.attempt")
-                    ocr_result = self.food_label_ocr_parser.parse(
-                        command.ocr_text_lines
-                    )
-                    elapsed_ms = (time.time() - ocr_started) * 1000
-                    if ocr_result.succeeded:
-                        self._record_ocr_metric(
-                            "food_label_ocr.success",
-                            elapsed_ms=elapsed_ms,
-                        )
-                        self._record_ocr_metric("food_label_ocr.ai_avoided")
-                        vision_result = {"structured_data": ocr_result.structured_data}
-                    else:
-                        reason = ",".join(ocr_result.failure_reasons[:3])
-                        self._record_ocr_metric(
-                            "food_label_ocr.fallback_to_ai",
-                            reason=reason or "unknown",
-                            elapsed_ms=elapsed_ms,
-                        )
-                        vision_result = await self.vision_service.analyze_food_label(
-                            image_bytes
-                        )
-                else:
+                if not command.ocr_text_lines:
                     self._record_ocr_metric(
-                        "food_label_ocr.skipped",
-                        reason="disabled" if not ocr_enabled else "no_ocr_text",
+                        "food_label_ocr.rejected",
+                        reason="no_ocr_text",
                     )
-                    vision_result = await self.vision_service.analyze_food_label(
-                        image_bytes
+                    raise ValueError(
+                        "Nutrition Facts label text could not be read. "
+                        "Please retake the label photo and try again."
                     )
+
+                self._record_ocr_metric("food_label_ocr.attempt")
+                ocr_result = self.food_label_ocr_parser.parse(command.ocr_text_lines)
+                elapsed_ms = (time.time() - ocr_started) * 1000
+                if not ocr_result.succeeded:
+                    reason = ",".join(ocr_result.failure_reasons[:3])
+                    self._record_ocr_metric(
+                        "food_label_ocr.failure",
+                        reason=reason or "unknown",
+                        elapsed_ms=elapsed_ms,
+                    )
+                    raise ValueError(
+                        "Nutrition Facts label could not be parsed from OCR text. "
+                        "Please retake the label photo and try again."
+                    )
+
+                self._record_ocr_metric(
+                    "food_label_ocr.success",
+                    elapsed_ms=elapsed_ms,
+                )
+                vision_result = {"structured_data": ocr_result.structured_data}
             elif command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,
