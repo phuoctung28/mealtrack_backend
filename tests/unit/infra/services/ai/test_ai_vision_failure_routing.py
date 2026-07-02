@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
     AIUnavailableError,
     AIVisionError,
     AIVisionFailureKind,
@@ -301,6 +302,38 @@ class TestVisionFailureKindRouting:
         )
 
         assert result == {"result": "openai_fallback"}
+        mock_circuit_breaker.record_failure.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_schema_failures_exhausting_chain_raise_output_validation(
+        self,
+        manager,
+        mock_openai_provider,
+        mock_circuit_breaker,
+    ):
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+        mock_openai_provider.generate_with_vision = AsyncMock(
+            side_effect=AIVisionError(
+                "[OPENAI-VISION-SCHEMA-FAIL] provider=openai model=test-model",
+                kind=AIVisionFailureKind.schema_validation,
+                provider="openai",
+                model="test-model",
+            )
+        )
+
+        with pytest.raises(AIOutputValidationError) as exc_info:
+            await manager.generate_with_vision(
+                purpose=ModelPurpose.MEAL_SCAN,
+                prompt="analyze food",
+                image_data=b"fake_image",
+                schema=VisionNutritionResponse,
+            )
+
+        assert exc_info.value.purpose == "meal_scan"
+        assert exc_info.value.attempt_count == 1
+        assert exc_info.value.validation_details == [
+            "openai/test-model: schema_validation"
+        ]
         mock_circuit_breaker.record_failure.assert_not_called()
 
     @pytest.mark.asyncio
