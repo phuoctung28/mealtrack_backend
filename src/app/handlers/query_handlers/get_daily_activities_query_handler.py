@@ -15,6 +15,7 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.services.hydration_catalog_service import (
     localized_name_for_catalog_name,
 )
+from src.domain.services.meal_calorie_service import effective_meal_calories
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
     get_zone_info,
@@ -116,7 +117,9 @@ class GetDailyActivitiesQueryHandler(
                 (
                     self._build_hydration_activity(item, query.language or "en")
                     if item.meal_type == "hydration"
-                    else self._build_meal_activity(item, query.target_date, query.language)
+                    else self._build_meal_activity(
+                        item, query.target_date, query.language
+                    )
                 )
                 for item in items
             ]
@@ -198,7 +201,7 @@ class GetDailyActivitiesQueryHandler(
             "title": title,
             "emoji": getattr(meal, "emoji", None),
             "meal_type": meal_type,
-            "calories": round(meal.nutrition.calories, 1) if meal.nutrition else 0,
+            "calories": round(effective_meal_calories(meal), 1),
             "macros": {
                 "protein": (
                     round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0
@@ -238,14 +241,19 @@ class GetDailyActivitiesQueryHandler(
             "source": meal.source or "hydration",
         }
 
-    def _build_hydration_entry_activity(self, entry, language: str = "en") -> dict[str, Any]:
+    def _build_hydration_entry_activity(
+        self, entry, language: str = "en"
+    ) -> dict[str, Any]:
         """Build activity dict from a HydrationEntry domain object (no Meal row)."""
         return {
             "id": entry.id,
             "type": "hydration",
             "timestamp": format_iso_utc(entry.logged_at),
-            "title": localized_name_for_catalog_name(entry.drink_name_snapshot, language)
-            or entry.drink_name_snapshot or "Water",
+            "title": localized_name_for_catalog_name(
+                entry.drink_name_snapshot, language
+            )
+            or entry.drink_name_snapshot
+            or "Water",
             "emoji": entry.emoji_snapshot or "💧",
             "meal_type": "hydration",
             "calories": round(entry.calories, 1),

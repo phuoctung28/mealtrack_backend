@@ -315,6 +315,7 @@ class TestVisionFailureKindRouting:
                 kind=AIVisionFailureKind.schema_validation,
                 provider="openai",
                 model="test-model",
+                validation_details=["product_name: Field required"],
             )
         )
 
@@ -329,7 +330,7 @@ class TestVisionFailureKindRouting:
         assert exc_info.value.purpose == "meal_scan"
         assert exc_info.value.attempt_count == 1
         assert exc_info.value.validation_details == [
-            "openai/test-model: schema_validation"
+            "openai/test-model: schema_validation: product_name: Field required"
         ]
         mock_circuit_breaker.record_failure.assert_not_called()
 

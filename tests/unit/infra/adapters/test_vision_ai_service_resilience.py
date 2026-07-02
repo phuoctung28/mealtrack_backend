@@ -6,13 +6,17 @@ from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
 )
+from src.domain.model.ai.nutrition_contracts import (
+    FoodLabelNutritionResponse,
+    VisionNutritionResponse,
+)
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.parsers.vision_response_parser import VisionResponseParser
 from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
+    FoodLabelImageAnalysisStrategy,
     MealAnalysisStrategy,
 )
-from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
 from src.infra.adapters.vision_ai_service import VisionAIService
 
 
@@ -118,6 +122,42 @@ async def test_analyze_with_strategy_calls_correct_purpose(
     call_kwargs = mock_ai_manager.generate_with_vision.call_args
     assert call_kwargs.kwargs["purpose"] == ModelPurpose.MEAL_SCAN
     assert call_kwargs.kwargs["schema"] is VisionNutritionResponse
+
+
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_uses_food_label_schema_for_label_images(
+    service, mock_ai_manager
+):
+    mock_ai_manager.generate_with_vision = AsyncMock(
+        return_value={
+            "is_food_label": True,
+            "product_name": "Protein Bar",
+            "brand": None,
+            "serving_size": {"display_text": "55g", "grams": 55},
+            "servings_per_package": 8,
+            "label_calories_per_serving": 210,
+            "macros_per_serving": {
+                "protein_g": 12,
+                "carbs_g": 24,
+                "fat_g": 7,
+                "fiber_g": 5,
+                "sugar_g": 8,
+            },
+            "confidence": 0.9,
+            "label_notes": ["Read from label image."],
+        }
+    )
+    strategy = FoodLabelImageAnalysisStrategy()
+
+    result = await service.analyze_with_strategy(b"fake_image", strategy)
+
+    call_kwargs = mock_ai_manager.generate_with_vision.call_args.kwargs
+    from src.infra.services.ai.ai_model_manager import ModelPurpose
+
+    assert call_kwargs["purpose"] == ModelPurpose.FOOD_LABEL_SCAN
+    assert call_kwargs["schema"] is FoodLabelNutritionResponse
+    assert call_kwargs["system_message"] == strategy.get_analysis_prompt()
+    assert result["structured_data"]["product_name"] == "Protein Bar"
 
 
 @pytest.mark.asyncio

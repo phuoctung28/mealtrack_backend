@@ -12,13 +12,17 @@ from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
 )
-from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.domain.model.ai.nutrition_contracts import (
+    FoodLabelNutritionResponse,
+    VisionNutritionResponse,
+)
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.ai_output_validation_service import (
     validate_ai_output,
 )
 from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
+    FoodLabelImageAnalysisStrategy,
     IngredientIdentificationStrategy,
     MealAnalysisStrategy,
 )
@@ -99,9 +103,18 @@ class VisionAIService(VisionAIServicePort):
             return await self._analyze_without_nutrition_contract(image_bytes, strategy)
 
         try:
-            schema = VisionNutritionResponse
-            validation_purpose = VISION_VALIDATION_PURPOSE
-            model_purpose = ModelPurpose.MEAL_SCAN
+            is_food_label = isinstance(strategy, FoodLabelImageAnalysisStrategy)
+            schema = (
+                FoodLabelNutritionResponse if is_food_label else VisionNutritionResponse
+            )
+            validation_purpose = (
+                "food_label_scan" if is_food_label else VISION_VALIDATION_PURPOSE
+            )
+            model_purpose = (
+                ModelPurpose.FOOD_LABEL_SCAN
+                if is_food_label
+                else ModelPurpose.MEAL_SCAN
+            )
             result = await self._ai_manager.generate_with_vision(
                 purpose=model_purpose,
                 prompt=strategy.get_user_message(),

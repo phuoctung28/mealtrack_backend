@@ -1,29 +1,30 @@
 """Handler for bulk activities query — returns activities grouped by date."""
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.activity.get_bulk_activities_query import GetBulkActivitiesQuery
 from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.meal_projection import MealProjection
+from src.domain.ports.cache_port import CachePort
 from src.domain.services.hydration_catalog_service import (
     localized_name_for_catalog_name,
 )
+from src.domain.services.meal_calorie_service import effective_meal_calories
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
     get_zone_info,
     resolve_user_timezone_async,
 )
-from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
 _ACTIVE_STATUSES = {MealStatus.READY, MealStatus.ENRICHING}
 
 
-def _build_meal_activity(meal: Meal, language: str = "en") -> Dict[str, Any]:
+def _build_meal_activity(meal: Meal, language: str = "en") -> dict[str, Any]:
     title = meal.dish_name or "Unknown Meal"
     if language and language != "en" and meal.translations:
         translation = meal.translations.get(language)
@@ -38,7 +39,7 @@ def _build_meal_activity(meal: Meal, language: str = "en") -> Dict[str, Any]:
         "title": title,
         "emoji": meal.emoji,
         "meal_type": meal.meal_type,
-        "calories": round(meal.nutrition.calories, 1) if meal.nutrition else 0,
+        "calories": round(effective_meal_calories(meal), 1),
         "macros": {
             "protein": round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0,
             "carbs": round(meal.nutrition.macros.carbs, 1) if meal.nutrition else 0,
@@ -51,7 +52,7 @@ def _build_meal_activity(meal: Meal, language: str = "en") -> Dict[str, Any]:
     }
 
 
-def _build_hydration_activity(meal: Meal, language: str = "en") -> Dict[str, Any]:
+def _build_hydration_activity(meal: Meal, language: str = "en") -> dict[str, Any]:
     kcal = round(meal.nutrition.calories, 1) if meal.nutrition else 0
     macros = {
         "protein": round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0,
@@ -77,14 +78,14 @@ def _build_hydration_activity(meal: Meal, language: str = "en") -> Dict[str, Any
 
 @handles(GetBulkActivitiesQuery)
 class GetBulkActivitiesQueryHandler(
-    EventHandler[GetBulkActivitiesQuery, Dict[str, List[Dict[str, Any]]]]
+    EventHandler[GetBulkActivitiesQuery, dict[str, list[dict[str, Any]]]]
 ):
-    def __init__(self, cache_service: Optional[CachePort] = None):
+    def __init__(self, cache_service: CachePort | None = None):
         self.cache_service = cache_service
 
     async def handle(
         self, query: GetBulkActivitiesQuery
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> dict[str, list[dict[str, Any]]]:
         async with AsyncUnitOfWork() as uow:
             user_tz_str = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
@@ -100,7 +101,7 @@ class GetBulkActivitiesQueryHandler(
             )
 
         language = query.language or "en"
-        result: Dict[str, List[Dict[str, Any]]] = {}
+        result: dict[str, list[dict[str, Any]]] = {}
 
         for meal in meals:
             if meal.status not in _ACTIVE_STATUSES:

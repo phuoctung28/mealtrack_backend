@@ -33,8 +33,10 @@ class ScanByUrlRequest(BaseModel):
 class FoodLabelScanByUrlRequest(BaseModel):
     image_url: str
     image_id: str
+    label_crop_image_url: str | None = None
+    label_crop_image_id: str | None = None
     target_date: str | None = None
-    ocr_text_lines: list[str] | None = None
+    crop_metadata: dict[str, Any] | None = None
 
 
 def _validate_cloudinary_url(image_url: str, image_id: str) -> None:
@@ -76,9 +78,24 @@ async def _scan_by_url(
     target_date: str | None,
     user_description: str | None,
     scan_mode: str,
-    ocr_text_lines: list[str] | None = None,
+    label_crop_image_url: str | None = None,
+    label_crop_image_id: str | None = None,
+    crop_metadata: dict[str, Any] | None = None,
 ) -> DetailedMealResponse:
     _validate_cloudinary_url(image_url, image_id)
+    if bool(label_crop_image_url) != bool(label_crop_image_id):
+        raise ValidationException(
+            message="label_crop_image_url and label_crop_image_id must be supplied together",
+            error_code="INVALID_LABEL_CROP_IMAGE",
+            details={
+                "has_url": bool(label_crop_image_url),
+                "has_id": bool(label_crop_image_id),
+            },
+        )
+    label_crop_public_id = None
+    if label_crop_image_url and label_crop_image_id:
+        _validate_cloudinary_url(label_crop_image_url, label_crop_image_id)
+        label_crop_public_id = f"mealtrack/{label_crop_image_id}"
 
     parsed_target_date = _parse_target_date(target_date)
     sanitized_description = (
@@ -95,7 +112,9 @@ async def _scan_by_url(
         target_date=parsed_target_date,
         language=language,
         scan_mode=scan_mode,
-        ocr_text_lines=ocr_text_lines,
+        label_crop_image_url=label_crop_image_url,
+        label_crop_public_id=label_crop_public_id,
+        crop_metadata=crop_metadata,
     )
 
     try:
@@ -182,7 +201,9 @@ async def scan_food_label_by_url(
             target_date=body.target_date,
             user_description=None,
             scan_mode="food_label",
-            ocr_text_lines=body.ocr_text_lines,
+            label_crop_image_url=body.label_crop_image_url,
+            label_crop_image_id=body.label_crop_image_id,
+            crop_metadata=body.crop_metadata,
             event_bus=event_bus,
         )
     except ValidationException:

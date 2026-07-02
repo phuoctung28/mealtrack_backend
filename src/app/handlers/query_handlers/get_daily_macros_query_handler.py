@@ -15,6 +15,7 @@ from src.domain.model.meal import MealStatus
 from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.cache_port import CachePort
+from src.domain.services.meal_calorie_service import effective_meal_calories
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import (
     get_user_monday,
@@ -62,7 +63,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
             total_protein = 0.0
             total_carbs = 0.0
             total_fat = 0.0
-            total_fiber = 0.0
+            total_calories = 0.0
             meal_count = 0
             meals_with_nutrition = 0
             has_legacy_hydration = False
@@ -82,7 +83,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                         total_protein += meal.nutrition.macros.protein or 0
                         total_carbs += meal.nutrition.macros.carbs or 0
                         total_fat += meal.nutrition.macros.fat or 0
-                        total_fiber += meal.nutrition.macros.fiber or 0
+                        total_calories += effective_meal_calories(meal)
 
             if not has_legacy_hydration:
                 hydration_entries = await uow.hydration_entries.find_by_date(
@@ -96,14 +97,12 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                     total_protein += entry.protein_g or 0
                     total_carbs += entry.carbs_g or 0
                     total_fat += entry.fat_g or 0
-                    total_fiber += entry.fiber_g or 0
-
-            total_calories = Macros(
-                protein=total_protein,
-                carbs=total_carbs,
-                fat=total_fat,
-                fiber=total_fiber,
-            ).total_calories
+                    total_calories += Macros(
+                        protein=entry.protein_g or 0,
+                        carbs=entry.carbs_g or 0,
+                        fat=entry.fat_g or 0,
+                        fiber=entry.fiber_g or 0,
+                    ).total_calories
 
             # Pre-fetch weekly budget eagerly here (must be inside this UoW — fetching it
             # later would require a second connection open). Only consumed when target_calories

@@ -155,6 +155,7 @@ def handle_exception(exc: Exception) -> HTTPException:
                 "details": {
                     "purpose": exc.purpose,
                     "attempt_count": exc.attempt_count,
+                    "validation_details": exc.validation_details,
                 },
             },
         )

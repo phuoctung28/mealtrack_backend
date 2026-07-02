@@ -478,6 +478,18 @@ class TestMealMapper:
             ready_at=datetime(2025, 1, 15, 15, 0),
             created_at=datetime(2025, 1, 15, 14, 30),
             source="food_label",
+            food_label_metadata={
+                "product_name": "Protein Bar",
+                "brand": "Example",
+                "serving_size": {
+                    "display_text": "1 bar (55g)",
+                    "grams": 55,
+                },
+                "servings_per_package": 8,
+                "label_calories_per_serving": 230,
+                "confidence": 0.92,
+                "label_notes": ["Calories differ from derived macros."],
+            },
             raw_gpt_json=json.dumps(
                 {
                     "product_name": "Protein Bar",
@@ -516,6 +528,11 @@ class TestMealMapper:
         result = MealMapper.to_detailed_response(meal)
 
         assert result.source == "food_label"
+        assert result.total_calories == pytest.approx(230)
+        assert result.food_items[0].nutrition.calories == pytest.approx(230)
+        assert result.food_items[0].custom_nutrition.calories_per_100g == (
+            pytest.approx(418.1818)
+        )
         assert result.food_label_metadata is not None
         assert result.food_label_metadata.product_name == "Protein Bar"
         assert result.food_label_metadata.brand == "Example"

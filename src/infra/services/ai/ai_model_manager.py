@@ -31,6 +31,7 @@ TEXT_PURPOSES: set[ModelPurpose] = {
 }
 VISION_PURPOSES: set[ModelPurpose] = {
     ModelPurpose.MEAL_SCAN,
+    ModelPurpose.FOOD_LABEL_SCAN,
     ModelPurpose.INGREDIENT_SCAN,
 }
 
@@ -39,6 +40,9 @@ FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
     # VISION TASKS: OpenAI primary, optional provider routes append as fallback
     # ==========================================================================
     ModelPurpose.MEAL_SCAN: [
+        DEFAULT_OPENAI_MODEL,
+    ],
+    ModelPurpose.FOOD_LABEL_SCAN: [
         DEFAULT_OPENAI_MODEL,
     ],
     ModelPurpose.INGREDIENT_SCAN: [
@@ -515,4 +519,7 @@ class AIModelManager:
 def _vision_failure_detail(error: AIVisionError) -> str:
     provider = error.provider or "vision-provider"
     model = error.model or "unknown-model"
-    return f"{provider}/{model}: {error.kind.value}"
+    detail = f"{provider}/{model}: {error.kind.value}"
+    if error.validation_details:
+        detail = f"{detail}: {'; '.join(error.validation_details[:3])}"
+    return detail
