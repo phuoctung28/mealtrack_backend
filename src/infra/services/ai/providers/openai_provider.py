@@ -14,6 +14,7 @@ from openai import (
 from pydantic import ValidationError
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
+from src.domain.services.ai_output_validation_service import summarize_validation_error
 from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
 from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.langchain_openai_adapter import OpenAILangChainAdapter
@@ -192,6 +193,7 @@ class OpenAIProvider(AIProviderPort):
                 kind=AIVisionFailureKind.schema_validation,
                 provider="openai",
                 model=model,
+                validation_details=summarize_validation_error(exc),
             ) from exc
         self._record_prompt_cache_usage(
             result.raw_message,

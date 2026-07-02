@@ -235,7 +235,8 @@ class Settings(BaseSettings):
         default="", description="Cloudflare API token with Workers AI permission"
     )
     CLOUDFLARE_AI_GATEWAY_ID: str = Field(
-        default="", description="AI Gateway ID for routing Workers AI requests (optional)"
+        default="",
+        description="AI Gateway ID for routing Workers AI requests (optional)",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_MODEL: str = Field(
         default="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
@@ -249,7 +250,8 @@ class Settings(BaseSettings):
         default=True, description="Enable Workers AI JSON Mode for structured responses"
     )
     CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS: int = Field(
-        default=60, description="HTTP timeout for Workers AI requests (thinking models need ≥60s)"
+        default=60,
+        description="HTTP timeout for Workers AI requests (thinking models need ≥60s)",
     )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,
@@ -260,7 +262,7 @@ class Settings(BaseSettings):
         description="Workers AI model for image analysis (must support vision input)",
     )
     CLOUDFLARE_WORKERS_AI_VISION_PURPOSES: str = Field(
-        default="meal_scan,ingredient_scan",
+        default="meal_scan,food_label_scan,ingredient_scan",
         description="Comma-separated ModelPurpose values where Workers AI vision is included in routing",
     )
     # Meal analysis settings

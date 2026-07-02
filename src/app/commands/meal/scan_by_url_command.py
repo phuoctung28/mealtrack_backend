@@ -17,4 +17,6 @@ class ScanByUrlCommand(Command):
     target_date: date | None = None
     language: str = "en"
     scan_mode: str = "scanner"
-    ocr_text_lines: list[str] | None = None
+    label_crop_image_url: str | None = None
+    label_crop_public_id: str | None = None
+    crop_metadata: dict | None = None

@@ -37,7 +37,9 @@ def client(monkeypatch) -> TestClient:
         def get_url(self, image_id: str) -> str:
             return f"https://example.com/{image_id}"
 
-        async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+        async def generate_upload_signature_async(
+            self, image_id: str, ttl: int = 300
+        ) -> dict:
             return {
                 "image_id": image_id,
                 "cloud_name": "test_cloud",
@@ -161,7 +163,6 @@ def test_scan_by_url_non_food_returns_not_food_image(client: TestClient):
     payload = {
         "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
         "image_id": "abc",
-        "ocr_text_lines": ["Nutrition Facts", "Protein 12g"],
     }
     r = client.post("/v1/meals/scan-by-url", json=payload)
 
@@ -192,7 +193,12 @@ def test_food_label_scan_by_url_uses_food_label_mode(client: TestClient):
     class _FoodLabelBus:
         async def send(self, msg):
             assert msg.scan_mode == "food_label"
-            assert msg.ocr_text_lines == ["Nutrition Facts", "Protein 12g"]
+            assert (
+                msg.label_crop_image_url
+                == "https://res.cloudinary.com/test/image/upload/v123/mealtrack/crop.jpg"
+            )
+            assert msg.label_crop_public_id == "mealtrack/crop"
+            assert msg.crop_metadata == {"crop_strategy": "food_label_visible_frame_v1"}
             return Meal(
                 meal_id=str(uuid4()),
                 user_id=str(uuid4()),
@@ -232,13 +238,27 @@ def test_food_label_scan_by_url_uses_food_label_mode(client: TestClient):
     payload = {
         "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
         "image_id": "abc",
-        "ocr_text_lines": ["Nutrition Facts", "Protein 12g"],
+        "label_crop_image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/crop.jpg",
+        "label_crop_image_id": "crop",
+        "crop_metadata": {"crop_strategy": "food_label_visible_frame_v1"},
     }
     r = client.post("/v1/meals/food-label/scan-by-url", json=payload)
 
     assert r.status_code == 200
     assert r.json()["source"] == "food_label"
     assert r.json()["food_label_metadata"]["servings_per_package"] == 8
+
+
+def test_food_label_scan_by_url_rejects_partial_crop_payload(client: TestClient):
+    payload = {
+        "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
+        "image_id": "abc",
+        "label_crop_image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/crop.jpg",
+    }
+    r = client.post("/v1/meals/food-label/scan-by-url", json=payload)
+
+    assert r.status_code == 400
+    assert r.json()["detail"]["error_code"] == "INVALID_LABEL_CROP_IMAGE"
 
 
 def test_upload_token_returns_signed_params(client: TestClient):

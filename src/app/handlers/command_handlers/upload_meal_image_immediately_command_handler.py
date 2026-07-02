@@ -336,7 +336,7 @@ class UploadMealImageImmediatelyHandler(
         """Handle immediate meal image upload and analysis."""
         if command.scan_mode == "food_label":
             raise ValueError(
-                "Food-label scans require client OCR text. "
+                "Food-label scans require the scan-by-url image flow. "
                 "Use /v1/meals/food-label/scan-by-url."
             )
 

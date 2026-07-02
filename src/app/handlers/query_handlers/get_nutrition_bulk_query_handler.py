@@ -1,21 +1,28 @@
 """
 Handler for bulk nutrition query - returns date-indexed summaries for a range.
 """
+
 import hashlib
 import logging
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.nutrition import GetNutritionBulkQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
-from src.domain.model.nutrition.macros import Macros
-from src.domain.services.weekly_budget_service import WeeklyBudgetService
-from src.domain.utils.timezone_utils import ensure_utc, get_user_monday, get_zone_info, resolve_user_timezone_async
-from src.domain.ports.cache_port import CachePort
-from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.model.meal_projection import MealProjection
+from src.domain.model.nutrition.macros import Macros
+from src.domain.ports.cache_port import CachePort
+from src.domain.services.meal_calorie_service import effective_meal_calories
+from src.domain.services.weekly_budget_service import WeeklyBudgetService
+from src.domain.utils.timezone_utils import (
+    ensure_utc,
+    get_user_monday,
+    get_zone_info,
+    resolve_user_timezone_async,
+)
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +30,13 @@ MAX_DATE_RANGE = 60
 
 
 @handles(GetNutritionBulkQuery)
-class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str, Any]]):
+class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str, Any]]):
     """Handler for bulk nutrition data retrieval."""
 
-    def __init__(self, cache_service: Optional[CachePort] = None):
+    def __init__(self, cache_service: CachePort | None = None):
         self.cache_service = cache_service
 
-    async def handle(self, query: GetNutritionBulkQuery) -> Dict[str, Any]:
+    async def handle(self, query: GetNutritionBulkQuery) -> dict[str, Any]:
         """Fetch nutrition summaries for all dates in range (cache-aside).
 
         The full response is cached under a short-TTL per-range key. The short
@@ -55,7 +62,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
         # get_or_set returns None only if the factory did; _compute never does.
         return await self._compute(query)
 
-    async def _compute(self, query: GetNutritionBulkQuery) -> Dict[str, Any]:
+    async def _compute(self, query: GetNutritionBulkQuery) -> dict[str, Any]:
         """Build the bulk nutrition response (uncached)."""
         async with AsyncUnitOfWork() as uow:
             user_tz_str = await resolve_user_timezone_async(
@@ -72,9 +79,11 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 projection=MealProjection.MACROS_ONLY,
             )
 
-            target_calories, target_macros, bmr = await self._get_user_targets(query.user_id)
+            target_calories, target_macros, bmr = await self._get_user_targets(
+                query.user_id
+            )
 
-            meals_by_date: Dict[date, list] = {}
+            meals_by_date: dict[date, list] = {}
             for meal in meals:
                 if meal.status == MealStatus.INACTIVE:
                     continue
@@ -83,7 +92,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                     meals_by_date.setdefault(meal_date, []).append(meal)
 
             # Fetch hydration entries for range; dedup by legacy_meal_id
-            hydration_by_date: Dict[date, list] = {}
+            hydration_by_date: dict[date, list] = {}
             try:
                 meal_id_set = {m.meal_id for m in meals}
                 h_entries = await uow.hydration_entries.find_by_date_range(
@@ -102,25 +111,31 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 logger.warning("Failed to fetch bulk hydration data: %s", exc)
 
             # Single query for the full range; bucket by local date in Python.
-            movement_by_date: Dict[date, float] = {}
+            movement_by_date: dict[date, float] = {}
             try:
-                overall_start, _ = self._local_day_utc_range(query.start_date, user_tz_str)
+                overall_start, _ = self._local_day_utc_range(
+                    query.start_date, user_tz_str
+                )
                 _, overall_end = self._local_day_utc_range(query.end_date, user_tz_str)
                 included = await uow.movement_entries.fetch_included_kcal_for_range(
                     query.user_id, overall_start, overall_end
                 )
                 for logged_at, kcal in included:
                     local_date = logged_at.astimezone(user_tz).date()
-                    movement_by_date[local_date] = movement_by_date.get(local_date, 0.0) + kcal
+                    movement_by_date[local_date] = (
+                        movement_by_date.get(local_date, 0.0) + kcal
+                    )
             except Exception as exc:
                 logger.warning("Failed to fetch bulk movement data: %s", exc)
 
-            dates_result: Dict[str, Dict[str, Any]] = {}
+            dates_result: dict[str, dict[str, Any]] = {}
             current = query.start_date
             while current <= query.end_date:
                 day_meals = meals_by_date.get(current, [])
                 dates_result[current.isoformat()] = self._build_date_summary(
-                    day_meals, target_calories, target_macros,
+                    day_meals,
+                    target_calories,
+                    target_macros,
                     movement_kcal=movement_by_date.get(current, 0.0),
                     hydration_entries=hydration_by_date.get(current, []),
                 )
@@ -134,18 +149,20 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
             weekly_summary = None
             if weekly_budget:
                 base_daily = target_calories or (weekly_budget.target_calories / 7)
-                effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
-                    uow=uow,
-                    user_id=query.user_id,
-                    week_start=week_start,
-                    target_date=today,
-                    weekly_budget=weekly_budget,
-                    base_daily_cal=base_daily,
-                    base_daily_protein=(target_macros or {}).get("protein", 70),
-                    base_daily_carbs=(target_macros or {}).get("carbs", 200),
-                    base_daily_fat=(target_macros or {}).get("fat", 70),
-                    bmr=bmr,
-                    user_timezone=user_tz_str,
+                effective = (
+                    await WeeklyBudgetService.get_effective_adjusted_daily_async(
+                        uow=uow,
+                        user_id=query.user_id,
+                        week_start=week_start,
+                        target_date=today,
+                        weekly_budget=weekly_budget,
+                        base_daily_cal=base_daily,
+                        base_daily_protein=(target_macros or {}).get("protein", 70),
+                        base_daily_carbs=(target_macros or {}).get("carbs", 200),
+                        base_daily_fat=(target_macros or {}).get("fat", 70),
+                        bmr=bmr,
+                        user_timezone=user_tz_str,
+                    )
                 )
                 adjusted = effective.adjusted
                 consumed = effective.consumed_total
@@ -169,18 +186,20 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
         }
 
     def _local_day_utc_range(self, target: date, user_tz_str: str):
-        from datetime import datetime, time, timezone
+        from datetime import datetime, time
+
         tz = get_zone_info(user_tz_str)
         start_local = datetime.combine(target, time.min, tzinfo=tz)
         end_local = start_local + timedelta(days=1)
-        return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+        return start_local.astimezone(UTC), end_local.astimezone(UTC)
 
-    def _get_meal_date(self, meal, user_tz_str: str) -> Optional[date]:
+    def _get_meal_date(self, meal, user_tz_str: str) -> date | None:
         """Extract local date from meal's created_at timestamp."""
         if not meal.created_at:
             return None
         tz = get_zone_info(user_tz_str)
         from src.domain.utils.timezone_utils import ensure_utc
+
         aware_dt = ensure_utc(meal.created_at)
         return aware_dt.astimezone(tz).date()
 
@@ -193,40 +212,41 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
     def _build_date_summary(
         self,
         meals: list,
-        target_calories: Optional[float],
-        target_macros: Optional[Dict],
+        target_calories: float | None,
+        target_macros: dict | None,
         movement_kcal: float = 0.0,
-        hydration_entries: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        hydration_entries: list | None = None,
+    ) -> dict[str, Any]:
         """Build summary for a single date."""
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
-        total_fiber = 0.0
+        food_calories = 0.0
         meal_count = 0
 
         for meal in meals:
             meal_count += 1
-            if meal.nutrition and meal.status in [MealStatus.READY, MealStatus.ENRICHING]:
+            if meal.nutrition and meal.status in [
+                MealStatus.READY,
+                MealStatus.ENRICHING,
+            ]:
                 if meal.nutrition.macros:
                     total_protein += meal.nutrition.macros.protein or 0
                     total_carbs += meal.nutrition.macros.carbs or 0
                     total_fat += meal.nutrition.macros.fat or 0
-                    total_fiber += meal.nutrition.macros.fiber or 0
+                    food_calories += effective_meal_calories(meal)
 
-        for entry in (hydration_entries or []):
+        for entry in hydration_entries or []:
             meal_count += 1
             total_protein += entry.protein_g or 0
             total_carbs += entry.carbs_g or 0
             total_fat += entry.fat_g or 0
-            total_fiber += entry.fiber_g or 0
-
-        food_calories = Macros(
-            protein=total_protein,
-            carbs=total_carbs,
-            fat=total_fat,
-            fiber=total_fiber,
-        ).total_calories
+            food_calories += Macros(
+                protein=entry.protein_g or 0,
+                carbs=entry.carbs_g or 0,
+                fat=entry.fat_g or 0,
+                fiber=entry.fiber_g or 0,
+            ).total_calories
         net_calories = food_calories - movement_kcal
 
         target_cal = target_calories or 2000
@@ -264,7 +284,9 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
     async def _get_user_targets(self, user_id: str) -> tuple:
         """Get user's TDEE targets. Returns (target_calories, target_macros, bmr)."""
         try:
-            from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
+            from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
+                GetUserTdeeQueryHandler,
+            )
             from src.app.queries.tdee import GetUserTdeeQuery
 
             tdee_handler = GetUserTdeeQueryHandler(cache_service=self.cache_service)
@@ -278,10 +300,9 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
             logger.warning(f"Could not fetch TDEE for user {user_id}: {e}")
             return (None, None, 1800)
 
-    def _compute_cache_version(
-        self, dates: Dict[str, Any], weekly: Optional[Dict]
-    ) -> str:
+    def _compute_cache_version(self, dates: dict[str, Any], weekly: dict | None) -> str:
         """Compute a version hash for cache staleness detection."""
         import json
+
         content = json.dumps({"d": dates, "w": weekly}, sort_keys=True)
         return f"v1-{hashlib.md5(content.encode()).hexdigest()[:8]}"

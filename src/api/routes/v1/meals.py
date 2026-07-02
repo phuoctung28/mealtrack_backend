@@ -216,7 +216,7 @@ async def analyze_meal_image_immediate(
     ),
     scan_mode: str = Query(
         "scanner",
-        description="scanner for meal photos. Use /food-label/scan-by-url with OCR text for Nutrition Facts labels.",
+        description="scanner for meal photos. Use /food-label/scan-by-url for Nutrition Facts labels.",
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
     image_store=Depends(get_image_store),
@@ -234,7 +234,7 @@ async def analyze_meal_image_immediate(
         if scan_mode != "scanner":
             raise ValidationException(
                 message=(
-                    "Use /v1/meals/food-label/scan-by-url with OCR text "
+                    "Use /v1/meals/food-label/scan-by-url "
                     "for Nutrition Facts labels."
                 ),
                 error_code="INVALID_SCAN_MODE",

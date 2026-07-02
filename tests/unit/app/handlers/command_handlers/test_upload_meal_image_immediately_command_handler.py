@@ -146,13 +146,13 @@ class TestVisionRetryRouting:
 
     @pytest.mark.asyncio
     async def test_food_label_mode_is_rejected_by_immediate_upload(self):
-        """Food-label scans require OCR text through the scan-by-url endpoint."""
+        """Food-label scans use the scan-by-url image endpoint."""
         analyze_mock = AsyncMock()
         handler = _make_handler(analyze_mock, max_attempts=3)
         command = _make_command()
         command.scan_mode = "food_label"
 
-        with pytest.raises(ValueError, match="require client OCR text"):
+        with pytest.raises(ValueError, match="require the scan-by-url image flow"):
             await handler.handle(command)
 
         analyze_mock.assert_not_called()

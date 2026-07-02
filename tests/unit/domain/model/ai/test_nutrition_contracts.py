@@ -306,6 +306,31 @@ class TestFoodLabelNutritionResponse:
                 }
             )
 
+    def test_defaults_unreadable_package_metadata(self):
+        response = FoodLabelNutritionResponse.model_validate(
+            {
+                "product_name": None,
+                "serving_size": None,
+                "servings_per_package": None,
+                "macros_per_serving": _valid_macros(),
+            }
+        )
+
+        assert response.product_name == "Scanned Food Label"
+        assert response.serving_size.display_text == "100g"
+        assert response.serving_size.grams == pytest.approx(100)
+        assert response.servings_per_package == pytest.approx(1)
+
+    def test_rejects_missing_macros(self):
+        with pytest.raises(ValidationError):
+            FoodLabelNutritionResponse.model_validate(
+                {
+                    "product_name": "Cereal",
+                    "serving_size": {"display_text": "2/3 cup", "grams": 55},
+                    "servings_per_package": 8,
+                }
+            )
+
     def test_accepts_unbounded_label_notes(self):
         response = FoodLabelNutritionResponse.model_validate(
             {

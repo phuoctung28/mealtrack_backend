@@ -316,6 +316,11 @@ def get_configured_event_bus() -> EventBus:
     # Register meal command handlers
     # Handlers receive AsyncUnitOfWork (concrete) and event_bus at the composition root
     meal_translation_service = get_deepl_meal_translation_service()
+    text_translation_service = get_deepl_text_translation_service()
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+
+    meal_generation_service = MealGenerationService()
+
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
@@ -372,12 +377,6 @@ def get_configured_event_bus() -> EventBus:
             cache_invalidation=cache_invalidation_service,
         ),
     )
-
-    # Get text translation service
-    text_translation_service = get_deepl_text_translation_service()
-    from src.infra.adapters.meal_generation_service import MealGenerationService
-
-    meal_generation_service = MealGenerationService()
 
     # Register meal text parsing command handler
     event_bus.register_handler(
