@@ -306,6 +306,62 @@ class TestFoodLabelNutritionResponse:
                 }
             )
 
+    def test_defaults_unreadable_package_metadata(self):
+        response = FoodLabelNutritionResponse.model_validate(
+            {
+                "product_name": None,
+                "serving_size": None,
+                "servings_per_package": None,
+                "macros_per_serving": _valid_macros(),
+            }
+        )
+
+        assert response.product_name == "Scanned Food Label"
+        assert response.serving_size.display_text == "100g"
+        assert response.serving_size.grams == pytest.approx(100)
+        assert response.servings_per_package == pytest.approx(1)
+
+    def test_rejects_missing_macros(self):
+        with pytest.raises(ValidationError):
+            FoodLabelNutritionResponse.model_validate(
+                {
+                    "product_name": "Cereal",
+                    "serving_size": {"display_text": "2/3 cup", "grams": 55},
+                    "servings_per_package": 8,
+                }
+            )
+
+    def test_accepts_unbounded_label_notes(self):
+        response = FoodLabelNutritionResponse.model_validate(
+            {
+                "product_name": "Cereal",
+                "serving_size": {"display_text": "2/3 cup (55g)", "grams": 55},
+                "servings_per_package": 8,
+                "macros_per_serving": _valid_macros(),
+                "label_notes": [
+                    " Calories per serving: 120 ",
+                    "Total fat: 3g",
+                    "Sodium: 140mg",
+                    "Carbohydrates: 24g",
+                    "Protein: 2g",
+                    "Calcium: 10mg",
+                    "Iron: 1mg",
+                    "Potassium: 50mg",
+                ],
+            }
+        )
+
+        assert response.label_notes == [
+            "Calories per serving: 120",
+            "Total fat: 3g",
+            "Sodium: 140mg",
+            "Carbohydrates: 24g",
+            "Protein: 2g",
+            "Calcium: 10mg",
+            "Iron: 1mg",
+            "Potassium: 50mg",
+        ]
+
 
 class TestMealTextNutritionResponse:
     def test_accepts_display_quantity_unit_and_optional_quantity_g(self):

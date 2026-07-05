@@ -32,19 +32,6 @@ class VisionAIServicePort(ABC):
         pass
 
     @abstractmethod
-    async def analyze_food_label(self, image_bytes: bytes) -> dict[str, Any]:
-        """
-        Analyze a packaged food Nutrition Facts label image.
-
-        Args:
-            image_bytes: The raw bytes of the image to analyze
-
-        Returns:
-            JSON-compatible dictionary with the raw AI response
-        """
-        pass
-
-    @abstractmethod
     async def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
     ) -> dict[str, Any]:

@@ -8,22 +8,24 @@ from datetime import datetime
 import pytest
 
 from src.domain.model import (
-    Meal as DomainMeal,
-    MealStatus,
-    MealImage,
-    Nutrition,
     FoodItem,
     Macros,
+    MealImage,
+    MealStatus,
+    Nutrition,
+)
+from src.domain.model import (
+    Meal as DomainMeal,
 )
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.mappers.meal_mapper import (
-    meal_orm_to_domain,
-    meal_domain_to_orm,
-    food_item_orm_to_domain,
     food_item_domain_to_orm,
+    food_item_orm_to_domain,
+    meal_domain_to_orm,
+    meal_orm_to_domain,
 )
 
 
@@ -113,6 +115,49 @@ class TestMealDatabaseModelEdit:
         assert meal_model.is_manually_edited is True
         assert meal_model.last_edited_at is not None
         assert meal_model.updated_at is not None
+
+    def test_meal_model_round_trip_preserves_food_label_metadata(self):
+        """Food-label serving metadata is persisted independently of raw AI JSON."""
+        metadata = {
+            "product_name": "Protein Bar",
+            "serving_size": {"display_text": "1 bar (55g)", "grams": 55},
+            "servings_per_package": 8,
+            "confidence": 0.92,
+        }
+        domain_meal = DomainMeal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            created_at=datetime.now(),
+            image=MealImage(
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=100000,
+                url="https://example.com/label.jpg",
+            ),
+            dish_name="Protein Bar",
+            source="food_label",
+            raw_gpt_json=None,
+            food_label_metadata=metadata,
+            nutrition=Nutrition(
+                macros=Macros(protein=3.0, carbs=37.0, fat=8.0),
+                food_items=[],
+                confidence_score=0.9,
+            ),
+            ready_at=datetime.now(),
+        )
+
+        meal_model = meal_domain_to_orm(domain_meal)
+        meal_model.image = MealImageORM(
+            image_id=domain_meal.image.image_id,
+            format=domain_meal.image.format,
+            size_bytes=domain_meal.image.size_bytes,
+            url=domain_meal.image.url,
+        )
+        converted_domain_meal = meal_orm_to_domain(meal_model)
+
+        assert meal_model.food_label_metadata == metadata
+        assert converted_domain_meal.food_label_metadata == metadata
 
     def test_meal_model_from_domain_defaults_edit_fields(self):
         """Test that meal model from_domain uses defaults for missing edit fields."""

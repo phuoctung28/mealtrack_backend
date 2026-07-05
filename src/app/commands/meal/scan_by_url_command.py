@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 
 from src.app.events.base import Command
 
@@ -14,7 +13,10 @@ class ScanByUrlCommand(Command):
     user_id: str
     image_url: str
     public_id: str
-    user_description: Optional[str] = None
-    target_date: Optional[date] = None
+    user_description: str | None = None
+    target_date: date | None = None
     language: str = "en"
     scan_mode: str = "scanner"
+    label_crop_image_url: str | None = None
+    label_crop_public_id: str | None = None
+    crop_metadata: dict | None = None

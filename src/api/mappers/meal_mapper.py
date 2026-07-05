@@ -3,6 +3,7 @@ Mapper for meal-related DTOs and domain models.
 """
 
 import json
+from typing import Any
 
 from src.api.schemas.response import (
     DetailedMealResponse,
@@ -16,6 +17,10 @@ from src.api.schemas.response import (
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
+from src.domain.services.meal_calorie_service import (
+    effective_food_item_calories,
+    effective_meal_calories,
+)
 from src.domain.services.meal_value_insight_contract import MealValueInsights
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
@@ -87,7 +92,7 @@ class MealMapper:
         total_nutrition = None
 
         if meal.nutrition:
-            total_calories = meal.nutrition.calories
+            total_calories = effective_meal_calories(meal)
 
             # Map total nutrition macros
             if hasattr(meal.nutrition, "macros") and meal.nutrition.macros:
@@ -109,11 +114,16 @@ class MealMapper:
             # Map food items in source language (English)
             if meal.nutrition.food_items:
                 for item in meal.nutrition.food_items:
+                    item_calories = effective_food_item_calories(
+                        item,
+                        meal_source=meal.source,
+                        food_label_metadata=meal.food_label_metadata,
+                    )
                     nutrition_dto = None
                     if hasattr(item, "macros") and item.macros:
                         nutrition_dto = NutritionResponse(
                             nutrition_id=str(item.name),
-                            calories=item.calories,
+                            calories=item_calories,
                             protein_g=item.macros.protein,
                             carbs_g=item.macros.carbs,
                             fat_g=item.macros.fat,
@@ -135,7 +145,7 @@ class MealMapper:
                         )
                         scale_factor = 100.0 / quantity_grams
                         custom_nutrition_dto = CustomNutritionResponse(
-                            calories_per_100g=item.calories * scale_factor,
+                            calories_per_100g=item_calories * scale_factor,
                             protein_per_100g=(
                                 item.macros.protein * scale_factor
                                 if item.macros
@@ -193,9 +203,7 @@ class MealMapper:
                     if item.name
                 }
                 legacy_names_by_id = {}
-                if tr.meal_ingredients and len(tr.meal_ingredients) == len(
-                    food_items
-                ):
+                if tr.meal_ingredients and len(tr.meal_ingredients) == len(food_items):
                     legacy_names_by_id = {
                         str(fi.id): tr.meal_ingredients[index]
                         for index, fi in enumerate(food_items)
@@ -307,10 +315,26 @@ class MealMapper:
 
     @staticmethod
     def _food_label_metadata(meal: Meal) -> FoodLabelMetadataResponse | None:
-        if meal.source != "food_label" or not meal.raw_gpt_json:
+        if meal.source != "food_label":
+            return None
+        metadata = getattr(meal, "food_label_metadata", None)
+        if isinstance(metadata, dict):
+            response = MealMapper._food_label_metadata_from_dict(metadata)
+            if response is not None:
+                return response
+        if not meal.raw_gpt_json:
             return None
         try:
             data = json.loads(meal.raw_gpt_json)
+        except json.JSONDecodeError:
+            return None
+        return MealMapper._food_label_metadata_from_dict(data)
+
+    @staticmethod
+    def _food_label_metadata_from_dict(
+        data: dict[str, Any],
+    ) -> FoodLabelMetadataResponse | None:
+        try:
             serving_size = data.get("serving_size") or {}
             return FoodLabelMetadataResponse(
                 product_name=data["product_name"],
@@ -324,7 +348,7 @@ class MealMapper:
                 confidence=float(data.get("confidence", 0.5)),
                 label_notes=list(data.get("label_notes") or []),
             )
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        except (KeyError, TypeError, ValueError):
             return None
 
     @staticmethod

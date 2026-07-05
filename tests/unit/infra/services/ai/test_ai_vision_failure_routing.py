@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
     AIUnavailableError,
     AIVisionError,
     AIVisionFailureKind,
@@ -55,9 +56,7 @@ def _fake_settings_with_cf_text_and_vision():
     )
     settings.CLOUDFLARE_WORKERS_AI_VISION_ENABLED = True
     settings.CLOUDFLARE_WORKERS_AI_VISION_MODEL = "cf-vision-model"
-    settings.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = (
-        "meal_scan,food_label_scan,ingredient_scan"
-    )
+    settings.CLOUDFLARE_WORKERS_AI_VISION_PURPOSES = "meal_scan,ingredient_scan"
     return settings
 
 
@@ -125,7 +124,6 @@ def test_image_scan_purposes_prefer_openai_and_fallback_to_cf(mock_circuit_break
 
     for purpose in {
         ModelPurpose.MEAL_SCAN,
-        ModelPurpose.FOOD_LABEL_SCAN,
         ModelPurpose.INGREDIENT_SCAN,
     }:
         assert manager.get_fallback_chain(purpose)[:2] == [
@@ -301,6 +299,39 @@ class TestVisionFailureKindRouting:
         )
 
         assert result == {"result": "openai_fallback"}
+        mock_circuit_breaker.record_failure.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_schema_failures_exhausting_chain_raise_output_validation(
+        self,
+        manager,
+        mock_openai_provider,
+        mock_circuit_breaker,
+    ):
+        mock_circuit_breaker.filter_available = Mock(side_effect=lambda models: models)
+        mock_openai_provider.generate_with_vision = AsyncMock(
+            side_effect=AIVisionError(
+                "[OPENAI-VISION-SCHEMA-FAIL] provider=openai model=test-model",
+                kind=AIVisionFailureKind.schema_validation,
+                provider="openai",
+                model="test-model",
+                validation_details=["product_name: Field required"],
+            )
+        )
+
+        with pytest.raises(AIOutputValidationError) as exc_info:
+            await manager.generate_with_vision(
+                purpose=ModelPurpose.MEAL_SCAN,
+                prompt="analyze food",
+                image_data=b"fake_image",
+                schema=VisionNutritionResponse,
+            )
+
+        assert exc_info.value.purpose == "meal_scan"
+        assert exc_info.value.attempt_count == 1
+        assert exc_info.value.validation_details == [
+            "openai/test-model: schema_validation: product_name: Field required"
+        ]
         mock_circuit_breaker.record_failure.assert_not_called()
 
     @pytest.mark.asyncio

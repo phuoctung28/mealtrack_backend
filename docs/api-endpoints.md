@@ -1,11 +1,11 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** June 27, 2026
+**Last Updated:** July 5, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
 Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
-**Surface:** 28 route files, 27 router registrations, 26 endpoint-bearing route modules, and 85 endpoint decorators.
+**Surface:** 28 route files, 27 router registrations, 26 endpoint-bearing route modules, and 88 endpoint decorators.
 
 ---
 
@@ -36,6 +36,7 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | POST | `/v1/meals/image/analyze` | Analyze meal from image (immediate upload) |
 | GET | `/v1/meals/upload-token` | Create signed direct-upload token |
 | POST | `/v1/meals/scan-by-url` | Analyze meal from an existing image URL |
+| POST | `/v1/meals/food-label/scan-by-url` | Analyze Nutrition Facts label from an existing image URL |
 | POST | `/v1/meals/manual` | Create meal from USDA foods |
 | POST | `/v1/meals/parse-text` | Parse meal from text description |
 | POST | `/v1/meals/parse-text/guest-trial` | One-shot guest text parse trial |
@@ -46,6 +47,14 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/meals/{meal_id}` | Get meal details |
 | DELETE | `/v1/meals/{meal_id}` | Delete meal (soft delete) |
 | PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients |
+
+### Food Label Image Contract
+
+- `/v1/meals/food-label/scan-by-url` accepts a Cloudinary `image_url`/`image_id` pair plus optional `label_crop_image_url`/`label_crop_image_id` and `crop_metadata`.
+- The backend downloads image bytes and sends the label crop, or the full image when no crop is supplied, through `FoodLabelImageAnalysisStrategy`.
+- AI output is validated against `FoodLabelNutritionResponse` before mapping to `Nutrition` and `food_label_metadata`.
+- Failed label reads return controlled validation errors and do not persist meals.
+- The backend remains source of truth for validation and calorie presentation; clients must not calculate label nutrition.
 
 ---
 

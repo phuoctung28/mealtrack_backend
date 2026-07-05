@@ -1,4 +1,5 @@
 """Cloudflare Workers AI implementation of AIProviderPort using LangChain."""
+
 import base64
 import json
 import logging
@@ -10,12 +11,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
+from src.domain.services.ai_output_validation_service import summarize_validation_error
 from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
 from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 
 logger = logging.getLogger(__name__)
 
-_CF_REST_BASE = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+_CF_REST_BASE = (
+    "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+)
 
 
 class CloudflareWorkersAIProvider(AIProviderPort):
@@ -70,7 +74,11 @@ class CloudflareWorkersAIProvider(AIProviderPort):
 
     def get_available_models(self) -> list[str]:
         models = [self._text_model] if self._text_model else []
-        if self._vision_enabled and self._vision_model and self._vision_model != self._text_model:
+        if (
+            self._vision_enabled
+            and self._vision_model
+            and self._vision_model != self._text_model
+        ):
             models.append(self._vision_model)
         return models
 
@@ -142,7 +150,10 @@ class CloudflareWorkersAIProvider(AIProviderPort):
         b64 = base64.b64encode(image_data).decode("ascii")
         user_content: list[dict] = [
             {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+            },
         ]
         messages: list[dict] = []
         if system_message:
@@ -163,7 +174,9 @@ class CloudflareWorkersAIProvider(AIProviderPort):
             headers["cf-aig-metadata"] = json.dumps({"purpose": purpose})
         return headers
 
-    async def _post_workers_ai(self, model: str, payload: dict, purpose: str = "") -> dict:
+    async def _post_workers_ai(
+        self, model: str, payload: dict, purpose: str = ""
+    ) -> dict:
         url = _CF_REST_BASE.format(account_id=self._account_id, model=model)
         headers = {
             "Authorization": f"Bearer {self._api_token}",
@@ -204,7 +217,9 @@ class CloudflareWorkersAIProvider(AIProviderPort):
 
         max_tokens: int = kwargs.get("max_tokens", 4096)
         purpose_hint: str = kwargs.get("purpose_hint", "")
-        payload = self._build_vision_payload(prompt, image_data, system_message, max_tokens)
+        payload = self._build_vision_payload(
+            prompt, image_data, system_message, max_tokens
+        )
         raw = await self._post_workers_ai(model, payload, purpose=purpose_hint)
         text = self._extract_response_text(raw)
 
@@ -236,6 +251,7 @@ class CloudflareWorkersAIProvider(AIProviderPort):
                     kind=AIVisionFailureKind.schema_validation,
                     provider="cloudflare-workers-ai",
                     model=model,
+                    validation_details=summarize_validation_error(exc),
                 ) from exc
 
         return parsed

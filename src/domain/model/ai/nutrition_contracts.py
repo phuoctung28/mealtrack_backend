@@ -133,15 +133,43 @@ class FoodLabelNutritionResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    is_food_label: bool = Field(True, description="Whether a Nutrition Facts label is visible")
-    product_name: str = Field(..., min_length=1, max_length=200)
+    is_food_label: bool = Field(
+        True, description="Whether a Nutrition Facts label is visible"
+    )
+    product_name: str = Field("Scanned Food Label", min_length=1, max_length=200)
     brand: str | None = Field(None, max_length=100)
-    serving_size: FoodLabelServingSize
-    servings_per_package: float = Field(..., gt=0, le=1000)
+    serving_size: FoodLabelServingSize = Field(
+        default_factory=lambda: FoodLabelServingSize(
+            display_text="100g",
+            grams=100,
+        )
+    )
+    servings_per_package: float = Field(1, gt=0, le=1000)
     label_calories_per_serving: float | None = Field(None, ge=0, le=5000)
     macros_per_serving: AIVisionNutritionMacros
     confidence: float = Field(0.5, ge=0, le=1)
-    label_notes: list[str] = Field(default_factory=list, max_length=6)
+    label_notes: list[str] = Field(default_factory=list)
+
+    @field_validator("product_name", mode="before")
+    @classmethod
+    def default_product_name(cls, value: Any) -> Any:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return "Scanned Food Label"
+        return value
+
+    @field_validator("serving_size", mode="before")
+    @classmethod
+    def default_serving_size(cls, value: Any) -> Any:
+        if value is None:
+            return {"display_text": "100g", "grams": 100}
+        return value
+
+    @field_validator("servings_per_package", mode="before")
+    @classmethod
+    def default_servings_per_package(cls, value: Any) -> Any:
+        if value is None:
+            return 1
+        return value
 
     @field_validator("product_name", "brand")
     @classmethod
@@ -149,6 +177,24 @@ class FoodLabelNutritionResponse(BaseModel):
         if value is None:
             return None
         return _strip_required_text(value)
+
+    @field_validator("label_notes", mode="before")
+    @classmethod
+    def normalize_label_notes(cls, value: Any) -> Any:
+        if value is None or not isinstance(value, list):
+            return value
+
+        notes: list[Any] = []
+        for note in value:
+            if isinstance(note, str):
+                stripped = note.strip()
+                if not stripped:
+                    continue
+                notes.append(stripped)
+            else:
+                notes.append(note)
+
+        return notes
 
 
 class VisionNutritionResponse(BaseModel):

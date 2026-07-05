@@ -37,11 +37,15 @@ def _make_uow() -> MagicMock:
     return uow
 
 
-def _install_fake_image_download(monkeypatch) -> None:
+def _install_fake_image_download(
+    monkeypatch,
+    responses: dict[str, bytes] | None = None,
+) -> None:
     from src.app.handlers.command_handlers import scan_by_url_command_handler as module
 
     class FakeResponse:
-        content = b"fake-image-bytes"
+        def __init__(self, content: bytes):
+            self.content = content
 
         def raise_for_status(self):
             return None
@@ -54,7 +58,12 @@ def _install_fake_image_download(monkeypatch) -> None:
             return False
 
         async def get(self, url):
-            return FakeResponse()
+            content = (
+                responses.get(url, b"fake-image-bytes")
+                if responses
+                else b"fake-image-bytes"
+            )
+            return FakeResponse(content)
 
     monkeypatch.setattr(module.httpx, "AsyncClient", lambda timeout: FakeClient())
     monkeypatch.setattr(module, "compress_image", lambda raw_bytes: raw_bytes)
@@ -118,57 +127,152 @@ async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_scan_by_url_food_label_creates_ready_meal(monkeypatch):
-    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
-
-    _install_fake_image_download(monkeypatch)
+async def test_scan_by_url_food_label_uses_crop_image_ai_without_ocr(
+    monkeypatch,
+):
+    crop_url = "https://res.cloudinary.com/test/image/upload/v1/mealtrack/crop.png"
+    _install_fake_image_download(
+        monkeypatch,
+        responses={
+            _IMAGE_URL: b"full-image-bytes",
+            crop_url: b"label-crop-image-bytes",
+        },
+    )
     uow = _make_uow()
     cache = MagicMock()
     cache.after_meal_write = AsyncMock()
+    vision_service = MagicMock()
+    vision_service.analyze_with_strategy = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food_label": True,
+                "product_name": "Danu Ensan Malaysia",
+                "brand": None,
+                "serving_size": {"display_text": "100g", "grams": 100},
+                "servings_per_package": 1,
+                "label_calories_per_serving": 476,
+                "macros_per_serving": {
+                    "protein_g": 10,
+                    "carbs_g": 100,
+                    "fat_g": 6,
+                    "fiber_g": 0,
+                    "sugar_g": 0,
+                },
+                "confidence": 0.82,
+                "label_notes": ["Read from crop image after OCR failed."],
+            }
+        }
+    )
     handler = ScanByUrlCommandHandler(
         uow=uow,
         event_bus=MagicMock(),
-        vision_service=MagicMock(),
-        gpt_parser=MagicMock(),
+        vision_service=vision_service,
+        gpt_parser=VisionResponseParser(),
         cache_invalidation=cache,
     )
-    handler.vision_service.analyze_food_label = AsyncMock(
-        return_value={"is_food_label": True, "product_name": "Protein Bar"}
-    )
-    handler.gpt_parser.parse_food_label_to_nutrition.return_value = Nutrition(
-        macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-        food_items=[
-            FoodItem(
-                id="label-item",
-                name="Protein Bar",
-                quantity=55,
-                unit="g",
-                macros=Macros(protein=10, carbs=20, fat=5, fiber=4, sugar=8),
-                is_custom=True,
-            )
-        ],
-    )
-    handler.gpt_parser.parse_food_label_metadata.return_value = {"is_food_label": True}
-    handler.gpt_parser.extract_raw_json.return_value = '{"product_name":"Protein Bar"}'
-    handler.gpt_parser.parse_is_food = MagicMock()
 
     result = await handler.handle(
         ScanByUrlCommand(
             user_id=_USER_ID,
             image_url=_IMAGE_URL,
-            public_id="mealtrack/00000000-0000-0000-0000-000000000002",
+            public_id="mealtrack/00000000-0000-0000-0000-000000000006",
+            scan_mode="food_label",
+            label_crop_image_url=crop_url,
+            label_crop_public_id="mealtrack/crop",
+            crop_metadata={"crop_strategy": "food_label_visible_frame_v1"},
+        )
+    )
+
+    assert result.source == "food_label"
+    assert result.food_label_metadata["product_name"] == "Danu Ensan Malaysia"
+    assert result.nutrition.macros.carbs == pytest.approx(100)
+    vision_service.analyze_with_strategy.assert_awaited_once()
+    call = vision_service.analyze_with_strategy.await_args
+    assert call.args[0] == b"label-crop-image-bytes"
+    assert call.args[1].get_strategy_name() == "FoodLabelImageAnalysis"
+    assert "OCR" not in call.args[1].get_user_message()
+    assert (
+        "crop_strategy: food_label_visible_frame_v1" in call.args[1].get_user_message()
+    )
+    vision_service.analyze.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_food_label_uses_full_image_when_crop_missing(monkeypatch):
+    _install_fake_image_download(
+        monkeypatch, responses={_IMAGE_URL: b"full-image-bytes"}
+    )
+    uow = _make_uow()
+    cache = MagicMock()
+    cache.after_meal_write = AsyncMock()
+    vision_service = MagicMock()
+    vision_service.analyze_with_strategy = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food_label": True,
+                "product_name": "Protein Bar",
+                "brand": None,
+                "serving_size": {"display_text": "55g", "grams": 55},
+                "servings_per_package": 8,
+                "label_calories_per_serving": 210,
+                "macros_per_serving": {
+                    "protein_g": 12,
+                    "carbs_g": 24,
+                    "fat_g": 7,
+                    "fiber_g": 5,
+                    "sugar_g": 8,
+                },
+                "confidence": 0.9,
+                "label_notes": ["Read from full image."],
+            }
+        }
+    )
+    handler = ScanByUrlCommandHandler(
+        uow=uow,
+        event_bus=MagicMock(),
+        vision_service=vision_service,
+        gpt_parser=VisionResponseParser(),
+        cache_invalidation=cache,
+    )
+
+    result = await handler.handle(
+        ScanByUrlCommand(
+            user_id=_USER_ID,
+            image_url=_IMAGE_URL,
+            public_id="mealtrack/00000000-0000-0000-0000-000000000007",
             scan_mode="food_label",
         )
     )
 
-    handler.vision_service.analyze_food_label.assert_awaited_once_with(
-        b"fake-image-bytes"
-    )
-    uow.meals.save.assert_awaited_once()
-    handler.gpt_parser.parse_is_food.assert_not_called()
-    cache.after_meal_write.assert_awaited_once()
     assert result.source == "food_label"
-    assert result.dish_name == "Unnamed Food"
-    assert result.emoji is None
-    assert result.nutrition.food_items[0].quantity == 55
-    handler.gpt_parser.parse_food_label_name.assert_not_called()
+    assert result.food_label_metadata["product_name"] == "Protein Bar"
+    call = vision_service.analyze_with_strategy.await_args
+    assert call.args[0] == b"full-image-bytes"
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_food_label_image_ai_failure_does_not_save(monkeypatch):
+    _install_fake_image_download(monkeypatch)
+    uow = _make_uow()
+    vision_service = MagicMock()
+    vision_service.analyze_with_strategy = AsyncMock(
+        return_value={"structured_data": {"is_food_label": False}}
+    )
+    handler = ScanByUrlCommandHandler(
+        uow=uow,
+        event_bus=MagicMock(),
+        vision_service=vision_service,
+        gpt_parser=MagicMock(),
+    )
+
+    with pytest.raises(ValueError, match="could not be read"):
+        await handler.handle(
+            ScanByUrlCommand(
+                user_id=_USER_ID,
+                image_url=_IMAGE_URL,
+                public_id="mealtrack/00000000-0000-0000-0000-000000000004",
+                scan_mode="food_label",
+            )
+        )
+
+    uow.meals.save.assert_not_awaited()

@@ -5,16 +5,16 @@ GetDailyBreakdownQueryHandler — 7-day macro breakdown (actual vs target).
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal.get_daily_breakdown_query import GetDailyBreakdownQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.meal_projection import MealProjection
-from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.cache_port import CachePort
+from src.domain.services.meal_calorie_service import effective_meal_calories
 from src.domain.utils.timezone_utils import (
     get_user_monday,
     get_zone_info,
@@ -27,14 +27,14 @@ logger = logging.getLogger(__name__)
 
 @handles(GetDailyBreakdownQuery)
 class GetDailyBreakdownQueryHandler(
-    EventHandler[GetDailyBreakdownQuery, Dict[str, Any]]
+    EventHandler[GetDailyBreakdownQuery, dict[str, Any]]
 ):
     """Handler for 7-day per-day macro breakdown with consumed vs target."""
 
-    def __init__(self, cache_service: Optional[CachePort] = None):
+    def __init__(self, cache_service: CachePort | None = None):
         self.cache_service = cache_service
 
-    async def handle(self, query: GetDailyBreakdownQuery) -> Dict[str, Any]:
+    async def handle(self, query: GetDailyBreakdownQuery) -> dict[str, Any]:
         """Return 7 DailyBreakdownEntry dicts for Mon–Sun of the requested week."""
         async with AsyncUnitOfWork() as uow:
             user_tz_str = await resolve_user_timezone_async(
@@ -65,18 +65,18 @@ class GetDailyBreakdownQueryHandler(
             await self._get_base_daily_targets(query.user_id)
         )
 
-        meals_by_day: Dict[date, List[Any]] = {day: [] for day in days}
+        meals_by_day: dict[date, list[Any]] = {day: [] for day in days}
         for meal in meals:
             meal_day = self._local_meal_date(meal.created_at, user_tz)
             if meal_day in meals_by_day:
                 meals_by_day[meal_day].append(meal)
 
-        entries: List[Dict[str, Any]] = []
+        entries: list[dict[str, Any]] = []
         for day in days:
             total_protein = 0.0
             total_carbs = 0.0
             total_fat = 0.0
-            total_fiber = 0.0
+            total_calories = 0.0
             meal_count = 0
 
             for meal in meals_by_day.get(day, []):
@@ -91,14 +91,7 @@ class GetDailyBreakdownQueryHandler(
                         total_protein += meal.nutrition.macros.protein or 0.0
                         total_carbs += meal.nutrition.macros.carbs or 0.0
                         total_fat += meal.nutrition.macros.fat or 0.0
-                        total_fiber += meal.nutrition.macros.fiber or 0.0
-
-            total_calories = Macros(
-                protein=total_protein,
-                carbs=total_carbs,
-                fat=total_fat,
-                fiber=total_fiber,
-            ).total_calories
+                        total_calories += effective_meal_calories(meal)
 
             entries.append(
                 {
@@ -125,7 +118,7 @@ class GetDailyBreakdownQueryHandler(
     def _local_meal_date(self, created_at: datetime, user_tz) -> date:
         """Return the user's local date for a meal timestamp."""
         if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
+            created_at = created_at.replace(tzinfo=UTC)
         return created_at.astimezone(user_tz).date()
 
     async def _get_base_daily_targets(
@@ -166,7 +159,7 @@ class GetDailyBreakdownQueryHandler(
             return None
 
     async def _write_cache(
-        self, user_id: str, week_start: date, payload: Dict[str, Any]
+        self, user_id: str, week_start: date, payload: dict[str, Any]
     ):
         if not self.cache_service:
             return

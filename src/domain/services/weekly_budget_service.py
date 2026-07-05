@@ -14,6 +14,7 @@ from typing import Any
 from src.domain.constants import WeeklyBudgetConstants
 from src.domain.model.meal import MealStatus
 from src.domain.model.weekly import WeeklyMacroBudget
+from src.domain.services.meal_calorie_service import effective_meal_calories
 from src.domain.utils.timezone_utils import ensure_utc, get_zone_info
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ class WeeklyBudgetService:
                 total_protein += macros.protein or 0
                 total_carbs += macros.carbs or 0
                 total_fat += macros.fat or 0
-                total_calories += WeeklyBudgetService._derive_macro_calories(macros)
+                total_calories += effective_meal_calories(meal)
 
         return {
             "calories": total_calories,
@@ -156,7 +157,7 @@ class WeeklyBudgetService:
                 total_protein += macros.protein or 0
                 total_carbs += macros.carbs or 0
                 total_fat += macros.fat or 0
-                total_calories += WeeklyBudgetService._derive_macro_calories(macros)
+                total_calories += effective_meal_calories(meal)
 
         movement_kcal = await WeeklyBudgetService._calculate_movement_kcal_async(
             uow=uow,
@@ -661,9 +662,13 @@ class WeeklyBudgetService:
         adjusted_calories = (
             (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
         )
-        while not bmr_floor_active and adjusted_calories > max_allowed and (
-            rounded_fat > standard_daily_fat * floor
-            or rounded_carbs > standard_daily_carbs * floor
+        while (
+            not bmr_floor_active
+            and adjusted_calories > max_allowed
+            and (
+                rounded_fat > standard_daily_fat * floor
+                or rounded_carbs > standard_daily_carbs * floor
+            )
         ):
             if rounded_fat > standard_daily_fat * floor:
                 rounded_fat = round(rounded_fat - 0.1, 1)

@@ -29,11 +29,13 @@ class AIVisionError(Exception):
         kind: AIVisionFailureKind,
         provider: str = "",
         model: str = "",
+        validation_details: list[str] | None = None,
     ) -> None:
         super().__init__(message)
         self.kind = kind
         self.provider = provider
         self.model = model
+        self.validation_details = validation_details or []
 
 
 class AIError(Exception):

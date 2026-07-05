@@ -235,7 +235,8 @@ class Settings(BaseSettings):
         default="", description="Cloudflare API token with Workers AI permission"
     )
     CLOUDFLARE_AI_GATEWAY_ID: str = Field(
-        default="", description="AI Gateway ID for routing Workers AI requests (optional)"
+        default="",
+        description="AI Gateway ID for routing Workers AI requests (optional)",
     )
     CLOUDFLARE_WORKERS_AI_TEXT_MODEL: str = Field(
         default="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
@@ -249,7 +250,8 @@ class Settings(BaseSettings):
         default=True, description="Enable Workers AI JSON Mode for structured responses"
     )
     CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS: int = Field(
-        default=60, description="HTTP timeout for Workers AI requests (thinking models need ≥60s)"
+        default=60,
+        description="HTTP timeout for Workers AI requests (thinking models need ≥60s)",
     )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,
@@ -268,7 +270,6 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(
         default=MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
     )
-
     # Affiliate integration
     AFFILIATE_INTEGRATION_ENABLED: bool = Field(
         default=False,

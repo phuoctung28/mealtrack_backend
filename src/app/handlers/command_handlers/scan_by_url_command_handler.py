@@ -25,6 +25,9 @@ from src.domain.services.meal_analysis.deepl_meal_translation_service import (
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
+from src.domain.strategies.meal_analysis_strategy import (
+    FoodLabelImageAnalysisStrategy,
+)
 from src.domain.utils.image_compression import compress_image
 from src.domain.utils.timezone_utils import (
     get_zone_info,
@@ -32,7 +35,7 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.observability import capture_message
+from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,25 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.meal_translation_service = meal_translation_service
         self.cache_invalidation = cache_invalidation
 
+    def _record_food_label_metric(
+        self,
+        name: str,
+        *,
+        reason: str | None = None,
+        elapsed_ms: float | None = None,
+    ) -> None:
+        attributes = {"component": "food_label_scan"}
+        if reason:
+            attributes["reason"] = reason
+        increment_metric(name, attributes=attributes)
+        if elapsed_ms is not None:
+            distribution_metric(
+                "food_label.scan_latency_ms",
+                elapsed_ms,
+                unit="millisecond",
+                attributes=attributes,
+            )
+
     def _capture_rejected_scan(
         self,
         *,
@@ -77,6 +99,40 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             },
         )
 
+    async def _download_image_bytes(self, image_url: str) -> bytes:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(image_url)
+            resp.raise_for_status()
+            return resp.content
+
+    async def _analyze_food_label_image_with_ai(
+        self,
+        image_bytes: bytes,
+        *,
+        crop_metadata: dict | None,
+    ) -> dict[str, Any]:
+        self._record_food_label_metric("food_label.image_ai_attempt")
+        try:
+            strategy = FoodLabelImageAnalysisStrategy(crop_metadata=crop_metadata)
+            vision_result = await self.vision_service.analyze_with_strategy(
+                image_bytes,
+                strategy,
+            )
+            structured_data = vision_result.get("structured_data")
+            if not isinstance(structured_data, dict):
+                raise ValueError("Nutrition Facts label could not be read.")
+            if not structured_data.get("is_food_label", True):
+                raise ValueError("Nutrition Facts label could not be read.")
+            self._record_food_label_metric("food_label.image_ai_success")
+            return {"structured_data": structured_data}
+        except Exception as exc:
+            logger.warning("[FOOD-LABEL-IMAGE-AI] failed: %s", exc)
+            self._record_food_label_metric(
+                "food_label.image_ai_failure",
+                reason=exc.__class__.__name__,
+            )
+            raise
+
     async def handle(self, command: ScanByUrlCommand) -> Meal:
         if not all([self.vision_service, self.gpt_parser]):
             raise RuntimeError("Required dependencies not configured")
@@ -86,17 +142,22 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
         try:
             # Download from Cloudinary and compress off the event loop
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(command.image_url)
-                resp.raise_for_status()
-            raw_bytes = resp.content
-            image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
-            logger.info(
-                "[SCAN-BY-URL] image_id=%s raw=%d compressed=%d bytes",
-                image_id,
-                len(raw_bytes),
-                len(image_bytes),
-            )
+            raw_bytes = await self._download_image_bytes(command.image_url)
+            image_bytes: bytes | None = None
+            if command.scan_mode != "food_label":
+                image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
+                logger.info(
+                    "[SCAN-BY-URL] image_id=%s raw=%d compressed=%d bytes",
+                    image_id,
+                    len(raw_bytes),
+                    len(image_bytes),
+                )
+            else:
+                logger.info(
+                    "[SCAN-BY-URL-FOOD-LABEL] image_id=%s raw=%d bytes",
+                    image_id,
+                    len(raw_bytes),
+                )
 
             # Determine timezone-aware datetime
             async with self.uow as uow:
@@ -118,10 +179,18 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             # Vision analysis via bytes path (never sends URL to the AI provider)
             if command.scan_mode == "food_label":
-                vision_result = await self.vision_service.analyze_food_label(
-                    image_bytes
+                label_image_bytes = raw_bytes
+                if command.label_crop_image_url:
+                    label_image_bytes = await self._download_image_bytes(
+                        command.label_crop_image_url
+                    )
+                vision_result = await self._analyze_food_label_image_with_ai(
+                    label_image_bytes,
+                    crop_metadata=command.crop_metadata,
                 )
             elif command.user_description:
+                if image_bytes is None:
+                    raise RuntimeError("Image bytes unavailable for scan-by-url")
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,
                 )
@@ -133,6 +202,8 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     image_bytes, strategy
                 )
             else:
+                if image_bytes is None:
+                    raise RuntimeError("Image bytes unavailable for scan-by-url")
                 vision_result = await self.vision_service.analyze(image_bytes)
 
             vision_elapsed = time.time() - start
@@ -164,6 +235,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     dish_name=MealDefaults.UNNAMED_FOOD_NAME,
                     ready_at=utc_now(),
                     raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
+                    food_label_metadata=label_metadata,
                     nutrition=nutrition,
                 )
 

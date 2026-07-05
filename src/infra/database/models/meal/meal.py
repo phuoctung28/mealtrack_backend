@@ -41,6 +41,7 @@ class MealORM(Base, TimestampMixin):
     )  # When meal analysis was completed
     error_message = Column(Text, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
+    food_label_metadata = Column(JSON, nullable=True)
 
     # Edit tracking fields
     last_edited_at = Column(
