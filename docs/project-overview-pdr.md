@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.6.6
-**Last Updated:** June 27, 2026
-**Status:** Production-ready. 627 Python files in `src/`, 53,972 LOC in `src/`, 306 Python files in `tests/`, and 1,600+ collected tests. Latest verified changes: OpenAI-first AI routing, journey progress seed, upload-token smoke coverage, and pydantic-settings/CI alignment.
+**Version:** 0.6.7
+**Last Updated:** July 5, 2026
+**Status:** Production-ready. 635 Python files in `src/`, 56,132 LOC in `src/`, 312 Python files in `tests/`, and 1,600+ collected tests. Latest verified changes: food-label image scan contract, OpenAI-first AI routing, journey progress seed, upload-token smoke coverage, and pydantic-settings/CI alignment.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI-based service for meal tracking and nutritional analysis. It implements Clean Architecture with CQRS across 4 layers, while `src/` also includes bootstrap, cron, and observability modules outside the layer directories. The current API surface spans 28 route files, 26 endpoint-bearing route modules, and 85 endpoint decorators; the test suite is unit-biased by default and exceeds 1,600 collected tests.
+MealTrack Backend is a FastAPI-based service for meal tracking and nutritional analysis. It implements Clean Architecture with CQRS across 4 layers, while `src/` also includes bootstrap, cron, and observability modules outside the layer directories. The current API surface spans 28 route files, 26 endpoint-bearing route modules, and 88 endpoint decorators; the test suite is unit-biased by default and exceeds 1,600 collected tests.
 
 ---
 
@@ -30,11 +30,12 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 ### 1. AI-Powered Meal Analysis
 - 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined.
 - Multi-food detection in single image with confidence scoring.
+- Nutrition Facts label analysis via `/v1/meals/food-label/scan-by-url`, optional label crop, crop metadata, and strict `FoodLabelNutritionResponse` validation.
 - OpenAI is the default provider; configured Cloudflare Workers AI can take routed text purposes first and vision purposes as fallback.
 - Returns results in <3 seconds through the meal state machine (PROCESSING → ANALYZING → READY/FAILED).
 
-### 2. RESTful API (85 endpoint decorators across 26 endpoint route modules)
-- **Meals**: image/analyze, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
+### 2. RESTful API (88 endpoint decorators across 26 endpoint route modules)
+- **Meals**: image/analyze, upload-token, scan-by-url, food-label/scan-by-url, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
 - **User Profiles**: create, metrics (GET/POST), TDEE, custom-macros.
 - **Users**: sync, Firebase UID lookups, metrics, timezone, language, delete.
 - **Meal Suggestions**: discover (6 meals + images), recipes, save.
@@ -119,6 +120,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.6.7 | Jul 5, 2026 | Updated docs for food-label image scan-by-url: optional label crop URL and crop metadata, direct nutrition-label image analysis, strict `FoodLabelNutritionResponse` validation, and refreshed codebase/API metrics. |
 | 0.6.6 | Jun 27, 2026 | Documentation refresh for current runtime versions, current codebase metrics, OpenAI-first AI routing, and updated test/CI defaults. |
 | 0.6.5 | Jun 13, 2026 | Added validation retry orchestration for structured AI nutrition output, with exactly one repair attempt for meal image scan and text parse flows, controlled `AIOutputValidationError` handling, preserved ingredient-recognition's unstructured contract, and kept calorie divergence checks anchored to backend-derived macro calories. |
 | 0.6.4 | Jun 13, 2026 | Added canonical AI nutrition contracts for image and text flows, rejected impossible over-limit food quantities at validation time, preserved current text-parse macro compatibility, and removed silent invalid-food filtering from the legacy parser. |

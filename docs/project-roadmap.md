@@ -1,13 +1,19 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.6
-**Last Updated:** June 27, 2026
-**Status:** Production-ready. 627 source files in `src/`, 53,972 LOC in `src/`, 306 Python test files, and 1,600+ collected tests. Default `pytest` is unit-biased because integration tests are ignored by config.
+**Version:** 0.6.7
+**Last Updated:** July 5, 2026
+**Status:** Production-ready. 635 source files in `src/`, 56,132 LOC in `src/`, 312 Python test files, and 1,600+ collected tests. Default `pytest` is unit-biased because integration tests are ignored by config.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### July 2026: Food-Label Image Scan
+- [x] `/v1/meals/food-label/scan-by-url` analyzes Nutrition Facts label images directly from Cloudinary bytes.
+- [x] Optional `label_crop_image_url` and crop metadata let mobile send a nutrition-panel crop while retaining the original image record.
+- [x] `FoodLabelImageAnalysisStrategy` handles multilingual labels and returns the strict `FoodLabelNutritionResponse` contract.
+- [x] Failed label reads do not persist meals; successful scans persist READY `Meal(source="food_label")` rows and invalidate meal caches without hydration side effects.
 
 ### June 2026: Python 3.13 and Dependency Standardization
 - [x] Upgraded runtime, Docker, CI, and documented backend baseline to Python 3.13.
