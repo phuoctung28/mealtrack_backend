@@ -101,6 +101,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                 confidence=0.8,
                 fdc_id=existing_item.fdc_id,
                 is_custom=True,
+                allowed_units=change.allowed_units or existing_item.allowed_units,
             )
             logger.info(
                 f"Updated food item with custom nutrition: {existing_item.name}"
@@ -134,6 +135,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     confidence=0.9,
                     fdc_id=existing_item.fdc_id,
                     is_custom=existing_item.is_custom,
+                    allowed_units=change.allowed_units or existing_item.allowed_units,
                 )
                 logger.info(f"Updated food item with unit change: {existing_item.name}")
             else:
@@ -192,6 +194,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             confidence=existing_item.confidence,
             fdc_id=existing_item.fdc_id,
             is_custom=existing_item.is_custom,
+            allowed_units=change.allowed_units or existing_item.allowed_units,
         )
         logger.info(f"Updated food item with scaling: {existing_item.name}")
 
@@ -223,6 +226,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 quantity,
                 unit,
                 change.custom_nutrition,
+                change.allowed_units,
             )
             food_items_dict[new_item_id] = food_item
             logger.info(f"Added custom food item: {change.name}")
@@ -248,6 +252,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                     confidence=0.9,
                     fdc_id=change.fdc_id,
                     is_custom=False,
+                    allowed_units=change.allowed_units,
                 )
                 logger.info(f"Added food item from nutrition service: {change.name}")
                 return
@@ -265,10 +270,17 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             confidence=0.3,
             fdc_id=change.fdc_id,
             is_custom=True,
+            allowed_units=change.allowed_units,
         )
 
     def _create_from_custom_nutrition(
-        self, item_id: str, name: str, quantity: float, unit: str, custom_nutrition
+        self,
+        item_id: str,
+        name: str,
+        quantity: float,
+        unit: str,
+        custom_nutrition,
+        allowed_units=None,
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
         quantity_grams = convert_quantity_to_grams(quantity, unit, name)
@@ -290,6 +302,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             confidence=0.8,
             fdc_id=None,
             is_custom=True,
+            allowed_units=allowed_units,
         )
 
 

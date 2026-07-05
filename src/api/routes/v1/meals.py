@@ -294,6 +294,7 @@ async def create_manual_meal(
                     quantity=i.quantity,
                     unit=i.unit,
                     custom_nutrition=custom_nutrition,
+                    allowed_units=[unit.model_dump() for unit in i.allowed_units],
                 )
             )
 
@@ -829,6 +830,9 @@ async def update_meal_ingredients(
                 quantity=change_request.quantity,
                 unit=change_request.unit,
                 custom_nutrition=custom_nutrition,
+                allowed_units=[
+                    unit.model_dump() for unit in change_request.allowed_units
+                ],
             )
         )
 

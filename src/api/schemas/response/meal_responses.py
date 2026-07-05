@@ -143,6 +143,14 @@ class FoodLabelMetadataResponse(BaseModel):
     label_notes: list[str] = Field(default_factory=list)
 
 
+class ServingUnitResponse(BaseModel):
+    """Food-specific serving conversion option."""
+
+    unit: str = Field(..., description="Unit token used for save/edit requests")
+    gram_weight: float = Field(..., gt=0, description="Gram weight for one unit")
+    description: str = Field("", description="User-facing serving description")
+
+
 class MealValueBulletResponse(BaseModel):
     """Short meal-level value insight."""
 
@@ -215,6 +223,10 @@ class FoodItemResponse(BaseModel):
     )
     fdc_id: int | None = Field(None, description="USDA FDC ID if available")
     is_custom: bool = Field(False, description="Whether this is a custom ingredient")
+    allowed_units: list[ServingUnitResponse] = Field(
+        default_factory=list,
+        description="Allowed unit options for this food item",
+    )
 
 
 class SimpleMealResponse(BaseModel):

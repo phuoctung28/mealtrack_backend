@@ -4,7 +4,7 @@ Used when editing meals to add, update, or remove food items.
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -18,6 +18,7 @@ class FoodItemChange:
     quantity: Optional[float] = None
     unit: Optional[str] = None
     custom_nutrition: Optional["CustomNutritionData"] = None
+    allowed_units: Optional[list[dict[str, Any]]] = None
 
 
 @dataclass
