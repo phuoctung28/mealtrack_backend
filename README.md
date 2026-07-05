@@ -12,8 +12,8 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 ## 🚀 Features
 
-- **AI-Powered Meal Analysis**: Vision-based food recognition with 6 analysis strategies and provider fallback routing.
-- **26 Endpoint Route Modules**: 85 endpoint decorators covering meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks, and support routes.
+- **AI-Powered Meal Analysis**: Vision-based food recognition with 6 meal strategies, food-label image analysis, and provider fallback routing.
+- **26 Endpoint Route Modules**: 88 endpoint decorators covering meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks, and support routes.
 - **CQRS Architecture**: Commands, queries, events, and handlers wired through a PyMediator singleton event bus.
 - **Intelligent Planning**: AI-generated weekly plans with dietary preferences, cooking time constraints, and ingredient-based generation.
 - **Vector Search**: Pinecone semantic search with 1024-dim embeddings (llama-text-embed-v2).
@@ -42,10 +42,10 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 Follows a **4-Layer Clean Architecture** with **CQRS** and **Event-Driven Design**:
 
-1. **API Layer** (91 files, 10,624 LOC): 26 endpoint route modules, 85 endpoint decorators, schemas, middleware, dependencies, and API mappers.
-2. **Application Layer** (207 files, 11,192 LOC): CQRS command/query/event handlers and orchestration services.
-3. **Domain Layer** (166 files, 16,283 LOC): entities, services, ports, policies, and bounded contexts.
-4. **Infrastructure Layer** (154 files, 15,134 LOC): database models, repositories, external adapters, cache, observability, and event bus implementation.
+1. **API Layer** (91 files, 11,323 LOC): 26 endpoint route modules, 88 endpoint decorators, schemas, middleware, dependencies, and API mappers.
+2. **Application Layer** (207 files, 11,333 LOC): CQRS command/query/event handlers and orchestration services.
+3. **Domain Layer** (174 files, 17,397 LOC): entities, services, ports, policies, and bounded contexts.
+4. **Infrastructure Layer** (154 files, 15,337 LOC): database models, repositories, external adapters, cache, observability, and event bus implementation.
 
 ## 🚦 Getting Started
 

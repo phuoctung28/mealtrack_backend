@@ -1,9 +1,9 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 27, 2026
+**Last Updated:** July 5, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 627 Python files, 53,972 LOC in `src/`
+**Codebase:** 635 Python files, 56,132 LOC in `src/`
 
 ---
 
@@ -21,7 +21,7 @@
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (166 files)                      │
+│                Domain Layer (174 files)                      │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
@@ -37,11 +37,11 @@
 
 | Layer | Files | LOC | Key Contents |
 |-------|-------|-----|-------------|
-| API | 91 | 10,624 | 28 route files, 26 endpoint route modules, 85 endpoint decorators, schemas, middleware, dependencies |
-| App | 207 | 11,192 | 37 command files, 34 query files, 10 event files, 75 handler files |
-| Domain | 166 | 16,283 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
-| Infra | 154 | 15,134 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
-| **Total** | **618** | **53,233** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
+| API | 91 | 11,323 | 28 route files, 26 endpoint route modules, 88 endpoint decorators, schemas, middleware, dependencies |
+| App | 207 | 11,333 | 50 command files, 52 query files, 14 event files, 86 handler files |
+| Domain | 174 | 17,397 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
+| Infra | 154 | 15,337 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
+| **Total** | **626** | **55,390** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
 
 **Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns.
 
@@ -115,6 +115,16 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 5. Handler returns Meal immediately to API (synchronous response to client)
 6. `EventBus.publish()` → `MealAnalysisEventHandler` (background)
 7. Background: calls `VisionAIService` through the provider stack, parses nutrition, updates Meal to READY
+
+## Data Flow Example: Food-Label Scan By URL
+
+1. `POST /v1/meals/food-label/scan-by-url` receives Cloudinary image identifiers, optional label-crop identifiers, and crop metadata.
+2. Route validates Cloudinary URLs and creates `ScanByUrlCommand(scan_mode="food_label")`.
+3. `ScanByUrlCommandHandler` downloads the full image bytes; if a label crop is supplied, it downloads and analyzes the crop bytes.
+4. Handler calls `VisionAIService.analyze_with_strategy(..., FoodLabelImageAnalysisStrategy)`.
+5. Infrastructure validates provider output against `FoodLabelNutritionResponse`.
+6. `VisionResponseParser` maps validated label data into `Nutrition` and `food_label_metadata`.
+7. Handler persists a READY `Meal(source="food_label")`, invalidates meal caches, and does not create hydration side effects.
 
 ---
 

@@ -1,11 +1,11 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** July 2, 2026
+**Last Updated:** July 5, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
 Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
-**Surface:** 28 route files, 27 router registrations, 26 endpoint-bearing route modules, and 85 endpoint decorators.
+**Surface:** 28 route files, 27 router registrations, 26 endpoint-bearing route modules, and 88 endpoint decorators.
 
 ---
 
@@ -48,12 +48,13 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | DELETE | `/v1/meals/{meal_id}` | Delete meal (soft delete) |
 | PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients |
 
-### Food Label OCR Contract
+### Food Label Image Contract
 
-- `/v1/meals/food-label/scan-by-url` requires `ocr_text_lines` from native client OCR.
-- The backend parses OCR text deterministically and does not send food-label images to AI analysis.
-- Missing OCR text, sparse text, missing fields, and conflicting values fail cleanly without AI fallback.
-- The backend remains source of truth for validation and derives calories from macros; clients must not calculate label nutrition.
+- `/v1/meals/food-label/scan-by-url` accepts a Cloudinary `image_url`/`image_id` pair plus optional `label_crop_image_url`/`label_crop_image_id` and `crop_metadata`.
+- The backend downloads image bytes and sends the label crop, or the full image when no crop is supplied, through `FoodLabelImageAnalysisStrategy`.
+- AI output is validated against `FoodLabelNutritionResponse` before mapping to `Nutrition` and `food_label_metadata`.
+- Failed label reads return controlled validation errors and do not persist meals.
+- The backend remains source of truth for validation and calorie presentation; clients must not calculate label nutrition.
 
 ---
 

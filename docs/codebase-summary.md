@@ -1,6 +1,6 @@
 # Backend Codebase Summary
 
-**Generated:** June 27, 2026
+**Generated:** July 5, 2026
 **Status:** Production-ready snapshot of the live backend codebase
 **Runtime:** FastAPI 0.136.3 on Python 3.13.2 with async SQLAlchemy 2.0
 
@@ -10,19 +10,19 @@
 
 | Metric | Value |
 |--------|-------|
-| Source files | 627 Python files in `src/` |
-| Source LOC | 53,972 LOC in `src/` |
-| Test files | 306 Python files in `tests/` |
+| Source files | 635 Python files in `src/` |
+| Source LOC | 56,132 LOC in `src/` |
+| Test files | 312 Python files in `tests/` |
 | Collected tests | 1,600+ collected tests |
 | API router files | 28 route files under `src/api/routes/`; 26 contain endpoint decorators |
-| API endpoints | 85 endpoint decorators under `src/api/routes/` |
-| CQRS command files | 37 |
-| CQRS query files | 34 |
-| CQRS event files | 10 |
-| CQRS handler files | 75 |
-| Domain service files | 46 |
-| Port files | 25 |
-| Database model files | 39 |
+| API endpoints | 88 endpoint decorators under `src/api/routes/` |
+| CQRS command files | 50 |
+| CQRS query files | 52 |
+| CQRS event files | 14 |
+| CQRS handler files | 86 |
+| Domain service files | 60 |
+| Port files | 27 |
+| Database model files | 48 |
 | ORM table declarations | 39 |
 
 ---
@@ -31,10 +31,10 @@
 
 | Layer | Files | LOC | Notes |
 |-------|-------|-----|-------|
-| API | 91 | 10,624 | Routes, middleware, schemas, dependency wiring, and API mappers |
-| Application | 207 | 11,192 | Commands, queries, handlers, and orchestration services |
-| Domain | 166 | 16,283 | Entities, services, ports, policies, and bounded contexts |
-| Infrastructure | 154 | 15,134 | Database, cache, adapters, observability, and service integrations |
+| API | 91 | 11,323 | Routes, middleware, schemas, dependency wiring, and API mappers |
+| Application | 207 | 11,333 | Commands, queries, handlers, and orchestration services |
+| Domain | 174 | 17,397 | Entities, services, ports, policies, and bounded contexts |
+| Infrastructure | 154 | 15,337 | Database, cache, adapters, observability, and service integrations |
 
 ---
 
@@ -42,7 +42,7 @@
 
 The current HTTP surface includes:
 
-- Meal logging and analysis: image upload, upload-token, scan-by-url, manual meals, parse-text, streak, weekly budget, and daily macros.
+- Meal logging and analysis: image upload, upload-token, scan-by-url, food-label scan-by-url, manual meals, parse-text, streak, weekly budget, and daily macros.
 - User and profile management: Firebase sync, onboarding completion, metrics, TDEE, language, timezone, and account deletion.
 - Discovery and planning: meal suggestions discover, recipes, and save.
 - Nutrition and activity tracking: nutrition bulk/presence, activities daily/bulk, hydration, movement, and the journey progress snapshot.
@@ -69,13 +69,17 @@ The current HTTP surface includes:
 | `src/app/queries/` | 52 | Read-operation query packages |
 | `src/app/handlers/` | 86 | CQRS handler packages |
 | `src/domain/model/` | 63 | Domain entities and value objects |
-| `src/domain/services/` | 54 | Domain services and policies |
+| `src/domain/services/` | 60 | Domain services and policies |
 | `src/infra/database/models/` | 48 | ORM model packages and table declarations |
 | `src/infra/repositories/` | 23 | Data access adapters |
 | `src/infra/services/` | 27 | Infrastructure services and AI providers |
-| `tests/` | 306 | Unit, architecture, migration, and explicit integration tests |
+| `tests/` | 312 | Unit, architecture, migration, and explicit integration tests |
 
 ---
+
+## Recent Features (July 2026)
+
+- **Food-Label Image Scan:** `/v1/meals/food-label/scan-by-url` now analyzes Cloudinary-hosted nutrition-label images directly, preferring an optional label crop and crop metadata. `FoodLabelImageAnalysisStrategy` reads multilingual nutrition panels into the strict `FoodLabelNutritionResponse` contract; failures do not persist meals.
 
 ## Recent Features (June 2026)
 

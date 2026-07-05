@@ -30,9 +30,11 @@ UploadMealImageImmediatelyHandler or ScanByUrlCommandHandler
   6. Invalidate meal caches
 ```
 
-Food-label scans do not use this image-AI flow. Clients upload through the
-signed Cloudinary flow, run native OCR, then call
-`/v1/meals/food-label/scan-by-url` with `ocr_text_lines`.
+Food-label scans use a separate image-AI flow. Clients upload through the signed
+Cloudinary flow, optionally crop the nutrition panel, then call
+`/v1/meals/food-label/scan-by-url` with the full image URL and optional
+`label_crop_image_url` plus crop metadata. The handler analyzes the crop when
+present and persists the result with `source="food_label"`.
 
 Meal scan must not create `hydration_entries`.
 
