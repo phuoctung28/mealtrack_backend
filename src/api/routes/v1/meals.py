@@ -45,7 +45,10 @@ from src.api.schemas.response import (
     MealValueInsightsStatusResponse,
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
-from src.api.schemas.response.meal_responses import ParseMealTextResponse
+from src.api.schemas.response.meal_responses import (
+    ParsedFoodItem,
+    ParseMealTextResponse,
+)
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
 from src.api.services.guest_parse_quota import (
     GuestParseQuotaService,
@@ -72,6 +75,7 @@ from src.app.queries.meal import (
     GetMealByIdQuery,
     GetStreakQuery,
 )
+from src.domain.model.nutrition.macros import Macros as MacrosModel
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.meal_value_insight_service import MealValueInsightService
@@ -108,6 +112,26 @@ def _parse_target_date(target_date: str | None):
             error_code="INVALID_DATE_FORMAT",
             details={"date": target_date},
         ) from e
+
+
+def _parsed_food_item_to_response(item) -> ParsedFoodItem:
+    return ParsedFoodItem(
+        name=item.name,
+        quantity=item.quantity,
+        unit=item.unit,
+        calories=MacrosModel(
+            protein=item.protein,
+            carbs=item.carbs,
+            fat=item.fat,
+            fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
+        ).total_calories,
+        protein=item.protein,
+        carbs=item.carbs,
+        fat=item.fat,
+        data_source=item.data_source,
+        fdc_id=item.fdc_id,
+        allowed_units=getattr(item, "allowed_units", None) or [],
+    )
 
 
 async def _analyze_uploaded_image(
@@ -379,28 +403,8 @@ async def parse_meal_text(
         )
         app_response = await event_bus.send(command)
 
-        # Map app DTO to API response DTO
-        from src.api.schemas.response.meal_responses import ParsedFoodItem
-        from src.domain.model.nutrition.macros import Macros as MacrosModel
-
         api_items = [
-            ParsedFoodItem(
-                name=item.name,
-                quantity=item.quantity,
-                unit=item.unit,
-                calories=MacrosModel(
-                    protein=item.protein,
-                    carbs=item.carbs,
-                    fat=item.fat,
-                    fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
-                ).total_calories,
-                protein=item.protein,
-                carbs=item.carbs,
-                fat=item.fat,
-                data_source=item.data_source,
-                fdc_id=item.fdc_id,
-            )
-            for item in app_response.items
+            _parsed_food_item_to_response(item) for item in app_response.items
         ]
         total_calories = sum(i.calories for i in api_items)
 
@@ -479,28 +483,7 @@ async def parse_meal_text_guest_trial(
 
     await quota.mark_completed(id_hash)
 
-    from src.api.schemas.response.meal_responses import ParsedFoodItem
-    from src.domain.model.nutrition.macros import Macros as MacrosModel
-
-    api_items = [
-        ParsedFoodItem(
-            name=item.name,
-            quantity=item.quantity,
-            unit=item.unit,
-            calories=MacrosModel(
-                protein=item.protein,
-                carbs=item.carbs,
-                fat=item.fat,
-                fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
-            ).total_calories,
-            protein=item.protein,
-            carbs=item.carbs,
-            fat=item.fat,
-            data_source=item.data_source,
-            fdc_id=item.fdc_id,
-        )
-        for item in app_response.items
-    ]
+    api_items = [_parsed_food_item_to_response(item) for item in app_response.items]
     total_calories = sum(i.calories for i in api_items)
 
     return ParseMealTextResponse(

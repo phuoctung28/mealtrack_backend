@@ -35,6 +35,14 @@ class ValueInsightCategoryEnum(StrEnum):
 # Translation Response DTOs
 
 
+class ServingUnitResponse(BaseModel):
+    """Food-specific serving conversion option."""
+
+    unit: str = Field(..., description="Unit token used for save/edit requests")
+    gram_weight: float = Field(..., gt=0, description="Gram weight for one unit")
+    description: str = Field("", description="User-facing serving description")
+
+
 class ParsedFoodItem(BaseModel):
     """Response DTO for a single parsed food item."""
 
@@ -51,6 +59,10 @@ class ParsedFoodItem(BaseModel):
         None, description="Data source: usda, fatsecret, or ai_estimate"
     )
     fdc_id: int | None = Field(None, description="USDA FDC ID when available")
+    allowed_units: list[ServingUnitResponse] = Field(
+        default_factory=list,
+        description="Allowed unit options for this food item",
+    )
 
 
 class ParseMealTextResponse(BaseModel):
@@ -141,14 +153,6 @@ class FoodLabelMetadataResponse(BaseModel):
     label_calories_per_serving: float | None = Field(None, ge=0)
     confidence: float = Field(..., ge=0, le=1)
     label_notes: list[str] = Field(default_factory=list)
-
-
-class ServingUnitResponse(BaseModel):
-    """Food-specific serving conversion option."""
-
-    unit: str = Field(..., description="Unit token used for save/edit requests")
-    gram_weight: float = Field(..., gt=0, description="Gram weight for one unit")
-    description: str = Field("", description="User-facing serving description")
 
 
 class MealValueBulletResponse(BaseModel):
