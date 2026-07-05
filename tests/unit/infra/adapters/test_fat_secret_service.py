@@ -5,6 +5,25 @@ import pytest
 from src.infra.adapters.fat_secret_service import FatSecretService
 
 
+class _Response:
+    status_code = 200
+    text = '{"ok": true}'
+
+    def json(self):
+        return {"ok": True}
+
+
+class _Client:
+    is_closed = False
+
+    def __init__(self):
+        self.post_calls = []
+
+    async def post(self, *args, **kwargs):
+        self.post_calls.append((args, kwargs))
+        return _Response()
+
+
 @pytest.mark.unit
 def test_fatsecret_serving_units_preserve_fatsecret_order():
     service = FatSecretService("client", "secret")
@@ -70,6 +89,26 @@ def test_fatsecret_nutrition_prefers_100g_serving():
     assert nutrition["carbs_100g"] == 66.67
     assert nutrition["fat_100g"] == 6.67
     assert nutrition["allowed_units"][0]["description"] == "1 cup"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fatsecret_api_request_posts_form_params():
+    service = FatSecretService("client", "secret")
+    service._get_access_token = AsyncMock(return_value="token")
+    client = _Client()
+    service._client = client
+
+    result = await service._api_request(
+        "POST",
+        params={"method": "foods.search.v5", "format": "json"},
+    )
+
+    assert result == {"ok": True}
+    _, kwargs = client.post_calls[0]
+    assert kwargs["data"] == {"method": "foods.search.v5", "format": "json"}
+    assert "json" not in kwargs
+    assert kwargs["headers"]["Content-Type"] == "application/x-www-form-urlencoded"
 
 
 @pytest.mark.unit

@@ -3,12 +3,12 @@ fatsecret API HTTP client.
 Provides product lookup by barcode and food search using OAuth 2.0.
 """
 
-from typing import Dict, Any, Optional, List
 import asyncio
-import logging
-import time
 import base64
+import logging
 import re
+import time
+from typing import Any
 
 import httpx
 
@@ -41,9 +41,9 @@ class FatSecretService:
     def __init__(self, client_id: str, client_secret: str):
         self.client_id = client_id
         self.client_secret = client_secret
-        self._access_token: Optional[str] = None
+        self._access_token: str | None = None
         self._token_expires_at: float = 0
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
@@ -57,7 +57,7 @@ class FatSecretService:
             await self._client.aclose()
             self._client = None
 
-    async def _get_access_token(self) -> Optional[str]:
+    async def _get_access_token(self) -> str | None:
         """Get OAuth 2.0 access token, refreshing if needed."""
         # Check if token is still valid (with 60s buffer)
         if self._access_token and time.time() < self._token_expires_at - 60:
@@ -100,9 +100,9 @@ class FatSecretService:
         self,
         method: str,
         endpoint: str = "",
-        params: Optional[Dict] = None,
+        params: dict | None = None,
         base_url: str = FATSECRET_API_BASE,
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         """Make authenticated API request."""
         token = await self._get_access_token()
         if not token:
@@ -111,7 +111,7 @@ class FatSecretService:
         url = base_url if not endpoint else f"{base_url}/{endpoint}"
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
         }
 
         try:
@@ -119,7 +119,7 @@ class FatSecretService:
             if method.upper() == "GET":
                 response = await client.get(url, headers=headers, params=params)
             else:
-                response = await client.post(url, headers=headers, json=params)
+                response = await client.post(url, headers=headers, data=params)
 
             if response.status_code != 200:
                 logger.warning(
@@ -127,7 +127,14 @@ class FatSecretService:
                 )
                 return None
 
-            return response.json()
+            try:
+                return response.json()
+            except ValueError:
+                logger.warning(
+                    "fatsecret API returned non-JSON response: %s",
+                    response.text[:200],
+                )
+                return None
         except httpx.HTTPError as e:
             logger.warning(f"fatsecret request error: {e}")
             return None
@@ -137,7 +144,7 @@ class FatSecretService:
         barcode: str,
         region: str = "US",
         language: str = "en",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Fetch product by barcode from fatsecret."""
         # Validate barcode format
         if not BARCODE_PATTERN.match(barcode):
@@ -185,7 +192,7 @@ class FatSecretService:
         max_results: int = 10,
         region: str = "US",
         language: str = "en",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search foods by query string with nutrition data."""
         try:
             params = {
@@ -225,7 +232,7 @@ class FatSecretService:
 
             # Process each food, fetching detailed nutrition concurrently to
             # avoid N+1 sequential round trips (one food.get per search result).
-            async def _process(food: Dict) -> Dict:
+            async def _process(food: dict) -> dict:
                 food_id = food.get("food_id")
                 mapped = self._map_search_result(food)
 
@@ -260,7 +267,7 @@ class FatSecretService:
             logger.warning(f"fatsecret search error for query '{query}': {e}")
             return []
 
-    def _extract_serving_units(self, food: Dict) -> List[Dict]:
+    def _extract_serving_units(self, food: dict) -> list[dict]:
         """Extract all serving units from fatsecret food details."""
         servings = food.get("servings", {}).get("serving", [])
         if not servings:
@@ -289,7 +296,7 @@ class FatSecretService:
 
         return units or self._default_allowed_units()
 
-    def _select_per_100g_serving(self, food: Dict[str, Any]) -> Optional[Dict]:
+    def _select_per_100g_serving(self, food: dict[str, Any]) -> dict | None:
         servings = food.get("servings", {}).get("serving", [])
         if isinstance(servings, dict):
             servings = [servings]
@@ -303,7 +310,7 @@ class FatSecretService:
                 return serving
         return servings[0] if isinstance(servings[0], dict) else None
 
-    def _extract_nutrition_from_details(self, food: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_nutrition_from_details(self, food: dict[str, Any]) -> dict[str, Any]:
         """Extract per-100g nutrition from fatsecret food details."""
         serving = self._select_per_100g_serving(food)
 
@@ -326,11 +333,11 @@ class FatSecretService:
             "allowed_units": self._extract_serving_units(food),
         }
 
-    def _default_allowed_units(self) -> List[Dict]:
+    def _default_allowed_units(self) -> list[dict]:
         """Return default allowed units when none are provided."""
         return [{"unit": "g", "gram_weight": 100.0, "description": "100 g"}]
 
-    def _map_product(self, food: Dict[str, Any], barcode: str) -> Dict[str, Any]:
+    def _map_product(self, food: dict[str, Any], barcode: str) -> dict[str, Any]:
         """Map fatsecret response to clean dict."""
         serving = self._select_per_100g_serving(food)
         if not isinstance(serving, dict):
@@ -365,7 +372,7 @@ class FatSecretService:
             "allowed_units": self._extract_serving_units(food),
         }
 
-    def _calc_per_100g(self, value: Any, metric_amount: float) -> Optional[float]:
+    def _calc_per_100g(self, value: Any, metric_amount: float) -> float | None:
         """Calculate nutrition value per 100g using metric_serving_amount."""
         if value is None:
             return None
@@ -376,7 +383,7 @@ class FatSecretService:
             return None
         return (raw_value / metric_amount) * 100
 
-    def _map_search_result(self, food: Dict[str, Any]) -> Dict[str, Any]:
+    def _map_search_result(self, food: dict[str, Any]) -> dict[str, Any]:
         """Map fatsecret search result to clean dict."""
         return {
             "description": food.get("food_name", ""),
@@ -389,7 +396,7 @@ class FatSecretService:
             "allowed_units": self._default_allowed_units(),  # Will be enriched with details
         }
 
-    def _safe_float(self, value: Any) -> Optional[float]:
+    def _safe_float(self, value: Any) -> float | None:
         """Safely convert value to float."""
         if value is None:
             return None
@@ -399,7 +406,7 @@ class FatSecretService:
             return None
 
 
-_fat_secret_service: Optional[FatSecretService] = None
+_fat_secret_service: FatSecretService | None = None
 
 
 def get_fat_secret_service() -> FatSecretService:
