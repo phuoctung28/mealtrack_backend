@@ -8,6 +8,7 @@ from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import all commands
 from src.app.commands.meal import (
     AddCustomIngredientCommand,
+    AttachMealPhotoCommand,
     DeleteMealCommand,
     EditMealCommand,
     ScanByUrlCommand,
@@ -58,6 +59,7 @@ from src.app.commands.weight import (
 # Saved suggestion handlers
 from src.app.handlers.command_handlers import (
     AddCustomIngredientCommandHandler,
+    AttachMealPhotoCommandHandler,
     CompleteOnboardingCommandHandler,
     CreateManualMealCommandHandler,
     DeleteFcmTokenCommandHandler,
@@ -357,6 +359,14 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
+            uow=AsyncUnitOfWork(),
+            cache_invalidation=cache_invalidation_service,
+        ),
+    )
+
+    event_bus.register_handler(
+        AttachMealPhotoCommand,
+        AttachMealPhotoCommandHandler(
             uow=AsyncUnitOfWork(),
             cache_invalidation=cache_invalidation_service,
         ),

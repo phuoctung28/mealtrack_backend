@@ -7,6 +7,7 @@ import logging
 import time
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -35,6 +36,7 @@ from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.request.meal_requests import (
+    AttachMealPhotoRequest,
     CreateManualMealFromFoodsRequest,
     EditMealIngredientsRequest,
     ParseMealTextRequest,
@@ -58,6 +60,7 @@ from src.api.services.guest_parse_quota import (
     validate_install_id,
 )
 from src.app.commands.meal import CustomNutritionData, EditMealCommand, FoodItemChange
+from src.app.commands.meal.attach_meal_photo_command import AttachMealPhotoCommand
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
     CustomNutrition,
@@ -132,6 +135,14 @@ def _parsed_food_item_to_response(item) -> ParsedFoodItem:
         fdc_id=item.fdc_id,
         allowed_units=getattr(item, "allowed_units", None) or [],
     )
+
+
+def _validate_uploaded_meal_photo_url(image_url: str, image_id: str) -> None:
+    parsed = urlparse(image_url)
+    if parsed.scheme != "https" or parsed.netloc != "res.cloudinary.com":
+        raise ValidationException("image_url must be a Cloudinary secure URL")
+    if image_id not in parsed.path:
+        raise ValidationException("image_id does not match image_url")
 
 
 async def _analyze_uploaded_image(
@@ -403,9 +414,7 @@ async def parse_meal_text(
         )
         app_response = await event_bus.send(command)
 
-        api_items = [
-            _parsed_food_item_to_response(item) for item in app_response.items
-        ]
+        api_items = [_parsed_food_item_to_response(item) for item in app_response.items]
         total_calories = sum(i.calories for i in api_items)
 
         return ParseMealTextResponse(
@@ -839,6 +848,30 @@ async def update_meal_ingredients(
         ai_manager=ai_manager,
     )
     return result
+
+
+@router.put("/{meal_id}/photo", response_model=None)
+async def attach_meal_photo(
+    meal_id: str,
+    payload: AttachMealPhotoRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Attach an already-uploaded meal photo to an existing meal.
+
+    Requires authentication - users can only modify their own meals.
+    """
+    _validate_uploaded_meal_photo_url(payload.image_url, payload.image_id)
+    command = AttachMealPhotoCommand(
+        meal_id=meal_id,
+        user_id=user_id,
+        image_id=payload.image_id,
+        image_url=payload.image_url,
+        image_format=payload.image_format,
+        size_bytes=payload.size_bytes,
+    )
+    return await event_bus.send(command)
 
 
 @router.get("/weekly/budget", response_model=WeeklyBudgetResponse)
