@@ -48,6 +48,7 @@ def food_reference_model_to_dict(model: FoodReferenceModel) -> dict[str, Any]:
         "fiber_100g": model.fiber_100g,
         "sugar_100g": model.sugar_100g,
         "serving_sizes": food_reference_serving_sizes_to_dict(model),
+        "allowed_units": food_reference_allowed_units_to_dict(model),
         "density": model.density,
         "serving_size": model.serving_size,
         "extra_nutrients": food_reference_nutrients_to_dict(model),
@@ -66,13 +67,15 @@ def build_food_reference_serving_rows(
     for idx, item in enumerate(raw):
         if not isinstance(item, dict):
             continue
-        name = str(item.get("name") or item.get("label") or "").strip()
+        name = str(
+            item.get("name") or item.get("label") or item.get("unit") or ""
+        ).strip()
         if not name:
             continue
         rows.append(
             FoodReferenceServingSizeModel(
                 name=name[:100],
-                grams=as_optional_float(item.get("grams")),
+                grams=as_optional_float(item.get("grams") or item.get("gram_weight")),
                 milliliters=as_optional_float(
                     item.get("milliliters") or item.get("ml")
                 ),
@@ -119,6 +122,49 @@ def food_reference_serving_sizes_to_dict(model: FoodReferenceModel) -> Any:
         }
         for row in rows
     ]
+
+
+def food_reference_allowed_units_to_dict(
+    model: FoodReferenceModel,
+) -> list[dict[str, Any]]:
+    raw_rows = getattr(model, "serving_size_rows", None)
+    if raw_rows:
+        units = [
+            {
+                "unit": row.name,
+                "gram_weight": row.grams,
+                "description": row.name,
+            }
+            for row in raw_rows
+            if row.grams is not None and row.grams > 0
+        ]
+    else:
+        units = _legacy_serving_sizes_to_allowed_units(model.serving_sizes)
+    if not any(unit["unit"].lower() == "g" for unit in units):
+        units.insert(0, {"unit": "g", "gram_weight": 1.0, "description": "1 g"})
+    return units
+
+
+def _legacy_serving_sizes_to_allowed_units(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    units: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(
+            item.get("name") or item.get("label") or item.get("unit") or ""
+        ).strip()
+        grams = as_optional_float(item.get("grams") or item.get("gram_weight"))
+        if name and grams is not None and grams > 0:
+            units.append(
+                {
+                    "unit": name,
+                    "gram_weight": grams,
+                    "description": item.get("description") or name,
+                }
+            )
+    return units
 
 
 def food_reference_nutrients_to_dict(model: FoodReferenceModel) -> Any:
