@@ -392,6 +392,24 @@ class EditMealIngredientsRequest(BaseModel):
         }
 
 
+class AttachMealPhotoRequest(BaseModel):
+    """Request DTO for attaching an uploaded image to a meal."""
+
+    image_id: str = Field(..., description="Cloudinary upload image UUID")
+    image_url: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Cloudinary secure URL returned after upload",
+    )
+    image_format: Literal["jpeg", "png"] = Field(
+        "jpeg", description="Uploaded image format"
+    )
+    size_bytes: int = Field(
+        ..., gt=0, le=8 * 1024 * 1024, description="Uploaded image size in bytes"
+    )
+
+
 class AddCustomIngredientRequest(BaseModel):
     """Request DTO for adding custom ingredient to meal."""
 

@@ -251,6 +251,31 @@ class Meal:
             **self._recipe_fields(),
         )
 
+    def with_image(self, image: MealImage) -> "Meal":
+        """Return the meal with updated image metadata."""
+        return Meal(
+            meal_id=self.meal_id,
+            user_id=self.user_id,
+            status=self.status,
+            created_at=self.created_at,
+            image=image,
+            dish_name=self.dish_name,
+            nutrition=self.nutrition,
+            ready_at=self.ready_at,
+            error_message=self.error_message,
+            raw_gpt_json=self.raw_gpt_json,
+            food_label_metadata=self.food_label_metadata,
+            updated_at=utc_now(),
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited,
+            meal_type=self.meal_type,
+            translations=self.translations,
+            source=self.source,
+            quantity=self.quantity,
+            **self._recipe_fields(),
+        )
+
     def mark_inactive(self) -> "Meal":
         """Mark meal as INACTIVE (soft delete)."""
         return Meal(
