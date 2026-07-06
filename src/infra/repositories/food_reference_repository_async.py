@@ -95,7 +95,7 @@ class AsyncFoodReferenceRepository:
             "fiber_100g": data.get("fiber_100g", 0),
             "sugar_100g": data.get("sugar_100g", 0),
             "serving_size": data.get("serving_size"),
-            "serving_sizes": data.get("serving_sizes"),
+            "serving_sizes": data.get("serving_sizes") or data.get("allowed_units"),
             "image_url": data.get("image_url"),
             "source": data.get("source", "fatsecret"),
             "is_verified": data.get("is_verified", False),
@@ -237,7 +237,7 @@ class AsyncFoodReferenceRepository:
         model: FoodReferenceModel,
         data: dict[str, Any],
     ) -> None:
-        serving_sizes = data.get("serving_sizes")
+        serving_sizes = data.get("serving_sizes") or data.get("allowed_units")
         extra_nutrients = data.get("extra_nutrients")
         if serving_sizes is not None:
             model.serving_size_rows = build_food_reference_serving_rows(serving_sizes)

@@ -32,4 +32,7 @@ def test_map_fdc_barcode_product_returns_flat_barcode_shape():
     assert result["sugar_100g"] == 18
     assert result["source"] == "usda_fdc"
     assert result["is_verified"] is True
-
+    assert result["allowed_units"] == [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {"unit": "serving", "gram_weight": 30.0, "description": "1 serving (30 g)"},
+    ]

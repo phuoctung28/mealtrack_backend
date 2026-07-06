@@ -213,7 +213,39 @@ class FoodMappingService(FoodMappingServicePort):
             "provider_source": "usda_fdc",
             "is_verified": True,
             "is_estimate": False,
+            "allowed_units": self._barcode_allowed_units(
+                item, serving_size, serving_unit
+            ),
         }
+
+    def _barcode_allowed_units(
+        self,
+        item: dict[str, Any],
+        serving_size: Any,
+        serving_unit: Any,
+    ) -> list[dict[str, Any]]:
+        if item.get("foodPortions"):
+            return self._parse_usda_portions(item.get("foodPortions"))
+        if not serving_size:
+            return DEFAULT_ALLOWED_UNITS
+        try:
+            grams = float(serving_size)
+        except (TypeError, ValueError):
+            return DEFAULT_ALLOWED_UNITS
+        if grams <= 0 or str(serving_unit or "").lower() not in {
+            "g",
+            "gram",
+            "grams",
+        }:
+            return DEFAULT_ALLOWED_UNITS
+        return [
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {
+                "unit": "serving",
+                "gram_weight": grams,
+                "description": f"1 serving ({serving_size} {serving_unit})",
+            },
+        ]
 
     def map_food_details(self, details: dict[str, Any]) -> dict[str, Any]:
         macros = self._extract_macros(details.get("foodNutrients") or [])
