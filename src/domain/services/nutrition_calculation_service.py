@@ -443,6 +443,7 @@ class NutritionCalculationService:
                     micros=None,
                     confidence=1.0,
                     fdc_id=getattr(item, "fdc_id", None),
+                    allowed_units=getattr(item, "allowed_units", None),
                 )
             )
 
