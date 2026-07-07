@@ -4,9 +4,12 @@ from uuid import uuid4
 import pytest
 
 from src.api.exceptions import AuthorizationException
-from src.app.commands.meal import AttachMealPhotoCommand
+from src.app.commands.meal import AttachMealPhotoCommand, DeleteMealPhotoCommand
 from src.app.handlers.command_handlers.attach_meal_photo_command_handler import (
     AttachMealPhotoCommandHandler,
+)
+from src.app.handlers.command_handlers.delete_meal_photo_command_handler import (
+    DeleteMealPhotoCommandHandler,
 )
 from src.domain.model.meal import Meal, MealImage
 from src.domain.model.nutrition import Macros, Nutrition
@@ -91,6 +94,50 @@ async def test_attach_meal_photo_rejects_wrong_owner():
                 image_format="jpeg",
                 size_bytes=2048,
             )
+        )
+
+    uow.meals.save.assert_not_awaited()
+    uow.commit.assert_not_awaited()
+    uow.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_meal_photo_detaches_owned_meal_image():
+    user_id = str(uuid4())
+    meal = _ready_meal(user_id)
+    uow = _uow_for(meal)
+    cache = MagicMock()
+    cache.after_meal_write = AsyncMock()
+
+    handler = DeleteMealPhotoCommandHandler(uow=uow, cache_invalidation=cache)
+
+    result = await handler.handle(
+        DeleteMealPhotoCommand(meal_id=meal.meal_id, user_id=user_id)
+    )
+
+    saved_meal = uow.meals.save.await_args.args[0]
+    assert result == {
+        "success": True,
+        "meal_id": meal.meal_id,
+        "image_url": None,
+    }
+    assert saved_meal.image is None
+    assert saved_meal.nutrition == meal.nutrition
+    uow.commit.assert_awaited_once()
+    cache.after_meal_write.assert_awaited_once_with(
+        user_id, saved_meal.created_at.date()
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_meal_photo_rejects_wrong_owner():
+    meal = _ready_meal(str(uuid4()))
+    uow = _uow_for(meal)
+    handler = DeleteMealPhotoCommandHandler(uow=uow)
+
+    with pytest.raises(AuthorizationException):
+        await handler.handle(
+            DeleteMealPhotoCommand(meal_id=meal.meal_id, user_id=str(uuid4()))
         )
 
     uow.meals.save.assert_not_awaited()

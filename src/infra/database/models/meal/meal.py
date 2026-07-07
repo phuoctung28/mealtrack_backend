@@ -68,7 +68,7 @@ class MealORM(Base, TimestampMixin):
     emoji = Column(String(8), nullable=True)  # AI-assigned food emoji
 
     # Relationships
-    image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
+    image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=True)
     image = relationship("MealImageORM", uselist=False, lazy="joined")
     nutrition = relationship(
         "NutritionORM",

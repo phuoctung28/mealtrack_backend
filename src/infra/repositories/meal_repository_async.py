@@ -126,9 +126,14 @@ class AsyncMealRepository(MealRepositoryPort):
                     if existing_image.url != meal.image.url:
                         existing_image.url = meal.image.url
                 else:
-                    self.session.add(meal_image_domain_to_orm(meal.image))
+                    existing_image = meal_image_domain_to_orm(meal.image)
+                    self.session.add(existing_image)
                     await self.session.flush()
                 existing_meal.image_id = str(meal.image.image_id)
+                existing_meal.image = existing_image
+            else:
+                existing_meal.image_id = None
+                existing_meal.image = None
 
             if meal.nutrition:
                 if not existing_meal.nutrition:

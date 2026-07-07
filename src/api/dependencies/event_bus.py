@@ -10,6 +10,7 @@ from src.app.commands.meal import (
     AddCustomIngredientCommand,
     AttachMealPhotoCommand,
     DeleteMealCommand,
+    DeleteMealPhotoCommand,
     EditMealCommand,
     ScanByUrlCommand,
     UploadMealImageImmediatelyCommand,
@@ -64,6 +65,7 @@ from src.app.handlers.command_handlers import (
     CreateManualMealCommandHandler,
     DeleteFcmTokenCommandHandler,
     DeleteMealCommandHandler,
+    DeleteMealPhotoCommandHandler,
     DeleteMovementEntryCommandHandler,
     DeleteSavedSuggestionCommandHandler,
     DeleteUserCommandHandler,
@@ -367,6 +369,14 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         AttachMealPhotoCommand,
         AttachMealPhotoCommandHandler(
+            uow=AsyncUnitOfWork(),
+            cache_invalidation=cache_invalidation_service,
+        ),
+    )
+
+    event_bus.register_handler(
+        DeleteMealPhotoCommand,
+        DeleteMealPhotoCommandHandler(
             uow=AsyncUnitOfWork(),
             cache_invalidation=cache_invalidation_service,
         ),
