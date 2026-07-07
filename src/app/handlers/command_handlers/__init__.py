@@ -12,6 +12,7 @@ from .create_manual_meal_command_handler import CreateManualMealCommandHandler
 from .delete_fcm_token_command_handler import DeleteFcmTokenCommandHandler
 from .delete_hydration_entry_command_handler import DeleteHydrationEntryCommandHandler
 from .delete_meal_command_handler import DeleteMealCommandHandler
+from .delete_meal_photo_command_handler import DeleteMealPhotoCommandHandler
 from .delete_movement_entry_command_handler import DeleteMovementEntryCommandHandler
 from .delete_user_command_handler import DeleteUserCommandHandler
 
@@ -65,6 +66,7 @@ __all__ = [
     "EditMealCommandHandler",
     "AddCustomIngredientCommandHandler",
     "AttachMealPhotoCommandHandler",
+    "DeleteMealPhotoCommandHandler",
     "DeleteMealCommandHandler",
     # User handlers
     "SaveUserOnboardingCommandHandler",

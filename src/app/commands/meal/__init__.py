@@ -4,6 +4,7 @@ Meal commands.
 
 from .attach_meal_photo_command import AttachMealPhotoCommand
 from .delete_meal_command import DeleteMealCommand
+from .delete_meal_photo_command import DeleteMealPhotoCommand
 from .edit_meal_command import (
     AddCustomIngredientCommand,
     CustomNutritionData,
@@ -21,5 +22,6 @@ __all__ = [
     "FoodItemChange",
     "CustomNutritionData",
     "DeleteMealCommand",
+    "DeleteMealPhotoCommand",
     "AttachMealPhotoCommand",
 ]

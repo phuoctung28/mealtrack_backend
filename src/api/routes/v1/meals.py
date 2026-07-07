@@ -67,6 +67,7 @@ from src.app.commands.meal.create_manual_meal_command import (
     ManualMealItem,
 )
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.app.commands.meal.delete_meal_photo_command import DeleteMealPhotoCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
@@ -871,6 +872,21 @@ async def attach_meal_photo(
         image_format=payload.image_format,
         size_bytes=payload.size_bytes,
     )
+    return await event_bus.send(command)
+
+
+@router.delete("/{meal_id}/photo", response_model=None)
+async def delete_meal_photo(
+    meal_id: str,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Detach the saved meal photo from an existing meal.
+
+    Requires authentication - users can only modify their own meals.
+    """
+    command = DeleteMealPhotoCommand(meal_id=meal_id, user_id=user_id)
     return await event_bus.send(command)
 
 
