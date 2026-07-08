@@ -1,15 +1,31 @@
 """Profile-aware scheduling helpers for meal value insights."""
 
 import logging
-from typing import Any
+from collections.abc import Coroutine
+from typing import Any, Protocol
 
 from src.app.queries.user import GetUserProfileQuery
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.meal_value_insight_service import MealValueInsightService
-from src.infra.event_bus import BackgroundTaskManager, EventBus
 
 logger = logging.getLogger(__name__)
+
+
+class MealInsightEventBus(Protocol):
+    """Event bus behavior needed to fetch user profile context."""
+
+    async def send(self, event: Any) -> Any: ...
+
+
+class MealInsightTaskScheduler(Protocol):
+    """Background task behavior needed to schedule insight generation."""
+
+    def spawn(
+        self,
+        name: str,
+        coro: Coroutine[Any, Any, Any],
+    ) -> Any: ...
 
 
 def compact_meal_insight_user_context(
@@ -63,7 +79,7 @@ def compact_meal_insight_user_context(
 
 
 async def get_meal_insight_user_context(
-    event_bus: EventBus,
+    event_bus: MealInsightEventBus,
     user_id: str,
 ) -> dict[str, Any]:
     """Fetch user profile context for insights without making it required."""
@@ -106,7 +122,7 @@ async def build_value_insights_for_meal_with_profile(
     language: str,
     cache_service: CachePort | None,
     ai_manager: MealInsightAIPort,
-    event_bus: EventBus,
+    event_bus: MealInsightEventBus,
     user_id: str,
 ):
     """Fetch profile context, then build value insights in the background."""
@@ -121,13 +137,13 @@ async def build_value_insights_for_meal_with_profile(
 
 
 def schedule_value_insight_generation(
-    task_manager: BackgroundTaskManager | None,
+    task_manager: MealInsightTaskScheduler | None,
     meal,
     *,
     language: str,
     cache_service: CachePort | None,
     ai_manager: MealInsightAIPort | None,
-    event_bus: EventBus | None,
+    event_bus: MealInsightEventBus | None,
     user_id: str,
     source: str = "api",
 ) -> bool:

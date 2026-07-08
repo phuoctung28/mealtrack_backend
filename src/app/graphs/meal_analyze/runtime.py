@@ -15,6 +15,8 @@ from src.app.services.food_reference_validation_service import (
     FoodReferenceValidationService,
 )
 from src.app.services.meal_value_insight_scheduler import (
+    MealInsightEventBus,
+    MealInsightTaskScheduler,
     schedule_value_insight_generation,
 )
 from src.domain.model.meal import Meal
@@ -23,7 +25,6 @@ from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.utils.image_compression import compress_image as default_compress_image
-from src.infra.event_bus import BackgroundTaskManager, EventBus
 
 
 @dataclass
@@ -54,10 +55,10 @@ class MealAnalyzeRuntime:
     gpt_parser: Any | None = None
     uow: Any | None = None
     cache_invalidation: CacheInvalidationService | None = None
-    meal_value_insight_task_manager: BackgroundTaskManager | None = None
+    meal_value_insight_task_manager: MealInsightTaskScheduler | None = None
     meal_value_insight_cache: CachePort | None = None
     meal_value_insight_ai_manager: MealInsightAIPort | None = None
-    event_bus: EventBus | None = None
+    event_bus: MealInsightEventBus | None = None
     meal_value_insight_scheduler: Callable[..., bool] = schedule_value_insight_generation
     meal_translation_service: Any | None = None
     food_reference_validation_service: FoodReferenceValidationService | None = None

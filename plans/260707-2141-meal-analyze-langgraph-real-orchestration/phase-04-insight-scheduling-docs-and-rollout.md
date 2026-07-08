@@ -248,6 +248,9 @@ API routes:
 - 2026-07-07: Added smoke-style graph test proving READY returns before the
   scheduled insight AI call runs, then the captured background coroutine emits
   `meal_value_insights.cache_saved`.
+- 2026-07-08: Replaced infra event-bus annotations with app-layer scheduler
+  protocols and routed FatSecret graph validation composition through existing
+  API dependencies. `lint-imports` reports all 4 contracts kept.
 
 ## Risk Assessment
 

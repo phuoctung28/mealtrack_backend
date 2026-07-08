@@ -17,12 +17,12 @@ from src.api.middleware.accept_language import get_request_language
 from src.api.schemas.response import DetailedMealResponse
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.services.meal_value_insight_scheduler import (
+    MealInsightTaskScheduler,
     schedule_value_insight_generation,
 )
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
-from src.infra.event_bus import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
@@ -87,7 +87,7 @@ async def _scan_by_url(
     user_description: str | None,
     scan_mode: str,
     cache_service: CachePort | None,
-    task_manager: BackgroundTaskManager | None,
+    task_manager: MealInsightTaskScheduler | None,
     ai_manager: MealInsightAIPort,
     label_crop_image_url: str | None = None,
     label_crop_image_id: str | None = None,
@@ -176,7 +176,7 @@ async def scan_meal_by_url(
     user_id: str = Depends(get_current_user_id),
     event_bus: Any = Depends(get_configured_event_bus),
     cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
+    task_manager: MealInsightTaskScheduler | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """Analyze a meal image already uploaded to Cloudinary via the safe bytes-download path."""
@@ -219,7 +219,7 @@ async def scan_food_label_by_url(
     user_id: str = Depends(get_current_user_id),
     event_bus: Any = Depends(get_configured_event_bus),
     cache_service: CachePort | None = Depends(get_cache_service),
-    task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
+    task_manager: MealInsightTaskScheduler | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """Analyze a Cloudinary-hosted Nutrition Facts label."""

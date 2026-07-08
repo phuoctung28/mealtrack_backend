@@ -299,6 +299,7 @@ def get_configured_event_bus() -> EventBus:
         get_food_mapping_service,
         get_gpt_parser,
         get_image_store,
+        get_meal_analyze_graph_settings,
         get_suggestion_orchestration_service,
         get_vision_service,
     )
@@ -328,10 +329,6 @@ def get_configured_event_bus() -> EventBus:
         FoodReferenceValidationService,
     )
     from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
-    from src.infra.adapters.fatsecret_nutrition_reference_provider import (
-        FatSecretNutritionReferenceProvider,
-    )
-    from src.infra.config.settings import get_settings
     from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Synchronous invalidation service — handlers await this before returning,
@@ -339,10 +336,7 @@ def get_configured_event_bus() -> EventBus:
     cache_invalidation_service = CacheInvalidationService(cache_service)
 
     event_bus = PyMediatorEventBus()
-    settings = get_settings()
-    nutrition_reference_provider = FatSecretNutritionReferenceProvider(
-        fat_secret_service
-    )
+    graph_settings = get_meal_analyze_graph_settings()
 
     async def find_food_references_by_normalized_names(
         normalized_names: list[str],
@@ -354,13 +348,13 @@ def get_configured_event_bus() -> EventBus:
 
     food_reference_validation_service = FoodReferenceValidationService(
         food_reference_batch_lookup=find_food_references_by_normalized_names,
-        nutrition_reference_provider=nutrition_reference_provider,
-        timeout_seconds=settings.AI_MEAL_ANALYZE_EXTERNAL_PROVIDER_TIMEOUT_SECONDS,
+        nutrition_reference_provider=fat_secret_service,
+        timeout_seconds=graph_settings["external_provider_timeout_seconds"],
     )
     meal_analyze_workflow = MealAnalyzeWorkflow(
         food_reference_validation_service=food_reference_validation_service,
-        fatsecret_validation_enabled=settings.AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED,
-        graph_version=settings.AI_MEAL_ANALYZE_GRAPH_VERSION,
+        fatsecret_validation_enabled=graph_settings["fatsecret_validation_enabled"],
+        graph_version=graph_settings["graph_version"],
     )
 
     # Register meal command handlers
@@ -385,7 +379,7 @@ def get_configured_event_bus() -> EventBus:
             meal_value_insight_cache=cache_service,
             meal_value_insight_ai_manager=ai_manager,
             meal_analyze_workflow=meal_analyze_workflow,
-            meal_analyze_graph_enabled=settings.AI_MEAL_ANALYZE_GRAPH_ENABLED,
+            meal_analyze_graph_enabled=graph_settings["graph_enabled"],
         ),
     )
     event_bus.register_handler(
@@ -401,7 +395,7 @@ def get_configured_event_bus() -> EventBus:
             meal_value_insight_cache=cache_service,
             meal_value_insight_ai_manager=ai_manager,
             meal_analyze_workflow=meal_analyze_workflow,
-            meal_analyze_graph_enabled=settings.AI_MEAL_ANALYZE_GRAPH_ENABLED,
+            meal_analyze_graph_enabled=graph_settings["graph_enabled"],
         ),
     )
 
