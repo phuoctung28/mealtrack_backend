@@ -11,6 +11,8 @@ from src.app.commands.meal.upload_meal_image_immediately_command import (
 from src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler import (
     UploadMealImageImmediatelyHandler,
 )
+from src.domain.model.meal import MealStatus
+from src.domain.parsers.vision_response_parser import VisionResponseParser
 
 
 @pytest.mark.asyncio
@@ -209,3 +211,135 @@ async def test_successful_upload_creates_meal_with_verified_url():
         == "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
     )
     assert final_meal.status.value == "READY"
+
+
+@pytest.mark.asyncio
+async def test_successful_upload_keeps_ready_scanner_contract_with_backend_calories():
+    """Direct image analyze returns a READY scanner meal with backend-derived calories."""
+    saved_meals = []
+    cloudinary_url = (
+        "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
+    )
+
+    mock_uow = MagicMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users = MagicMock()
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.meals = MagicMock()
+
+    async def capture_save(meal):
+        saved_meals.append(meal)
+        return meal
+
+    mock_uow.meals.save = AsyncMock(side_effect=capture_save)
+    mock_uow.meals.find_by_id = AsyncMock(side_effect=lambda mid, **kw: saved_meals[-1])
+    mock_uow.commit = AsyncMock()
+
+    cache = MagicMock()
+    cache.after_meal_write = AsyncMock()
+
+    handler = UploadMealImageImmediatelyHandler(
+        uow=mock_uow,
+        event_bus=MagicMock(),
+        cache_invalidation=cache,
+    )
+    handler.image_store = MagicMock()
+    handler.image_store.save_async = AsyncMock(return_value=cloudinary_url)
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food": True,
+                "dish_name": "Chicken rice",
+                "foods": [
+                    {
+                        "name": "Chicken rice",
+                        "quantity_g": 300,
+                        "macros": {
+                            "protein_g": 10,
+                            "carbs_g": 50,
+                            "fat_g": 8,
+                            "fiber_g": 5,
+                            "sugar_g": 2,
+                        },
+                    }
+                ],
+                "confidence": 0.9,
+            }
+        }
+    )
+    handler.gpt_parser = VisionResponseParser()
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"fake-image-bytes",
+        content_type="image/jpeg",
+    )
+
+    result = await handler.handle(command)
+
+    assert len(saved_meals) == 1
+    saved_meal = saved_meals[0]
+    assert result.meal_id == saved_meal.meal_id
+    assert saved_meal.status == MealStatus.READY
+    assert saved_meal.source == "scanner"
+    assert saved_meal.image.url == cloudinary_url
+    assert saved_meal.image.size_bytes == len(command.file_contents)
+    assert saved_meal.nutrition.calories == pytest.approx(302.0)
+    mock_uow.meals.save.assert_awaited_once()
+    cache.after_meal_write.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_upload_uses_workflow_only_when_graph_enabled():
+    expected_meal = object()
+    workflow = MagicMock()
+    workflow.run_uploaded = AsyncMock(return_value=expected_meal)
+    handler = UploadMealImageImmediatelyHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        image_store=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+        meal_analyze_workflow=workflow,
+        meal_analyze_graph_enabled=True,
+    )
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"fake-image-bytes",
+        content_type="image/jpeg",
+    )
+
+    result = await handler.handle(command)
+
+    assert result is expected_meal
+    workflow.run_uploaded.assert_awaited_once()
+    assert workflow.run_uploaded.await_args.args[0] == command
+
+
+@pytest.mark.asyncio
+async def test_upload_graph_disabled_keeps_legacy_path():
+    workflow = MagicMock()
+    workflow.run_uploaded = AsyncMock()
+    handler = UploadMealImageImmediatelyHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        image_store=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+        meal_analyze_workflow=workflow,
+        meal_analyze_graph_enabled=False,
+    )
+    handler._handle_parallel_upload = AsyncMock(return_value="legacy-result")
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"fake-image-bytes",
+        content_type="image/jpeg",
+    )
+
+    result = await handler.handle(command)
+
+    assert result == "legacy-result"
+    handler._handle_parallel_upload.assert_awaited_once_with(command)
+    workflow.run_uploaded.assert_not_awaited()

@@ -166,6 +166,78 @@ async def test_fatsecret_search_uses_v5_methods():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_fatsecret_search_candidates_does_not_fetch_details():
+    service = FatSecretService("client", "secret")
+    service._api_request = AsyncMock(
+        return_value={
+            "foods_search": {
+                "results": {
+                    "food": [
+                        {
+                            "food_id": "50953",
+                            "food_name": "Whole Grain Cheerios",
+                            "brand_name": "General Mills",
+                        }
+                    ]
+                }
+            }
+        }
+    )
+
+    results = await service.search_food_candidates("cheerios", max_results=1)
+
+    service._api_request.assert_awaited_once()
+    assert service._api_request.await_args.kwargs["params"]["method"] == "foods.search.v5"
+    assert results == [
+        {
+            "description": "Whole Grain Cheerios",
+            "brand": "General Mills",
+            "food_description": "",
+            "source": "fatsecret",
+            "food_id": "50953",
+            "allowed_units": [
+                {"unit": "g", "gram_weight": 100.0, "description": "100 g"}
+            ],
+        }
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fatsecret_get_food_details_fetches_one_selected_candidate():
+    service = FatSecretService("client", "secret")
+    service._api_request = AsyncMock(
+        return_value={
+            "food": {
+                "food_id": "50953",
+                "food_name": "Whole Grain Cheerios",
+                "brand_name": "General Mills",
+                "servings": {
+                    "serving": {
+                        "measurement_description": "g",
+                        "metric_serving_amount": "100.000",
+                        "serving_description": "100 g",
+                        "calories": "333",
+                        "protein": "10",
+                        "carbohydrate": "66.67",
+                        "fat": "6.67",
+                    }
+                },
+            }
+        }
+    )
+
+    result = await service.get_food_details("50953")
+
+    service._api_request.assert_awaited_once()
+    params = service._api_request.await_args.kwargs["params"]
+    assert params["method"] == "food.get.v5"
+    assert params["food_id"] == "50953"
+    assert result["protein_100g"] == 10.0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_fatsecret_barcode_lookup_uses_method_based_endpoint():
     service = FatSecretService("client", "secret")
     service._api_request = AsyncMock(

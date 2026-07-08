@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** July 5, 2026
+**Last Updated:** July 7, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 635 Python files, 56,132 LOC in `src/`
@@ -106,15 +106,20 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 
 ---
 
-## Data Flow Example: Meal Analysis
+## Data Flow Example: Meal Image Analysis
 
-1. `POST /v1/meals/image/analyze` receives image
-2. Route creates `UploadMealImageImmediatelyCommand`
-3. `EventBus.send()` → `UploadMealImageImmediatelyHandler`
-4. Handler uploads to Cloudinary, creates Meal (PROCESSING), publishes `MealImageUploadedEvent`
-5. Handler returns Meal immediately to API (synchronous response to client)
-6. `EventBus.publish()` → `MealAnalysisEventHandler` (background)
-7. Background: calls `VisionAIService` through the provider stack, parses nutrition, updates Meal to READY
+1. `POST /v1/meals/image/analyze` receives image bytes.
+2. Route creates `UploadMealImageImmediatelyCommand`.
+3. `EventBus.send()` calls `UploadMealImageImmediatelyHandler`.
+4. Handler uploads to Cloudinary, runs `VisionAIService`, parses nutrition, and persists a READY `Meal(source="scanner")`.
+5. If `AI_MEAL_ANALYZE_GRAPH_ENABLED=true`, the handler enters `MealAnalyzeWorkflow`; the app-layer graph owns image acquisition, vision parsing, persistence, cache invalidation, and meal value insight scheduling.
+6. If `AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED=true`, optional reference validation may run after meal creation. Provider timeout or mismatch keeps the original meal result.
+7. Meal value insight scheduling is best-effort after persistence and cache invalidation. It stores only safe state fields such as `meal_value_insight_scheduled` and never blocks the READY meal response.
+8. Handler returns `DetailedMealResponse` synchronously.
+
+`POST /v1/meals/scan-by-url` follows the same synchronous workflow after
+downloading Cloudinary bytes. Graph nodes must not import provider SDKs,
+`sentry_sdk`, SQLAlchemy, API-layer services, or domain-internal vendor code.
 
 ## Data Flow Example: Food-Label Scan By URL
 

@@ -2,6 +2,8 @@
 Event bus dependency for FastAPI with proper type registrations.
 """
 
+import logging
+
 from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
 from src.app.commands.ingredient import RecognizeIngredientCommand
 
@@ -174,6 +176,8 @@ from src.app.queries.user.get_user_onboarding_status_query import (
 from src.app.queries.weight import GetWeightEntriesQuery
 from src.infra.event_bus import EventBus, PyMediatorEventBus
 
+logger = logging.getLogger(__name__)
+
 # Singleton event buses
 _food_search_event_bus: EventBus | None = None
 _configured_event_bus: EventBus | None = None
@@ -284,6 +288,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Get singleton services (these are safe to reuse)
     from src.api.base_dependencies import (
+        get_ai_model_manager,
         get_cache_service,
         get_daily_context_precompute_service,
         get_deepl_meal_translation_service,
@@ -297,18 +302,36 @@ def get_configured_event_bus() -> EventBus:
         get_suggestion_orchestration_service,
         get_vision_service,
     )
+    from src.api.dependencies.task_manager import get_optional_task_manager
 
     image_store = get_image_store()
     vision_service = get_vision_service()
     gpt_parser = get_gpt_parser()
+    try:
+        ai_manager = get_ai_model_manager()
+    except Exception as exc:
+        logger.info(
+            "meal_value_insights.ai_manager_unavailable_for_graph error=%s",
+            type(exc).__name__,
+        )
+        ai_manager = None
     food_cache_service = get_food_cache_service()
     food_data_service = get_food_data_service()
     food_mapping_service = get_food_mapping_service()
     fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
+    task_manager = get_optional_task_manager()
     suggestion_service = get_suggestion_orchestration_service()
 
     from src.app.services.cache_invalidation_service import CacheInvalidationService
+    from src.app.services.food_reference_validation_service import (
+        FoodReferenceValidationService,
+    )
+    from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+    from src.infra.adapters.fatsecret_nutrition_reference_provider import (
+        FatSecretNutritionReferenceProvider,
+    )
+    from src.infra.config.settings import get_settings
     from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Synchronous invalidation service — handlers await this before returning,
@@ -316,6 +339,29 @@ def get_configured_event_bus() -> EventBus:
     cache_invalidation_service = CacheInvalidationService(cache_service)
 
     event_bus = PyMediatorEventBus()
+    settings = get_settings()
+    nutrition_reference_provider = FatSecretNutritionReferenceProvider(
+        fat_secret_service
+    )
+
+    async def find_food_references_by_normalized_names(
+        normalized_names: list[str],
+    ) -> dict:
+        async with AsyncUnitOfWork() as uow:
+            return await uow.food_references.find_batch_by_normalized_names(
+                normalized_names
+            )
+
+    food_reference_validation_service = FoodReferenceValidationService(
+        food_reference_batch_lookup=find_food_references_by_normalized_names,
+        nutrition_reference_provider=nutrition_reference_provider,
+        timeout_seconds=settings.AI_MEAL_ANALYZE_EXTERNAL_PROVIDER_TIMEOUT_SECONDS,
+    )
+    meal_analyze_workflow = MealAnalyzeWorkflow(
+        food_reference_validation_service=food_reference_validation_service,
+        fatsecret_validation_enabled=settings.AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED,
+        graph_version=settings.AI_MEAL_ANALYZE_GRAPH_VERSION,
+    )
 
     # Register meal command handlers
     # Handlers receive AsyncUnitOfWork (concrete) and event_bus at the composition root
@@ -335,6 +381,11 @@ def get_configured_event_bus() -> EventBus:
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
             cache_invalidation=cache_invalidation_service,
+            meal_value_insight_task_manager=task_manager,
+            meal_value_insight_cache=cache_service,
+            meal_value_insight_ai_manager=ai_manager,
+            meal_analyze_workflow=meal_analyze_workflow,
+            meal_analyze_graph_enabled=settings.AI_MEAL_ANALYZE_GRAPH_ENABLED,
         ),
     )
     event_bus.register_handler(
@@ -346,6 +397,11 @@ def get_configured_event_bus() -> EventBus:
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
             cache_invalidation=cache_invalidation_service,
+            meal_value_insight_task_manager=task_manager,
+            meal_value_insight_cache=cache_service,
+            meal_value_insight_ai_manager=ai_manager,
+            meal_analyze_workflow=meal_analyze_workflow,
+            meal_analyze_graph_enabled=settings.AI_MEAL_ANALYZE_GRAPH_ENABLED,
         ),
     )
 

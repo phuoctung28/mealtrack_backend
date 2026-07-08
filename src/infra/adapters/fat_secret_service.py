@@ -195,66 +195,29 @@ class FatSecretService:
     ) -> list[dict[str, Any]]:
         """Search foods by query string with nutrition data."""
         try:
-            params = {
-                "method": "foods.search.v5",
-                "search_expression": query,
-                "max_results": max_results,
-                "page_number": 0,
-                "format": "json",
-                "region": region,
-                "language": language,
-                "flag_default_serving": "true",
-            }
-            result = await self._api_request("POST", params=params)
-            if not result:
-                return []
-
-            # Handle both OAuth 1.0 and OAuth 2.0 response formats
-            foods = result.get("foods", {}).get("food", [])
-            if not foods:
-                # OAuth 2.0 format: {"foods_search": {"results": {"food": [...]}}}
-                foods = (
-                    result.get("foods_search", {}).get("results", {}).get("food", [])
-                )
-            if not foods:
-                # Log error details if present
-                error = result.get("error")
-                if error:
-                    logger.warning(f"fatsecret API error for '{query}': {error}")
-                else:
-                    logger.warning(
-                        f"fatsecret returned no foods for '{query}'. "
-                        f"Response keys: {list(result.keys())}"
-                    )
-                return []
-            if isinstance(foods, dict):
-                foods = [foods]
+            foods = await self.search_food_candidates(
+                query,
+                max_results=max_results,
+                region=region,
+                language=language,
+            )
 
             # Process each food, fetching detailed nutrition concurrently to
             # avoid N+1 sequential round trips (one food.get per search result).
             async def _process(food: dict) -> dict:
                 food_id = food.get("food_id")
-                mapped = self._map_search_result(food)
+                mapped = dict(food)
 
                 # Fetch detailed nutrition if we have a food_id
                 if food_id:
                     try:
-                        detail_params = {
-                            "method": "food.get.v5",
-                            "food_id": food_id,
-                            "format": "json",
-                            "region": region,
-                            "language": language,
-                            "flag_default_serving": "true",
-                        }
-                        details = await self._api_request(
-                            "POST", params=detail_params
+                        details = await self.get_food_details(
+                            food_id,
+                            region=region,
+                            language=language,
                         )
                         if details:
-                            # Handle both response formats for food.get
-                            food_data = details.get("food", details)
-                            nutrition = self._extract_nutrition_from_details(food_data)
-                            mapped.update(nutrition)
+                            mapped.update(details)
                     except Exception:
                         pass  # Use basic mapped data if details fail
 
@@ -266,6 +229,75 @@ class FatSecretService:
         except Exception as e:
             logger.warning(f"fatsecret search error for query '{query}': {e}")
             return []
+
+    async def search_food_candidates(
+        self,
+        query: str,
+        max_results: int = 10,
+        region: str = "US",
+        language: str = "en",
+    ) -> list[dict[str, Any]]:
+        """Search foods without fetching detail nutrition for every result."""
+        params = {
+            "method": "foods.search.v5",
+            "search_expression": query,
+            "max_results": max_results,
+            "page_number": 0,
+            "format": "json",
+            "region": region,
+            "language": language,
+            "flag_default_serving": "true",
+        }
+        result = await self._api_request("POST", params=params)
+        if not result:
+            return []
+
+        foods = self._extract_foods_search_results(result)
+        if not foods:
+            error = result.get("error")
+            if error:
+                logger.warning(f"fatsecret API error for '{query}': {error}")
+            else:
+                logger.warning(
+                    f"fatsecret returned no foods for '{query}'. "
+                    f"Response keys: {list(result.keys())}"
+                )
+            return []
+
+        return [self._map_search_result(food) for food in foods]
+
+    async def get_food_details(
+        self,
+        food_id: str,
+        region: str = "US",
+        language: str = "en",
+    ) -> dict[str, Any] | None:
+        """Fetch detailed nutrition for one selected fatsecret food candidate."""
+        detail_params = {
+            "method": "food.get.v5",
+            "food_id": food_id,
+            "format": "json",
+            "region": region,
+            "language": language,
+            "flag_default_serving": "true",
+        }
+        details = await self._api_request("POST", params=detail_params)
+        if not details:
+            return None
+
+        food_data = details.get("food", details)
+        mapped = self._map_search_result(food_data)
+        mapped.update(self._extract_nutrition_from_details(food_data))
+        return mapped
+
+    def _extract_foods_search_results(self, result: dict[str, Any]) -> list[dict]:
+        """Extract search result foods across fatsecret response shapes."""
+        foods = result.get("foods", {}).get("food", [])
+        if not foods:
+            foods = result.get("foods_search", {}).get("results", {}).get("food", [])
+        if isinstance(foods, dict):
+            foods = [foods]
+        return foods if isinstance(foods, list) else []
 
     def _extract_serving_units(self, food: dict) -> list[dict]:
         """Extract all serving units from fatsecret food details."""
