@@ -79,6 +79,10 @@ from src.app.queries.meal import (
     GetMealByIdQuery,
     GetStreakQuery,
 )
+from src.app.services.meal_value_insight_scheduler import (
+    get_meal_insight_user_context,
+    schedule_value_insight_generation,
+)
 from src.domain.model.nutrition.macros import Macros as MacrosModel
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
@@ -218,12 +222,14 @@ async def _analyze_uploaded_image(
     if meal.image:
         image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-    _schedule_value_insight_generation(
+    schedule_value_insight_generation(
         task_manager,
         meal,
         language=language,
         cache_service=cache_service,
         ai_manager=ai_manager,
+        event_bus=event_bus,
+        user_id=user_id,
     )
 
     return MealMapper.to_detailed_response(
@@ -363,12 +369,14 @@ async def create_manual_meal(
             user_id,
             _elapsed_ms,
         )
-        _schedule_value_insight_generation(
+        schedule_value_insight_generation(
             task_manager,
             meal,
             language=get_request_language(request),
             cache_service=cache_service,
             ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=user_id,
         )
 
         return ManualMealCreationResponse(
@@ -596,21 +604,25 @@ async def get_meal(
 
     # Get language from Accept-Language header via middleware
     language = get_request_language(request)
+    user_context = await get_meal_insight_user_context(event_bus, user_id)
     insight_service = MealValueInsightService()
     value_insights = await insight_service.get_cached_ai(
         dish_name=meal.dish_name,
         nutrition=meal.nutrition,
         ingredient_names_by_id={},
         language=language,
+        user_context=user_context,
         cache_service=cache_service,
     )
     if value_insights is None:
-        _schedule_value_insight_generation(
+        schedule_value_insight_generation(
             task_manager,
             meal,
             language=language,
             cache_service=cache_service,
             ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=user_id,
         )
 
     # Use mapper to convert to response with translation support
@@ -635,12 +647,14 @@ async def get_meal_value_insights(
     """Return current value-insight cache status for a meal."""
     meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
     language = get_request_language(request)
+    user_context = await get_meal_insight_user_context(event_bus, user_id)
     insight_service = MealValueInsightService()
     version = insight_service.version(
         dish_name=meal.dish_name,
         nutrition=meal.nutrition,
         ingredient_names_by_id={},
         language=language,
+        user_context=user_context,
     )
     if version is None or cache_service is None:
         return MealValueInsightsStatusResponse(
@@ -654,15 +668,18 @@ async def get_meal_value_insights(
         nutrition=meal.nutrition,
         ingredient_names_by_id={},
         language=language,
+        user_context=user_context,
         cache_service=cache_service,
     )
     if value_insights is None:
-        _schedule_value_insight_generation(
+        schedule_value_insight_generation(
             task_manager,
             meal,
             language=language,
             cache_service=cache_service,
             ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=user_id,
         )
         return MealValueInsightsStatusResponse(
             status="generating",
@@ -674,45 +691,6 @@ async def get_meal_value_insights(
         status="fresh",
         value_insights=MealMapper.to_value_insights_response(value_insights),
         version=version,
-    )
-
-
-async def _build_value_insights_for_meal(
-    meal,
-    *,
-    language: str,
-    cache_service: CachePort | None,
-    ai_manager: MealInsightAIPort,
-):
-    return await MealValueInsightService(
-        ai_manager=ai_manager,
-    ).build_ai(
-        dish_name=meal.dish_name,
-        nutrition=meal.nutrition,
-        ingredient_names_by_id={},
-        language=language,
-        cache_service=cache_service,
-    )
-
-
-def _schedule_value_insight_generation(
-    task_manager: BackgroundTaskManager | None,
-    meal,
-    *,
-    language: str,
-    cache_service: CachePort | None,
-    ai_manager: MealInsightAIPort,
-) -> None:
-    if cache_service is None or task_manager is None:
-        return
-    task_manager.spawn(
-        f"meal-value-insights:{meal.meal_id}",
-        _build_value_insights_for_meal(
-            meal,
-            language=language,
-            cache_service=cache_service,
-            ai_manager=ai_manager,
-        ),
     )
 
 
@@ -841,12 +819,14 @@ async def update_meal_ingredients(
     logger.info("Sending command to event bus: %s", command)
     result = await event_bus.send(command)
     meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
-    _schedule_value_insight_generation(
+    schedule_value_insight_generation(
         task_manager,
         meal,
         language=get_request_language(http_request),
         cache_service=cache_service,
         ai_manager=ai_manager,
+        event_bus=event_bus,
+        user_id=user_id,
     )
     return result
 

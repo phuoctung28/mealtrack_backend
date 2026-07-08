@@ -270,6 +270,22 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(
         default=MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
     )
+    AI_MEAL_ANALYZE_GRAPH_ENABLED: bool = Field(
+        default=False,
+        description="Enable the LangGraph meal image analysis workflow.",
+    )
+    AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED: bool = Field(
+        default=False,
+        description="Enable optional FatSecret nutrition reference validation for meal analysis.",
+    )
+    AI_MEAL_ANALYZE_EXTERNAL_PROVIDER_TIMEOUT_SECONDS: float = Field(
+        default=5.0,
+        description="Timeout for optional external reference providers in meal analysis.",
+    )
+    AI_MEAL_ANALYZE_GRAPH_VERSION: str = Field(
+        default="v1",
+        description="Meal analysis graph version emitted in workflow state.",
+    )
     # Affiliate integration
     AFFILIATE_INTEGRATION_ENABLED: bool = Field(
         default=False,

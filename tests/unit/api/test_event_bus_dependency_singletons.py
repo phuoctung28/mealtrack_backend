@@ -162,6 +162,133 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
     assert len(bus1.subscriptions) == 0
 
 
+def test_configured_event_bus_wires_meal_analyze_validation(monkeypatch):
+    mod = importlib.import_module("src.api.dependencies.event_bus")
+    monkeypatch.setattr(mod, "_configured_event_bus", None, raising=False)
+
+    class _Bus:
+        def __init__(self):
+            self.handlers = {}
+
+        def register_handler(self, event_type, handler):
+            self.handlers[event_type] = handler
+
+        def subscribe(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(mod, "PyMediatorEventBus", _Bus)
+
+    import src.api.base_dependencies as deps
+
+    monkeypatch.setattr(deps, "get_image_store", lambda: object())
+    monkeypatch.setattr(deps, "get_vision_service", lambda: object())
+    monkeypatch.setattr(deps, "get_gpt_parser", lambda: object())
+    monkeypatch.setattr(deps, "get_food_cache_service", lambda: object())
+    monkeypatch.setattr(deps, "get_food_data_service", lambda: object())
+    monkeypatch.setattr(deps, "get_food_mapping_service", lambda: object())
+    monkeypatch.setattr(deps, "get_fat_secret_service_instance", lambda: object())
+    monkeypatch.setattr(deps, "get_cache_service", lambda: object())
+    monkeypatch.setattr(deps, "get_suggestion_orchestration_service", lambda: object())
+    monkeypatch.setattr(deps, "get_deepl_meal_translation_service", lambda: object())
+    monkeypatch.setattr(deps, "get_deepl_text_translation_service", lambda: object())
+
+    class _Settings:
+        AI_MEAL_ANALYZE_GRAPH_ENABLED = True
+        AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED = True
+        AI_MEAL_ANALYZE_EXTERNAL_PROVIDER_TIMEOUT_SECONDS = 7.0
+        AI_MEAL_ANALYZE_GRAPH_VERSION = "test-v2"
+
+    import src.infra.config.settings as settings_mod
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _Settings())
+
+    class _MealGen:
+        pass
+
+    import src.infra.adapters.meal_generation_service as _meal_gen_mod
+
+    monkeypatch.setattr(_meal_gen_mod, "MealGenerationService", _MealGen)
+
+    class _StubWithHandle:
+        async def handle(self, *args, **kwargs):
+            return None
+
+    handler_names = [
+        "EditMealCommandHandler",
+        "AddCustomIngredientCommandHandler",
+        "DeleteMealCommandHandler",
+        "CreateManualMealCommandHandler",
+        "ParseMealTextHandler",
+        "SearchFoodsQueryHandler",
+        "GetFoodDetailsQueryHandler",
+        "GetMealByIdQueryHandler",
+        "GetDailyMacrosQueryHandler",
+        "GetWeeklyBudgetQueryHandler",
+        "GetStreakQueryHandler",
+        "GetDailyBreakdownQueryHandler",
+        "GetNutritionBulkQueryHandler",
+        "GetActivitiesPresenceQueryHandler",
+        "GetDailyActivitiesQueryHandler",
+        "GetBulkActivitiesQueryHandler",
+        "GetMealsByDateQueryHandler",
+        "DiscoverMealsCommandHandler",
+        "GenerateMealRecipesCommandHandler",
+        "SaveMealSuggestionCommandHandler",
+        "SaveUserOnboardingCommandHandler",
+        "SyncUserCommandHandler",
+        "UpdateUserLastAccessedCommandHandler",
+        "CompleteOnboardingCommandHandler",
+        "DeleteUserCommandHandler",
+        "UpdateUserMetricsCommandHandler",
+        "UpdateTimezoneCommandHandler",
+        "UpdateLanguageCommandHandler",
+        "UpdateCustomMacrosCommandHandler",
+        "GetUserProfileQueryHandler",
+        "GetUserByFirebaseUidQueryHandler",
+        "GetUserOnboardingStatusQueryHandler",
+        "GetUserMetricsQueryHandler",
+        "GetUserTdeeQueryHandler",
+        "PreviewTdeeQueryHandler",
+        "RegisterFcmTokenCommandHandler",
+        "DeleteFcmTokenCommandHandler",
+        "UpdateNotificationPreferencesCommandHandler",
+        "GetNotificationPreferencesQueryHandler",
+        "RecognizeIngredientCommandHandler",
+        "MarkCheatDayCommandHandler",
+        "UnmarkCheatDayCommandHandler",
+        "GetCheatDaysQueryHandler",
+        "AddWeightEntryCommandHandler",
+        "DeleteWeightEntryCommandHandler",
+        "SyncWeightEntriesCommandHandler",
+        "GetWeightEntriesQueryHandler",
+        "SaveSuggestionCommandHandler",
+        "DeleteSavedSuggestionCommandHandler",
+        "GetSavedSuggestionsQueryHandler",
+        "LogMovementCommandHandler",
+        "DeleteMovementEntryCommandHandler",
+        "UpdateMovementEntryCommandHandler",
+        "LookupBarcodeQueryHandler",
+        "AttachMealPhotoCommandHandler",
+        "DeleteFcmTokenCommandHandler",
+    ]
+
+    for name in handler_names:
+        if hasattr(mod, name):
+            monkeypatch.setattr(mod, name, lambda *a, **k: _StubWithHandle())
+
+    bus = mod.get_configured_event_bus()
+    upload_handler = bus.handlers[mod.UploadMealImageImmediatelyCommand]
+    scan_handler = bus.handlers[mod.ScanByUrlCommand]
+
+    assert upload_handler.meal_analyze_graph_enabled is True
+    assert scan_handler.meal_analyze_graph_enabled is True
+    workflow = upload_handler.meal_analyze_workflow
+    assert workflow is scan_handler.meal_analyze_workflow
+    assert workflow._fatsecret_validation_enabled is True
+    assert workflow._food_reference_validation_service is not None
+    assert workflow._graph_version == "test-v2"
+
+
 @pytest.mark.asyncio
 async def test_configured_event_bus_can_send_movement_catalog_query(monkeypatch):
     mod = importlib.import_module("src.api.dependencies.event_bus")

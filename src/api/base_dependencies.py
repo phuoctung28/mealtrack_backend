@@ -182,6 +182,23 @@ def get_fat_secret_service_instance():
     return get_fat_secret_service()
 
 
+def get_meal_analyze_graph_settings():
+    """Return meal-analysis graph settings needed by API composition."""
+    from src.infra.config.settings import get_settings
+
+    current_settings = get_settings()
+    return {
+        "external_provider_timeout_seconds": (
+            current_settings.AI_MEAL_ANALYZE_EXTERNAL_PROVIDER_TIMEOUT_SECONDS
+        ),
+        "fatsecret_validation_enabled": (
+            current_settings.AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED
+        ),
+        "graph_enabled": current_settings.AI_MEAL_ANALYZE_GRAPH_ENABLED,
+        "graph_version": current_settings.AI_MEAL_ANALYZE_GRAPH_VERSION,
+    }
+
+
 # Food Reference Repository (replaces barcode_product_repository)
 _async_food_reference_repository = None
 

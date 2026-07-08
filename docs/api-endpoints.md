@@ -45,8 +45,16 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/meals/weekly/budget` | Weekly calorie budget |
 | GET | `/v1/meals/daily/macros` | Today's aggregated macros |
 | GET | `/v1/meals/{meal_id}` | Get meal details |
+| GET | `/v1/meals/{meal_id}/value-insights` | Get value-insight cache status or trigger refresh |
 | DELETE | `/v1/meals/{meal_id}` | Delete meal (soft delete) |
 | PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients |
+
+### Meal Value Insights Contract
+
+- Graph-enabled image scans schedule profile-aware meal value insights after READY meal persistence and meal cache invalidation.
+- `GET /v1/meals/{meal_id}/value-insights` is a compatibility/status/refresh endpoint. Existing response statuses are unchanged.
+- Graph-disabled scan routes still schedule insights from the API route after the command handler returns.
+- Scheduling is best-effort background work and never changes the READY meal response contract.
 
 ### Food Label Image Contract
 
