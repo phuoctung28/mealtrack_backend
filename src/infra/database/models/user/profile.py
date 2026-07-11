@@ -48,6 +48,7 @@ class UserProfile(Base, BaseMixin):
         String(30), nullable=False, default="maintenance"
     )  # maintenance, cutting, bulking
     target_weight_kg = Column(Float, nullable=True)
+    target_body_fat_percentage = Column(Float, nullable=True)
     meals_per_day = Column(Integer, default=3, nullable=False)
     snacks_per_day = Column(Integer, default=1, nullable=False)
 
@@ -101,6 +102,10 @@ class UserProfile(Base, BaseMixin):
         CheckConstraint(
             "body_fat_percentage IS NULL OR (body_fat_percentage >= 0 AND body_fat_percentage <= 100)",
             name="check_body_fat_range",
+        ),
+        CheckConstraint(
+            "target_body_fat_percentage IS NULL OR (target_body_fat_percentage >= 5 AND target_body_fat_percentage <= 55)",
+            name="check_target_body_fat_range",
         ),
         Index("idx_user_current", "user_id", "is_current"),
         CheckConstraint(

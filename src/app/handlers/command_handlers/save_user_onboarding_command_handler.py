@@ -70,6 +70,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         body_fat_percentage=command.body_fat_percentage,
                         date_of_birth=command.date_of_birth,
                         target_weight_kg=command.target_weight_kg,
+                        target_body_fat_percentage=command.target_body_fat_percentage,
                         goal_start_weight_kg=(
                             command.weight_kg if command.target_weight_kg else None
                         ),
@@ -108,6 +109,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.training_level = command.training_level
                     profile.date_of_birth = command.date_of_birth
                     profile.target_weight_kg = command.target_weight_kg
+                    profile.target_body_fat_percentage = command.target_body_fat_percentage
                     if command.target_weight_kg and (
                         profile.goal_started_at is None
                         or previous_target != command.target_weight_kg

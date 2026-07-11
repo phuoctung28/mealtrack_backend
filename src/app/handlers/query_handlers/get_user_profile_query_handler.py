@@ -98,6 +98,7 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
                     "training_level": profile.training_level,
                     "fitness_goal": profile.fitness_goal,
                     "target_weight_kg": profile.target_weight_kg,
+                    "target_body_fat_percentage": profile.target_body_fat_percentage,
                     "meals_per_day": profile.meals_per_day,
                     "snacks_per_day": profile.snacks_per_day,
                     "dietary_preferences": profile.dietary_preferences or [],

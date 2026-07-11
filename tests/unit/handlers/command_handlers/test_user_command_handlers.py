@@ -75,6 +75,7 @@ class TestSaveUserOnboardingCommandHandler:
             dietary_preferences=["vegetarian"],
             pain_points=["diabetes"],
             referral_sources=["tiktok", "friend_family"],
+            target_body_fat_percentage=18.5,
         )
 
         # Act - Get handler from event_bus and set its uow to use test_session
@@ -124,6 +125,7 @@ class TestSaveUserOnboardingCommandHandler:
         assert saved_profile.training_days_per_week == 4
         assert saved_profile.training_minutes_per_session == 60
         assert saved_profile.fitness_goal == "recomp"
+        assert saved_profile.target_body_fat_percentage == 18.5
 
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_age(self, event_bus, test_session):

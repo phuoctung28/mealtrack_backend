@@ -41,6 +41,7 @@ class SaveUserOnboardingCommand(Command):
     training_level: Optional[str] = None
     date_of_birth: Optional[date] = None
     target_weight_kg: Optional[float] = None
+    target_body_fat_percentage: Optional[float] = None
 
     # Onboarding redesign fields (NM-44)
     challenge_duration: Optional[str] = None

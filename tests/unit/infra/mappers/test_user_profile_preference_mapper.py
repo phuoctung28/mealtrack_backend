@@ -73,6 +73,16 @@ def test_mapper_falls_back_to_legacy_json_arrays() -> None:
     assert domain.allergies == ["peanuts"]
 
 
+def test_mapper_preserves_target_body_fat_percentage() -> None:
+    profile = _profile_entity(target_body_fat_percentage=18.5)
+
+    domain = UserProfileMapper.to_domain(profile)
+    persisted = UserProfileMapper.to_persistence(domain)
+
+    assert domain.target_body_fat_percentage == 18.5
+    assert persisted.target_body_fat_percentage == 18.5
+
+
 def test_profile_persistence_dual_writes_normalized_and_legacy_values() -> None:
     domain = UserProfileDomainModel(
         id=uuid4(),

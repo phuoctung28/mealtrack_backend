@@ -74,6 +74,7 @@ async def save_user_onboarding(
             training_level=request.training_level,
             date_of_birth=dob,
             target_weight_kg=request.target_weight_kg,
+            target_body_fat_percentage=request.target_body_fat_percentage,
             challenge_duration=request.challenge_duration,
             training_types=request.training_types,
             custom_protein_g=request.custom_protein_g,

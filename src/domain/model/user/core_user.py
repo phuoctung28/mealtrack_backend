@@ -33,6 +33,7 @@ class UserProfileDomainModel(BaseDomainModel):
     body_fat_percentage: Optional[float] = None
     date_of_birth: Optional[date] = None
     target_weight_kg: Optional[float] = None
+    target_body_fat_percentage: Optional[float] = None
     snacks_per_day: int = 1
     dietary_preferences: List[str] = field(default_factory=list)
     health_conditions: List[str] = field(default_factory=list)

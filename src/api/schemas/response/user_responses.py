@@ -126,6 +126,9 @@ class UserMetricsResponse(BaseModel):
     target_weight_kg: Optional[float] = Field(
         None, description="Target weight in kilograms"
     )
+    target_body_fat_percentage: Optional[float] = Field(
+        None, description="Target body fat percentage for a recomp journey"
+    )
     goal_start_weight_kg: Optional[float] = Field(
         None, description="Weight when goal journey started"
     )

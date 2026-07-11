@@ -59,6 +59,10 @@ class OnboardingCompleteRequest(BaseModel):
     # Target weight - OPTIONAL
     target_weight_kg: Optional[float] = Field(None, gt=0)
 
+    # Recomp destination - OPTIONAL for other goals, required by the mobile
+    # flow when goal is recomp.
+    target_body_fat_percentage: Optional[float] = Field(None, ge=5, le=55)
+
     # Attribution - OPTIONAL (screen removed in onboarding redesign)
     referral_sources: List[str] = Field(
         default_factory=list, description="How user heard about us"
