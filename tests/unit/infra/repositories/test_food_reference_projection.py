@@ -4,6 +4,7 @@ from src.infra.database.models.food_reference_nutrient import (
     FoodReferenceNutrientModel,
 )
 from src.infra.repositories.food_reference_projection import (
+    build_food_reference_serving_rows,
     food_reference_model_to_dict,
 )
 
@@ -73,3 +74,17 @@ def test_food_reference_nutrient_projection_preserves_legacy_object_shape():
         "unit": "mg",
         "source": "old",
     }
+
+
+def test_food_reference_projection_returns_allowed_units_from_serving_rows():
+    model = _make_food_reference_model("spinach")
+    model.serving_size_rows = build_food_reference_serving_rows(
+        [{"unit": "serving", "gram_weight": 85}]
+    )
+
+    result = food_reference_model_to_dict(model)
+
+    assert result["allowed_units"] == [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {"unit": "serving", "gram_weight": 85.0, "description": "serving"},
+    ]

@@ -313,6 +313,33 @@ def test_meals_parse_text_happy_path(monkeypatch, client: TestClient):
     assert len(body["items"]) == 2
 
 
+def test_delete_meal_photo_sends_delete_command(client: TestClient):
+    import src.api.main as main
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.app.commands.meal import DeleteMealPhotoCommand
+
+    sent = []
+
+    async def send(msg):
+        sent.append(msg)
+        return {"success": True, "meal_id": msg.meal_id, "image_url": None}
+
+    main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(send)
+
+    r = client.delete("/v1/meals/meal_123/photo")
+
+    assert r.status_code == 200
+    assert r.json() == {
+        "success": True,
+        "meal_id": "meal_123",
+        "image_url": None,
+    }
+    command = sent[0]
+    assert isinstance(command, DeleteMealPhotoCommand)
+    assert command.meal_id == "meal_123"
+    assert command.user_id == "user_1"
+
+
 def test_meals_manual_invalid_date_does_not_call_bus(monkeypatch, client: TestClient):
     import src.api.main as main
     from src.api.dependencies.event_bus import get_configured_event_bus

@@ -72,6 +72,7 @@ def food_item_orm_to_domain(orm: FoodItemORM) -> DomainFoodItem:
         confidence=orm.confidence,
         fdc_id=orm.fdc_id,
         is_custom=orm.is_custom,
+        allowed_units=orm.allowed_units,
     )
 
 
@@ -207,6 +208,7 @@ def food_item_domain_to_orm(domain: DomainFoodItem, nutrition_id=None) -> FoodIt
         nutrition_id=nutrition_id,
         fdc_id=getattr(domain, "fdc_id", None),
         is_custom=getattr(domain, "is_custom", False),
+        allowed_units=getattr(domain, "allowed_units", None),
     )
     if hasattr(domain, "id") and domain.id:
         item.id = str(domain.id)

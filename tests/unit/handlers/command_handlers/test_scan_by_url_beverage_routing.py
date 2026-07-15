@@ -276,3 +276,55 @@ async def test_scan_by_url_food_label_image_ai_failure_does_not_save(monkeypatch
         )
 
     uow.meals.save.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_uses_workflow_only_when_graph_enabled():
+    expected_meal = object()
+    workflow = MagicMock()
+    workflow.run_scan_by_url = AsyncMock(return_value=expected_meal)
+    handler = ScanByUrlCommandHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+        meal_analyze_workflow=workflow,
+        meal_analyze_graph_enabled=True,
+    )
+    command = ScanByUrlCommand(
+        user_id=_USER_ID,
+        image_url=_IMAGE_URL,
+        public_id=_PUBLIC_ID,
+    )
+
+    result = await handler.handle(command)
+
+    assert result is expected_meal
+    workflow.run_scan_by_url.assert_awaited_once()
+    assert workflow.run_scan_by_url.await_args.args[0] == command
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_graph_disabled_keeps_legacy_path():
+    workflow = MagicMock()
+    workflow.run_scan_by_url = AsyncMock()
+    handler = ScanByUrlCommandHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+        meal_analyze_workflow=workflow,
+        meal_analyze_graph_enabled=False,
+    )
+    handler._handle_legacy_scan_by_url = AsyncMock(return_value="legacy-result")
+    command = ScanByUrlCommand(
+        user_id=_USER_ID,
+        image_url=_IMAGE_URL,
+        public_id=_PUBLIC_ID,
+    )
+
+    result = await handler.handle(command)
+
+    assert result == "legacy-result"
+    handler._handle_legacy_scan_by_url.assert_awaited_once_with(command)
+    workflow.run_scan_by_url.assert_not_awaited()

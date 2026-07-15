@@ -185,6 +185,14 @@ class ManualMealCustomNutritionRequest(BaseModel):
         )
 
 
+class ServingUnitRequest(BaseModel):
+    """Food-specific serving conversion option."""
+
+    unit: str = Field(..., min_length=1, max_length=120)
+    gram_weight: float = Field(..., gt=0)
+    description: str = Field("", max_length=200)
+
+
 class ManualMealItemRequest(BaseModel):
     """Single selected food item with portion to create a manual meal.
 
@@ -204,7 +212,11 @@ class ManualMealItemRequest(BaseModel):
         ..., gt=0, description="Amount relative to serving unit (e.g., grams)"
     )
     unit: str = Field(
-        "g", min_length=1, max_length=64, description="Unit, default grams"
+        "g", min_length=1, max_length=120, description="Unit, default grams"
+    )
+    allowed_units: list[ServingUnitRequest] = Field(
+        default_factory=list,
+        description="Food-specific units allowed for editing this ingredient",
     )
     custom_nutrition: Optional[ManualMealCustomNutritionRequest] = Field(
         None,
@@ -268,7 +280,11 @@ class FoodItemChangeRequest(BaseModel):
         None, gt=0, le=10000, description="Quantity amount"
     )
     unit: Optional[str] = Field(
-        None, min_length=1, max_length=20, description="Unit of measurement"
+        None, min_length=1, max_length=120, description="Unit of measurement"
+    )
+    allowed_units: list[ServingUnitRequest] = Field(
+        default_factory=list,
+        description="Food-specific units allowed for editing this ingredient",
     )
     custom_nutrition: Optional["CustomNutritionRequest"] = Field(
         None, description="Custom nutrition data for non-USDA ingredients"
@@ -374,6 +390,24 @@ class EditMealIngredientsRequest(BaseModel):
                 ],
             }
         }
+
+
+class AttachMealPhotoRequest(BaseModel):
+    """Request DTO for attaching an uploaded image to a meal."""
+
+    image_id: str = Field(..., description="Cloudinary upload image UUID")
+    image_url: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Cloudinary secure URL returned after upload",
+    )
+    image_format: Literal["jpeg", "png"] = Field(
+        "jpeg", description="Uploaded image format"
+    )
+    size_bytes: int = Field(
+        ..., gt=0, le=8 * 1024 * 1024, description="Uploaded image size in bytes"
+    )
 
 
 class AddCustomIngredientRequest(BaseModel):

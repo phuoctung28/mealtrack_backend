@@ -4,7 +4,7 @@ Command to create a manual meal from a list of USDA FDC items or custom foods wi
 
 from dataclasses import dataclass
 from datetime import date
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from src.app.events.base import Command
 
@@ -30,6 +30,7 @@ class ManualMealItem:
     quantity: float = 1.0  # in grams or unit-specified grams base
     unit: str = "g"  # unit name, e.g., "g"
     custom_nutrition: Optional[CustomNutrition] = None
+    allowed_units: Optional[List[dict[str, Any]]] = None
 
 
 @dataclass

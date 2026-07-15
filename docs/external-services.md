@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
-**Last Updated:** July 5, 2026
-**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
+**Last Updated:** July 7, 2026
+**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, LangGraph, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
@@ -76,6 +76,8 @@ Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Ne
 ### Vision AI (Meal Analysis)
 - 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context, combined
 - Food-label scan strategy: reads Cloudinary-hosted Nutrition Facts labels, preferring an optional cropped label image and validating output through `FoodLabelNutritionResponse`
+- Optional LangGraph app-layer workflow is gated by `AI_MEAL_ANALYZE_GRAPH_ENABLED`; it does not change provider order or API response contracts.
+- Optional FatSecret reference validation is gated separately by `AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED` and is never required for a valid scan.
 - JSON parsing with multiple fallbacks: direct, markdown extraction, regex, truncation recovery
 - Safety detection for blocked responses
 

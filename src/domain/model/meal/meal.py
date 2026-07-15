@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from src.domain.utils.timezone_utils import format_iso_utc, utc_now
 
@@ -35,7 +36,7 @@ class Meal:
     user_id: str  # UUID as string - identifies the user who owns this meal
     status: MealStatus
     created_at: datetime
-    image: MealImage
+    image: MealImage | None
     dish_name: str | None = None
     nutrition: Nutrition | None = None
     ready_at: datetime | None = None
@@ -251,6 +252,35 @@ class Meal:
             **self._recipe_fields(),
         )
 
+    def with_image(self, image: MealImage | None) -> "Meal":
+        """Return the meal with updated image metadata."""
+        return Meal(
+            meal_id=self.meal_id,
+            user_id=self.user_id,
+            status=self.status,
+            created_at=self.created_at,
+            image=image,
+            dish_name=self.dish_name,
+            nutrition=self.nutrition,
+            ready_at=self.ready_at,
+            error_message=self.error_message,
+            raw_gpt_json=self.raw_gpt_json,
+            food_label_metadata=self.food_label_metadata,
+            updated_at=utc_now(),
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited,
+            meal_type=self.meal_type,
+            translations=self.translations,
+            source=self.source,
+            quantity=self.quantity,
+            **self._recipe_fields(),
+        )
+
+    def without_image(self) -> "Meal":
+        """Return the meal with no attached image."""
+        return self.with_image(None)
+
     def mark_inactive(self) -> "Meal":
         """Mark meal as INACTIVE (soft delete)."""
         return Meal(
@@ -276,14 +306,14 @@ class Meal:
             **self._recipe_fields(),
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary format."""
-        result = {
+        result: dict[str, Any] = {
             "meal_id": self.meal_id,
             "user_id": self.user_id,
             "status": str(self.status),
             "created_at": format_iso_utc(self.created_at),
-            "image": self.image.to_dict(),
+            "image": self.image.to_dict() if self.image else None,
         }
 
         if self.dish_name is not None:

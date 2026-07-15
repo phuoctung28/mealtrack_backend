@@ -114,16 +114,26 @@ class AsyncMealRepository(MealRepositoryPort):
                 meal.instructions
             )
 
-            # Update image URL if changed (parallel upload sets URL after initial save)
-            if meal.image and meal.image.url:
+            # Update image association/URL if changed.
+            if meal.image:
                 img_result = await self.session.execute(
                     select(MealImageORM).where(
                         MealImageORM.image_id == meal.image.image_id
                     )
                 )
                 existing_image = img_result.scalars().first()
-                if existing_image and existing_image.url != meal.image.url:
-                    existing_image.url = meal.image.url
+                if existing_image:
+                    if existing_image.url != meal.image.url:
+                        existing_image.url = meal.image.url
+                else:
+                    existing_image = meal_image_domain_to_orm(meal.image)
+                    self.session.add(existing_image)
+                    await self.session.flush()
+                existing_meal.image_id = str(meal.image.image_id)
+                existing_meal.image = existing_image
+            else:
+                existing_meal.image_id = None
+                existing_meal.image = None
 
             if meal.nutrition:
                 if not existing_meal.nutrition:
