@@ -167,8 +167,6 @@ def test_capture_message_applies_only_safe_context(monkeypatch):
     safe_context = mock_sdk.set_context.call_args.args[1]
     assert safe_context == {
         "component": "affiliate_outbox",
-        "row_id": "row-1",
-        "event_id": "evt-1",
         "event_type": "signup",
     }
     assert "payload" not in safe_context
@@ -192,10 +190,10 @@ def test_request_context_sets_safe_context_and_user(monkeypatch):
     safe_context = mock_sdk.set_context.call_args.args[1]
     assert safe_context["request_id"] == "abc12345"
     assert safe_context["method"] == "GET"
-    assert safe_context["path"] == "/v1/meals"
+    assert safe_context["route"] == "/v1/meals"
     assert safe_context["environment"] == "test"
     assert safe_context["release"] == "rel-1"
-    mock_sdk.set_user.assert_called_once_with({"id": "user-1"})
+    mock_sdk.set_user.assert_not_called()
 
 
 def test_start_span_returns_noop_when_disabled(monkeypatch):

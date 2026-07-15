@@ -62,7 +62,8 @@ async def test_expected_application_exception_is_not_logged_as_error(caplog):
     ]
     assert any(
         record.levelno == logging.DEBUG
-        and "Application exception handling _MissingMealQuery" in record.message
+        and "stage=application_exception" in record.message
+        and "event_type=_MissingMealQuery" in record.message
         for record in caplog.records
     )
 
@@ -86,7 +87,8 @@ async def test_ai_unavailable_exception_is_not_logged_as_error(caplog):
     ]
     assert any(
         record.levelno == logging.DEBUG
-        and "Application exception handling _AIUnavailableQuery" in record.message
+        and "stage=application_exception" in record.message
+        and "event_type=_AIUnavailableQuery" in record.message
         for record in caplog.records
     )
 
@@ -101,10 +103,14 @@ async def test_unexpected_exception_is_logged_as_error(caplog):
         logger="src.infra.event_bus.pymediator_event_bus",
     ):
         with pytest.raises(RuntimeError):
-            await bus.send(_CrashingQuery(name="test"))
+            await bus.send(_CrashingQuery(name="operation-sentinel uid-sentinel"))
 
     assert any(
         record.levelno == logging.ERROR
-        and "Error handling _CrashingQuery" in record.message
+        and "stage=handler_error" in record.message
+        and "event_type=_CrashingQuery" in record.message
         for record in caplog.records
     )
+    rendered = "\n".join(record.getMessage() for record in caplog.records)
+    assert "operation-sentinel" not in rendered
+    assert "uid-sentinel" not in rendered

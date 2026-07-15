@@ -12,6 +12,52 @@ from src.observability_connectors import (
 
 _connector: ObservabilityConnector = NoopObservabilityConnector()
 
+# This facade is the application's privacy boundary.  These fields are bounded,
+# operational classifications only; identifiers and arbitrary values fail closed.
+_SAFE_FIELDS = frozenset(
+    {
+        "request_id",
+        "method",
+        "path",
+        "route",
+        "action",
+        "stage",
+        "outcome",
+        "version",
+        "status_code",
+        "status",
+        "component",
+        "operation",
+        "error_type",
+        "error_code",
+        "event_type",
+        "provider",
+        "ai_provider",
+        "ai_model",
+        "ai_purpose",
+        "ai_stage",
+        "failure_kind",
+        "cache_hit",
+        "attempt_count",
+        "attempt_index",
+        "elapsed_ms",
+        "duration_ms",
+        "content_len_bucket",
+    }
+)
+_SAFE_VALUE_TYPES = (str, int, float, bool)
+
+
+def _safe_fields(values: dict[str, Any] | None) -> dict[str, Any]:
+    """Drop non-allowlisted, complex, and potentially identifying telemetry."""
+    if not values:
+        return {}
+    return {
+        key: value
+        for key, value in values.items()
+        if key in _SAFE_FIELDS and isinstance(value, _SAFE_VALUE_TYPES)
+    }
+
 
 def get_observability_connector() -> ObservabilityConnector:
     """Return the process-wide observability connector."""
@@ -47,7 +93,9 @@ def capture_exception(
     context: dict[str, Any] | None = None,
 ) -> None:
     """Capture an unexpected exception through the active connector."""
-    get_observability_connector().capture_exception(error, context=context)
+    safe_context = _safe_fields(context)
+    safe_context["error_type"] = type(error).__name__
+    get_observability_connector().capture_exception(error, context=safe_context)
 
 
 def capture_message(
@@ -60,7 +108,7 @@ def capture_message(
     get_observability_connector().capture_message(
         message,
         level=level,
-        context=context,
+        context=_safe_fields(context),
     )
 
 
@@ -74,7 +122,7 @@ def log_event(
     get_observability_connector().log_event(
         level,
         message,
-        attributes=attributes,
+        attributes=_safe_fields(attributes),
     )
 
 
@@ -90,7 +138,7 @@ def increment_metric(
         name,
         value,
         unit=unit,
-        attributes=attributes,
+        attributes=_safe_fields(attributes),
     )
 
 
@@ -106,7 +154,7 @@ def gauge_metric(
         name,
         value,
         unit=unit,
-        attributes=attributes,
+        attributes=_safe_fields(attributes),
     )
 
 
@@ -122,7 +170,7 @@ def distribution_metric(
         name,
         value,
         unit=unit,
-        attributes=attributes,
+        attributes=_safe_fields(attributes),
     )
 
 
@@ -138,7 +186,6 @@ def set_request_context(
         request_id=request_id,
         method=method,
         path=path,
-        user_id=user_id,
     )
 
 
@@ -152,7 +199,7 @@ def start_span(
     return get_observability_connector().start_span(
         operation=operation,
         description=description,
-        context=context,
+        context=_safe_fields(context) if context else None,
     )
 
 

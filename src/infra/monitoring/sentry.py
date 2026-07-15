@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, Literal, cast
 
@@ -28,6 +29,10 @@ SentryMessageLevel = Literal["fatal", "critical", "error", "warning", "info", "d
 SentryLogLevel = Literal["fatal", "error", "warning", "info", "debug", "trace"]
 _SENTRY_MESSAGE_LEVELS = {"fatal", "critical", "error", "warning", "info", "debug"}
 _SENTRY_LOG_LEVELS = {"fatal", "error", "warning", "info", "debug", "trace"}
+_SAFE_SPAN_OPERATION = re.compile(r"^[a-z][a-z0-9_.-]{0,79}$")
+_PROVIDER_FORBIDDEN_KEYS = frozenset(
+    {"user_id", "row_id", "event_id", "image_id", "image_url", "path"}
+)
 
 
 class SentryObservabilityConnector:
@@ -60,7 +65,7 @@ class SentryObservabilityConnector:
             "release": settings.SENTRY_RELEASE,
             "traces_sample_rate": settings.SENTRY_TRACES_SAMPLE_RATE,
             "profiles_sample_rate": settings.SENTRY_PROFILES_SAMPLE_RATE,
-            "send_default_pii": settings.SENTRY_SEND_PII,
+            "send_default_pii": False,
             "enable_logs": settings.SENTRY_ENABLE_LOGS,
             "enable_metrics": settings.SENTRY_ENABLE_METRICS,
             "integrations": [
@@ -69,6 +74,8 @@ class SentryObservabilityConnector:
                 SqlalchemyIntegration(),
                 LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
             ],
+            "before_send": _before_send,
+            "before_send_transaction": _before_send_transaction,
         }
         if settings.SENTRY_PROFILE_SESSION_SAMPLE_RATE is not None:
             init_kwargs["profile_session_sample_rate"] = (
@@ -90,7 +97,9 @@ class SentryObservabilityConnector:
         if not self._can_use_sdk():
             return
 
-        self._apply_safe_context(context)
+        self._apply_safe_context(
+            {"error_type": type(error).__name__, **(context or {})}
+        )
         sentry_sdk.capture_exception(error)
 
     def capture_message(
@@ -188,15 +197,11 @@ class SentryObservabilityConnector:
         context = {
             "request_id": request_id,
             "method": method,
-            "path": path,
-            "route": path,
+            "route": _safe_route_template(path),
             "environment": settings.ENVIRONMENT,
             "release": settings.SENTRY_RELEASE,
-            "user_id": user_id,
         }
         self._apply_safe_context(context)
-        if user_id:
-            sentry_sdk.set_user({"id": user_id})
 
     def start_span(
         self,
@@ -208,10 +213,11 @@ class SentryObservabilityConnector:
         if not self._can_use_sdk():
             return nullcontext()
 
-        self._apply_safe_context(
-            {"operation": operation, **filter_safe_context(context)}
+        safe_operation = (
+            operation if _SAFE_SPAN_OPERATION.fullmatch(operation) else "operation"
         )
-        return sentry_sdk.start_span(op=operation, description=description)
+        self._apply_safe_context({"operation": safe_operation, **(context or {})})
+        return sentry_sdk.start_span(op=safe_operation, description=None)
 
     def flush(self, *, timeout: float = 5) -> None:
         if not self._can_use_sdk():
@@ -222,7 +228,11 @@ class SentryObservabilityConnector:
         return bool(self._enabled and sentry_sdk is not None)
 
     def _apply_safe_context(self, context: dict[str, Any] | None) -> None:
-        safe_context = filter_safe_context(context)
+        safe_context = {
+            key: value
+            for key, value in filter_safe_context(context).items()
+            if key not in _PROVIDER_FORBIDDEN_KEYS
+        }
         if not safe_context:
             return
 
@@ -248,3 +258,44 @@ def _normalize_log_level(level: str) -> SentryLogLevel:
     if level in _SENTRY_LOG_LEVELS:
         return cast(SentryLogLevel, level)
     return "info"
+
+
+def _safe_route_template(value: str) -> str:
+    """Accept only route templates/static routes; reject URLs and resolved paths."""
+    if not value.startswith("/") or "?" in value or "://" in value:
+        return "unmatched"
+    if re.search(r"/[0-9a-f]{8}-[0-9a-f-]{27,}(?:/|$)", value, re.IGNORECASE):
+        return "unmatched"
+    return value
+
+
+def _before_send(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any]:
+    """Fail closed: provider events retain classifications, never request/error data."""
+    del hint
+    contexts = event.get("contexts")
+    mealtrack = contexts.get("mealtrack") if isinstance(contexts, dict) else None
+    safe_context = {
+        key: value
+        for key, value in filter_safe_context(mealtrack).items()
+        if key not in _PROVIDER_FORBIDDEN_KEYS
+    }
+    return {
+        "level": event.get("level", "error"),
+        "logger": event.get("logger", "application"),
+        "transaction": "unmatched",
+        "contexts": {"mealtrack": safe_context} if safe_context else {},
+        "tags": filter_safe_tags(safe_context),
+    }
+
+
+def _before_send_transaction(
+    event: dict[str, Any], hint: dict[str, Any]
+) -> dict[str, Any]:
+    """Retain only HTTP route-template spans; SQL spans may expose statements/binds."""
+    del hint
+    spans: list[dict[str, Any]] = []
+    for span in event.get("spans", []):
+        if not isinstance(span, dict) or span.get("op") != "http.server":
+            continue
+        spans.append({"op": "http.server", "description": "unmatched"})
+    return {"transaction": "unmatched", "spans": spans}
