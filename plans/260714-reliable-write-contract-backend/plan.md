@@ -3,7 +3,7 @@ title: "Reliable Write Contract Backend"
 description: "Add fail-closed, capability-gated idempotency and reconciliation for critical meal, weight, onboarding, promo, and referral writes."
 status: in-progress
 priority: P1
-branch: "main"
+branch: "feature/reliable-write-foundation-prep"
 tags: [backend, api, database, reliability, critical]
 blockedBy: []
 blocks: []
@@ -30,6 +30,10 @@ migration, API, or capability enablement has started.
 
 ## Readiness Status — 2026-07-15
 
+- Delivery handoff: draft PR [#418](https://github.com/phuoctung28/mealtrack_backend/pull/418)
+  targets `delivery` from `feature/reliable-write-foundation-prep`. It contains
+  the authority/plan corrections and incomplete Phase 0 redaction groundwork;
+  it contains no Phase 1-2 migration/API or capability enablement.
 - Final foundation review: **rejected**. Phase 1 and Phase 2 must not start or
   deploy until the open canonical-input, legacy-weight-compatibility, and Phase 0
   redaction gates below pass renewed review.
