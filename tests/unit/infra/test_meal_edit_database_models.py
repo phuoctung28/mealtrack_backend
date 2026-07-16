@@ -210,6 +210,7 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model.fiber = 0.0
         food_item_model.sugar = 0.0
         food_item_model.fdc_id = 171077
+        food_item_model.food_reference_id = 77
         food_item_model.is_custom = False
 
         # Act
@@ -218,6 +219,7 @@ class TestFoodItemDatabaseModelEdit:
         # Assert
         assert domain_food_item.id == food_item_model.id
         assert domain_food_item.fdc_id == 171077
+        assert domain_food_item.food_reference_id == 77
         assert domain_food_item.is_custom is False
 
     def test_food_item_model_from_domain_includes_edit_fields(self):
@@ -235,6 +237,7 @@ class TestFoodItemDatabaseModelEdit:
             confidence=0.8,
             id=str(uuid.uuid4()),
             fdc_id=None,
+            food_reference_id=88,
             is_custom=True,
         )
 
@@ -244,6 +247,7 @@ class TestFoodItemDatabaseModelEdit:
         # Assert
         # The database model will have an auto-generated integer ID
         assert food_item_model.fdc_id is None
+        assert food_item_model.food_reference_id == 88
         assert food_item_model.is_custom is True
 
     def test_food_item_model_from_domain_defaults_edit_fields(self):
@@ -321,6 +325,7 @@ class TestMealEditDatabaseIntegration:
                         macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
                         id=str(uuid.uuid4()),
                         fdc_id=12345,
+                        food_reference_id=99,
                         is_custom=False,
                     )
                 ],
@@ -359,6 +364,7 @@ class TestMealEditDatabaseIntegration:
             converted_domain_meal.last_edited_at == original_domain_meal.last_edited_at
         )
         assert converted_domain_meal.updated_at == original_domain_meal.updated_at
+        assert converted_domain_meal.nutrition.food_items[0].food_reference_id == 99
 
     def test_food_item_roundtrip_with_edit_fields(self):
         """Test that food item can be converted to/from domain with edit fields intact."""
@@ -371,6 +377,7 @@ class TestMealEditDatabaseIntegration:
             confidence=0.95,
             id=str(uuid.uuid4()),
             fdc_id=54321,
+            food_reference_id=1001,
             is_custom=True,
         )
 
@@ -384,6 +391,10 @@ class TestMealEditDatabaseIntegration:
         assert converted_domain_food_item.name == original_domain_food_item.name
         # ID conversion: string domain ID -> int DB ID -> string domain ID
         assert converted_domain_food_item.fdc_id == original_domain_food_item.fdc_id
+        assert (
+            converted_domain_food_item.food_reference_id
+            == original_domain_food_item.food_reference_id
+        )
         assert (
             converted_domain_food_item.is_custom == original_domain_food_item.is_custom
         )

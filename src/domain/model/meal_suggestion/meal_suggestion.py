@@ -2,14 +2,13 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import List, Optional
+from enum import StrEnum
 
-from src.domain.utils.timezone_utils import utc_now
 from src.domain.model.common.enums import MealType  # noqa: F401
+from src.domain.utils.timezone_utils import utc_now
 
 
-class MealSize(str, Enum):
+class MealSize(StrEnum):
     """T-shirt sizing for meal portions (% of daily TDEE)."""
 
     S = "S"  # 10% of daily TDEE
@@ -28,7 +27,7 @@ MEAL_SIZE_PERCENTAGES = {
 }
 
 
-class SuggestionStatus(str, Enum):
+class SuggestionStatus(StrEnum):
     """Suggestion lifecycle status."""
 
     PENDING = "pending"
@@ -43,6 +42,7 @@ class Ingredient:
     name: str
     amount: float
     unit: str
+    food_reference_id: int | None = None
 
 
 @dataclass
@@ -51,7 +51,7 @@ class RecipeStep:
 
     step: int
     instruction: str
-    duration_minutes: Optional[int] = None
+    duration_minutes: int | None = None
 
 
 @dataclass
@@ -84,13 +84,13 @@ class MealSuggestion:
     description: str
     meal_type: MealType
     macros: MacroEstimate
-    ingredients: List[Ingredient]
-    recipe_steps: List[RecipeStep]
+    ingredients: list[Ingredient]
+    recipe_steps: list[RecipeStep]
     prep_time_minutes: int
     confidence_score: float
-    origin_country: Optional[str] = None
-    cuisine_type: Optional[str] = None
-    emoji: Optional[str] = None
-    english_name: Optional[str] = None  # Original English name for image search
+    origin_country: str | None = None
+    cuisine_type: str | None = None
+    emoji: str | None = None
+    english_name: str | None = None  # Original English name for image search
     status: SuggestionStatus = SuggestionStatus.PENDING
     generated_at: datetime = field(default_factory=utc_now)

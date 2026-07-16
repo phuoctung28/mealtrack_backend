@@ -123,6 +123,23 @@ async def test_find_by_normalized_name_uses_scalars_first():
 
 
 @pytest.mark.asyncio
+async def test_get_nutrition_projection_returns_typed_food_reference_projection():
+    row = _food_row(verified=True)
+    row.source = "catalog_seed"
+    session = _AsyncSession([_Result(one=row)])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.get_nutrition_projection(7)
+
+    assert result is not None
+    assert result.id == 7
+    assert result.source == "catalog_seed"
+    assert result.is_verified is True
+    assert result.protein_100g == pytest.approx(2.7)
+    assert "food_reference.id" in str(session.statement)
+
+
+@pytest.mark.asyncio
 async def test_upsert_by_normalized_name_preserves_verified_row_without_flush():
     row = _food_row(verified=True)
     session = _AsyncSession([_Result(rows=[row])])

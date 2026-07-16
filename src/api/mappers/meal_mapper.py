@@ -177,6 +177,7 @@ class MealMapper:
                         nutrition=nutrition_dto,
                         custom_nutrition=custom_nutrition_dto,
                         fdc_id=getattr(item, "fdc_id", None),
+                        food_reference_id=getattr(item, "food_reference_id", None),
                         is_custom=getattr(item, "is_custom", False),
                         allowed_units=getattr(item, "allowed_units", None) or [],
                     )
@@ -467,6 +468,7 @@ class MealMapper:
             micros=micros,
             confidence=item_dict.get("confidence", 1.0),
             fdc_id=item_dict.get("fdc_id"),
+            food_reference_id=item_dict.get("food_reference_id"),
             is_custom=item_dict.get("is_custom", False),
             allowed_units=item_dict.get("allowed_units") or None,
         )

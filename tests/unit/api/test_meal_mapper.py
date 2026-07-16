@@ -104,6 +104,7 @@ class TestMealMapper:
                 macros=Macros(protein=40, carbs=0, fat=5),
                 confidence=0.95,
                 fdc_id=123456,
+                food_reference_id=321,
                 is_custom=False,
             ),
             FoodItem(
@@ -159,6 +160,7 @@ class TestMealMapper:
         assert result.food_items[0].display_name == "Chicken Breast"
         assert result.food_items[0].canonical_name == "Chicken Breast"
         assert result.food_items[0].fdc_id == 123456
+        assert result.food_items[0].food_reference_id == 321
         assert result.food_items[1].name == "Rice"
         assert result.food_items[1].display_name == "Rice"
         assert result.food_items[1].canonical_name == "Rice"

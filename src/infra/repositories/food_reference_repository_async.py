@@ -10,12 +10,16 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+)
 from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.repositories.food_reference_projection import (
     FOOD_REFERENCE_SEED_COLUMNS,
     build_food_reference_nutrient_rows,
     build_food_reference_serving_rows,
     food_reference_model_to_dict,
+    food_reference_model_to_nutrition_projection,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +57,19 @@ class AsyncFoodReferenceRepository:
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return food_reference_model_to_dict(model) if model else None
+
+    async def get_nutrition_projection(
+        self,
+        food_reference_id: int,
+    ) -> FoodReferenceNutritionProjection | None:
+        stmt = (
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.id == food_reference_id)
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return food_reference_model_to_nutrition_projection(model) if model else None
 
     async def get_by_fdc_id(self, fdc_id: int) -> dict[str, Any] | None:
         stmt = (

@@ -2,6 +2,10 @@
 
 from typing import Any
 
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+    FoodReferenceServingProjection,
+)
 from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.database.models.food_reference_nutrient import FoodReferenceNutrientModel
 from src.infra.database.models.food_reference_serving_size import (
@@ -56,6 +60,33 @@ def food_reference_model_to_dict(model: FoodReferenceModel) -> dict[str, Any]:
         "is_verified": model.is_verified,
         "image_url": model.image_url,
     }
+
+
+def food_reference_model_to_nutrition_projection(
+    model: FoodReferenceModel,
+) -> FoodReferenceNutritionProjection:
+    """Convert a food reference ORM row to the domain recipe-publication shape."""
+    return FoodReferenceNutritionProjection(
+        id=model.id,
+        name=model.name,
+        source=model.source,
+        is_verified=model.is_verified,
+        protein_100g=model.protein_100g,
+        carbs_100g=model.carbs_100g,
+        fat_100g=model.fat_100g,
+        fiber_100g=model.fiber_100g or 0.0,
+        sugar_100g=model.sugar_100g or 0.0,
+        density_g_ml=model.density,
+        servings=[
+            FoodReferenceServingProjection(
+                name=item["name"],
+                grams=item.get("grams"),
+                milliliters=item.get("milliliters"),
+                is_default=item.get("is_default", False),
+            )
+            for item in _serving_sizes_for_projection(model)
+        ],
+    )
 
 
 def build_food_reference_serving_rows(
@@ -122,6 +153,43 @@ def food_reference_serving_sizes_to_dict(model: FoodReferenceModel) -> Any:
         }
         for row in rows
     ]
+
+
+def _serving_sizes_for_projection(model: FoodReferenceModel) -> list[dict[str, Any]]:
+    rows = getattr(model, "serving_size_rows", None)
+    if rows:
+        return [
+            {
+                "name": row.name,
+                "grams": row.grams,
+                "milliliters": row.milliliters,
+                "is_default": row.is_default,
+            }
+            for row in rows
+        ]
+    raw = model.serving_sizes
+    if not isinstance(raw, list):
+        return []
+    servings: list[dict[str, Any]] = []
+    for idx, item in enumerate(raw):
+        if not isinstance(item, dict):
+            continue
+        name = str(
+            item.get("name") or item.get("label") or item.get("unit") or ""
+        ).strip()
+        if not name:
+            continue
+        servings.append(
+            {
+                "name": name,
+                "grams": as_optional_float(item.get("grams") or item.get("gram_weight")),
+                "milliliters": as_optional_float(
+                    item.get("milliliters") or item.get("ml")
+                ),
+                "is_default": bool(item.get("is_default", idx == 0)),
+            }
+        )
+    return servings
 
 
 def food_reference_allowed_units_to_dict(

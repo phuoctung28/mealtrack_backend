@@ -5,16 +5,16 @@ Unit tests for meal suggestion mappers.
 from datetime import datetime, timedelta
 
 from src.api.mappers.meal_suggestion_mapper import (
-    to_meal_suggestion_response,
     to_discovery_batch_response,
     to_discovery_meal_response,
+    to_meal_suggestion_response,
 )
 from src.domain.model.meal_suggestion import (
-    MealSuggestion,
-    SuggestionSession,
-    MacroEstimate,
     Ingredient,
+    MacroEstimate,
+    MealSuggestion,
     RecipeStep,
+    SuggestionSession,
 )
 
 
@@ -34,7 +34,12 @@ class TestMealSuggestionMapper:
             meal_type=MealType.DINNER,
             macros=MacroEstimate(calories=500, protein=50, carbs=20, fat=15),
             ingredients=[
-                Ingredient(name="Chicken Breast", amount=200, unit="g"),
+                Ingredient(
+                    name="Chicken Breast",
+                    amount=200,
+                    unit="g",
+                    food_reference_id=321,
+                ),
                 Ingredient(name="Olive Oil", amount=10, unit="ml"),
             ],
             recipe_steps=[
@@ -56,6 +61,7 @@ class TestMealSuggestionMapper:
         assert result.macros.protein == 50
         assert len(result.ingredients) == 2
         assert result.ingredients[0].name == "Chicken Breast"
+        assert result.ingredients[0].food_reference_id == 321
         assert len(result.recipe_steps) == 2
         assert result.recipe_steps[0].step == 1
         assert result.prep_time_minutes == 15

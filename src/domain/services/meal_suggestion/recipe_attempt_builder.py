@@ -6,7 +6,6 @@ Used by ParallelRecipeGenerator for each individual recipe AI call.
 import asyncio
 import logging
 import uuid
-from typing import Dict, List, Optional
 
 from src.domain.model.meal_suggestion import (
     Ingredient,
@@ -16,8 +15,8 @@ from src.domain.model.meal_suggestion import (
     RecipeStep,
     SuggestionSession,
 )
-from src.domain.services.emoji_validator import validate_emoji
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.services.emoji_validator import validate_emoji
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
 )
@@ -45,7 +44,7 @@ async def attempt_recipe_generation(
     reject_on_scale_out_of_range: bool = True,
     fill_missing_steps: bool = False,
     recipe_schema: type | None = None,
-) -> Optional[MealSuggestion]:
+) -> MealSuggestion | None:
     """
     Single AI call to generate one recipe. Returns MealSuggestion on success, None on failure.
 
@@ -78,8 +77,8 @@ async def attempt_recipe_generation(
             timeout=PARALLEL_SINGLE_MEAL_TIMEOUT,
         )
 
-        ingredients: List[Dict] = raw.get("ingredients", [])
-        recipe_steps: List[Dict] = raw.get("recipe_steps", [])
+        ingredients: list[dict] = raw.get("ingredients", [])
+        recipe_steps: list[dict] = raw.get("recipe_steps", [])
         prep_time: int = (
             raw.get("prep_time_minutes") or session.cooking_time_minutes or 30
         )
@@ -132,6 +131,7 @@ async def attempt_recipe_generation(
             if i < len(scaled_ing_list):
                 raw_ing["amount"] = round(scaled_ing_list[i].quantity_g)
                 raw_ing["unit"] = "g"
+                raw_ing["food_reference_id"] = scaled_ing_list[i].food_reference_id
 
         _log_ingredient_coverage(session, ingredients, meal_name, index, marker)
 
@@ -163,7 +163,7 @@ async def attempt_recipe_generation(
             english_name=meal_name,
         )
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             f"[PHASE-2-TIMEOUT]{marker} index={index} | "
             f"model_purpose={model_purpose} | meal_name={meal_name}"
@@ -179,7 +179,7 @@ async def attempt_recipe_generation(
 
 def _log_ingredient_coverage(
     session: SuggestionSession,
-    ingredients: List[Dict],
+    ingredients: list[dict],
     meal_name: str,
     index: int,
     marker: str,
@@ -210,8 +210,8 @@ def _log_ingredient_coverage(
 
 
 def _fallback_recipe_steps(
-    meal_name: str, ingredients: List[Dict], prep_time: int
-) -> List[Dict]:
+    meal_name: str, ingredients: list[dict], prep_time: int
+) -> list[dict]:
     """Build simple steps when selected-recipe AI output omits instructions."""
     ingredient_names = [
         ing.get("name", "ingredient") for ing in ingredients if ing.get("name")

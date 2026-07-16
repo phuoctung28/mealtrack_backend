@@ -2,8 +2,7 @@
 Command for saving a meal suggestion as a regular meal.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
 
 from src.app.events.base import Command
 
@@ -21,9 +20,11 @@ class IngredientItem:
     amount: float
     unit: str
     calories: float = 0.0
+    food_reference_id: int | None = None
     protein: float = 0.0
     carbs: float = 0.0
     fat: float = 0.0
+    fiber: float = 0.0
 
 
 @dataclass
@@ -38,17 +39,18 @@ class SaveMealSuggestionCommand(Command):
     protein: float
     carbs: float
     fat: float
-    description: Optional[str]
-    estimated_cook_time_minutes: Optional[int]
-    ingredients: List[IngredientItem]
+    fiber: float
+    description: str | None
+    estimated_cook_time_minutes: int | None
+    ingredients: list[IngredientItem]
     instructions: list  # List[str] or List[dict] with {instruction, duration_minutes}
     portion_multiplier: int
     meal_date: str  # YYYY-MM-DD format
-    cuisine_type: Optional[str] = None
-    origin_country: Optional[str] = None
-    emoji: Optional[str] = None
+    cuisine_type: str | None = None
+    origin_country: str | None = None
+    emoji: str | None = None
     language: str = "en"  # ISO 639-1 code; used to persist meal_translation on save
-    image_url: Optional[str] = None
+    image_url: str | None = None
 
     def __post_init__(self):
         """Validate command data."""
@@ -59,7 +61,7 @@ class SaveMealSuggestionCommand(Command):
         if self.calories <= 0:
             raise ValueError("calories must be greater than 0")
 
-        if self.protein < 0 or self.carbs < 0 or self.fat < 0:
+        if self.protein < 0 or self.carbs < 0 or self.fat < 0 or self.fiber < 0:
             raise ValueError("macros must be non-negative")
 
         if self.portion_multiplier < 1:
