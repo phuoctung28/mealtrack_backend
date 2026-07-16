@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     Column,
@@ -107,6 +108,9 @@ class MealRecommendationSlotORM(Base):
     target_calories = Column(Integer, nullable=False)
     score = Column(Float, nullable=False)
     position = Column(Integer, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    logged_meal_id = Column(String(36), nullable=True)
+    logged_at = Column(DateTime(timezone=True), nullable=True)
 
     plan = relationship("MealRecommendationPlanORM", back_populates="slots")
     alternatives = relationship(
@@ -131,10 +135,116 @@ class MealRecommendationSlotORM(Base):
             "recipe_version_id",
             name="uq_meal_recommendation_slots_unique_recipe",
         ),
+        UniqueConstraint(
+            "logged_meal_id",
+            name="uq_meal_recommendation_slots_logged_meal",
+        ),
         Index(
             "idx_meal_recommendation_slots_plan_position",
             "plan_id",
             "position",
+        ),
+    )
+
+
+class MealRecommendationSwapORM(Base):
+    """Audit row for a committed recommendation slot swap."""
+
+    __tablename__ = "meal_recommendation_swaps"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), nullable=False)
+    plan_id = Column(
+        String(36),
+        ForeignKey("meal_recommendation_plans.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    slot_id = Column(
+        String(36),
+        ForeignKey("meal_recommendation_slots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    request_id = Column(String(160), nullable=False)
+    expected_version = Column(Integer, nullable=False)
+    requested_recipe_version_id = Column(
+        String(36),
+        ForeignKey("catalog_recipe_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    from_recipe_version_id = Column(
+        String(36),
+        ForeignKey("catalog_recipe_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    to_recipe_version_id = Column(
+        String(36),
+        ForeignKey("catalog_recipe_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    reason = Column(String(40), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "expected_version > 0",
+            name="ck_meal_recommendation_swaps_expected_version",
+        ),
+        CheckConstraint(
+            "reason IN ('user_requested', 'alternative_selected')",
+            name="ck_meal_recommendation_swaps_reason",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "request_id",
+            name="uq_meal_recommendation_swaps_user_request",
+        ),
+        Index("idx_meal_recommendation_swaps_slot_created", "slot_id", "created_at"),
+    )
+
+
+class MealRecommendationInteractionORM(Base):
+    """Raw owner-scoped recommendation interaction event."""
+
+    __tablename__ = "meal_recommendation_interactions"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), nullable=False)
+    plan_id = Column(
+        String(36),
+        ForeignKey("meal_recommendation_plans.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    slot_id = Column(
+        String(36),
+        ForeignKey("meal_recommendation_slots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    event_type = Column(String(40), nullable=False)
+    request_id = Column(String(160), nullable=True)
+    meal_id = Column(String(36), nullable=True)
+    recipe_version_id = Column(
+        String(36),
+        ForeignKey("catalog_recipe_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_metadata = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('swap_selected', 'meal_logged')",
+            name="ck_meal_recommendation_interactions_type",
+        ),
+        UniqueConstraint(
+            "slot_id",
+            "event_type",
+            "request_id",
+            name="uq_meal_recommendation_interactions_slot_event_request",
+        ),
+        Index(
+            "idx_meal_recommendation_interactions_plan_created",
+            "plan_id",
+            "created_at",
         ),
     )
 

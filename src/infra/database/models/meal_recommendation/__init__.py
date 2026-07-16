@@ -10,9 +10,11 @@ from .catalog_recipe import (
     CatalogReleaseORM,
 )
 from .meal_recommendation_plan import (
+    MealRecommendationInteractionORM,
     MealRecommendationPlanORM,
     MealRecommendationSlotAlternativeORM,
     MealRecommendationSlotORM,
+    MealRecommendationSwapORM,
 )
 
 __all__ = [
@@ -26,4 +28,6 @@ __all__ = [
     "MealRecommendationPlanORM",
     "MealRecommendationSlotAlternativeORM",
     "MealRecommendationSlotORM",
+    "MealRecommendationSwapORM",
+    "MealRecommendationInteractionORM",
 ]

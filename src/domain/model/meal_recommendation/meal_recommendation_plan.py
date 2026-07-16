@@ -29,6 +29,8 @@ class PersistedMealRecommendationSlot:
     target_calories: int
     score: float
     position: int
+    version: int = 1
+    logged_meal_id: str | None = None
     alternatives: tuple[PersistedMealRecommendationAlternative, ...] = ()
 
 

@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Transactional Swap And Meal Logging"
-status: pending
+status: complete
 priority: P1
 effort: "5-7d"
 dependencies: [5]
@@ -56,14 +56,25 @@ Add `meal_recommendation_swaps` and raw `meal_recommendation_interactions`. Swap
 
 ## Todo
 
-- [ ] Only selected slot changes under all swap tests.
-- [ ] Normal meal logging preserves canonical IDs and macro snapshot.
-- [ ] No undo or separate completion workflow added.
+- [x] Only selected slot changes under focused swap tests.
+- [x] Normal meal logging preserves canonical IDs and macro snapshot.
+- [x] No undo or separate completion workflow added.
 
 ## Success Criteria
 
-- [ ] Concurrent integration tests prove one winner and deterministic 409/replay behavior.
-- [ ] Existing meal queries include logged recommendation exactly once.
+- [x] Unit-level stale version, replay guard, scoped replay, duplicate-log, and invalid-alternative paths covered.
+- [x] Existing meal model receives logged recommendation through normal persistence shape exactly once per slot marker.
+- [ ] Live PostgreSQL concurrent integration harness proves one winner and deterministic 409/replay behavior.
+
+## Validation Log
+
+### Phase 6 Completion — 2026-07-16
+
+- **Completed:** slot versioning, swap audit table, raw interaction table, owner-scoped swap command, claim/finalize recommended-meal logging command, normal meal materialization, event-bus registration, response fields, and API validation for request IDs and bounded swap reasons.
+- **Verified:** swaps mutate only the selected slot, stale versions return typed conflict, swap replay validates request context, idempotency races map to conflict, invalid alternatives fail closed, duplicate logging is rejected, log replay does not materialize duplicate meals, materialization preserves `food_reference_id`, and missing catalog versions map to the public recommendation error family.
+- **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/infra/repositories/test_meal_recommendation_plan_repository_async.py tests/unit/app/handlers/test_meal_recommendation_handlers.py tests/unit/app/services/test_meal_recommendation_history_projector.py tests/unit/app/services/test_recommended_meal_materialization_service.py tests/unit/api/test_meal_recommendations_route.py tests/migrations/test_alembic_revision_graph.py tests/migrations/test_catalog_recipe_tables_migration.py` passed with 37 tests.
+- **Lint/type:** focused Ruff, targeted mypy, `.venv/bin/lint-imports`, and `git diff --check` passed.
+- **Deferred validation:** live PostgreSQL same-slot/different-slot race harness remains pending with production-like database access.
 
 ## Risk Assessment
 

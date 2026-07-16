@@ -19,7 +19,11 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
-from src.app.commands.meal_recommendation import CreateThreeDayMealRecommendationCommand
+from src.app.commands.meal_recommendation import (
+    CreateThreeDayMealRecommendationCommand,
+    LogRecommendedMealCommand,
+    SwapMealRecommendationSlotCommand,
+)
 from src.app.commands.meal_suggestion import (
     DiscoverMealsCommand,
     GenerateMealRecipesCommand,
@@ -104,6 +108,8 @@ from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
 )
 from src.app.handlers.command_handlers.meal_recommendation import (
     CreateThreeDayMealRecommendationCommandHandler,
+    LogRecommendedMealCommandHandler,
+    SwapMealRecommendationSlotCommandHandler,
 )
 from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
     SyncWeightEntriesCommandHandler,
@@ -560,6 +566,14 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         CreateThreeDayMealRecommendationCommand,
         CreateThreeDayMealRecommendationCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        SwapMealRecommendationSlotCommand,
+        SwapMealRecommendationSlotCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        LogRecommendedMealCommand,
+        LogRecommendedMealCommandHandler(uow=AsyncUnitOfWork()),
     )
     event_bus.register_handler(
         GetMealRecommendationPlanQuery,

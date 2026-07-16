@@ -24,6 +24,8 @@ class MealRecommendationSlotResponse(BaseModel):
     target_calories: int
     score: float
     position: int
+    version: int
+    logged_meal_id: str | None = None
     alternatives: list[MealRecommendationAlternativeResponse]
 
 
@@ -37,4 +39,3 @@ class MealRecommendationPlanResponse(BaseModel):
     catalog_release_id: str
     allergy_evaluated: bool
     slots: list[MealRecommendationSlotResponse]
-

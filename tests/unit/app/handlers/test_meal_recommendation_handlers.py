@@ -6,10 +6,16 @@ from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_asyn
     _plan,
 )
 
-from src.app.commands.meal_recommendation import CreateThreeDayMealRecommendationCommand
+from src.app.commands.meal_recommendation import (
+    CreateThreeDayMealRecommendationCommand,
+    LogRecommendedMealCommand,
+)
 from src.app.handlers.command_handlers.meal_recommendation.create_three_day_meal_recommendation_command_handler import (
     CreateThreeDayMealRecommendationCommandHandler,
     _request_fingerprint,
+)
+from src.app.handlers.command_handlers.meal_recommendation.log_recommended_meal_command_handler import (
+    LogRecommendedMealCommandHandler,
 )
 from src.app.handlers.query_handlers.get_meal_recommendation_plan_query_handler import (
     GetMealRecommendationPlanQueryHandler,
@@ -66,6 +72,20 @@ class _ConflictPlanRepo(_PlanRepo):
     async def _get_by_key(self, **kwargs):
         self._reads += 1
         return None if self._reads == 1 else self.existing
+
+
+class _LogPlanRepo(_PlanRepo):
+    def __init__(self, *, replayed=False):
+        super().__init__()
+        self.claim_slot_log = AsyncMock(return_value=(_plan(), _plan().slots[0], replayed))
+        self.finalize_slot_logged = AsyncMock(return_value=_plan())
+
+
+class _Materializer:
+    def __init__(self):
+        self.materialize = AsyncMock(
+            return_value=type("Meal", (), {"meal_id": "meal-1"})()
+        )
 
 
 class _Uow:
@@ -154,6 +174,15 @@ def _command() -> CreateThreeDayMealRecommendationCommand:
     )
 
 
+def _log_command() -> LogRecommendedMealCommand:
+    return LogRecommendedMealCommand(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="log-1",
+    )
+
+
 @pytest.mark.asyncio
 async def test_create_handler_replays_existing_idempotent_plan():
     plans = _PlanRepo()
@@ -231,3 +260,43 @@ async def test_query_handler_reads_owner_scoped_plan():
     assert result is not None
     assert result.id == "plan-1"
     plans.get_by_id.assert_awaited_once_with(user_id="user-1", plan_id="plan-1")
+
+
+@pytest.mark.asyncio
+async def test_log_handler_replays_without_materializing_duplicate_meal():
+    plans = _LogPlanRepo(replayed=True)
+    materializer = _Materializer()
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+    )
+
+    result = await handler.handle(_log_command())
+
+    assert result.id == "plan-1"
+    plans.claim_slot_log.assert_awaited_once()
+    materializer.materialize.assert_not_awaited()
+    plans.finalize_slot_logged.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_log_handler_claims_materializes_then_finalizes():
+    plans = _LogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+    )
+
+    result = await handler.handle(_log_command())
+
+    assert result.id == "plan-1"
+    plans.claim_slot_log.assert_awaited_once()
+    materializer.materialize.assert_awaited_once()
+    plans.finalize_slot_logged.assert_awaited_once_with(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="log-1",
+        meal_id="meal-1",
+    )

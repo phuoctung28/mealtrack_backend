@@ -36,7 +36,7 @@ Source precedence: the repository-focused foundation report narrows the proposed
 | 3 | [Immutable Curated Recipe Catalog](./phase-03-immutable-curated-recipe-catalog.md) | In Progress |
 | 4 | [Deterministic Recommendation Domain](./phase-04-deterministic-recommendation-domain.md) | Complete |
 | 5 | [Durable Plans CQRS And API](./phase-05-durable-plans-cqrs-and-api.md) | Complete |
-| 6 | [Transactional Swap And Meal Logging](./phase-06-transactional-swap-and-meal-logging.md) | Pending |
+| 6 | [Transactional Swap And Meal Logging](./phase-06-transactional-swap-and-meal-logging.md) | Complete |
 | 7 | [Measurement And Controlled Rollout](./phase-07-measurement-and-controlled-rollout.md) | Pending |
 
 ## Dependencies
@@ -108,6 +108,14 @@ Source precedence: the repository-focused foundation report narrows the proposed
 - **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/infra/repositories/test_meal_recommendation_plan_repository_async.py tests/unit/app/handlers/test_meal_recommendation_handlers.py tests/unit/app/services/test_meal_recommendation_history_projector.py tests/unit/api/test_meal_recommendations_route.py tests/migrations/test_alembic_revision_graph.py tests/migrations/test_catalog_recipe_tables_migration.py` passed with 17 tests.
 - **Lint/type:** focused Ruff, targeted mypy, `.venv/bin/lint-imports`, and `git diff --check` passed.
 - **Deferred measurement:** representative-data API p95 remains blocked until the Phase 3 production catalog corpus exists.
+
+### Phase 6 Swap And Logging Completion — 2026-07-16
+
+- **Completed:** slot versioning, transactional swap audit, raw swap/log interactions, owner-scoped swap and claim/finalize log CQRS commands, normal meal materialization from immutable recipe snapshots, event-bus registration, and API response/request validation.
+- **Verified:** selected-slot mutation, stale-version conflict, swap replay context matching, idempotency-race conflict mapping, invalid-alternative rejection, duplicate-log rejection, log replay without duplicate meal materialization, public error mapping for missing recipe versions, `food_reference_id` preservation, and no undo/completion workflow.
+- **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/infra/repositories/test_meal_recommendation_plan_repository_async.py tests/unit/app/handlers/test_meal_recommendation_handlers.py tests/unit/app/services/test_meal_recommendation_history_projector.py tests/unit/app/services/test_recommended_meal_materialization_service.py tests/unit/api/test_meal_recommendations_route.py tests/migrations/test_alembic_revision_graph.py tests/migrations/test_catalog_recipe_tables_migration.py` passed with 37 tests.
+- **Lint/type:** focused Ruff, targeted mypy, `.venv/bin/lint-imports`, and `git diff --check` passed.
+- **Deferred validation:** live PostgreSQL same-slot/different-slot concurrency harness remains pending.
 
 ### Session 1 — 2026-07-16
 

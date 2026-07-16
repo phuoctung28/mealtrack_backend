@@ -49,9 +49,11 @@ from .meal_recommendation import (
     CatalogRecipeSourceORM,
     CatalogRecipeVersionORM,
     CatalogReleaseORM,
+    MealRecommendationInteractionORM,
     MealRecommendationPlanORM,
     MealRecommendationSlotAlternativeORM,
     MealRecommendationSlotORM,
+    MealRecommendationSwapORM,
 )
 
 # Notification models
@@ -160,6 +162,8 @@ __all__ = [
     "MealRecommendationPlanORM",
     "MealRecommendationSlotORM",
     "MealRecommendationSlotAlternativeORM",
+    "MealRecommendationSwapORM",
+    "MealRecommendationInteractionORM",
     "PendingMealImageResolutionModel",
     # Referral system
     "ReferralCode",

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
+from src.domain.model.meal_recommendation import (
+    PersistedMealRecommendationPlan,
+    PersistedMealRecommendationSlot,
+)
 
 
 class MealRecommendationPlanRepositoryPort(ABC):
@@ -39,3 +42,40 @@ class MealRecommendationPlanRepositoryPort(ABC):
         plan: PersistedMealRecommendationPlan,
     ) -> PersistedMealRecommendationPlan:
         """Supersede prior active plan and persist a new complete aggregate."""
+
+    @abstractmethod
+    async def swap_slot(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+        expected_version: int,
+        alternative_recipe_version_id: str | None,
+        reason: str,
+    ) -> PersistedMealRecommendationPlan:
+        """Swap one owned slot and return the updated plan."""
+
+    @abstractmethod
+    async def claim_slot_log(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+    ) -> tuple[PersistedMealRecommendationPlan, PersistedMealRecommendationSlot, bool]:
+        """Claim a slot log request before materializing a normal meal."""
+
+    @abstractmethod
+    async def finalize_slot_logged(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+        meal_id: str,
+    ) -> PersistedMealRecommendationPlan:
+        """Attach a materialized meal to a claimed slot log and return the plan."""

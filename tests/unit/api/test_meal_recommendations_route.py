@@ -1,15 +1,24 @@
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from starlette.requests import Request
 from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_async import (
     _plan,
 )
 
 from src.api.routes.v1.meal_recommendations import (
+    LogRecommendedMealRequest,
+    SwapMealRecommendationSlotRequest,
     _to_response,
     create_three_day_recommendations,
+    log_recommended_meal,
+    swap_meal_recommendation_slot,
 )
-from src.app.commands.meal_recommendation import CreateThreeDayMealRecommendationCommand
+from src.app.commands.meal_recommendation import (
+    CreateThreeDayMealRecommendationCommand,
+    LogRecommendedMealCommand,
+    SwapMealRecommendationSlotCommand,
+)
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.app.queries.user import GetUserTimezoneQuery
 
@@ -48,6 +57,20 @@ def test_meal_recommendation_response_includes_allergy_not_evaluated_and_slots()
     assert response.slots[0].alternatives[0].recipe_version_id == "version-2"
 
 
+def test_swap_request_rejects_unsupported_reason():
+    with pytest.raises(ValidationError):
+        SwapMealRecommendationSlotRequest(
+            request_id="swap-1",
+            expected_version=1,
+            reason="unsupported",
+        )
+
+
+def test_log_request_rejects_blank_request_id_after_trim():
+    with pytest.raises(ValidationError):
+        LogRecommendedMealRequest(request_id="   ")
+
+
 @pytest.mark.asyncio
 async def test_create_three_day_recommendations_rejects_blank_idempotency_key():
     with pytest.raises(HTTPException) as exc_info:
@@ -78,3 +101,46 @@ async def test_create_three_day_recommendations_snapshots_target_and_timezone():
     assert command.idempotency_key == "key-1"
     assert command.timezone == "Asia/Ho_Chi_Minh"
     assert command.daily_calories == 2150
+
+
+@pytest.mark.asyncio
+async def test_swap_route_sends_expected_version_command():
+    event_bus = _EventBus()
+
+    await swap_meal_recommendation_slot(
+        plan_id="plan-1",
+        slot_id="slot-1",
+        body=SwapMealRecommendationSlotRequest(
+            request_id="swap-1",
+            expected_version=1,
+            alternative_recipe_version_id="version-2",
+        ),
+        user_id="user-1",
+        event_bus=event_bus,
+    )
+
+    command = next(
+        item
+        for item in event_bus.commands
+        if isinstance(item, SwapMealRecommendationSlotCommand)
+    )
+    assert command.expected_version == 1
+    assert command.alternative_recipe_version_id == "version-2"
+
+
+@pytest.mark.asyncio
+async def test_log_route_sends_recommended_meal_command():
+    event_bus = _EventBus()
+
+    await log_recommended_meal(
+        plan_id="plan-1",
+        slot_id="slot-1",
+        body=LogRecommendedMealRequest(request_id="log-1"),
+        user_id="user-1",
+        event_bus=event_bus,
+    )
+
+    command = next(
+        item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
+    )
+    assert command.request_id == "log-1"
