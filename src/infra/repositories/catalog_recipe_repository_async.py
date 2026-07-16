@@ -61,7 +61,7 @@ class AsyncCatalogRecipeRepository(CatalogRecipeRepositoryPort):
             .where(CatalogRecipeVersionORM.status == "published")
             .where(CatalogRecipeVersionORM.recipe.has(is_active=True))
             .options(*_VERSION_LOAD_OPTIONS)
-            .order_by(CatalogRecipeVersionORM.name)
+            .order_by(CatalogRecipeVersionORM.id)
         )
         if cuisine is not None:
             stmt = stmt.where(CatalogRecipeVersionORM.recipe.has(cuisine=cuisine))

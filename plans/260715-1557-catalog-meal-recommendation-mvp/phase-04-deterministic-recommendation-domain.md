@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Deterministic Recommendation Domain"
-status: pending
+status: complete
 priority: P1
 effort: "5-7d"
 dependencies: [3]
@@ -54,14 +54,24 @@ Pure services: calorie allocation, history profile, recipe scoring, three-day op
 
 ## Todo
 
-- [ ] Pure service tests written before implementation.
-- [ ] Stable results and all hard constraints proven.
-- [ ] Learned popularity and Redis absent.
+- [x] Pure service tests written before implementation.
+- [x] Stable results and all hard constraints proven.
+- [x] Learned popularity and Redis absent.
 
 ## Success Criteria
 
-- [ ] Every golden case yields 9 valid slots and 45 alternatives or typed insufficiency.
-- [ ] `.venv/bin/python3.13 -m pytest -q tests/unit/domain/services/meal_recommendation/` passes.
+- [x] Every golden case yields 9 valid slots and 45 alternatives or typed insufficiency.
+- [x] `.venv/bin/python3.13 -m pytest -q tests/unit/domain/services/meal_recommendation/` passes.
+
+## Implementation Log
+
+### 2026-07-16
+
+- Added deterministic calorie allocation, linked-ingredient affinity, recipe scoring, slot alternatives, and three-day optimizer services.
+- Added typed recommendation plan, slot, alternative, and insufficiency domain projections.
+- Enforced deterministic sorting by score descending and recipe-version ID ascending; repository active-version ordering now uses version ID.
+- Added golden tests for calorie allocation, 90-day affinity, stable ties, sparse catalog insufficiency, repeat-call determinism, and 9-slot/45-alternative plan invariants.
+- Verified Phase 4 suite, Ruff, targeted mypy, and import-linter.
 
 ## Risk Assessment
 

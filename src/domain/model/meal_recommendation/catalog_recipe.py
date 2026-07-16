@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
 
 @dataclass(frozen=True)
@@ -56,3 +57,50 @@ class CatalogRelease:
     expected_recipe_count: int
     activated_at: datetime | None = None
 
+
+class MealRecommendationInsufficiencyReason(StrEnum):
+    """Typed reasons a deterministic recommendation plan cannot be produced."""
+
+    NOT_ENOUGH_CURRENT_RECIPES = "not_enough_current_recipes"
+    NOT_ENOUGH_ALTERNATIVES = "not_enough_alternatives"
+
+
+@dataclass(frozen=True)
+class MealRecommendationSlot:
+    """One selected recipe slot in a deterministic recommendation plan."""
+
+    day_index: int
+    meal_type: str
+    target_calories: int
+    recipe: CatalogRecipeVersion
+    score: float
+
+
+@dataclass(frozen=True)
+class MealRecommendationAlternative:
+    """Alternative recipe for a selected recommendation slot."""
+
+    day_index: int
+    meal_type: str
+    target_calories: int
+    recipe: CatalogRecipeVersion
+    score: float
+
+
+@dataclass(frozen=True)
+class MealRecommendationPlan:
+    """Pure-domain deterministic recommendation result."""
+
+    algorithm_version: str
+    slots: tuple[MealRecommendationSlot, ...]
+    alternatives: dict[tuple[int, str], tuple[MealRecommendationAlternative, ...]]
+
+
+@dataclass(frozen=True)
+class MealRecommendationInsufficiency:
+    """Typed deterministic failure when catalog capacity is insufficient."""
+
+    reason: MealRecommendationInsufficiencyReason
+    message: str
+    required: int
+    available: int

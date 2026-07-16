@@ -1,6 +1,7 @@
 """Strict recipe ingredient quantity conversion for catalog publication."""
 
 from dataclasses import dataclass
+from typing import cast
 
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
@@ -118,9 +119,12 @@ class IngredientQuantityConversionService:
         grams = self._resolve_grams(reference, quantity, unit)
         self._validate_resolved_grams(grams)
         factor = grams / 100.0
-        protein = reference.protein_100g * factor
-        carbs = reference.carbs_100g * factor
-        fat = reference.fat_100g * factor
+        protein_100g = cast(float, reference.protein_100g)
+        carbs_100g = cast(float, reference.carbs_100g)
+        fat_100g = cast(float, reference.fat_100g)
+        protein = protein_100g * factor
+        carbs = carbs_100g * factor
+        fat = fat_100g * factor
         fiber = (reference.fiber_100g or 0.0) * factor
         sugar = (reference.sugar_100g or 0.0) * factor
         calories = protein * 4 + max(carbs - fiber, 0.0) * 4 + fiber * 2 + fat * 9
@@ -159,6 +163,9 @@ class IngredientQuantityConversionService:
                 "incomplete_macro_snapshot",
                 f"Food reference {reference.id} has incomplete macros.",
             )
+        protein_100g = cast(float, reference.protein_100g)
+        carbs_100g = cast(float, reference.carbs_100g)
+        fat_100g = cast(float, reference.fat_100g)
         if (reference.fiber_100g or 0.0) < 0 or (reference.sugar_100g or 0.0) < 0:
             raise IngredientQuantityConversionError(
                 "incomplete_macro_snapshot",
@@ -166,16 +173,12 @@ class IngredientQuantityConversionService:
             )
         fiber = reference.fiber_100g or 0.0
         sugar = reference.sugar_100g or 0.0
-        if (
-            fiber > reference.carbs_100g
-            or sugar > reference.carbs_100g
-            or fiber + sugar > reference.carbs_100g
-        ):
+        if fiber > carbs_100g or sugar > carbs_100g or fiber + sugar > carbs_100g:
             raise IngredientQuantityConversionError(
                 "implausible_macro_snapshot",
                 f"Food reference {reference.id} fiber or sugar exceeds carbs.",
             )
-        macro_mass = reference.protein_100g + reference.carbs_100g + reference.fat_100g
+        macro_mass = protein_100g + carbs_100g + fat_100g
         if macro_mass > 110.0:
             raise IngredientQuantityConversionError(
                 "implausible_macro_snapshot",

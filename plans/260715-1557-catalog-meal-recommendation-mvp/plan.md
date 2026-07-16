@@ -34,7 +34,7 @@ Source precedence: the repository-focused foundation report narrows the proposed
 | 1 | [Contract And Regression Lock](./phase-01-contract-and-regression-lock.md) | Complete |
 | 2 | [Canonical Ingredient And Nutrition Foundation](./phase-02-canonical-ingredient-and-nutrition-foundation.md) | Complete |
 | 3 | [Immutable Curated Recipe Catalog](./phase-03-immutable-curated-recipe-catalog.md) | In Progress |
-| 4 | [Deterministic Recommendation Domain](./phase-04-deterministic-recommendation-domain.md) | Pending |
+| 4 | [Deterministic Recommendation Domain](./phase-04-deterministic-recommendation-domain.md) | Complete |
 | 5 | [Durable Plans CQRS And API](./phase-05-durable-plans-cqrs-and-api.md) | Pending |
 | 6 | [Transactional Swap And Meal Logging](./phase-06-transactional-swap-and-meal-logging.md) | Pending |
 | 7 | [Measurement And Controlled Rollout](./phase-07-measurement-and-controlled-rollout.md) | Pending |
@@ -93,6 +93,13 @@ Source precedence: the repository-focused foundation report narrows the proposed
 - **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/domain/services/meal_recommendation/test_catalog_recipe_seed_validator.py tests/unit/infra/repositories/test_catalog_recipe_repository_async.py tests/unit/infra/database/test_uow_async.py tests/migrations/test_alembic_revision_graph.py` passed with 13 tests.
 - **Lint:** focused Ruff and `.venv/bin/lint-imports` passed.
 - **Blocker:** real `scripts/data/meal-recommendation-recipes.json` content and rights records are still needed before Phase 3 can be marked complete.
+
+### Phase 4 Domain Completion — 2026-07-16
+
+- **Completed:** pure deterministic calorie allocation, linked-ingredient affinity, recipe scoring, three-day optimization, and five-alternative selection.
+- **Verified:** same inputs return the same 9 current slots and 45 alternatives; sparse catalogs return typed insufficiency; learned popularity, Redis, AI, DB, and API imports are absent from the domain services.
+- **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/domain/services/meal_recommendation/ tests/unit/infra/repositories/test_catalog_recipe_repository_async.py` passed with 32 tests.
+- **Lint/type:** focused Ruff, targeted mypy, and `.venv/bin/lint-imports` passed.
 
 ### Session 1 — 2026-07-16
 
