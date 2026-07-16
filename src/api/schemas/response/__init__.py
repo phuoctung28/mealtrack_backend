@@ -3,6 +3,10 @@ Response DTOs for API endpoints.
 """
 
 # Daily nutrition responses
+from .body_fat_visual_responses import (
+    BodyFatVisualProfileResponse,
+    BodyFatVisualSelectionResponse,
+)
 from .daily_nutrition_response import (
     DailyNutritionResponse,
 )
@@ -113,6 +117,8 @@ __all__ = [
     "UserStatusResponse",
     "UserUpdateResponse",
     "UserMetricsResponse",
+    "BodyFatVisualProfileResponse",
+    "BodyFatVisualSelectionResponse",
     # Ingredient recognition
     "IngredientRecognitionResponse",
     "IngredientCategoryEnum",

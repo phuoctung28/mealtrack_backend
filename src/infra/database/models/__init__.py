@@ -55,6 +55,7 @@ from .saved_suggestion import SavedSuggestionModel
 from .saved_suggestion_item import SavedSuggestionItemModel
 from .saved_suggestion_step import SavedSuggestionStepModel
 from .subscription import Subscription
+from .user.body_fat_visual_profile import BodyFatVisualProfile
 from .user.profile import UserProfile
 from .user.profile_preference import UserProfilePreference
 
@@ -68,10 +69,9 @@ from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 BarcodeProductModel = FoodReferenceModel
 
 # AI Handshake guest trial quota
-from .ai_handshake_guest_trial_quota import AiHandshakeGuestTrialQuota
-
 # Affiliate outbox
 from .affiliate_event_outbox import AffiliateEventOutbox
+from .ai_handshake_guest_trial_quota import AiHandshakeGuestTrialQuota
 
 # Referral system
 # Email log
@@ -105,6 +105,7 @@ __all__ = [
     # User models
     "User",
     "UserProfile",
+    "BodyFatVisualProfile",
     "UserProfilePreference",
     "Subscription",
     # Nutrition models

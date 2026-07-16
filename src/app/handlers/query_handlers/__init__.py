@@ -4,6 +4,9 @@ Each handler is in its own file for better maintainability.
 """
 
 # Activity handlers
+from .get_body_fat_visual_profile_query_handler import (
+    GetBodyFatVisualProfileQueryHandler,
+)
 from .get_bulk_activities_query_handler import GetBulkActivitiesQueryHandler
 from .get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
 from .get_daily_breakdown_query_handler import GetDailyBreakdownQueryHandler
@@ -59,6 +62,7 @@ __all__ = [
     "GetDailyMacrosQueryHandler",
     # User
     "GetUserProfileQueryHandler",
+    "GetBodyFatVisualProfileQueryHandler",
     "GetUserByFirebaseUidQueryHandler",
     "GetUserOnboardingStatusQueryHandler",
     "GetUserMetricsQueryHandler",
