@@ -41,6 +41,15 @@ from .meal.meal_instruction_step import MealInstructionStepORM
 # Translation models (meals + food items)
 from .meal.meal_translation_model import MealTranslationORM
 from .meal_image_cache import MealImageCacheModel
+from .meal_recommendation import (
+    CatalogRecipeIngredientORM,
+    CatalogRecipeMealTypeORM,
+    CatalogRecipeORM,
+    CatalogRecipeRightsRecordORM,
+    CatalogRecipeSourceORM,
+    CatalogRecipeVersionORM,
+    CatalogReleaseORM,
+)
 
 # Notification models
 from .notification import NotificationORM, NotificationPreferencesORM, UserFcmTokenORM
@@ -68,10 +77,9 @@ from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 BarcodeProductModel = FoodReferenceModel
 
 # AI Handshake guest trial quota
-from .ai_handshake_guest_trial_quota import AiHandshakeGuestTrialQuota
-
 # Affiliate outbox
 from .affiliate_event_outbox import AffiliateEventOutbox
+from .ai_handshake_guest_trial_quota import AiHandshakeGuestTrialQuota
 
 # Referral system
 # Email log
@@ -138,6 +146,14 @@ __all__ = [
     "BarcodeProductModel",  # backward-compatible alias
     "HydrationEntryORM",
     "MealImageCacheModel",
+    # Meal recommendation catalog
+    "CatalogReleaseORM",
+    "CatalogRecipeORM",
+    "CatalogRecipeVersionORM",
+    "CatalogRecipeMealTypeORM",
+    "CatalogRecipeIngredientORM",
+    "CatalogRecipeSourceORM",
+    "CatalogRecipeRightsRecordORM",
     "PendingMealImageResolutionModel",
     # Referral system
     "ReferralCode",

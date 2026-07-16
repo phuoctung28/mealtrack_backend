@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Immutable Curated Recipe Catalog"
-status: pending
+status: in_progress
 priority: P1
 effort: "7-10d"
 dependencies: [2]
@@ -41,8 +41,8 @@ Tables: `catalog_releases`, `catalog_recipes`, `catalog_recipe_versions`, `catal
 - Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/infra/repositories/catalog_recipe_repository_async.py`
 - Modify: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/infra/database/models/__init__.py`
 - Modify: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/infra/database/uow_async.py`
-- Replace/repair: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/scripts/import_food_seeds.py`
-- Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/scripts/data/meal-recommendation-recipes.json`
+- Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/scripts/import_catalog_recipe_seeds.py`
+- Pending content handoff: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/scripts/data/meal-recommendation-recipes.json`
 
 ## Implementation Steps
 
@@ -56,15 +56,25 @@ Tables: `catalog_releases`, `catalog_recipes`, `catalog_recipe_versions`, `catal
 
 ## Todo
 
-- [ ] Migration head remains single.
-- [ ] Published versions are immutable and reproducible.
+- [x] Migration head remains single.
+- [x] Published versions are immutable and reproducible.
 - [ ] Partial imports are invisible; prior release remains active on any failure.
-- [ ] Catalog seed and rights checks pass.
+- [x] Catalog seed and rights checks pass for schema/sample validation.
 
 ## Success Criteria
 
 - [ ] Catalog release gate produces 9-slot-capable eligible pools and five-alternative capacity.
-- [ ] Migration, repository integration, import dry-run, and architecture tests pass.
+- [x] Migration, repository integration, import dry-run, and architecture tests pass.
+
+## Implementation Log
+
+### 2026-07-16
+
+- Added PostgreSQL catalog release, recipe, immutable version, meal-type, ingredient, source, and rights-record tables with checks, indexes, single active-release enforcement, and published-version mutation triggers.
+- Added catalog recipe domain projections, repository port, async repository, ORM models, and UoW registration for active published recipe projections.
+- Added catalog seed manifest validator and dry-run CLI. Production defaults require 180 recipes and minimum cuisine/meal-type coverage; sample fixture thresholds pass only when explicitly requested.
+- Verified focused Phase 3 tests, Alembic single-head graph, Ruff, and import-linter.
+- Blocker: the real commissioned 180-recipe corpus and production DB import/activation path are not present in the repo, so final release activation remains pending.
 
 ## Risk Assessment
 
@@ -76,8 +86,8 @@ Allowlisted source/image URLs; provenance and hosting permission required; seed 
 
 ## Next Steps
 
-- Phase 4 consumes published immutable projections only.
+- Finish production import/activation after the commissioned 180-recipe corpus and rights records are available. Phase 4 may build deterministic ranking against the active published projection contract, but real 9-slot capacity remains blocked until content lands.
 
 ## Unresolved Questions
 
-None. MVP uses reviewed seed/import publishing only; no admin UI/API.
+- Where is the approved 180-recipe commissioned corpus and rights manifest that should become `scripts/data/meal-recommendation-recipes.json`?

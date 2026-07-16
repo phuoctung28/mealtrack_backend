@@ -33,7 +33,7 @@ Source precedence: the repository-focused foundation report narrows the proposed
 |-------|------|--------|
 | 1 | [Contract And Regression Lock](./phase-01-contract-and-regression-lock.md) | Complete |
 | 2 | [Canonical Ingredient And Nutrition Foundation](./phase-02-canonical-ingredient-and-nutrition-foundation.md) | Complete |
-| 3 | [Immutable Curated Recipe Catalog](./phase-03-immutable-curated-recipe-catalog.md) | Pending |
+| 3 | [Immutable Curated Recipe Catalog](./phase-03-immutable-curated-recipe-catalog.md) | In Progress |
 | 4 | [Deterministic Recommendation Domain](./phase-04-deterministic-recommendation-domain.md) | Pending |
 | 5 | [Durable Plans CQRS And API](./phase-05-durable-plans-cqrs-and-api.md) | Pending |
 | 6 | [Transactional Swap And Meal Logging](./phase-06-transactional-swap-and-meal-logging.md) | Pending |
@@ -85,6 +85,14 @@ Source precedence: the repository-focused foundation report narrows the proposed
 - **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/domain/services/meal_recommendation/test_ingredient_quantity_conversion_service.py tests/unit/infra/repositories/test_food_reference_projection.py tests/unit/infra/repositories/test_food_reference_repository_async.py tests/unit/domain/services/meal_suggestion/test_parallel_recipe_generator_nutrition.py tests/unit/domain/services/meal_suggestion/test_nutrition_lookup_service.py tests/unit/api/test_meal_suggestion_mapper.py tests/unit/api/test_meal_suggestions_routes.py tests/unit/infra/test_meal_edit_database_models.py tests/unit/api/test_meal_mapper.py tests/unit/domain/test_meal_edit_strategies.py tests/unit/app/handlers/test_meal_suggestion_cqrs_handlers.py` passed with 144 tests.
 - **Lint:** touched-file Ruff, `.venv/bin/lint-imports`, and `git diff --check` passed.
 - **Review:** tester and reviewer agent passes are clean; reviewer-raised fiber plus sugar invariant was fixed and rechecked.
+
+### Phase 3 Schema Slice — 2026-07-16
+
+- **Completed:** catalog release/recipe/version schema, published-version immutability triggers, typed active-release repository projections, UoW registration, and fail-closed seed manifest validation.
+- **Verified:** sample manifest passes only with explicit sample thresholds; production defaults reject the sample because the required 180-recipe commissioned corpus is absent.
+- **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/domain/services/meal_recommendation/test_catalog_recipe_seed_validator.py tests/unit/infra/repositories/test_catalog_recipe_repository_async.py tests/unit/infra/database/test_uow_async.py tests/migrations/test_alembic_revision_graph.py` passed with 13 tests.
+- **Lint:** focused Ruff and `.venv/bin/lint-imports` passed.
+- **Blocker:** real `scripts/data/meal-recommendation-recipes.json` content and rights records are still needed before Phase 3 can be marked complete.
 
 ### Session 1 — 2026-07-16
 

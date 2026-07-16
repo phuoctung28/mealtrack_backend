@@ -11,6 +11,12 @@ from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
 from src.infra.database.config_async import AsyncSessionLocal
+from src.infra.repositories.affiliate_event_outbox_repository import (
+    AffiliateEventOutboxRepository,
+)
+from src.infra.repositories.catalog_recipe_repository_async import (
+    AsyncCatalogRecipeRepository,
+)
 from src.infra.repositories.cheat_day_repository_async import AsyncCheatDayRepository
 from src.infra.repositories.food_reference_repository_async import (
     AsyncFoodReferenceRepository,
@@ -23,9 +29,6 @@ from src.infra.repositories.meal_translation_repository_async import (
 from src.infra.repositories.movement_repository_async import AsyncMovementRepository
 from src.infra.repositories.notification_repository_async import (
     AsyncNotificationRepository,
-)
-from src.infra.repositories.affiliate_event_outbox_repository import (
-    AffiliateEventOutboxRepository,
 )
 from src.infra.repositories.promo_code_repository import PromoCodeRepository
 from src.infra.repositories.referral_repository import ReferralRepository
@@ -118,6 +121,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.weight_entries = AsyncWeightRepository(session)
         self.movement_entries = AsyncMovementRepository(session)
         self.food_references = AsyncFoodReferenceRepository(session)
+        self.catalog_recipes = AsyncCatalogRecipeRepository(session)
         self.meal_translations = AsyncMealTranslationRepository(session)
         self.promo_codes = PromoCodeRepository(session)
         self.referrals = ReferralRepository(session)

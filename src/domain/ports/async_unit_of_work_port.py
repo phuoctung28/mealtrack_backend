@@ -37,6 +37,7 @@ class AsyncUnitOfWorkPort(ABC):
     weight_entries: Any
     movement_entries: Any
     food_references: Any
+    catalog_recipes: Any
     meal_translations: Any
     promo_codes: Any
     referrals: Any
