@@ -6,10 +6,10 @@ from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_asyn
     _plan,
 )
 
+from src.api.routes.v1.meal_recommendation_route_support import to_response
 from src.api.routes.v1.meal_recommendations import (
     LogRecommendedMealRequest,
     SwapMealRecommendationSlotRequest,
-    _to_response,
     create_three_day_recommendations,
     log_recommended_meal,
     swap_meal_recommendation_slot,
@@ -36,6 +36,24 @@ class _EventBus:
         return _plan()
 
 
+class _EnabledGate:
+    def is_enabled_for_user(self, user_id):
+        return True
+
+
+class _DisabledGate:
+    def is_enabled_for_user(self, user_id):
+        return False
+
+
+class _Analytics:
+    def __init__(self):
+        self.events = []
+
+    async def capture_plan_response(self, *, user_id, event, plan):
+        self.events.append((user_id, event, plan.id))
+
+
 def _request(timezone: str = "Asia/Ho_Chi_Minh") -> Request:
     return Request(
         {
@@ -49,7 +67,7 @@ def _request(timezone: str = "Asia/Ho_Chi_Minh") -> Request:
 
 
 def test_meal_recommendation_response_includes_allergy_not_evaluated_and_slots():
-    response = _to_response(_plan())
+    response = to_response(_plan())
 
     assert response.id == "plan-1"
     assert response.allergy_evaluated is False
@@ -75,21 +93,42 @@ def test_log_request_rejects_blank_request_id_after_trim():
 async def test_create_three_day_recommendations_rejects_blank_idempotency_key():
     with pytest.raises(HTTPException) as exc_info:
         await create_three_day_recommendations(
-            request=_request(), idempotency_key="   ", user_id="user-1"
+            request=_request(),
+            idempotency_key="   ",
+            user_id="user-1",
+            cohort_service=_EnabledGate(),
+            analytics_service=_Analytics(),
         )
 
     assert exc_info.value.status_code == 400
 
 
 @pytest.mark.asyncio
+async def test_create_three_day_recommendations_is_default_off():
+    with pytest.raises(HTTPException) as exc_info:
+        await create_three_day_recommendations(
+            request=_request(),
+            idempotency_key="key-1",
+            user_id="user-1",
+            cohort_service=_DisabledGate(),
+            analytics_service=_Analytics(),
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_create_three_day_recommendations_snapshots_target_and_timezone():
     event_bus = _EventBus()
+    analytics = _Analytics()
 
     response = await create_three_day_recommendations(
         request=_request(),
         idempotency_key=" key-1 ",
         user_id="user-1",
         event_bus=event_bus,
+        cohort_service=_EnabledGate(),
+        analytics_service=analytics,
     )
 
     command = next(
@@ -101,6 +140,10 @@ async def test_create_three_day_recommendations_snapshots_target_and_timezone():
     assert command.idempotency_key == "key-1"
     assert command.timezone == "Asia/Ho_Chi_Minh"
     assert command.daily_calories == 2150
+    assert [item[1] for item in analytics.events] == [
+        "plan_shown",
+        "alternatives_shown",
+    ]
 
 
 @pytest.mark.asyncio
@@ -117,6 +160,8 @@ async def test_swap_route_sends_expected_version_command():
         ),
         user_id="user-1",
         event_bus=event_bus,
+        cohort_service=_EnabledGate(),
+        analytics_service=_Analytics(),
     )
 
     command = next(
@@ -138,6 +183,8 @@ async def test_log_route_sends_recommended_meal_command():
         body=LogRecommendedMealRequest(request_id="log-1"),
         user_id="user-1",
         event_bus=event_bus,
+        cohort_service=_EnabledGate(),
+        analytics_service=_Analytics(),
     )
 
     command = next(

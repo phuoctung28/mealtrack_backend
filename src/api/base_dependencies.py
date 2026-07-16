@@ -1,7 +1,15 @@
 import logging
 import os
+from importlib import import_module
 from typing import TYPE_CHECKING, Optional
+from uuid import UUID
 
+from src.app.services.meal_recommendation_analytics_service import (
+    MealRecommendationAnalyticsService,
+)
+from src.app.services.meal_recommendation_cohort_service import (
+    MealRecommendationCohortService,
+)
 from src.domain.parsers.vision_response_parser import VisionResponseParser
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
@@ -199,6 +207,25 @@ def get_meal_analyze_graph_settings():
     }
 
 
+def get_meal_recommendation_cohort_service() -> MealRecommendationCohortService:
+    """Return the server-side rollout gate for catalog recommendations."""
+    return MealRecommendationCohortService(
+        enabled=settings.MEAL_RECOMMENDATIONS_ENABLED,
+        internal_user_ids=settings.MEAL_RECOMMENDATIONS_INTERNAL_USER_IDS,
+        cohort_percent=settings.MEAL_RECOMMENDATIONS_COHORT_PERCENT,
+        cohort_salt=settings.MEAL_RECOMMENDATIONS_COHORT_SALT,
+    )
+
+
+def get_meal_recommendation_analytics_service() -> MealRecommendationAnalyticsService:
+    """Return privacy-safe recommendation analytics."""
+    posthog_module = import_module("src.infra.adapters.posthog_adapter")
+    return MealRecommendationAnalyticsService(
+        salt=settings.MEAL_RECOMMENDATIONS_ANALYTICS_SALT,
+        adapter=posthog_module.PostHogAdapter(),
+    )
+
+
 # Food Reference Repository (replaces barcode_product_repository)
 _async_food_reference_repository = None
 
@@ -319,7 +346,7 @@ def get_suggestion_orchestration_service():
 
     async def profile_provider(user_id: str):
         async with AsyncUnitOfWork() as uow:
-            return await uow.users.get_profile(user_id)
+            return await uow.users.get_profile(UUID(user_id))
 
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,

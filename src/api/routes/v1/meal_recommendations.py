@@ -3,18 +3,27 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from time import perf_counter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from pydantic import BaseModel, Field, field_validator
 
+from src.api.base_dependencies import (
+    get_meal_recommendation_analytics_service,
+    get_meal_recommendation_cohort_service,
+)
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.middleware.rate_limit import limiter
+from src.api.routes.v1.meal_recommendation_route_support import (
+    LogRecommendedMealRequest,
+    SwapMealRecommendationSlotRequest,
+    capture_plan_events,
+    ensure_recommendations_enabled,
+    record_operation_latency,
+    to_response,
+)
 from src.api.schemas.response.meal_recommendation_responses import (
-    MealRecommendationAlternativeResponse,
     MealRecommendationPlanResponse,
-    MealRecommendationSlotResponse,
 )
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
@@ -24,40 +33,18 @@ from src.app.commands.meal_recommendation import (
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.app.queries.meal_recommendation import GetMealRecommendationPlanQuery
 from src.app.queries.user import GetUserTimezoneQuery
+from src.app.services.meal_recommendation_analytics_service import (
+    MealRecommendationAnalyticsService,
+)
+from src.app.services.meal_recommendation_cohort_service import (
+    MealRecommendationCohortService,
+)
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationCreationError,
 )
-from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
 from src.domain.utils.timezone_utils import get_zone_info
 
 router = APIRouter(prefix="/v1/meal-recommendations", tags=["Meal Recommendations"])
-
-
-class SwapMealRecommendationSlotRequest(BaseModel):
-    request_id: str = Field(..., min_length=1, max_length=160)
-    expected_version: int = Field(..., ge=1)
-    alternative_recipe_version_id: str | None = None
-    reason: Literal["user_requested", "alternative_selected"] = "user_requested"
-
-    @field_validator("request_id")
-    @classmethod
-    def normalize_request_id(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("request_id is required")
-        return normalized
-
-
-class LogRecommendedMealRequest(BaseModel):
-    request_id: str = Field(..., min_length=1, max_length=160)
-
-    @field_validator("request_id")
-    @classmethod
-    def normalize_request_id(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("request_id is required")
-        return normalized
 
 
 @router.post("/three-day", response_model=MealRecommendationPlanResponse)
@@ -67,56 +54,79 @@ async def create_three_day_recommendations(
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
+    cohort_service: MealRecommendationCohortService = Depends(
+        get_meal_recommendation_cohort_service
+    ),
+    analytics_service: MealRecommendationAnalyticsService = Depends(
+        get_meal_recommendation_analytics_service
+    ),
 ) -> MealRecommendationPlanResponse:
     """Create or replay a durable three-day catalog recommendation plan."""
 
+    started = perf_counter()
+    metric_status = "error"
+    ensure_recommendations_enabled(user_id, cohort_service, operation="create")
     normalized_idempotency_key = idempotency_key.strip()
-    if not normalized_idempotency_key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Idempotency-Key is required",
-        )
-    if len(normalized_idempotency_key) > 160:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Idempotency-Key must be 160 characters or fewer",
-        )
-    header_timezone = request.headers.get("X-Timezone")
-    timezone = get_zone_info(
-        await event_bus.send(
-            GetUserTimezoneQuery(user_id=user_id, header_timezone=header_timezone)
-        )
-    ).key
-    start_date = datetime.now(get_zone_info(timezone)).date()
-    weekly_budget = await event_bus.send(
-        GetWeeklyBudgetQuery(
-            user_id=user_id,
-            target_date=start_date,
-            header_timezone=timezone,
-        )
-    )
-    daily_calories = int(round(weekly_budget.get("adjusted_daily_calories") or 0))
-    if daily_calories <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Meal recommendation target is unavailable",
-        )
     try:
-        plan = await event_bus.send(
-            CreateThreeDayMealRecommendationCommand(
+        if not normalized_idempotency_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Idempotency-Key is required",
+            )
+        if len(normalized_idempotency_key) > 160:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Idempotency-Key must be 160 characters or fewer",
+            )
+        header_timezone = request.headers.get("X-Timezone")
+        timezone = get_zone_info(
+            await event_bus.send(
+                GetUserTimezoneQuery(user_id=user_id, header_timezone=header_timezone)
+            )
+        ).key
+        start_date = datetime.now(get_zone_info(timezone)).date()
+        weekly_budget = await event_bus.send(
+            GetWeeklyBudgetQuery(
                 user_id=user_id,
-                idempotency_key=normalized_idempotency_key,
-                start_date=start_date,
-                timezone=timezone,
-                daily_calories=daily_calories,
+                target_date=start_date,
+                header_timezone=timezone,
             )
         )
-    except MealRecommendationCreationError as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=exc.public_detail,
-        ) from exc
-    return _to_response(plan)
+        daily_calories = int(round(weekly_budget.get("adjusted_daily_calories") or 0))
+        if daily_calories <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Meal recommendation target is unavailable",
+            )
+        try:
+            plan = await event_bus.send(
+                CreateThreeDayMealRecommendationCommand(
+                    user_id=user_id,
+                    idempotency_key=normalized_idempotency_key,
+                    start_date=start_date,
+                    timezone=timezone,
+                    daily_calories=daily_calories,
+                )
+            )
+        except MealRecommendationCreationError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=exc.public_detail,
+            ) from exc
+        response = to_response(plan)
+        await capture_plan_events(
+            analytics_service,
+            user_id=user_id,
+            plan=plan,
+            events=("plan_shown", "alternatives_shown"),
+        )
+        metric_status = "success"
+        return response
+    except HTTPException as exc:
+        metric_status = f"http_{exc.status_code}"
+        raise
+    finally:
+        record_operation_latency("create", started, metric_status)
 
 
 @router.post("/{plan_id}/slots/{slot_id}/swap", response_model=MealRecommendationPlanResponse)
@@ -126,7 +136,16 @@ async def swap_meal_recommendation_slot(
     body: SwapMealRecommendationSlotRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
+    cohort_service: MealRecommendationCohortService = Depends(
+        get_meal_recommendation_cohort_service
+    ),
+    analytics_service: MealRecommendationAnalyticsService = Depends(
+        get_meal_recommendation_analytics_service
+    ),
 ) -> MealRecommendationPlanResponse:
+    started = perf_counter()
+    metric_status = "error"
+    ensure_recommendations_enabled(user_id, cohort_service, operation="swap")
     try:
         plan = await event_bus.send(
             SwapMealRecommendationSlotCommand(
@@ -140,8 +159,18 @@ async def swap_meal_recommendation_slot(
             )
         )
     except MealRecommendationCreationError as exc:
+        metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    return _to_response(plan)
+    response = to_response(plan)
+    await capture_plan_events(
+        analytics_service,
+        user_id=user_id,
+        plan=plan,
+        events=("swap_selected",),
+    )
+    metric_status = "success"
+    record_operation_latency("swap", started, metric_status)
+    return response
 
 
 @router.post("/{plan_id}/slots/{slot_id}/log", response_model=MealRecommendationPlanResponse)
@@ -151,7 +180,16 @@ async def log_recommended_meal(
     body: LogRecommendedMealRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
+    cohort_service: MealRecommendationCohortService = Depends(
+        get_meal_recommendation_cohort_service
+    ),
+    analytics_service: MealRecommendationAnalyticsService = Depends(
+        get_meal_recommendation_analytics_service
+    ),
 ) -> MealRecommendationPlanResponse:
+    started = perf_counter()
+    metric_status = "error"
+    ensure_recommendations_enabled(user_id, cohort_service, operation="log")
     try:
         plan = await event_bus.send(
             LogRecommendedMealCommand(
@@ -162,8 +200,18 @@ async def log_recommended_meal(
             )
         )
     except MealRecommendationCreationError as exc:
+        metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    return _to_response(plan)
+    response = to_response(plan)
+    await capture_plan_events(
+        analytics_service,
+        user_id=user_id,
+        plan=plan,
+        events=("meal_logged",),
+    )
+    metric_status = "success"
+    record_operation_latency("log", started, metric_status)
+    return response
 
 
 @router.get("/{plan_id}", response_model=MealRecommendationPlanResponse)
@@ -171,52 +219,28 @@ async def get_meal_recommendation_plan(
     plan_id: str,
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
+    analytics_service: MealRecommendationAnalyticsService = Depends(
+        get_meal_recommendation_analytics_service
+    ),
 ) -> MealRecommendationPlanResponse:
     """Read an owner-scoped durable recommendation plan."""
 
+    started = perf_counter()
+    metric_status = "error"
     plan = await event_bus.send(
         GetMealRecommendationPlanQuery(user_id=user_id, plan_id=plan_id)
     )
     if plan is None:
+        metric_status = "http_404"
+        record_operation_latency("read", started, metric_status)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    return _to_response(plan)
-
-
-def _to_response(
-    plan: PersistedMealRecommendationPlan,
-) -> MealRecommendationPlanResponse:
-    return MealRecommendationPlanResponse(
-        id=plan.id,
-        status=plan.status,
-        timezone=plan.timezone,
-        start_date=plan.start_date,
-        daily_calories=plan.daily_calories,
-        algorithm_version=plan.algorithm_version,
-        catalog_release_id=plan.catalog_release_id,
-        allergy_evaluated=plan.allergy_evaluated,
-        slots=[
-            MealRecommendationSlotResponse(
-                id=slot.id,
-                slot_date=slot.slot_date,
-                day_index=slot.day_index,
-                meal_type=slot.meal_type,
-                recipe_version_id=slot.recipe_version_id,
-                target_calories=slot.target_calories,
-                score=slot.score,
-                position=slot.position,
-                version=slot.version,
-                logged_meal_id=slot.logged_meal_id,
-                alternatives=[
-                    MealRecommendationAlternativeResponse(
-                        id=alternative.id,
-                        recipe_version_id=alternative.recipe_version_id,
-                        target_calories=alternative.target_calories,
-                        score=alternative.score,
-                        position=alternative.position,
-                    )
-                    for alternative in slot.alternatives
-                ],
-            )
-            for slot in plan.slots
-        ],
+    response = to_response(plan)
+    await capture_plan_events(
+        analytics_service,
+        user_id=user_id,
+        plan=plan,
+        events=("plan_shown", "alternatives_shown"),
     )
+    metric_status = "success"
+    record_operation_latency("read", started, metric_status)
+    return response

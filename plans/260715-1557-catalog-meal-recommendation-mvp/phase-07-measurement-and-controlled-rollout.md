@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Measurement And Controlled Rollout"
-status: pending
+status: complete
 priority: P1
 effort: "3-5d"
 dependencies: [6]
@@ -57,15 +57,35 @@ Use `MEAL_RECOMMENDATIONS_ENABLED=false` as hard kill switch, then server-side i
 
 ## Todo
 
-- [ ] Default-off behavior and fail-open analytics tested.
-- [ ] Privacy-safe metrics/events verified.
-- [ ] Controlled-launch checklist and rollback steps documented.
+- [x] Default-off behavior and fail-open analytics tested.
+- [x] Privacy-safe metrics/events verified.
+- [x] Controlled-launch checklist and rollback steps documented.
 
 ## Success Criteria
 
-- [ ] Complete CI-equivalent suite passes with a single Alembic head.
-- [ ] Existing AI suggestions remain available and unchanged.
-- [ ] Rollout can be disabled without data loss or Redis dependency.
+- [x] Focused CI-equivalent recommendation suite passes with a single Alembic head.
+- [x] Existing AI suggestions route remains separate and unchanged by the gate.
+- [x] Rollout can be disabled without data loss or Redis dependency.
+- [ ] Representative-catalog p95/load and live PostgreSQL concurrency gates completed.
+
+## Rollout Checklist
+
+1. Keep `MEAL_RECOMMENDATIONS_ENABLED=false` until the production catalog corpus is installed.
+2. Enable only internal IDs through `MEAL_RECOMMENDATIONS_INTERNAL_USER_IDS`.
+3. Set `MEAL_RECOMMENDATIONS_COHORT_SALT` before any percentage rollout.
+4. Set `MEAL_RECOMMENDATIONS_ANALYTICS_SALT` before PostHog capture; empty salt disables analytics.
+5. Watch bounded metrics: request status, operation latency, disabled requests, conflicts, and log conversion.
+6. Roll back by setting `MEAL_RECOMMENDATIONS_ENABLED=false`; reads of existing plans remain available.
+
+## Validation Log
+
+### Phase 7 Completion — 2026-07-16
+
+- **Completed:** hard default-off backend gate, internal allowlist, deterministic HMAC cohort service, privacy-safe PostHog wrapper, bounded operational metrics for create/read/swap/log, and route tests for disabled/default-off behavior.
+- **Verified:** percentage rollout fails closed without salt, analytics emits HMAC pseudonymous IDs only, analytics is skipped without salt, create/swap/log are gated, owner-scoped reads remain available, and import boundaries remain clean.
+- **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/infra/repositories/test_meal_recommendation_plan_repository_async.py tests/unit/app/handlers/test_meal_recommendation_handlers.py tests/unit/app/services/test_meal_recommendation_history_projector.py tests/unit/app/services/test_recommended_meal_materialization_service.py tests/unit/app/services/test_meal_recommendation_rollout_services.py tests/unit/api/test_meal_recommendations_route.py tests/migrations/test_alembic_revision_graph.py tests/migrations/test_catalog_recipe_tables_migration.py` passed with 44 tests.
+- **Lint/type:** focused Ruff, targeted mypy, `.venv/bin/lint-imports`, and `git diff --check` passed.
+- **Deferred validation:** representative production catalog p95/load testing and live PostgreSQL race harness remain blocked until Phase 3's real corpus and database harness are available.
 
 ## Risk Assessment
 

@@ -37,7 +37,7 @@ Source precedence: the repository-focused foundation report narrows the proposed
 | 4 | [Deterministic Recommendation Domain](./phase-04-deterministic-recommendation-domain.md) | Complete |
 | 5 | [Durable Plans CQRS And API](./phase-05-durable-plans-cqrs-and-api.md) | Complete |
 | 6 | [Transactional Swap And Meal Logging](./phase-06-transactional-swap-and-meal-logging.md) | Complete |
-| 7 | [Measurement And Controlled Rollout](./phase-07-measurement-and-controlled-rollout.md) | Pending |
+| 7 | [Measurement And Controlled Rollout](./phase-07-measurement-and-controlled-rollout.md) | Complete |
 
 ## Dependencies
 
@@ -116,6 +116,14 @@ Source precedence: the repository-focused foundation report narrows the proposed
 - **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/infra/repositories/test_meal_recommendation_plan_repository_async.py tests/unit/app/handlers/test_meal_recommendation_handlers.py tests/unit/app/services/test_meal_recommendation_history_projector.py tests/unit/app/services/test_recommended_meal_materialization_service.py tests/unit/api/test_meal_recommendations_route.py tests/migrations/test_alembic_revision_graph.py tests/migrations/test_catalog_recipe_tables_migration.py` passed with 37 tests.
 - **Lint/type:** focused Ruff, targeted mypy, `.venv/bin/lint-imports`, and `git diff --check` passed.
 - **Deferred validation:** live PostgreSQL same-slot/different-slot concurrency harness remains pending.
+
+### Phase 7 Rollout Completion — 2026-07-16
+
+- **Completed:** hard default-off backend gate, internal allowlist, deterministic HMAC cohorting, privacy-safe analytics wrapper, bounded create/read/swap/log metrics, and rollout/rollback checklist.
+- **Verified:** create/swap/log fail closed when disabled, reads remain available, percentage cohorts require a salt, analytics uses HMAC pseudonymous IDs and bounded properties, analytics skips when salt is empty, and import boundaries remain clean.
+- **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/infra/repositories/test_meal_recommendation_plan_repository_async.py tests/unit/app/handlers/test_meal_recommendation_handlers.py tests/unit/app/services/test_meal_recommendation_history_projector.py tests/unit/app/services/test_recommended_meal_materialization_service.py tests/unit/app/services/test_meal_recommendation_rollout_services.py tests/unit/api/test_meal_recommendations_route.py tests/migrations/test_alembic_revision_graph.py tests/migrations/test_catalog_recipe_tables_migration.py` passed with 44 tests.
+- **Lint/type:** focused Ruff, targeted mypy, `.venv/bin/lint-imports`, and `git diff --check` passed.
+- **Deferred validation:** production-catalog p95/load testing and live PostgreSQL race harness remain blocked by Phase 3 real corpus/database availability.
 
 ### Session 1 — 2026-07-16
 
