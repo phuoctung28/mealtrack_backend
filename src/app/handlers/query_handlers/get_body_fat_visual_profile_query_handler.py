@@ -2,14 +2,12 @@
 
 from typing import Any
 
-from sqlalchemy import select
-
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_body_fat_visual_profile_query import (
     GetBodyFatVisualProfileQuery,
 )
-from src.infra.database.models.user.body_fat_visual_profile import BodyFatVisualProfile
-from src.infra.database.uow_async import AsyncUnitOfWork
+from src.domain.model.user.body_fat_visual import BodyFatVisualProfileSelection
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 
 
 @handles(GetBodyFatVisualProfileQuery)
@@ -18,19 +16,19 @@ class GetBodyFatVisualProfileQueryHandler(
 ):
     """Return immutable selection history when a selection exists."""
 
+    def __init__(self, uow: AsyncUnitOfWorkPort):
+        self.uow = uow
+
     async def handle(
         self, query: GetBodyFatVisualProfileQuery
     ) -> dict[str, Any] | None:
-        async with AsyncUnitOfWork() as uow:
-            result = await uow.session.execute(
-                select(BodyFatVisualProfile)
-                .where(BodyFatVisualProfile.user_id == query.user_id)
-                .order_by(
-                    BodyFatVisualProfile.updated_at.asc(),
-                    BodyFatVisualProfile.id.asc(),
+        async with self.uow as uow:
+            history = [
+                self._serialize(record)
+                for record in await uow.body_fat_visual_profiles.find_history_by_user(
+                    query.user_id
                 )
-            )
-            history = [self._serialize(record) for record in result.scalars().all()]
+            ]
 
         if not history:
             return None
@@ -47,7 +45,7 @@ class GetBodyFatVisualProfileQueryHandler(
         }
 
     @staticmethod
-    def _serialize(record: BodyFatVisualProfile) -> dict[str, Any]:
+    def _serialize(record: BodyFatVisualProfileSelection) -> dict[str, Any]:
         return {
             "schema_version": record.schema_version,
             "range_catalog_version": record.range_catalog_version,

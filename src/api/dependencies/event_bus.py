@@ -503,7 +503,8 @@ def get_configured_event_bus() -> EventBus:
         SaveUserOnboardingCommandHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
-        SaveBodyFatVisualProfileCommand, SaveBodyFatVisualProfileCommandHandler()
+        SaveBodyFatVisualProfileCommand,
+        SaveBodyFatVisualProfileCommandHandler(uow=AsyncUnitOfWork()),
     )
     event_bus.register_handler(SyncUserCommand, SyncUserCommandHandler())
     event_bus.register_handler(
@@ -540,7 +541,8 @@ def get_configured_event_bus() -> EventBus:
         GetUserProfileQueryHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
-        GetBodyFatVisualProfileQuery, GetBodyFatVisualProfileQueryHandler()
+        GetBodyFatVisualProfileQuery,
+        GetBodyFatVisualProfileQueryHandler(uow=AsyncUnitOfWork()),
     )
     event_bus.register_handler(
         GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler()

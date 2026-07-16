@@ -4,8 +4,8 @@ from src.app.commands.user.save_body_fat_visual_profile_command import (
     SaveBodyFatVisualProfileCommand,
 )
 from src.app.events.base import EventHandler, handles
-from src.infra.database.models.user.body_fat_visual_profile import BodyFatVisualProfile
-from src.infra.database.uow_async import AsyncUnitOfWork
+from src.domain.model.user.body_fat_visual import BodyFatVisualProfileSelection
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 
 
 @handles(SaveBodyFatVisualProfileCommand)
@@ -14,10 +14,13 @@ class SaveBodyFatVisualProfileCommandHandler(
 ):
     """Persist each selection as a new record to preserve selection history."""
 
+    def __init__(self, uow: AsyncUnitOfWorkPort):
+        self.uow = uow
+
     async def handle(self, command: SaveBodyFatVisualProfileCommand) -> None:
-        async with AsyncUnitOfWork() as uow:
-            uow.session.add(
-                BodyFatVisualProfile(
+        async with self.uow as uow:
+            await uow.body_fat_visual_profiles.append(
+                BodyFatVisualProfileSelection(
                     user_id=command.user_id,
                     schema_version=command.schema_version,
                     range_catalog_version=command.range_catalog_version,

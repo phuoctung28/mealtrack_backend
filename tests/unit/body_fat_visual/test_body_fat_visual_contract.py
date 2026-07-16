@@ -1,7 +1,7 @@
 """Focused contract tests for durable visual body-fat profile selections."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -24,6 +24,7 @@ from src.app.handlers.query_handlers.get_body_fat_visual_profile_query_handler i
 from src.app.queries.user.get_body_fat_visual_profile_query import (
     GetBodyFatVisualProfileQuery,
 )
+from src.domain.model.user.body_fat_visual import BodyFatVisualProfileSelection
 from src.infra.database.models.user.body_fat_visual_profile import BodyFatVisualProfile
 
 
@@ -103,20 +104,15 @@ async def test_get_returns_404_when_no_selection_exists():
 @pytest.mark.asyncio
 async def test_save_handler_appends_separate_visual_record_only():
     command = SaveBodyFatVisualProfileCommand(user_id="user-1", **valid_payload())
-    session = MagicMock()
     uow = MagicMock()
-    uow.session = session
+    uow.body_fat_visual_profiles.append = AsyncMock()
     uow.__aenter__ = AsyncMock(return_value=uow)
     uow.__aexit__ = AsyncMock(return_value=None)
 
-    with patch(
-        "src.app.handlers.command_handlers.save_body_fat_visual_profile_command_handler.AsyncUnitOfWork",
-        return_value=uow,
-    ):
-        await SaveBodyFatVisualProfileCommandHandler().handle(command)
+    await SaveBodyFatVisualProfileCommandHandler(uow=uow).handle(command)
 
-    record = session.add.call_args.args[0]
-    assert isinstance(record, BodyFatVisualProfile)
+    record = uow.body_fat_visual_profiles.append.await_args.args[0]
+    assert isinstance(record, BodyFatVisualProfileSelection)
     assert record.user_id == "user-1"
     assert record.current_range_id == "male_17_20"
 

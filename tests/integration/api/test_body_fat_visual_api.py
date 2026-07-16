@@ -11,6 +11,9 @@ from src.api.main import app
 from src.infra.database.models.user.body_fat_visual_profile import BodyFatVisualProfile
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
+from src.infra.repositories.body_fat_visual_profile_repository_async import (
+    AsyncBodyFatVisualProfileRepository,
+)
 
 
 class _AsyncSessionAdapter:
@@ -28,6 +31,9 @@ class _SQLiteAsyncUnitOfWork:
     def __init__(self, session):
         self.session = _AsyncSessionAdapter(session)
         self._test_session = session
+        self.body_fat_visual_profiles = AsyncBodyFatVisualProfileRepository(
+            self.session
+        )
 
     async def __aenter__(self):
         return self
@@ -89,9 +95,8 @@ def real_handler_client(
     api_client, test_session, two_authenticated_users, monkeypatch
 ) -> Generator[tuple[TestClient, dict[str, str]]]:
     import src.api.base_dependencies as base_dependencies_module
-    import src.app.handlers.command_handlers.save_body_fat_visual_profile_command_handler as save_handler_module
-    import src.app.handlers.query_handlers.get_body_fat_visual_profile_query_handler as get_handler_module
     import src.app.handlers.query_handlers.get_user_tdee_query_handler as tdee_handler_module
+    import src.infra.database.uow_async as uow_module
 
     user_one, user_two = two_authenticated_users
     active_user = {"id": user_one.id}
@@ -99,8 +104,7 @@ def real_handler_client(
     def sqlite_uow():
         return _SQLiteAsyncUnitOfWork(test_session)
 
-    monkeypatch.setattr(save_handler_module, "AsyncUnitOfWork", sqlite_uow)
-    monkeypatch.setattr(get_handler_module, "AsyncUnitOfWork", sqlite_uow)
+    monkeypatch.setattr(uow_module, "AsyncUnitOfWork", sqlite_uow)
     monkeypatch.setattr(tdee_handler_module, "AsyncUnitOfWork", sqlite_uow)
     monkeypatch.setattr(
         base_dependencies_module, "get_fat_secret_service_instance", lambda: object()
