@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Durable Plans CQRS And API"
-status: pending
+status: complete
 priority: P1
 effort: "7-10d"
 dependencies: [4]
@@ -39,8 +39,7 @@ Tables: `meal_recommendation_plans`, `meal_recommendation_slots`, `meal_recommen
 - Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/domain/ports/meal_recommendation_plan_repository_port.py`
 - Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/app/commands/meal_recommendation/create_three_day_meal_recommendation_command.py`
 - Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/app/queries/meal_recommendation/get_meal_recommendation_plan_query.py`
-- Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/app/services/meal_recommendation_target_resolver.py`
-- Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/domain/ports/meal_recommendation_history_repository_port.py`
+- Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/app/services/meal_recommendation_history_projector.py`
 - Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/api/routes/v1/meal_recommendations.py`
 - Create: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/api/schemas/response/meal_recommendation_responses.py`
 - Modify: `/Users/alexnguyen/Desktop/Nut/mealtrack_backend/src/api/dependencies/event_bus.py`
@@ -59,14 +58,16 @@ Tables: `meal_recommendation_plans`, `meal_recommendation_slots`, `meal_recommen
 
 ## Todo
 
-- [ ] Migration and aggregate constraints pass.
-- [ ] Create/read wiring is production-registered.
-- [ ] Idempotency and ownership tests pass.
+- [x] Migration and aggregate constraints pass.
+- [x] Create/read wiring is production-registered.
+- [x] Idempotency and ownership tests pass.
 
 ## Success Criteria
 
-- [ ] Exactly one complete aggregate persists per successful request.
+- [x] Exactly one complete aggregate persists per successful request.
 - [ ] API p95 target <500 ms is measured with representative seeded data.
+
+Representative-data p95 measurement is deferred until the Phase 3 production catalog corpus exists.
 
 ## Risk Assessment
 

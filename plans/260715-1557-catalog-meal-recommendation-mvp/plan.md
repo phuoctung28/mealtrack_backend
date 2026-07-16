@@ -35,7 +35,7 @@ Source precedence: the repository-focused foundation report narrows the proposed
 | 2 | [Canonical Ingredient And Nutrition Foundation](./phase-02-canonical-ingredient-and-nutrition-foundation.md) | Complete |
 | 3 | [Immutable Curated Recipe Catalog](./phase-03-immutable-curated-recipe-catalog.md) | In Progress |
 | 4 | [Deterministic Recommendation Domain](./phase-04-deterministic-recommendation-domain.md) | Complete |
-| 5 | [Durable Plans CQRS And API](./phase-05-durable-plans-cqrs-and-api.md) | Pending |
+| 5 | [Durable Plans CQRS And API](./phase-05-durable-plans-cqrs-and-api.md) | Complete |
 | 6 | [Transactional Swap And Meal Logging](./phase-06-transactional-swap-and-meal-logging.md) | Pending |
 | 7 | [Measurement And Controlled Rollout](./phase-07-measurement-and-controlled-rollout.md) | Pending |
 
@@ -100,6 +100,14 @@ Source precedence: the repository-focused foundation report narrows the proposed
 - **Verified:** same inputs return the same 9 current slots and 45 alternatives; sparse catalogs return typed insufficiency; learned popularity, Redis, AI, DB, and API imports are absent from the domain services.
 - **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/domain/services/meal_recommendation/ tests/unit/infra/repositories/test_catalog_recipe_repository_async.py` passed with 32 tests.
 - **Lint/type:** focused Ruff, targeted mypy, and `.venv/bin/lint-imports` passed.
+
+### Phase 5 Durable API Completion — 2026-07-16
+
+- **Completed:** durable recommendation plan schema, operation-scoped idempotency, owner-scoped read repository, active-plan superseding, transaction advisory generation lock, conflict replay, weekly-budget-adjusted target snapshot, 90-day linked-ingredient history projection, CQRS handlers, rate-limited API routes, and response mappers.
+- **Verified:** create/read route wiring remains separate from `/v1/meal-suggestions`; active generation is serialized per owner; replay verifies request fingerprint; route exposes stable public errors and `allergy_evaluated=false`.
+- **Tests:** `.venv/bin/python3.13 -m pytest -q tests/unit/infra/repositories/test_meal_recommendation_plan_repository_async.py tests/unit/app/handlers/test_meal_recommendation_handlers.py tests/unit/app/services/test_meal_recommendation_history_projector.py tests/unit/api/test_meal_recommendations_route.py tests/migrations/test_alembic_revision_graph.py tests/migrations/test_catalog_recipe_tables_migration.py` passed with 17 tests.
+- **Lint/type:** focused Ruff, targeted mypy, `.venv/bin/lint-imports`, and `git diff --check` passed.
+- **Deferred measurement:** representative-data API p95 remains blocked until the Phase 3 production catalog corpus exists.
 
 ### Session 1 — 2026-07-16
 

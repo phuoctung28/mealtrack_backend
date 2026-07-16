@@ -1,0 +1,41 @@
+"""Repository port for durable meal recommendation plans."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
+
+
+class MealRecommendationPlanRepositoryPort(ABC):
+    """Persistence contract for owner-scoped recommendation plans."""
+
+    @abstractmethod
+    async def get_by_id(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+    ) -> PersistedMealRecommendationPlan | None:
+        """Return an owner-scoped plan by ID."""
+
+    @abstractmethod
+    async def get_by_idempotency_key(
+        self,
+        *,
+        user_id: str,
+        operation: str,
+        idempotency_key: str,
+    ) -> PersistedMealRecommendationPlan | None:
+        """Return a prior request result for idempotency replay."""
+
+    @abstractmethod
+    async def lock_generation_for_user(self, *, user_id: str) -> None:
+        """Serialize durable recommendation generation for one owner."""
+
+    @abstractmethod
+    async def save_new_active_plan(
+        self,
+        plan: PersistedMealRecommendationPlan,
+    ) -> PersistedMealRecommendationPlan:
+        """Supersede prior active plan and persist a new complete aggregate."""

@@ -22,6 +22,9 @@ from src.infra.repositories.food_reference_repository_async import (
     AsyncFoodReferenceRepository,
 )
 from src.infra.repositories.hydration_repository_async import AsyncHydrationRepository
+from src.infra.repositories.meal_recommendation_plan_repository_async import (
+    AsyncMealRecommendationPlanRepository,
+)
 from src.infra.repositories.meal_repository_async import AsyncMealRepository
 from src.infra.repositories.meal_translation_repository_async import (
     AsyncMealTranslationRepository,
@@ -107,6 +110,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
     def _init_repositories(self):
         session = self._require_session()
         self.meals = AsyncMealRepository(session)
+        self.meal_recommendation_plans = AsyncMealRecommendationPlanRepository(session)
         self.meal_suggestions = UnavailableMealSuggestionSessionStore()
         self.hydration_entries = AsyncHydrationRepository(session)
         self.users = AsyncUserRepository(session)

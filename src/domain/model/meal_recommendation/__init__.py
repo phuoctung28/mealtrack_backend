@@ -10,6 +10,11 @@ from .catalog_recipe import (
     MealRecommendationPlan,
     MealRecommendationSlot,
 )
+from .meal_recommendation_plan import (
+    PersistedMealRecommendationAlternative,
+    PersistedMealRecommendationPlan,
+    PersistedMealRecommendationSlot,
+)
 
 __all__ = [
     "CatalogRecipeIngredient",
@@ -20,4 +25,7 @@ __all__ = [
     "MealRecommendationInsufficiencyReason",
     "MealRecommendationPlan",
     "MealRecommendationSlot",
+    "PersistedMealRecommendationAlternative",
+    "PersistedMealRecommendationPlan",
+    "PersistedMealRecommendationSlot",
 ]

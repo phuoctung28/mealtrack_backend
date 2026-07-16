@@ -25,6 +25,7 @@ class AsyncUnitOfWorkPort(ABC):
 
     users: UserRepositoryPort
     meals: MealRepositoryPort
+    meal_recommendation_plans: Any
     meal_suggestions: MealSuggestionRepositoryPort
     subscriptions: SubscriptionRepositoryPort
     notifications: NotificationRepositoryPort
