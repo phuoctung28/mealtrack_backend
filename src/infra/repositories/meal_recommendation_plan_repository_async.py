@@ -1,8 +1,9 @@
-"""Async repository for durable meal recommendation plans."""
+"""Async repository for durable meal recommendation candidate rows."""
 
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import cast
 
 from sqlalchemy import func, select, update
@@ -19,30 +20,26 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationVersionConflictError,
 )
 from src.domain.model.meal_recommendation import (
-    PersistedMealRecommendationAlternative,
+    CatalogMeal,
+    PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
 from src.domain.ports.meal_recommendation_plan_repository_port import (
     MealRecommendationPlanRepositoryPort,
 )
+from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.database.models.meal_recommendation import (
-    MealRecommendationInteractionORM,
-    MealRecommendationPlanORM,
-    MealRecommendationSlotAlternativeORM,
-    MealRecommendationSlotORM,
-    MealRecommendationSwapORM,
+    MealCatalogIngredientORM,
+    MealCatalogORM,
+    MealRecommendationOperationORM,
+    MealRecommendationORM,
 )
-
-_PLAN_LOAD_OPTIONS = (
-    selectinload(MealRecommendationPlanORM.slots).selectinload(
-        MealRecommendationSlotORM.alternatives
-    ),
-)
+from src.infra.repositories.catalog_recipe_repository_async import _meal_to_domain
 
 
 class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort):
-    """Repository for owner-scoped durable recommendation aggregates."""
+    """Repository for owner-scoped durable recommendation batches."""
 
     def __init__(self, session: AsyncSession):
         self._session = session
@@ -53,14 +50,8 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         user_id: str,
         plan_id: str,
     ) -> PersistedMealRecommendationPlan | None:
-        result = await self._session.execute(
-            select(MealRecommendationPlanORM)
-            .where(MealRecommendationPlanORM.id == plan_id)
-            .where(MealRecommendationPlanORM.user_id == user_id)
-            .options(*_PLAN_LOAD_OPTIONS)
-        )
-        row = result.scalar_one_or_none()
-        return _plan_to_domain(row) if row else None
+        rows = await self._load_batch(user_id=user_id, batch_id=plan_id)
+        return _rows_to_plan(rows) if rows else None
 
     async def get_by_idempotency_key(
         self,
@@ -70,14 +61,17 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         idempotency_key: str,
     ) -> PersistedMealRecommendationPlan | None:
         result = await self._session.execute(
-            select(MealRecommendationPlanORM)
-            .where(MealRecommendationPlanORM.user_id == user_id)
-            .where(MealRecommendationPlanORM.operation == operation)
-            .where(MealRecommendationPlanORM.idempotency_key == idempotency_key)
-            .options(*_PLAN_LOAD_OPTIONS)
+            select(MealRecommendationORM.id)
+            .where(MealRecommendationORM.user_id == user_id)
+            .where(MealRecommendationORM.operation == operation)
+            .where(MealRecommendationORM.idempotency_key == idempotency_key)
+            .where(MealRecommendationORM.id == MealRecommendationORM.batch_id)
         )
-        row = result.scalar_one_or_none()
-        return _plan_to_domain(row) if row else None
+        batch_id = result.scalar_one_or_none()
+        if batch_id is None:
+            return None
+        rows = await self._load_batch(user_id=user_id, batch_id=cast(str, batch_id))
+        return _rows_to_plan(rows) if rows else None
 
     async def lock_generation_for_user(self, *, user_id: str) -> None:
         await self._session.execute(
@@ -92,20 +86,22 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         self,
         plan: PersistedMealRecommendationPlan,
     ) -> PersistedMealRecommendationPlan:
-        row = _plan_to_orm(plan)
+        rows = _plan_to_rows(plan)
         try:
             async with self._session.begin_nested():
                 await self._session.execute(
-                    update(MealRecommendationPlanORM)
-                    .where(MealRecommendationPlanORM.user_id == plan.user_id)
-                    .where(MealRecommendationPlanORM.status == "active")
+                    update(MealRecommendationORM)
+                    .where(MealRecommendationORM.user_id == plan.user_id)
+                    .where(MealRecommendationORM.status == "active")
+                    .where(MealRecommendationORM.id == MealRecommendationORM.batch_id)
                     .values(status="superseded", superseded_at=datetime.now(UTC))
                 )
-                self._session.add(row)
+                for row in rows:
+                    self._session.add(row)
                 await self._session.flush()
         except IntegrityError as exc:
             raise MealRecommendationPersistenceConflictError from exc
-        return _plan_to_domain(row)
+        return _rows_to_plan(rows)
 
     async def swap_slot(
         self,
@@ -115,102 +111,79 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         slot_id: str,
         request_id: str,
         expected_version: int,
-        alternative_recipe_version_id: str | None,
+        alternative_catalog_meal_id: str | None,
         reason: str,
     ) -> PersistedMealRecommendationPlan:
-        replay = await self._get_swap_replay(user_id=user_id, request_id=request_id)
-        if replay is not None:
-            return await self._validated_swap_replay(
-                replay,
-                user_id=user_id,
-                plan_id=plan_id,
-                slot_id=slot_id,
-                expected_version=expected_version,
-                alternative_recipe_version_id=alternative_recipe_version_id,
-                reason=reason,
-            )
-
-        plan_row, slot = await self._lock_plan_slot(
-            user_id=user_id,
+        replay = await self._get_operation_replay(
+            user_id=user_id, operation_type="swap", request_id=request_id
+        )
+        fingerprint = _operation_fingerprint(
             plan_id=plan_id,
             slot_id=slot_id,
+            expected_version=expected_version,
+            requested_catalog_meal_id=alternative_catalog_meal_id,
+            reason=reason,
         )
-        replay = await self._get_swap_replay(user_id=user_id, request_id=request_id)
         if replay is not None:
-            return await self._validated_swap_replay(
-                replay,
-                user_id=user_id,
-                plan_id=plan_id,
-                slot_id=slot_id,
-                expected_version=expected_version,
-                alternative_recipe_version_id=alternative_recipe_version_id,
-                reason=reason,
-            )
-        if int(slot.version) != expected_version:
-            raise MealRecommendationVersionConflictError
+            if cast(str, replay.request_fingerprint) != fingerprint:
+                raise MealRecommendationIdempotencyConflictError
+            plan = await self.get_by_id(user_id=user_id, plan_id=plan_id)
+            if plan is None:
+                raise MealRecommendationNotFoundError
+            return plan
 
-        alternatives = sorted(slot.alternatives, key=lambda item: item.position)
-        if alternative_recipe_version_id is None:
-            target = next(
-                (
-                    item
-                    for item in alternatives
-                    if item.recipe_version_id != slot.recipe_version_id
-                ),
-                None,
-            )
+        rows = await self._load_batch_for_update(user_id=user_id, batch_id=plan_id)
+        if not rows:
+            raise MealRecommendationNotFoundError
+        selected = _selected_row(rows, slot_id)
+        if int(cast(int, selected.selection_version)) != expected_version:
+            raise MealRecommendationVersionConflictError
+        if selected.logged_at:
+            raise MealRecommendationInvalidAlternativeError
+
+        alternatives = sorted(
+            (
+                row
+                for row in rows
+                if cast(str, row.slot_id) == slot_id and not cast(bool, row.is_selected)
+            ),
+            key=lambda item: cast(int, item.candidate_rank),
+        )
+        if alternative_catalog_meal_id is None:
+            target = alternatives[0] if alternatives else None
         else:
             target = next(
                 (
-                    item
-                    for item in alternatives
-                    if item.recipe_version_id == alternative_recipe_version_id
+                    row
+                    for row in alternatives
+                    if cast(str, row.catalog_meal_id) == alternative_catalog_meal_id
                 ),
                 None,
             )
-        if target is None or target.recipe_version_id == slot.recipe_version_id:
-            raise MealRecommendationInvalidAlternativeError
-        if _plan_has_recipe_version(
-            plan_row,
-            slot_id=slot_id,
-            recipe_version_id=target.recipe_version_id,
-        ):
+        if target is None:
             raise MealRecommendationInvalidAlternativeError
 
-        from_recipe_version_id = cast(str, slot.recipe_version_id)
-        slot.recipe_version_id = target.recipe_version_id
-        slot.target_calories = target.target_calories
-        slot.score = target.score
-        slot.version = int(cast(int, slot.version)) + 1  # type: ignore[assignment]
+        new_version = expected_version + 1
+        for row in rows:
+            if cast(str, row.slot_id) != slot_id:
+                continue
+            row.is_selected = row.id == target.id  # type: ignore[assignment]
+            row.selection_version = new_version  # type: ignore[assignment]
+        target.logged_at = None  # type: ignore[assignment]
         self._session.add(
-            MealRecommendationSwapORM(
+            MealRecommendationOperationORM(
                 user_id=user_id,
-                plan_id=plan_id,
+                batch_id=plan_id,
                 slot_id=slot_id,
+                operation_type="swap",
                 request_id=request_id,
-                expected_version=expected_version,
-                requested_recipe_version_id=alternative_recipe_version_id,
-                from_recipe_version_id=from_recipe_version_id,
-                to_recipe_version_id=target.recipe_version_id,
-                reason=reason,
+                request_fingerprint=fingerprint,
+                result_selection_version=new_version,
+                result_catalog_meal_id=cast(str, target.catalog_meal_id),
             )
         )
-        self._session.add(
-            MealRecommendationInteractionORM(
-                user_id=user_id,
-                plan_id=plan_id,
-                slot_id=slot_id,
-                event_type="swap_selected",
-                request_id=request_id,
-                recipe_version_id=target.recipe_version_id,
-                event_metadata={"from_recipe_version_id": from_recipe_version_id},
-            )
-        )
-        try:
-            await self._session.flush()
-        except IntegrityError as exc:
-            _raise_swap_integrity_error(exc)
-        return await self._reload_plan(plan_row)
+        await self._flush_operations()
+        return _rows_to_plan(rows)
 
     async def claim_slot_log(
         self,
@@ -220,37 +193,25 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         slot_id: str,
         request_id: str,
     ) -> tuple[PersistedMealRecommendationPlan, PersistedMealRecommendationSlot, bool]:
-        plan_row, slot = await self._lock_plan_slot(
-            user_id=user_id,
-            plan_id=plan_id,
-            slot_id=slot_id,
+        replay = await self._get_operation_replay(
+            user_id=user_id, operation_type="log", request_id=request_id
         )
-        replay = await self._get_interaction_replay(
-            user_id=user_id,
-            plan_id=plan_id,
-            slot_id=slot_id,
-            event_type="meal_logged",
-            request_id=request_id,
-        )
+        rows = await self._load_batch_for_update(user_id=user_id, batch_id=plan_id)
+        if not rows:
+            raise MealRecommendationNotFoundError
+        plan = _rows_to_plan(rows)
+        slot = next(item for item in plan.slots if item.id == slot_id)
         if replay is not None:
-            return await self._reload_plan(plan_row), _slot_to_domain(slot), True
-
-        if slot.logged_meal_id:
+            if (
+                cast(str, replay.batch_id) != plan_id
+                or cast(str, replay.slot_id) != slot_id
+            ):
+                raise MealRecommendationIdempotencyConflictError
+            return plan, slot, True
+        selected = _selected_row(rows, slot_id)
+        if selected.logged_meal_id:
             raise MealRecommendationAlreadyLoggedError
-
-        self._session.add(
-            MealRecommendationInteractionORM(
-                user_id=user_id,
-                plan_id=plan_id,
-                slot_id=slot_id,
-                event_type="meal_logged",
-                request_id=request_id,
-                recipe_version_id=slot.recipe_version_id,
-                event_metadata={},
-            )
-        )
-        await self._session.flush()
-        return _plan_to_domain(plan_row), _slot_to_domain(slot), False
+        return plan, slot, False
 
     async def finalize_slot_logged(
         self,
@@ -261,235 +222,255 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         request_id: str,
         meal_id: str,
     ) -> PersistedMealRecommendationPlan:
-        plan_row, slot = await self._lock_plan_slot(
-            user_id=user_id,
-            plan_id=plan_id,
-            slot_id=slot_id,
-        )
-        replay = await self._get_interaction_replay(
-            user_id=user_id,
-            plan_id=plan_id,
-            slot_id=slot_id,
-            event_type="meal_logged",
-            request_id=request_id,
-        )
-        if replay is None:
+        rows = await self._load_batch_for_update(user_id=user_id, batch_id=plan_id)
+        if not rows:
             raise MealRecommendationNotFoundError
-        if slot.logged_meal_id:
-            if cast(str | None, slot.logged_meal_id) == meal_id:
-                return await self._reload_plan(plan_row)
+        selected = _selected_row(rows, slot_id)
+        if selected.logged_meal_id:
+            if cast(str | None, selected.logged_meal_id) == meal_id:
+                return _rows_to_plan(rows)
             raise MealRecommendationAlreadyLoggedError
-
-        slot.logged_meal_id = meal_id  # type: ignore[assignment]
-        slot.logged_at = datetime.now(UTC)  # type: ignore[assignment]
-        replay.meal_id = meal_id  # type: ignore[assignment]
-        await self._session.flush()
-        return await self._reload_plan(plan_row)
-
-    async def _validated_swap_replay(
-        self,
-        replay: MealRecommendationSwapORM,
-        *,
-        user_id: str,
-        plan_id: str,
-        slot_id: str,
-        expected_version: int,
-        alternative_recipe_version_id: str | None,
-        reason: str,
-    ) -> PersistedMealRecommendationPlan:
-        if (
-            cast(str, replay.plan_id) != plan_id
-            or cast(str, replay.slot_id) != slot_id
-            or cast(int, replay.expected_version) != expected_version
-            or cast(str | None, replay.requested_recipe_version_id)
-            != alternative_recipe_version_id
-            or cast(str, replay.reason) != reason
-        ):
-            raise MealRecommendationIdempotencyConflictError
-        plan = await self.get_by_id(user_id=user_id, plan_id=plan_id)
-        if plan is None:
-            raise MealRecommendationNotFoundError
-        return plan
-
-    async def _get_swap_replay(
-        self,
-        *,
-        user_id: str,
-        request_id: str,
-    ) -> MealRecommendationSwapORM | None:
-        result = await self._session.execute(
-            select(MealRecommendationSwapORM)
-            .where(MealRecommendationSwapORM.user_id == user_id)
-            .where(MealRecommendationSwapORM.request_id == request_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def _get_interaction_replay(
-        self,
-        *,
-        user_id: str,
-        plan_id: str,
-        slot_id: str,
-        event_type: str,
-        request_id: str,
-    ) -> MealRecommendationInteractionORM | None:
-        result = await self._session.execute(
-            select(MealRecommendationInteractionORM)
-            .where(MealRecommendationInteractionORM.user_id == user_id)
-            .where(MealRecommendationInteractionORM.plan_id == plan_id)
-            .where(MealRecommendationInteractionORM.slot_id == slot_id)
-            .where(MealRecommendationInteractionORM.event_type == event_type)
-            .where(MealRecommendationInteractionORM.request_id == request_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def _lock_plan_slot(
-        self,
-        *,
-        user_id: str,
-        plan_id: str,
-        slot_id: str,
-    ) -> tuple[MealRecommendationPlanORM, MealRecommendationSlotORM]:
-        result = await self._session.execute(
-            select(MealRecommendationPlanORM, MealRecommendationSlotORM)
-            .join(
-                MealRecommendationSlotORM,
-                MealRecommendationSlotORM.plan_id == MealRecommendationPlanORM.id,
+        now = datetime.now(UTC)
+        selected.logged_meal_id = meal_id  # type: ignore[assignment]
+        selected.logged_at = now  # type: ignore[assignment]
+        self._session.add(
+            MealRecommendationOperationORM(
+                user_id=user_id,
+                batch_id=plan_id,
+                slot_id=slot_id,
+                operation_type="log",
+                request_id=request_id,
+                request_fingerprint=_operation_fingerprint(
+                    plan_id=plan_id,
+                    slot_id=slot_id,
+                    meal_id=meal_id,
+                ),
+                result_logged_meal_id=meal_id,
             )
-            .where(MealRecommendationPlanORM.id == plan_id)
-            .where(MealRecommendationPlanORM.user_id == user_id)
-            .where(MealRecommendationSlotORM.id == slot_id)
-            .options(*_PLAN_LOAD_OPTIONS)
+        )
+        await self._flush_operations()
+        return _rows_to_plan(rows)
+
+    async def _load_batch(
+        self, *, user_id: str, batch_id: str
+    ) -> list[MealRecommendationORM]:
+        stmt = (
+            select(MealRecommendationORM)
+            .where(MealRecommendationORM.batch_id == batch_id)
+            .options(_recommendation_catalog_meal_load_options())
+            .order_by(
+                MealRecommendationORM.recommendation_date,
+                MealRecommendationORM.meal_type,
+                MealRecommendationORM.candidate_rank,
+            )
+        )
+        result = await self._session.execute(stmt)
+        rows = list(result.scalars().unique().all())
+        anchor = _anchor_row(rows)
+        if anchor is None or cast(str | None, anchor.user_id) != user_id:
+            return []
+        return rows
+
+    async def _load_batch_for_update(
+        self, *, user_id: str, batch_id: str
+    ) -> list[MealRecommendationORM]:
+        stmt = (
+            select(MealRecommendationORM)
+            .where(MealRecommendationORM.batch_id == batch_id)
+            .options(_recommendation_catalog_meal_load_options())
+            .order_by(
+                MealRecommendationORM.recommendation_date,
+                MealRecommendationORM.meal_type,
+                MealRecommendationORM.candidate_rank,
+            )
             .with_for_update()
         )
-        row = result.first()
-        if row is None:
-            raise MealRecommendationNotFoundError
-        return row[0], row[1]
+        result = await self._session.execute(stmt)
+        rows = list(result.scalars().unique().all())
+        anchor = _anchor_row(rows)
+        if anchor is None or cast(str | None, anchor.user_id) != user_id:
+            return []
+        return rows
 
-    async def _reload_plan(
-        self, plan_row: MealRecommendationPlanORM
-    ) -> PersistedMealRecommendationPlan:
-        plan = await self.get_by_id(
-            user_id=cast(str, plan_row.user_id),
-            plan_id=cast(str, plan_row.id),
+    async def _get_operation_replay(
+        self, *, user_id: str, operation_type: str, request_id: str
+    ) -> MealRecommendationOperationORM | None:
+        result = await self._session.execute(
+            select(MealRecommendationOperationORM)
+            .where(MealRecommendationOperationORM.user_id == user_id)
+            .where(MealRecommendationOperationORM.operation_type == operation_type)
+            .where(MealRecommendationOperationORM.request_id == request_id)
         )
-        if plan is None:
-            raise MealRecommendationNotFoundError
-        return plan
+        return result.scalar_one_or_none()
+
+    async def _flush_operations(self) -> None:
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            detail = f"{exc.orig!s} {exc!s}"
+            if "uq_meal_recommendation_operations_user_type_request" in detail:
+                raise MealRecommendationIdempotencyConflictError from exc
+            raise MealRecommendationInvalidAlternativeError from exc
 
 
-def _plan_to_orm(plan: PersistedMealRecommendationPlan) -> MealRecommendationPlanORM:
-    row = MealRecommendationPlanORM(
-        id=plan.id,
-        user_id=plan.user_id,
-        status=plan.status,
-        timezone=plan.timezone,
-        start_date=plan.start_date,
-        daily_calories=plan.daily_calories,
-        algorithm_version=plan.algorithm_version,
-        catalog_release_id=plan.catalog_release_id,
-        allergy_evaluated=plan.allergy_evaluated,
-        operation=plan.operation,
-        idempotency_key=plan.idempotency_key,
-        request_fingerprint=plan.request_fingerprint,
-    )
-    row.slots = [
-        MealRecommendationSlotORM(
-            id=slot.id,
-            slot_date=slot.slot_date,
-            day_index=slot.day_index,
-            meal_type=slot.meal_type,
-            recipe_version_id=slot.recipe_version_id,
-            target_calories=slot.target_calories,
-            score=slot.score,
-            position=slot.position,
-            version=slot.version,
-            logged_meal_id=slot.logged_meal_id,
-            alternatives=[
-                MealRecommendationSlotAlternativeORM(
-                    id=alternative.id,
-                    recipe_version_id=alternative.recipe_version_id,
-                    target_calories=alternative.target_calories,
-                    score=alternative.score,
-                    position=alternative.position,
+def _plan_to_rows(plan: PersistedMealRecommendationPlan) -> list[MealRecommendationORM]:
+    rows: list[MealRecommendationORM] = []
+    for slot in plan.slots:
+        candidates = _slot_candidates(slot)
+        for candidate in candidates:
+            rows.append(
+                MealRecommendationORM(
+                    id=candidate.id,
+                    batch_id=plan.id,
+                    slot_id=slot.id,
+                    recommendation_date=slot.slot_date,
+                    meal_type=slot.meal_type,
+                    catalog_meal_id=candidate.catalog_meal_id,
+                    candidate_rank=candidate.candidate_rank,
+                    is_selected=candidate.is_selected,
+                    score=candidate.score,
+                    selection_version=candidate.selection_version,
+                    logged_at=candidate.logged_at,
+                    logged_meal_id=candidate.logged_meal_id,
+                    user_id=plan.user_id if candidate.id == plan.id else None,
+                    status=plan.status if candidate.id == plan.id else None,
+                    timezone=plan.timezone if candidate.id == plan.id else None,
+                    start_date=plan.start_date if candidate.id == plan.id else None,
+                    target_calories=plan.daily_calories if candidate.id == plan.id else None,
+                    algorithm_version=plan.algorithm_version if candidate.id == plan.id else None,
+                    operation=plan.operation if candidate.id == plan.id else None,
+                    idempotency_key=plan.idempotency_key if candidate.id == plan.id else None,
+                    request_fingerprint=plan.request_fingerprint if candidate.id == plan.id else None,
                 )
-                for alternative in slot.alternatives
-            ],
-        )
-        for slot in plan.slots
-    ]
-    return row
+            )
+    return rows
 
 
-def _plan_has_recipe_version(
-    plan_row: MealRecommendationPlanORM,
-    *,
-    slot_id: str,
-    recipe_version_id: str,
-) -> bool:
-    return any(
-        cast(str, other_slot.id) != slot_id
-        and cast(str, other_slot.recipe_version_id) == recipe_version_id
-        for other_slot in getattr(plan_row, "slots", ())
-    )
-
-
-def _raise_swap_integrity_error(exc: IntegrityError) -> None:
-    detail = f"{exc.orig!s} {exc!s}"
-    if "uq_meal_recommendation_swaps_user_request" in detail:
-        raise MealRecommendationIdempotencyConflictError from exc
-    raise MealRecommendationInvalidAlternativeError from exc
-
-
-def _plan_to_domain(
-    row: MealRecommendationPlanORM,
-) -> PersistedMealRecommendationPlan:
-    return PersistedMealRecommendationPlan(
-        id=cast(str, row.id),
-        user_id=cast(str, row.user_id),
-        status=cast(str, row.status),
-        timezone=cast(str, row.timezone),
-        start_date=cast(date, row.start_date),
-        daily_calories=cast(int, row.daily_calories),
-        algorithm_version=cast(str, row.algorithm_version),
-        catalog_release_id=cast(str, row.catalog_release_id),
-        allergy_evaluated=cast(bool, row.allergy_evaluated),
-        operation=cast(str, row.operation),
-        idempotency_key=cast(str, row.idempotency_key),
-        request_fingerprint=cast(str, row.request_fingerprint),
-        created_at=cast(datetime | None, row.created_at),
-        slots=tuple(_slot_to_domain(slot) for slot in row.slots),
-    )
-
-
-def _slot_to_domain(
-    row: MealRecommendationSlotORM,
-) -> PersistedMealRecommendationSlot:
-    return PersistedMealRecommendationSlot(
-        id=cast(str, row.id),
-        slot_date=cast(date, row.slot_date),
-        day_index=cast(int, row.day_index),
-        meal_type=cast(str, row.meal_type),
-        recipe_version_id=cast(str, row.recipe_version_id),
-        target_calories=cast(int, row.target_calories),
-        score=cast(float, row.score),
-        position=cast(int, row.position),
-        version=cast(int, row.version),
-        logged_meal_id=cast(str | None, row.logged_meal_id),
-        alternatives=tuple(
-            _alternative_to_domain(alternative) for alternative in row.alternatives
+def _slot_candidates(
+    slot: PersistedMealRecommendationSlot,
+) -> tuple[PersistedMealRecommendationCandidate, ...]:
+    if slot.selected is not None:
+        return (slot.selected, *slot.alternatives)
+    return (
+        PersistedMealRecommendationCandidate(
+            id=slot.id,
+            slot_id=slot.id,
+            recommendation_date=slot.slot_date,
+            meal_type=slot.meal_type,
+            catalog_meal_id=slot.catalog_meal_id,
+            candidate_rank=0,
+            is_selected=True,
+            score=Decimal(str(slot.score)),
+            selection_version=slot.selection_version,
+            logged_meal_id=slot.logged_meal_id,
         ),
+        *slot.alternatives,
     )
 
 
-def _alternative_to_domain(
-    row: MealRecommendationSlotAlternativeORM,
-) -> PersistedMealRecommendationAlternative:
-    return PersistedMealRecommendationAlternative(
+def _rows_to_plan(rows: list[MealRecommendationORM]) -> PersistedMealRecommendationPlan:
+    anchor = _anchor_row(rows)
+    if anchor is None:
+        raise MealRecommendationNotFoundError
+    slots: list[PersistedMealRecommendationSlot] = []
+    grouped: dict[str, list[MealRecommendationORM]] = {}
+    for row in rows:
+        grouped.setdefault(cast(str, row.slot_id), []).append(row)
+
+    for position, slot_rows in enumerate(grouped.values()):
+        ordered = sorted(slot_rows, key=lambda item: cast(int, item.candidate_rank))
+        selected = next(row for row in ordered if cast(bool, row.is_selected))
+        selected_candidate = _candidate_to_domain(selected)
+        alternatives = tuple(
+            _candidate_to_domain(row)
+            for row in ordered
+            if cast(str, row.id) != selected_candidate.id
+        )
+        slots.append(
+            PersistedMealRecommendationSlot(
+                id=cast(str, selected.slot_id),
+                slot_date=cast(date, selected.recommendation_date),
+                day_index=(cast(date, selected.recommendation_date) - cast(date, anchor.start_date)).days,
+                meal_type=cast(str, selected.meal_type),
+                catalog_meal_id=cast(str, selected.catalog_meal_id),
+                target_calories=cast(int, anchor.target_calories),
+                score=float(selected.score),
+                position=position,
+                selection_version=cast(int, selected.selection_version),
+                logged_meal_id=cast(str | None, selected.logged_meal_id),
+                selected=selected_candidate,
+                alternatives=alternatives,
+            )
+        )
+
+    return PersistedMealRecommendationPlan(
+        id=cast(str, anchor.id),
+        user_id=cast(str, anchor.user_id),
+        status=cast(str, anchor.status),
+        timezone=cast(str, anchor.timezone),
+        start_date=cast(date, anchor.start_date),
+        daily_calories=cast(int, anchor.target_calories),
+        algorithm_version=cast(str, anchor.algorithm_version),
+        operation=cast(str, anchor.operation),
+        idempotency_key=cast(str, anchor.idempotency_key),
+        request_fingerprint=cast(str, anchor.request_fingerprint),
+        created_at=cast(datetime | None, anchor.created_at),
+        slots=tuple(slots),
+    )
+
+
+def _candidate_to_domain(
+    row: MealRecommendationORM,
+) -> PersistedMealRecommendationCandidate:
+    return PersistedMealRecommendationCandidate(
         id=cast(str, row.id),
-        recipe_version_id=cast(str, row.recipe_version_id),
-        target_calories=cast(int, row.target_calories),
-        score=cast(float, row.score),
-        position=cast(int, row.position),
+        slot_id=cast(str, row.slot_id),
+        recommendation_date=cast(date, row.recommendation_date),
+        meal_type=cast(str, row.meal_type),
+        catalog_meal_id=cast(str, row.catalog_meal_id),
+        candidate_rank=cast(int, row.candidate_rank),
+        is_selected=cast(bool, row.is_selected),
+        score=cast(Decimal, row.score),
+        selection_version=cast(int, row.selection_version),
+        catalog_meal=_candidate_catalog_meal(row),
+        logged_at=cast(datetime | None, row.logged_at),
+        logged_meal_id=cast(str | None, row.logged_meal_id),
+    )
+
+
+def _candidate_catalog_meal(row: MealRecommendationORM) -> CatalogMeal | None:
+    catalog_meal = row.catalog_meal
+    if catalog_meal is None:
+        return None
+    if isinstance(catalog_meal, CatalogMeal):
+        return catalog_meal
+    return _meal_to_domain(catalog_meal)
+
+
+def _anchor_row(rows: list[MealRecommendationORM]) -> MealRecommendationORM | None:
+    return next((row for row in rows if cast(str, row.id) == cast(str, row.batch_id)), None)
+
+
+def _selected_row(rows: list[MealRecommendationORM], slot_id: str) -> MealRecommendationORM:
+    for row in rows:
+        if cast(str, row.slot_id) == slot_id and cast(bool, row.is_selected):
+            return row
+    raise MealRecommendationNotFoundError
+
+
+def _operation_fingerprint(**payload) -> str:
+    import hashlib
+    import json
+
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _recommendation_catalog_meal_load_options():
+    return (
+        selectinload(MealRecommendationORM.catalog_meal)
+        .selectinload(MealCatalogORM.ingredients)
+        .selectinload(MealCatalogIngredientORM.food_reference)
+        .selectinload(FoodReferenceModel.serving_size_rows)
     )

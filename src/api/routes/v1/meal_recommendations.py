@@ -153,8 +153,8 @@ async def swap_meal_recommendation_slot(
                 plan_id=plan_id,
                 slot_id=slot_id,
                 request_id=body.request_id,
-                expected_version=body.expected_version,
-                alternative_recipe_version_id=body.alternative_recipe_version_id,
+                expected_selection_version=body.expected_selection_version,
+                alternative_catalog_meal_id=body.alternative_catalog_meal_id,
                 reason=body.reason,
             )
         )

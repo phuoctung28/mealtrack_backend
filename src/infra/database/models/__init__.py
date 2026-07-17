@@ -42,18 +42,10 @@ from .meal.meal_instruction_step import MealInstructionStepORM
 from .meal.meal_translation_model import MealTranslationORM
 from .meal_image_cache import MealImageCacheModel
 from .meal_recommendation import (
-    CatalogRecipeIngredientORM,
-    CatalogRecipeMealTypeORM,
-    CatalogRecipeORM,
-    CatalogRecipeRightsRecordORM,
-    CatalogRecipeSourceORM,
-    CatalogRecipeVersionORM,
-    CatalogReleaseORM,
-    MealRecommendationInteractionORM,
-    MealRecommendationPlanORM,
-    MealRecommendationSlotAlternativeORM,
-    MealRecommendationSlotORM,
-    MealRecommendationSwapORM,
+    MealCatalogIngredientORM,
+    MealCatalogORM,
+    MealRecommendationOperationORM,
+    MealRecommendationORM,
 )
 
 # Notification models
@@ -152,18 +144,10 @@ __all__ = [
     "HydrationEntryORM",
     "MealImageCacheModel",
     # Meal recommendation catalog
-    "CatalogReleaseORM",
-    "CatalogRecipeORM",
-    "CatalogRecipeVersionORM",
-    "CatalogRecipeMealTypeORM",
-    "CatalogRecipeIngredientORM",
-    "CatalogRecipeSourceORM",
-    "CatalogRecipeRightsRecordORM",
-    "MealRecommendationPlanORM",
-    "MealRecommendationSlotORM",
-    "MealRecommendationSlotAlternativeORM",
-    "MealRecommendationSwapORM",
-    "MealRecommendationInteractionORM",
+    "MealCatalogORM",
+    "MealCatalogIngredientORM",
+    "MealRecommendationORM",
+    "MealRecommendationOperationORM",
     "PendingMealImageResolutionModel",
     # Referral system
     "ReferralCode",

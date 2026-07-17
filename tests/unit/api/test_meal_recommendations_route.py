@@ -71,15 +71,19 @@ def test_meal_recommendation_response_includes_allergy_not_evaluated_and_slots()
 
     assert response.id == "plan-1"
     assert response.allergy_evaluated is False
-    assert response.slots[0].recipe_version_id == "version-1"
-    assert response.slots[0].alternatives[0].recipe_version_id == "version-2"
+    assert response.slots[0].catalog_meal_id == "catalog-1"
+    assert response.slots[0].catalog_meal.name == "Breakfast Rice"
+    assert response.slots[0].catalog_meal.calories == 380
+    assert response.slots[0].catalog_meal.ingredients[0].display_name == "Rice"
+    assert response.slots[0].alternatives[0].catalog_meal_id == "catalog-2"
+    assert response.slots[0].alternatives[0].catalog_meal.name == "Chicken Bowl"
 
 
 def test_swap_request_rejects_unsupported_reason():
     with pytest.raises(ValidationError):
         SwapMealRecommendationSlotRequest(
             request_id="swap-1",
-            expected_version=1,
+            expected_selection_version=1,
             reason="unsupported",
         )
 
@@ -147,7 +151,7 @@ async def test_create_three_day_recommendations_snapshots_target_and_timezone():
 
 
 @pytest.mark.asyncio
-async def test_swap_route_sends_expected_version_command():
+async def test_swap_route_sends_expected_selection_version_command():
     event_bus = _EventBus()
 
     await swap_meal_recommendation_slot(
@@ -155,8 +159,8 @@ async def test_swap_route_sends_expected_version_command():
         slot_id="slot-1",
         body=SwapMealRecommendationSlotRequest(
             request_id="swap-1",
-            expected_version=1,
-            alternative_recipe_version_id="version-2",
+            expected_selection_version=1,
+            alternative_catalog_meal_id="selection_version-2",
         ),
         user_id="user-1",
         event_bus=event_bus,
@@ -169,8 +173,8 @@ async def test_swap_route_sends_expected_version_command():
         for item in event_bus.commands
         if isinstance(item, SwapMealRecommendationSlotCommand)
     )
-    assert command.expected_version == 1
-    assert command.alternative_recipe_version_id == "version-2"
+    assert command.expected_selection_version == 1
+    assert command.alternative_catalog_meal_id == "selection_version-2"
 
 
 @pytest.mark.asyncio

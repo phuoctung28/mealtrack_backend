@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.infra.repositories.catalog_recipe_repository_async import (
-    AsyncCatalogRecipeRepository,
+    AsyncCatalogMealRepository,
 )
 
 
@@ -40,112 +40,74 @@ class _AsyncSession:
         return self._results.pop(0)
 
 
-def _release_row():
-    row = MagicMock()
-    row.id = "release-1"
-    row.release_key = "2026-q3"
-    row.manifest_digest = "a" * 64
-    row.status = "active"
-    row.expected_recipe_count = 180
-    row.activated_at = None
-    return row
-
-
-def _version_row(*, rights_status="approved"):
-    recipe = MagicMock()
-    recipe.recipe_key = "vn-rice"
-    recipe.cuisine = "vietnamese"
-    recipe.is_active = True
-
-    meal_type = MagicMock()
-    meal_type.meal_type = "breakfast"
+def _meal_row():
+    food_reference = MagicMock()
+    food_reference.id = 7
+    food_reference.name = "Rice"
+    food_reference.source = "catalog_seed"
+    food_reference.is_verified = True
+    food_reference.protein_100g = 2.7
+    food_reference.carbs_100g = 28.0
+    food_reference.fat_100g = 0.3
+    food_reference.fiber_100g = 0.4
+    food_reference.sugar_100g = 0.1
+    food_reference.density = 1.0
+    food_reference.serving_size_rows = []
 
     ingredient = MagicMock()
     ingredient.food_reference_id = 7
-    ingredient.name = "Rice"
+    ingredient.display_name = "Rice"
     ingredient.quantity = 100
     ingredient.unit = "g"
-    ingredient.resolved_grams = 100
-    ingredient.protein_g = 2.7
-    ingredient.carbs_g = 28.0
-    ingredient.fat_g = 0.3
-    ingredient.fiber_g = 0.4
-    ingredient.sugar_g = 0.1
-    ingredient.position = 0
-    ingredient.is_display_only = False
-
-    rights = MagicMock()
-    rights.status = rights_status
-    rights.agreement_identifier = "agreement-1"
+    ingredient.food_reference = food_reference
 
     row = MagicMock()
-    row.id = "version-1"
-    row.recipe_id = "recipe-1"
-    row.release_id = "release-1"
-    row.recipe = recipe
+    row.id = "catalog-1"
+    row.catalog_key = "vn-rice"
+    row.content_hash = "a" * 64
     row.name = "Rice Bowl"
-    row.status = "published"
-    row.version_number = 1
-    row.calories = 126
-    row.protein_g = 2.7
-    row.carbs_g = 28.0
-    row.fat_g = 0.3
-    row.fiber_g = 0.4
-    row.meal_types = [meal_type]
+    row.cuisine = "vietnamese"
+    row.description = None
+    row.image_url = None
+    row.breakfast_eligible = True
+    row.lunch_eligible = False
+    row.dinner_eligible = False
+    row.snack_eligible = False
+    row.is_active = True
     row.ingredients = [ingredient]
-    row.rights_records = [rights]
     return row
 
 
 @pytest.mark.asyncio
-async def test_get_active_release_returns_typed_projection():
-    session = _AsyncSession([_Result(one=_release_row())])
-    repo = AsyncCatalogRecipeRepository(session)
+async def test_list_active_meals_filters_by_cuisine_and_meal_type():
+    session = _AsyncSession([_Result(rows=[_meal_row()])])
+    repo = AsyncCatalogMealRepository(session)
 
-    result = await repo.get_active_release()
-
-    assert result is not None
-    assert result.release_key == "2026-q3"
-    assert result.expected_recipe_count == 180
-    assert "catalog_releases.status" in str(session.statement)
-
-
-@pytest.mark.asyncio
-async def test_list_active_versions_filters_to_approved_rights():
-    session = _AsyncSession(
-        [_Result(rows=[_version_row(), _version_row(rights_status="pending")])]
-    )
-    repo = AsyncCatalogRecipeRepository(session)
-
-    result = await repo.list_active_versions(
+    result = await repo.list_active_meals(
         cuisine="vietnamese",
         meal_type="breakfast",
     )
 
     assert len(result) == 1
-    assert result[0].recipe_key == "vn-rice"
+    assert result[0].catalog_key == "vn-rice"
     assert result[0].meal_types == ("breakfast",)
     assert result[0].ingredients[0].food_reference_id == 7
-    assert "catalog_recipe_versions.status" in str(session.statement)
-    assert "catalog_releases.status" in str(session.statement)
+    statement = str(session.statement)
+    assert "meal_catalog.is_active" in statement
+    assert "meal_catalog.cuisine" in statement
+    assert "meal_catalog.breakfast_eligible" in statement
 
 
 @pytest.mark.asyncio
-async def test_get_version_rejects_missing_approved_rights():
-    session = _AsyncSession([_Result(one=_version_row(rights_status="pending"))])
-    repo = AsyncCatalogRecipeRepository(session)
+async def test_get_meal_scopes_to_active_catalog_row():
+    session = _AsyncSession([_Result(one=_meal_row())])
+    repo = AsyncCatalogMealRepository(session)
 
-    assert await repo.get_version("version-1") is None
-    assert "catalog_releases.status" in str(session.statement)
-
-
-@pytest.mark.asyncio
-async def test_get_version_scopes_to_active_release():
-    session = _AsyncSession([_Result(one=_version_row())])
-    repo = AsyncCatalogRecipeRepository(session)
-
-    result = await repo.get_version("version-1")
+    result = await repo.get_meal("catalog-1")
 
     assert result is not None
-    assert result.id == "version-1"
-    assert "catalog_releases.status" in str(session.statement)
+    assert result.id == "catalog-1"
+    assert result.calories > 0
+    statement = str(session.statement)
+    assert "meal_catalog.id" in statement
+    assert "meal_catalog.is_active" in statement

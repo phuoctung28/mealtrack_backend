@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -9,48 +10,41 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationNotFoundError,
 )
 from src.domain.model.meal_recommendation import (
-    CatalogRecipeIngredient,
-    CatalogRecipeVersion,
+    CatalogMeal,
+    CatalogMealIngredient,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
 
 
 class _CatalogRepo:
-    async def get_version(self, version_id):
-        return CatalogRecipeVersion(
-            id=version_id,
-            recipe_id="recipe-1",
-            release_id="release-1",
-            recipe_key="recipe-key",
+    async def get_meal(self, catalog_meal_id):
+        return CatalogMeal(
+            id=catalog_meal_id,
+            catalog_key="catalog-key",
+            content_hash="a" * 64,
             name="Catalog Recipe",
             cuisine="vietnamese",
-            status="published",
-            version_number=1,
-            calories=500,
-            protein_g=30,
-            carbs_g=50,
-            fat_g=10,
-            fiber_g=5,
+            description=None,
+            image_url=None,
+            protein_g=Decimal("30"),
+            carbs_g=Decimal("50"),
+            fat_g=Decimal("10"),
+            fiber_g=Decimal("5"),
             meal_types=("breakfast",),
             ingredients=(
-                CatalogRecipeIngredient(
+                CatalogMealIngredient(
                     food_reference_id=123,
-                    name="Ingredient",
-                    quantity=100,
+                    display_name="Ingredient",
+                    quantity=Decimal("100"),
                     unit="g",
-                    resolved_grams=100,
-                    protein_g=10,
-                    carbs_g=20,
-                    fat_g=5,
-                    fiber_g=2,
                 ),
             ),
         )
 
 
 class _MissingCatalogRepo:
-    async def get_version(self, version_id):
+    async def get_meal(self, catalog_meal_id):
         return None
 
 
@@ -78,8 +72,6 @@ def _plan_and_slot():
         start_date=date(2026, 7, 16),
         daily_calories=2000,
         algorithm_version="catalog_deterministic_v1",
-        catalog_release_id="release-1",
-        allergy_evaluated=False,
         operation="three_day",
         idempotency_key="key",
         request_fingerprint="f" * 64,
@@ -89,7 +81,7 @@ def _plan_and_slot():
         slot_date=date(2026, 7, 16),
         day_index=0,
         meal_type="breakfast",
-        recipe_version_id="version-1",
+        catalog_meal_id="catalog-1",
         target_calories=500,
         score=1.0,
         position=0,

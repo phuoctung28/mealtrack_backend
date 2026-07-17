@@ -80,8 +80,16 @@ class IngredientQuantityConversionService:
     def __init__(
         self,
         approved_sources: set[str] | frozenset[str] | None = None,
+        allow_unverified: bool = False,
+        allow_unapproved_sources: bool = False,
+        allow_implausible_macros: bool = False,
+        allow_common_unit_fallbacks: bool = False,
     ) -> None:
         self._approved_sources = approved_sources or _DEFAULT_APPROVED_SOURCES
+        self._allow_unverified = allow_unverified
+        self._allow_unapproved_sources = allow_unapproved_sources
+        self._allow_implausible_macros = allow_implausible_macros
+        self._allow_common_unit_fallbacks = allow_common_unit_fallbacks
 
     def resolve(
         self,
@@ -130,7 +138,7 @@ class IngredientQuantityConversionService:
         calories = protein * 4 + max(carbs - fiber, 0.0) * 4 + fiber * 2 + fat * 9
         return ResolvedIngredientQuantity(
             food_reference_id=reference.id,
-            display_name=reference.name,
+            display_name=display_name or reference.name,
             quantity=quantity,
             unit=unit,
             grams=grams,
@@ -143,12 +151,15 @@ class IngredientQuantityConversionService:
         )
 
     def _validate_reference(self, reference: FoodReferenceNutritionProjection) -> None:
-        if not reference.is_verified:
+        if not reference.is_verified and not self._allow_unverified:
             raise IngredientQuantityConversionError(
                 "food_reference_not_verified",
                 f"Food reference {reference.id} is not verified.",
             )
-        if reference.source.lower() not in self._approved_sources:
+        if (
+            reference.source.lower() not in self._approved_sources
+            and not self._allow_unapproved_sources
+        ):
             raise IngredientQuantityConversionError(
                 "food_reference_source_not_approved",
                 f"Food reference {reference.id} source is not approved.",
@@ -173,13 +184,16 @@ class IngredientQuantityConversionService:
             )
         fiber = reference.fiber_100g or 0.0
         sugar = reference.sugar_100g or 0.0
-        if fiber > carbs_100g or sugar > carbs_100g or fiber + sugar > carbs_100g:
+        if (
+            not self._allow_implausible_macros
+            and (fiber > carbs_100g or sugar > carbs_100g or fiber + sugar > carbs_100g)
+        ):
             raise IngredientQuantityConversionError(
                 "implausible_macro_snapshot",
                 f"Food reference {reference.id} fiber or sugar exceeds carbs.",
             )
         macro_mass = protein_100g + carbs_100g + fat_100g
-        if macro_mass > 110.0:
+        if macro_mass > 110.0 and not self._allow_implausible_macros:
             raise IngredientQuantityConversionError(
                 "implausible_macro_snapshot",
                 f"Food reference {reference.id} macros exceed plausible mass.",
@@ -202,6 +216,9 @@ class IngredientQuantityConversionService:
         if normalized_unit in _VOLUME_UNITS_TO_ML:
             density = self._validated_density(reference)
             return quantity * _VOLUME_UNITS_TO_ML[normalized_unit] * density
+        fallback_grams = self._common_unit_fallback_grams(reference, normalized_unit)
+        if fallback_grams is not None:
+            return quantity * fallback_grams
         serving = self._find_serving(reference.servings, normalized_unit)
         if serving.grams is not None and serving.grams > 0:
             return quantity * serving.grams
@@ -212,6 +229,19 @@ class IngredientQuantityConversionService:
             "unresolved_quantity_unit",
             f"Serving '{unit}' has no usable grams or milliliters.",
         )
+
+    def _common_unit_fallback_grams(
+        self,
+        reference: FoodReferenceNutritionProjection,
+        normalized_unit: str,
+    ) -> float | None:
+        if not self._allow_common_unit_fallbacks:
+            return None
+        if normalized_unit not in {"each", "piece", "unit"}:
+            return None
+        if "egg" in reference.name.lower():
+            return 50.0
+        return None
 
     def _validated_density(self, reference: FoodReferenceNutritionProjection) -> float:
         density = reference.density_g_ml

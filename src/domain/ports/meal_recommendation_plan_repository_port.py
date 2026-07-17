@@ -52,7 +52,7 @@ class MealRecommendationPlanRepositoryPort(ABC):
         slot_id: str,
         request_id: str,
         expected_version: int,
-        alternative_recipe_version_id: str | None,
+        alternative_catalog_meal_id: str | None,
         reason: str,
     ) -> PersistedMealRecommendationPlan:
         """Swap one owned slot and return the updated plan."""

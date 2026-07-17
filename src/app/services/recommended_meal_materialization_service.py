@@ -26,27 +26,20 @@ class RecommendedMealMaterializationService:
         plan: PersistedMealRecommendationPlan,
         slot: PersistedMealRecommendationSlot,
     ) -> Meal:
-        recipe = await uow.catalog_recipes.get_version(slot.recipe_version_id)
-        if recipe is None:
+        catalog_meal = await uow.catalog_recipes.get_meal(slot.catalog_meal_id)
+        if catalog_meal is None:
             raise MealRecommendationNotFoundError
 
         food_items = [
             FoodItem(
                 id=str(uuid4()),
                 name=ingredient.name,
-                quantity=ingredient.resolved_grams,
-                unit="g",
-                macros=Macros(
-                    protein=ingredient.protein_g,
-                    carbs=ingredient.carbs_g,
-                    fat=ingredient.fat_g,
-                    fiber=ingredient.fiber_g,
-                    sugar=ingredient.sugar_g,
-                ),
+                quantity=float(ingredient.quantity),
+                unit=ingredient.unit,
+                macros=Macros(protein=0, carbs=0, fat=0, fiber=0, sugar=0),
                 food_reference_id=ingredient.food_reference_id,
             )
-            for ingredient in recipe.ingredients
-            if not ingredient.is_display_only
+            for ingredient in catalog_meal.ingredients
         ]
         meal_time = noon_utc_for_date(slot.slot_date, plan.timezone)
         meal = Meal(
@@ -61,13 +54,13 @@ class RecommendedMealMaterializationService:
                 size_bytes=1,
                 url=None,
             ),
-            dish_name=recipe.name,
+            dish_name=catalog_meal.name,
             nutrition=Nutrition(
                 macros=Macros(
-                    protein=recipe.protein_g,
-                    carbs=recipe.carbs_g,
-                    fat=recipe.fat_g,
-                    fiber=recipe.fiber_g,
+                    protein=float(catalog_meal.protein_g),
+                    carbs=float(catalog_meal.carbs_g),
+                    fat=float(catalog_meal.fat_g),
+                    fiber=float(catalog_meal.fiber_g),
                 ),
                 food_items=food_items,
             ),

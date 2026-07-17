@@ -21,7 +21,7 @@ class SwapMealRecommendationSlotCommandHandler(
                 plan_id=command.plan_id,
                 slot_id=command.slot_id,
                 request_id=command.request_id,
-                expected_version=command.expected_version,
-                alternative_recipe_version_id=command.alternative_recipe_version_id,
+                expected_version=command.expected_selection_version,
+                alternative_catalog_meal_id=command.alternative_catalog_meal_id,
                 reason=command.reason,
             )

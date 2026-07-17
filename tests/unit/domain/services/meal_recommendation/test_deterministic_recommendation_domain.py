@@ -1,10 +1,11 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
 from src.domain.model.meal_recommendation import (
-    CatalogRecipeIngredient,
-    CatalogRecipeVersion,
+    CatalogMeal,
+    CatalogMealIngredient,
     MealRecommendationInsufficiency,
     MealRecommendationInsufficiencyReason,
 )
@@ -24,47 +25,42 @@ from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
 )
 
 
-def _recipe(
-    recipe_id: str,
+def _catalog_meal(
+    catalog_meal_id: str,
     meal_type: str,
     calories: int,
     *,
     cuisine: str = "vietnamese",
     food_reference_id: int = 1,
     status: str = "published",
-) -> CatalogRecipeVersion:
-    return CatalogRecipeVersion(
-        id=recipe_id,
-        recipe_id=f"recipe-{recipe_id}",
-        release_id="release-1",
-        recipe_key=f"key-{recipe_id}",
-        name=f"Recipe {recipe_id}",
+) -> CatalogMeal:
+    return CatalogMeal(
+        id=catalog_meal_id,
+        catalog_key=f"key-{catalog_meal_id}",
+        content_hash=f"{catalog_meal_id:0<64}"[:64],
+        name=f"Recipe {catalog_meal_id}",
         cuisine=cuisine,
-        status=status,
-        version_number=1,
-        calories=calories,
-        protein_g=20,
-        carbs_g=35,
-        fat_g=12,
-        fiber_g=4,
+        description=None,
+        image_url=None,
+        protein_g=Decimal(str(calories / 4)),
+        carbs_g=Decimal("0"),
+        fat_g=Decimal("0"),
+        fiber_g=Decimal("0"),
         meal_types=(meal_type,),
         ingredients=(
-            CatalogRecipeIngredient(
+            CatalogMealIngredient(
                 food_reference_id=food_reference_id,
-                name="Ingredient",
-                quantity=100,
+                display_name="Ingredient",
+                quantity=Decimal("100"),
                 unit="g",
-                resolved_grams=100,
-                protein_g=10,
-                carbs_g=10,
-                fat_g=5,
             ),
         ),
+        is_active=status == "published",
     )
 
 
-def _candidate_pool() -> list[CatalogRecipeVersion]:
-    recipes = []
+def _candidate_pool() -> list[CatalogMeal]:
+    catalog_meals = []
     calorie_targets = {
         "breakfast": 500,
         "lunch": 750,
@@ -72,15 +68,15 @@ def _candidate_pool() -> list[CatalogRecipeVersion]:
     }
     for meal_type, target in calorie_targets.items():
         for index in range(9):
-            recipes.append(
-                _recipe(
-                    recipe_id=f"{meal_type}-{index:02d}",
+            catalog_meals.append(
+                _catalog_meal(
+                    catalog_meal_id=f"{meal_type}-{index:02d}",
                     meal_type=meal_type,
                     calories=target + index,
                     food_reference_id=index + 1,
                 )
             )
-    return recipes
+    return catalog_meals
 
 
 def test_calorie_allocation_is_deterministic_and_balanced():
@@ -120,19 +116,19 @@ def test_ingredient_affinity_accepts_naive_now_with_aware_events():
     assert profile.weights[7] == pytest.approx(1.0)
 
 
-def test_scoring_stable_tie_breaks_by_recipe_version_id():
-    recipes = [
-        _recipe("b-version", "breakfast", 500),
-        _recipe("a-version", "breakfast", 500),
+def test_scoring_stable_tie_breaks_by_catalog_meal_version_id():
+    catalog_meals = [
+        _catalog_meal("b-version", "breakfast", 500),
+        _catalog_meal("a-version", "breakfast", 500),
     ]
     ranked = RecipeScoringService().rank(
-        recipes,
+        catalog_meals,
         meal_type="breakfast",
         target_calories=500,
         affinity=IngredientAffinityService().build_profile([], now=datetime.now(UTC)),
     )
 
-    assert [item.recipe.id for item in ranked] == ["a-version", "b-version"]
+    assert [item.catalog_meal.id for item in ranked] == ["a-version", "b-version"]
     assert ranked[0].score == ranked[1].score
 
 
@@ -143,7 +139,7 @@ def test_scoring_stays_within_bounds():
     )
 
     score = RecipeScoringService().score(
-        _recipe("candidate", "breakfast", 500, food_reference_id=1),
+        _catalog_meal("candidate", "breakfast", 500, food_reference_id=1),
         target_calories=500,
         affinity=profile,
     )
@@ -157,20 +153,20 @@ def test_optimizer_fallback_is_distance_ranked_after_tolerance_misses():
         now=datetime.now(UTC),
     )
     optimizer = ThreeDayPlanOptimizer()
-    recipes = [
-        _recipe("far-affinity", "breakfast", 1200, food_reference_id=99),
-        _recipe("closer-no-affinity", "breakfast", 900, food_reference_id=1),
+    catalog_meals = [
+        _catalog_meal("far-affinity", "breakfast", 1200, food_reference_id=99),
+        _catalog_meal("closer-no-affinity", "breakfast", 900, food_reference_id=1),
     ]
 
     ranked = optimizer._rank_with_fallback(
-        recipes,
+        catalog_meals,
         meal_type="breakfast",
         target_calories=500,
         affinity=affinity,
         selected_ids=set(),
     )
 
-    assert [item.recipe.id for item in ranked] == [
+    assert [item.catalog_meal.id for item in ranked] == [
         "closer-no-affinity",
         "far-affinity",
     ]
@@ -189,7 +185,7 @@ def test_three_day_optimizer_produces_9_slots_and_45_alternatives():
     assert not isinstance(result, MealRecommendationInsufficiency)
     assert result.algorithm_version == ALGORITHM_VERSION
     assert len(result.slots) == 9
-    assert len({slot.recipe.id for slot in result.slots}) == 9
+    assert len({slot.catalog_meal.id for slot in result.slots}) == 9
     assert set(result.alternatives) == {
         (day_index, meal_type)
         for day_index in range(3)
@@ -198,15 +194,15 @@ def test_three_day_optimizer_produces_9_slots_and_45_alternatives():
     assert sum(len(items) for items in result.alternatives.values()) == 45
     for slot in result.slots:
         alternatives = result.alternatives[(slot.day_index, slot.meal_type)]
-        assert len({item.recipe.id for item in alternatives}) == 5
-        assert slot.recipe.id not in {item.recipe.id for item in alternatives}
+        assert len({item.catalog_meal.id for item in alternatives}) == 5
+        assert slot.catalog_meal.id not in {item.catalog_meal.id for item in alternatives}
 
 
 def test_three_day_optimizer_returns_typed_insufficiency_for_sparse_catalog():
     profile = IngredientAffinityService().build_profile([], now=datetime.now(UTC))
 
     result = ThreeDayPlanOptimizer().build_plan(
-        [_recipe("breakfast-only", "breakfast", 500)],
+        [_catalog_meal("breakfast-only", "breakfast", 500)],
         daily_calories=2000,
         affinity=profile,
     )
@@ -218,13 +214,13 @@ def test_three_day_optimizer_returns_typed_insufficiency_for_sparse_catalog():
 def test_optimizer_is_repeatable_for_same_inputs():
     profile = IngredientAffinityService().build_profile([], now=datetime.now(UTC))
     optimizer = ThreeDayPlanOptimizer()
-    recipes = _candidate_pool()
+    catalog_meals = _candidate_pool()
 
-    first = optimizer.build_plan(recipes, daily_calories=2000, affinity=profile)
-    second = optimizer.build_plan(list(reversed(recipes)), daily_calories=2000, affinity=profile)
+    first = optimizer.build_plan(catalog_meals, daily_calories=2000, affinity=profile)
+    second = optimizer.build_plan(list(reversed(catalog_meals)), daily_calories=2000, affinity=profile)
 
     assert not isinstance(first, MealRecommendationInsufficiency)
     assert not isinstance(second, MealRecommendationInsufficiency)
-    assert [slot.recipe.id for slot in first.slots] == [
-        slot.recipe.id for slot in second.slots
+    assert [slot.catalog_meal.id for slot in first.slots] == [
+        slot.catalog_meal.id for slot in second.slots
     ]

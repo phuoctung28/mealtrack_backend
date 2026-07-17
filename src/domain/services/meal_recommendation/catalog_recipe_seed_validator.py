@@ -8,7 +8,6 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-ALLOWED_SOURCE_TYPES = frozenset({"commissioned"})
 REQUIRED_CUISINES = ("vietnamese", "japanese", "korean")
 REQUIRED_MEAL_TYPES = ("breakfast", "lunch", "dinner")
 PRODUCTION_CUISINE_COUNTS = {
@@ -16,6 +15,12 @@ PRODUCTION_CUISINE_COUNTS = {
     "japanese": 60,
     "korean": 60,
 }
+_DERIVED_RECIPE_FIELDS = frozenset(
+    {"servings", "instructions", "calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g"}
+)
+_DERIVED_INGREDIENT_FIELDS = frozenset(
+    {"resolved_grams", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g"}
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +43,7 @@ def validate_catalog_seed_manifest(
     expected_recipe_count: int = 180,
     min_per_cuisine_meal_type: int = 5,
     expected_cuisine_counts: dict[str, int] | None = PRODUCTION_CUISINE_COUNTS,
+    allow_declared_expected_count_mismatch: bool = False,
 ) -> CatalogSeedValidationResult:
     """Validate catalog recipe seed manifest before any DB writes."""
 
@@ -51,7 +57,10 @@ def validate_catalog_seed_manifest(
         )
 
     declared_expected = manifest.get("expected_recipe_count", expected_recipe_count)
-    if declared_expected != expected_recipe_count:
+    if (
+        declared_expected != expected_recipe_count
+        and not allow_declared_expected_count_mismatch
+    ):
         errors.append(
             f"expected_recipe_count must be {expected_recipe_count}, "
             f"got {declared_expected}"
@@ -142,38 +151,8 @@ def _validate_recipe(
     if _string(recipe.get("name")) is None:
         errors.append(f"recipes[{index}].name is required")
 
-    _validate_rights(recipe.get("rights"), index, errors)
-    _validate_sources(recipe.get("sources"), index, errors)
+    _validate_absent_derived_recipe_fields(recipe, index, errors)
     _validate_ingredients(recipe.get("ingredients"), index, errors)
-    _validate_recipe_macro_totals(recipe, index, errors)
-
-
-def _validate_rights(rights: Any, index: int, errors: list[str]) -> None:
-    if not isinstance(rights, dict):
-        errors.append(f"recipes[{index}].rights must be an object")
-        return
-    if rights.get("status") != "approved":
-        errors.append(f"recipes[{index}].rights.status must be approved")
-    if _string(rights.get("agreement_identifier")) is None:
-        errors.append(f"recipes[{index}].rights.agreement_identifier is required")
-    if _string(rights.get("approver")) is None:
-        errors.append(f"recipes[{index}].rights.approver is required")
-
-
-def _validate_sources(sources: Any, index: int, errors: list[str]) -> None:
-    if not isinstance(sources, list) or not sources:
-        errors.append(f"recipes[{index}].sources must be a non-empty array")
-        return
-    for source_index, source in enumerate(sources):
-        if not isinstance(source, dict):
-            errors.append(f"recipes[{index}].sources[{source_index}] must be an object")
-            continue
-        source_type = source.get("source_type")
-        if source_type not in ALLOWED_SOURCE_TYPES:
-            errors.append(
-                f"recipes[{index}].sources[{source_index}].source_type "
-                f"is not allowlisted: {source_type}"
-            )
 
 
 def _validate_ingredients(ingredients: Any, index: int, errors: list[str]) -> None:
@@ -186,123 +165,56 @@ def _validate_ingredients(ingredients: Any, index: int, errors: list[str]) -> No
                 f"recipes[{index}].ingredients[{ingredient_index}] must be an object"
             )
             continue
-        if not isinstance(ingredient.get("food_reference_id"), int):
+        food_reference_id = ingredient.get("food_reference_id")
+        if food_reference_id is not None and not isinstance(food_reference_id, int):
             errors.append(
                 f"recipes[{index}].ingredients[{ingredient_index}].food_reference_id "
-                "is required"
+                "must be an integer or null"
             )
-        _validate_non_negative_macro(
-            ingredient,
-            index,
-            ingredient_index,
-            "protein_g",
-            errors,
-        )
-        carbs = _validate_non_negative_macro(
-            ingredient,
-            index,
-            ingredient_index,
-            "carbs_g",
-            errors,
-        )
-        _validate_non_negative_macro(ingredient, index, ingredient_index, "fat_g", errors)
-        fiber = _validate_non_negative_macro(
-            ingredient,
-            index,
-            ingredient_index,
-            "fiber_g",
-            errors,
-        )
-        sugar = _validate_non_negative_macro(
-            ingredient,
-            index,
-            ingredient_index,
-            "sugar_g",
-            errors,
-        )
-        if carbs is not None and fiber is not None and fiber > carbs:
+        if _string(ingredient.get("name")) is None:
             errors.append(
-                f"recipes[{index}].ingredients[{ingredient_index}].fiber_g exceeds carbs_g"
+                f"recipes[{index}].ingredients[{ingredient_index}].name is required"
             )
-        if carbs is not None and sugar is not None and sugar > carbs:
+        quantity = ingredient.get("quantity")
+        if not isinstance(quantity, int | float) or quantity <= 0:
             errors.append(
-                f"recipes[{index}].ingredients[{ingredient_index}].sugar_g exceeds carbs_g"
-            )
-        resolved_grams = ingredient.get("resolved_grams")
-        if not isinstance(resolved_grams, int | float) or resolved_grams <= 0:
-            errors.append(
-                f"recipes[{index}].ingredients[{ingredient_index}].resolved_grams "
+                f"recipes[{index}].ingredients[{ingredient_index}].quantity "
                 "must be positive"
             )
+        if _string(ingredient.get("unit")) is None:
+            errors.append(
+                f"recipes[{index}].ingredients[{ingredient_index}].unit is required"
+            )
+        _validate_absent_derived_ingredient_fields(
+            ingredient,
+            index,
+            ingredient_index,
+            errors,
+        )
 
 
-def _validate_recipe_macro_totals(
+def _validate_absent_derived_recipe_fields(
     recipe: dict[str, Any],
     index: int,
     errors: list[str],
 ) -> None:
-    ingredients = recipe.get("ingredients")
-    if not isinstance(ingredients, list):
-        return
-
-    totals = {
-        "protein_g": 0.0,
-        "carbs_g": 0.0,
-        "fat_g": 0.0,
-        "fiber_g": 0.0,
-        "sugar_g": 0.0,
-    }
-    for ingredient in ingredients:
-        if not isinstance(ingredient, dict):
-            return
-        for key in totals:
-            value = ingredient.get(key, 0.0)
-            if not isinstance(value, int | float):
-                return
-            totals[key] += float(value)
-
-    for key, expected in totals.items():
-        supplied = recipe.get(key)
-        if supplied is not None and not isinstance(supplied, int | float):
-            errors.append(f"recipes[{index}].{key} must be numeric")
-        elif supplied is not None and not _close_enough(float(supplied), expected):
-            errors.append(
-                f"recipes[{index}].{key} must match ingredient sum "
-                f"{expected:.2f}, got {supplied}"
-            )
-
-    supplied_calories = recipe.get("calories")
-    if supplied_calories is not None and not isinstance(supplied_calories, int | float):
-        errors.append(f"recipes[{index}].calories must be numeric")
-    elif supplied_calories is not None:
-        derived_calories = round(
-            totals["protein_g"] * 4
-            + max(totals["carbs_g"] - totals["fiber_g"], 0) * 4
-            + totals["fiber_g"] * 2
-            + totals["fat_g"] * 9
+    for key in sorted(_DERIVED_RECIPE_FIELDS.intersection(recipe)):
+        errors.append(
+            f"recipes[{index}].{key} is derived by backend and must not be supplied"
         )
-        if not _close_enough(float(supplied_calories), derived_calories, tolerance=1.0):
-            errors.append(
-                f"recipes[{index}].calories must match ingredient-derived "
-                f"{derived_calories}, got {supplied_calories}"
-            )
 
 
-def _validate_non_negative_macro(
+def _validate_absent_derived_ingredient_fields(
     ingredient: dict[str, Any],
     recipe_index: int,
     ingredient_index: int,
-    key: str,
     errors: list[str],
-) -> float | None:
-    value = ingredient.get(key, 0.0)
-    if not isinstance(value, int | float) or value < 0:
+) -> None:
+    for key in sorted(_DERIVED_INGREDIENT_FIELDS.intersection(ingredient)):
         errors.append(
             f"recipes[{recipe_index}].ingredients[{ingredient_index}].{key} "
-            "must be non-negative"
+            "is derived by backend and must not be supplied"
         )
-        return None
-    return float(value)
 
 
 def _string(value: Any) -> str | None:
@@ -310,7 +222,3 @@ def _string(value: Any) -> str | None:
         return None
     value = value.strip()
     return value or None
-
-
-def _close_enough(left: float, right: float, *, tolerance: float = 0.01) -> bool:
-    return abs(left - right) <= tolerance

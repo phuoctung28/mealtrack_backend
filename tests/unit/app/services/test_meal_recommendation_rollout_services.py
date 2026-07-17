@@ -34,8 +34,6 @@ def _plan() -> PersistedMealRecommendationPlan:
         start_date=date(2026, 7, 16),
         daily_calories=2000,
         algorithm_version="catalog_deterministic_v1",
-        catalog_release_id="release-1",
-        allergy_evaluated=False,
         operation="three_day",
         idempotency_key="key-1",
         request_fingerprint="f" * 64,
@@ -100,10 +98,8 @@ async def test_analytics_uses_pseudonymous_id_and_bounded_properties():
     assert set(payload["properties"]) == {
         "schema_version",
         "algorithm_version",
-        "catalog_release_id",
         "slots_count",
         "alternatives_count",
-        "allergy_evaluated",
     }
 
 

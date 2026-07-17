@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.api.schemas.response.meal_recommendation_responses import (
     MealRecommendationAlternativeResponse,
+    MealRecommendationCatalogMealResponse,
+    MealRecommendationIngredientResponse,
+    MealRecommendationMacrosResponse,
     MealRecommendationPlanResponse,
     MealRecommendationSlotResponse,
 )
@@ -20,13 +23,14 @@ from src.app.services.meal_recommendation_cohort_service import (
     MealRecommendationCohortService,
 )
 from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
+from src.domain.model.meal_recommendation.catalog_recipe import CatalogMeal
 from src.observability import distribution_metric, increment_metric, log_event
 
 
 class SwapMealRecommendationSlotRequest(BaseModel):
     request_id: str = Field(..., min_length=1, max_length=160)
-    expected_version: int = Field(..., ge=1)
-    alternative_recipe_version_id: str | None = None
+    expected_selection_version: int = Field(..., ge=1)
+    alternative_catalog_meal_id: str | None = None
     reason: Literal["user_requested", "alternative_selected"] = "user_requested"
 
     @field_validator("request_id")
@@ -122,31 +126,72 @@ def to_response(
         start_date=plan.start_date,
         daily_calories=plan.daily_calories,
         algorithm_version=plan.algorithm_version,
-        catalog_release_id=plan.catalog_release_id,
-        allergy_evaluated=plan.allergy_evaluated,
+        allergy_evaluated=False,
         slots=[
             MealRecommendationSlotResponse(
                 id=slot.id,
                 slot_date=slot.slot_date,
                 day_index=slot.day_index,
                 meal_type=slot.meal_type,
-                recipe_version_id=slot.recipe_version_id,
+                catalog_meal_id=slot.catalog_meal_id,
+                catalog_meal=_catalog_meal_response(_selected_catalog_meal(slot)),
                 target_calories=slot.target_calories,
                 score=slot.score,
                 position=slot.position,
-                version=slot.version,
+                selection_version=slot.selection_version,
                 logged_meal_id=slot.logged_meal_id,
                 alternatives=[
                     MealRecommendationAlternativeResponse(
                         id=alternative.id,
-                        recipe_version_id=alternative.recipe_version_id,
-                        target_calories=alternative.target_calories,
+                        catalog_meal_id=alternative.catalog_meal_id,
+                        catalog_meal=_catalog_meal_response(
+                            _required_catalog_meal(alternative.catalog_meal)
+                        ),
                         score=alternative.score,
-                        position=alternative.position,
+                        candidate_rank=alternative.candidate_rank,
                     )
                     for alternative in slot.alternatives
                 ],
             )
             for slot in plan.slots
+        ],
+    )
+
+
+def _selected_catalog_meal(slot) -> CatalogMeal:
+    if slot.selected is not None and slot.selected.catalog_meal is not None:
+        return slot.selected.catalog_meal
+    raise ValueError(f"catalog meal details are missing for slot {slot.id}")
+
+
+def _required_catalog_meal(catalog_meal: CatalogMeal | None) -> CatalogMeal:
+    if catalog_meal is None:
+        raise ValueError("catalog meal details are missing for recommendation candidate")
+    return catalog_meal
+
+
+def _catalog_meal_response(catalog_meal: CatalogMeal) -> MealRecommendationCatalogMealResponse:
+    return MealRecommendationCatalogMealResponse(
+        id=catalog_meal.id,
+        name=catalog_meal.name,
+        cuisine=catalog_meal.cuisine,
+        description=catalog_meal.description,
+        image_url=catalog_meal.image_url,
+        calories=catalog_meal.calories,
+        macros=MealRecommendationMacrosResponse(
+            protein_g=float(catalog_meal.protein_g),
+            carbs_g=float(catalog_meal.carbs_g),
+            fat_g=float(catalog_meal.fat_g),
+            fiber_g=float(catalog_meal.fiber_g),
+            sugar_g=float(catalog_meal.sugar_g),
+        ),
+        ingredients=[
+            MealRecommendationIngredientResponse(
+                food_reference_id=ingredient.food_reference_id,
+                display_name=ingredient.display_name,
+                quantity=float(ingredient.quantity),
+                unit=ingredient.unit,
+            )
+            for ingredient in catalog_meal.ingredients
         ],
     )

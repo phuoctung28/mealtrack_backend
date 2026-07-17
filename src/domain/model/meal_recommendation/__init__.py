@@ -1,9 +1,8 @@
 """Meal recommendation domain models."""
 
 from .catalog_recipe import (
-    CatalogRecipeIngredient,
-    CatalogRecipeVersion,
-    CatalogRelease,
+    CatalogMeal,
+    CatalogMealIngredient,
     MealRecommendationAlternative,
     MealRecommendationInsufficiency,
     MealRecommendationInsufficiencyReason,
@@ -11,21 +10,20 @@ from .catalog_recipe import (
     MealRecommendationSlot,
 )
 from .meal_recommendation_plan import (
-    PersistedMealRecommendationAlternative,
+    PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
 
 __all__ = [
-    "CatalogRecipeIngredient",
-    "CatalogRecipeVersion",
-    "CatalogRelease",
+    "CatalogMeal",
+    "CatalogMealIngredient",
     "MealRecommendationAlternative",
     "MealRecommendationInsufficiency",
     "MealRecommendationInsufficiencyReason",
     "MealRecommendationPlan",
     "MealRecommendationSlot",
-    "PersistedMealRecommendationAlternative",
+    "PersistedMealRecommendationCandidate",
     "PersistedMealRecommendationPlan",
     "PersistedMealRecommendationSlot",
 ]

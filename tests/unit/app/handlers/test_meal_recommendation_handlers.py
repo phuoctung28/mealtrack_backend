@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -26,7 +27,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationPersistenceConflictError,
 )
 from src.domain.model.meal_recommendation import (
-    CatalogRecipeVersion,
+    CatalogMeal,
     MealRecommendationAlternative,
     MealRecommendationPlan,
     MealRecommendationSlot,
@@ -49,15 +50,11 @@ class _PlanRepo:
 
 
 class _CatalogRepo:
-    def __init__(self, release=None, versions=None):
-        self.release = release
-        self.versions = versions or []
+    def __init__(self, meals=None):
+        self.meals = meals or []
 
-    async def get_active_release(self):
-        return self.release
-
-    async def list_active_versions(self):
-        return self.versions
+    async def list_active_meals(self):
+        return self.meals
 
 
 class _ConflictPlanRepo(_PlanRepo):
@@ -101,39 +98,9 @@ class _Uow:
 
 
 class _Optimizer:
-    def build_plan(self, recipes, *, daily_calories, affinity):
-        recipe = CatalogRecipeVersion(
-            id="version-1",
-            recipe_id="recipe-1",
-            release_id="release-1",
-            recipe_key="recipe-key-1",
-            name="Recipe 1",
-            cuisine="vietnamese",
-            status="published",
-            version_number=1,
-            calories=500,
-            protein_g=20,
-            carbs_g=35,
-            fat_g=12,
-            fiber_g=4,
-            meal_types=("breakfast",),
-        )
-        alternative = CatalogRecipeVersion(
-            id="version-2",
-            recipe_id="recipe-2",
-            release_id="release-1",
-            recipe_key="recipe-key-2",
-            name="Recipe 2",
-            cuisine="vietnamese",
-            status="published",
-            version_number=1,
-            calories=500,
-            protein_g=20,
-            carbs_g=35,
-            fat_g=12,
-            fiber_g=4,
-            meal_types=("breakfast",),
-        )
+    def build_plan(self, catalog_meals, *, daily_calories, affinity):
+        recipe = _catalog_meal("catalog-1")
+        alternative = _catalog_meal("catalog-2")
         return MealRecommendationPlan(
             algorithm_version="catalog_deterministic_v1",
             slots=(
@@ -141,7 +108,7 @@ class _Optimizer:
                     day_index=0,
                     meal_type="breakfast",
                     target_calories=500,
-                    recipe=recipe,
+                    catalog_meal=recipe,
                     score=1.0,
                 ),
             ),
@@ -151,7 +118,7 @@ class _Optimizer:
                         day_index=0,
                         meal_type="breakfast",
                         target_calories=500,
-                        recipe=alternative,
+                        catalog_meal=alternative,
                         score=0.9,
                     ),
                 )
@@ -171,6 +138,24 @@ def _command() -> CreateThreeDayMealRecommendationCommand:
         start_date=date(2026, 7, 16),
         timezone="UTC",
         daily_calories=2000,
+    )
+
+
+def _catalog_meal(meal_id: str) -> CatalogMeal:
+    return CatalogMeal(
+        id=meal_id,
+        catalog_key=f"key-{meal_id}",
+        content_hash=f"{meal_id:0<64}"[:64],
+        name=f"Meal {meal_id}",
+        cuisine="vietnamese",
+        description=None,
+        image_url=None,
+        protein_g=Decimal("125"),
+        carbs_g=Decimal("0"),
+        fat_g=Decimal("0"),
+        fiber_g=Decimal("0"),
+        meal_types=("breakfast",),
+        is_active=True,
     )
 
 
@@ -217,9 +202,9 @@ async def test_create_handler_conflicts_on_idempotency_fingerprint_mismatch():
 
 
 @pytest.mark.asyncio
-async def test_create_handler_fails_closed_without_active_release():
+async def test_create_handler_fails_closed_without_catalog_meals():
     handler = CreateThreeDayMealRecommendationCommandHandler(
-        uow=_Uow(_PlanRepo(), _CatalogRepo(release=None)),
+        uow=_Uow(_PlanRepo(), _CatalogRepo(meals=[])),
         history_projector=_HistoryProjector(),
     )
 
@@ -235,7 +220,7 @@ async def test_create_handler_replays_after_persistence_conflict():
     )
     plans = _ConflictPlanRepo(replay_plan)
     handler = CreateThreeDayMealRecommendationCommandHandler(
-        uow=_Uow(plans, _CatalogRepo(release=type("Release", (), {"id": "release-1"})())),
+        uow=_Uow(plans, _CatalogRepo(meals=[_catalog_meal("catalog-1")])),
         optimizer=_Optimizer(),
         history_projector=_HistoryProjector(),
     )

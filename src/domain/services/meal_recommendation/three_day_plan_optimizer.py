@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.domain.model.meal_recommendation import (
-    CatalogRecipeVersion,
+    CatalogMeal,
     MealRecommendationInsufficiency,
     MealRecommendationInsufficiencyReason,
     MealRecommendationPlan,
@@ -42,19 +42,19 @@ class ThreeDayPlanOptimizer:
 
     def build_plan(
         self,
-        recipes: list[CatalogRecipeVersion],
+        catalog_meals: list[CatalogMeal],
         *,
         daily_calories: int,
         affinity: IngredientAffinityProfile,
         cuisines: set[str] | None = None,
     ) -> MealRecommendationPlan | MealRecommendationInsufficiency:
-        candidates = _filter_supported_recipes(recipes, cuisines)
-        if len({recipe.id for recipe in candidates}) < PLAN_DAYS * len(MEAL_TYPE_ORDER):
+        candidates = _filter_supported_catalog_meals(catalog_meals, cuisines)
+        if len({catalog_meal.id for catalog_meal in candidates}) < PLAN_DAYS * len(MEAL_TYPE_ORDER):
             return MealRecommendationInsufficiency(
                 reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_CURRENT_RECIPES,
-                message="not enough unique recipes for 3-day plan",
+                message="not enough unique catalog_meals for 3-day plan",
                 required=PLAN_DAYS * len(MEAL_TYPE_ORDER),
-                available=len({recipe.id for recipe in candidates}),
+                available=len({catalog_meal.id for catalog_meal in candidates}),
             )
 
         allocations = self._allocation.allocate(daily_calories)
@@ -79,13 +79,13 @@ class ThreeDayPlanOptimizer:
                         available=0,
                     )
                 winner = ranked[0]
-                selected_ids.add(winner.recipe.id)
+                selected_ids.add(winner.catalog_meal.id)
                 slots.append(
                     MealRecommendationSlot(
                         day_index=day_index,
                         meal_type=meal_type,
                         target_calories=target_calories,
-                        recipe=winner.recipe,
+                        catalog_meal=winner.catalog_meal,
                         score=winner.score,
                     )
                 )
@@ -97,8 +97,8 @@ class ThreeDayPlanOptimizer:
                 day_index=slot.day_index,
                 meal_type=slot.meal_type,
                 target_calories=slot.target_calories,
-                selected_recipe_id=slot.recipe.id,
-                selected_recipe_ids=selected_ids,
+                selected_catalog_meal_id=slot.catalog_meal.id,
+                selected_catalog_meal_ids=selected_ids,
                 affinity=affinity,
             )
             if isinstance(result, MealRecommendationInsufficiency):
@@ -113,7 +113,7 @@ class ThreeDayPlanOptimizer:
 
     def _rank_with_fallback(
         self,
-        recipes: list[CatalogRecipeVersion],
+        catalog_meals: list[CatalogMeal],
         *,
         meal_type: str,
         target_calories: int,
@@ -121,17 +121,17 @@ class ThreeDayPlanOptimizer:
         selected_ids: set[str],
     ):
         ranked = self._scoring.rank(
-            recipes,
+            catalog_meals,
             meal_type=meal_type,
             target_calories=target_calories,
             affinity=affinity,
-            excluded_recipe_ids=selected_ids,
+            excluded_catalog_meal_ids=selected_ids,
         )
         for tolerance in (0.20, 0.30):
             within_tolerance = [
                 item
                 for item in ranked
-                if abs(item.recipe.calories - target_calories) / target_calories
+                if abs(item.catalog_meal.calories - target_calories) / target_calories
                 <= tolerance
             ]
             if within_tolerance:
@@ -139,22 +139,22 @@ class ThreeDayPlanOptimizer:
         return sorted(
             ranked,
             key=lambda item: (
-                abs(item.recipe.calories - target_calories),
+                abs(item.catalog_meal.calories - target_calories),
                 -item.score,
-                item.recipe.id,
+                item.catalog_meal.id,
             ),
         )
 
 
-def _filter_supported_recipes(
-    recipes: list[CatalogRecipeVersion],
+def _filter_supported_catalog_meals(
+    catalog_meals: list[CatalogMeal],
     cuisines: set[str] | None,
-) -> list[CatalogRecipeVersion]:
+) -> list[CatalogMeal]:
     filtered = [
-        recipe
-        for recipe in recipes
-        if recipe.status == "published"
-        and (cuisines is None or recipe.cuisine in cuisines)
-        and set(recipe.meal_types).intersection(MEAL_TYPE_ORDER)
+        catalog_meal
+        for catalog_meal in catalog_meals
+        if catalog_meal.status == "published"
+        and (cuisines is None or catalog_meal.cuisine in cuisines)
+        and set(catalog_meal.meal_types).intersection(MEAL_TYPE_ORDER)
     ]
-    return sorted(filtered, key=lambda recipe: recipe.id)
+    return sorted(filtered, key=lambda catalog_meal: catalog_meal.id)

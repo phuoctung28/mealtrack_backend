@@ -1,12 +1,12 @@
 ---
 title: "Catalog Meal Recommendation MVP"
 description: "Build a durable catalog-backed 3-day recommendation flow with canonical ingredients, immutable recipes, deterministic plans, swaps, and normal meal logging."
-status: in_progress
+status: cancelled
 priority: P1
 branch: "delivery"
 effort: "5-7 weeks"
 tags: [feature, backend, database, api, recommendation, critical]
-blockedBy: []
+blockedBy: [260716-1509-four-table-meal-catalog-rework]
 blocks: []
 created: "2026-07-15"
 createdBy: "ck:plan"
@@ -14,6 +14,8 @@ source: skill
 ---
 
 # Catalog Meal Recommendation MVP
+
+> Superseded on 2026-07-16 by [Four-Table Meal Catalog Rework](../260716-1509-four-table-meal-catalog-rework/plan.md) after the user explicitly reduced the approved persistence scope from 12 feature tables to 4. Implementation history below is retained as evidence; do not continue this plan.
 
 ## Overview
 

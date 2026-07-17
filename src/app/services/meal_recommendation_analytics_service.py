@@ -42,10 +42,8 @@ class MealRecommendationAnalyticsService:
             properties={
                 "schema_version": "meal_recommendation_v1",
                 "algorithm_version": plan.algorithm_version,
-                "catalog_release_id": plan.catalog_release_id,
                 "slots_count": len(plan.slots),
                 "alternatives_count": sum(len(slot.alternatives) for slot in plan.slots),
-                "allergy_evaluated": plan.allergy_evaluated,
             },
         )
 

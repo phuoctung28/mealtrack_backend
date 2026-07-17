@@ -11,6 +11,6 @@ class SwapMealRecommendationSlotCommand(Command):
     plan_id: str
     slot_id: str
     request_id: str
-    expected_version: int
-    alternative_recipe_version_id: str | None = None
+    expected_selection_version: int
+    alternative_catalog_meal_id: str | None = None
     reason: str = "user_requested"

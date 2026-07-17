@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.domain.model.meal_recommendation import (
-    CatalogRecipeVersion,
+    CatalogMeal,
     MealRecommendationAlternative,
     MealRecommendationInsufficiency,
     MealRecommendationInsufficiencyReason,
@@ -24,24 +24,24 @@ class SlotAlternativeService:
 
     def select_alternatives(
         self,
-        recipes: list[CatalogRecipeVersion],
+        catalog_meals: list[CatalogMeal],
         *,
         day_index: int,
         meal_type: str,
         target_calories: int,
-        selected_recipe_id: str,
-        selected_recipe_ids: set[str],
+        selected_catalog_meal_id: str,
+        selected_catalog_meal_ids: set[str],
         affinity: IngredientAffinityProfile,
         count: int = 5,
     ) -> tuple[MealRecommendationAlternative, ...] | MealRecommendationInsufficiency:
-        excluded = set(selected_recipe_ids)
-        excluded.add(selected_recipe_id)
+        excluded = set(selected_catalog_meal_ids)
+        excluded.add(selected_catalog_meal_id)
         ranked = self._scoring.rank(
-            recipes,
+            catalog_meals,
             meal_type=meal_type,
             target_calories=target_calories,
             affinity=affinity,
-            excluded_recipe_ids=excluded,
+            excluded_catalog_meal_ids=excluded,
         )
         if len(ranked) < count:
             return MealRecommendationInsufficiency(
@@ -55,9 +55,8 @@ class SlotAlternativeService:
                 day_index=day_index,
                 meal_type=meal_type,
                 target_calories=target_calories,
-                recipe=item.recipe,
+                catalog_meal=item.catalog_meal,
                 score=item.score,
             )
             for item in ranked[:count]
         )
-

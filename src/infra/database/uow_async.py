@@ -15,7 +15,7 @@ from src.infra.repositories.affiliate_event_outbox_repository import (
     AffiliateEventOutboxRepository,
 )
 from src.infra.repositories.catalog_recipe_repository_async import (
-    AsyncCatalogRecipeRepository,
+    AsyncCatalogMealRepository,
 )
 from src.infra.repositories.cheat_day_repository_async import AsyncCheatDayRepository
 from src.infra.repositories.food_reference_repository_async import (
@@ -125,7 +125,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.weight_entries = AsyncWeightRepository(session)
         self.movement_entries = AsyncMovementRepository(session)
         self.food_references = AsyncFoodReferenceRepository(session)
-        self.catalog_recipes = AsyncCatalogRecipeRepository(session)
+        self.catalog_recipes = AsyncCatalogMealRepository(session)
         self.meal_translations = AsyncMealTranslationRepository(session)
         self.promo_codes = PromoCodeRepository(session)
         self.referrals = ReferralRepository(session)

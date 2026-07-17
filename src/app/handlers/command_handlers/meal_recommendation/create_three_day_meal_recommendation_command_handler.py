@@ -22,7 +22,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 )
 from src.domain.model.meal_recommendation import (
     MealRecommendationInsufficiency,
-    PersistedMealRecommendationAlternative,
+    PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
@@ -69,11 +69,10 @@ class CreateThreeDayMealRecommendationCommandHandler(
                     raise MealRecommendationIdempotencyConflictError
                 return existing
 
-            release = await uow.catalog_recipes.get_active_release()
-            if release is None:
+            catalog_meals = await uow.catalog_recipes.list_active_meals()
+            if not catalog_meals:
                 raise MealRecommendationCatalogUnavailableError
 
-            recipes = await uow.catalog_recipes.list_active_versions()
             affinity = await self.history_projector.build_affinity(
                 uow,
                 user_id=command.user_id,
@@ -81,14 +80,14 @@ class CreateThreeDayMealRecommendationCommandHandler(
                 timezone=command.timezone,
             )
             result = self.optimizer.build_plan(
-                recipes,
+                catalog_meals,
                 daily_calories=command.daily_calories,
                 affinity=affinity,
             )
             if isinstance(result, MealRecommendationInsufficiency):
                 raise MealRecommendationInsufficientCatalogError(result.message)
 
-            plan = _to_persisted_plan(command, fingerprint, release.id, result)
+            plan = _to_persisted_plan(command, fingerprint, result)
             try:
                 return await uow.meal_recommendation_plans.save_new_active_plan(plan)
             except MealRecommendationPersistenceConflictError:
@@ -107,18 +106,37 @@ class CreateThreeDayMealRecommendationCommandHandler(
 def _to_persisted_plan(
     command: CreateThreeDayMealRecommendationCommand,
     fingerprint: str,
-    catalog_release_id: str,
     plan,
 ) -> PersistedMealRecommendationPlan:
     slots: list[PersistedMealRecommendationSlot] = []
+    batch_id = str(uuid.uuid4())
     for position, slot in enumerate(plan.slots):
+        slot_id = str(uuid.uuid4())
+        selected_id = batch_id if position == 0 else str(uuid.uuid4())
+        selected = PersistedMealRecommendationCandidate(
+            id=selected_id,
+            slot_id=slot_id,
+            recommendation_date=command.start_date + timedelta(days=slot.day_index),
+            meal_type=slot.meal_type,
+            catalog_meal_id=slot.catalog_meal.id,
+            candidate_rank=0,
+            is_selected=True,
+            score=_decimal_score(slot.score),
+            selection_version=1,
+            catalog_meal=slot.catalog_meal,
+        )
         alternatives = tuple(
-            PersistedMealRecommendationAlternative(
+            PersistedMealRecommendationCandidate(
                 id=str(uuid.uuid4()),
-                recipe_version_id=alternative.recipe.id,
-                target_calories=alternative.target_calories,
-                score=alternative.score,
-                position=alternative_position,
+                slot_id=slot_id,
+                recommendation_date=command.start_date + timedelta(days=slot.day_index),
+                meal_type=slot.meal_type,
+                catalog_meal_id=alternative.catalog_meal.id,
+                candidate_rank=alternative_position + 1,
+                is_selected=False,
+                score=_decimal_score(alternative.score),
+                selection_version=1,
+                catalog_meal=alternative.catalog_meal,
             )
             for alternative_position, alternative in enumerate(
                 plan.alternatives[(slot.day_index, slot.meal_type)]
@@ -126,32 +144,37 @@ def _to_persisted_plan(
         )
         slots.append(
             PersistedMealRecommendationSlot(
-                id=str(uuid.uuid4()),
+                id=slot_id,
                 slot_date=command.start_date + timedelta(days=slot.day_index),
                 day_index=slot.day_index,
                 meal_type=slot.meal_type,
-                recipe_version_id=slot.recipe.id,
+                catalog_meal_id=slot.catalog_meal.id,
                 target_calories=slot.target_calories,
                 score=slot.score,
                 position=position,
+                selected=selected,
                 alternatives=alternatives,
             )
         )
     return PersistedMealRecommendationPlan(
-        id=str(uuid.uuid4()),
+        id=batch_id,
         user_id=command.user_id,
         status="active",
         timezone=command.timezone,
         start_date=command.start_date,
         daily_calories=command.daily_calories,
         algorithm_version=plan.algorithm_version,
-        catalog_release_id=catalog_release_id,
-        allergy_evaluated=False,
         operation=command.operation,
         idempotency_key=command.idempotency_key,
         request_fingerprint=fingerprint,
         slots=tuple(slots),
     )
+
+
+def _decimal_score(value: float):
+    from decimal import Decimal
+
+    return Decimal(str(value))
 
 
 def _request_fingerprint(command: CreateThreeDayMealRecommendationCommand) -> str:

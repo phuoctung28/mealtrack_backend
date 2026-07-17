@@ -1,33 +1,14 @@
 """Meal recommendation catalog database models."""
 
-from .catalog_recipe import (
-    CatalogRecipeIngredientORM,
-    CatalogRecipeMealTypeORM,
-    CatalogRecipeORM,
-    CatalogRecipeRightsRecordORM,
-    CatalogRecipeSourceORM,
-    CatalogRecipeVersionORM,
-    CatalogReleaseORM,
-)
+from .catalog_recipe import MealCatalogIngredientORM, MealCatalogORM
 from .meal_recommendation_plan import (
-    MealRecommendationInteractionORM,
-    MealRecommendationPlanORM,
-    MealRecommendationSlotAlternativeORM,
-    MealRecommendationSlotORM,
-    MealRecommendationSwapORM,
+    MealRecommendationOperationORM,
+    MealRecommendationORM,
 )
 
 __all__ = [
-    "CatalogRecipeIngredientORM",
-    "CatalogRecipeMealTypeORM",
-    "CatalogRecipeORM",
-    "CatalogRecipeRightsRecordORM",
-    "CatalogRecipeSourceORM",
-    "CatalogRecipeVersionORM",
-    "CatalogReleaseORM",
-    "MealRecommendationPlanORM",
-    "MealRecommendationSlotAlternativeORM",
-    "MealRecommendationSlotORM",
-    "MealRecommendationSwapORM",
-    "MealRecommendationInteractionORM",
+    "MealCatalogIngredientORM",
+    "MealCatalogORM",
+    "MealRecommendationORM",
+    "MealRecommendationOperationORM",
 ]
