@@ -29,6 +29,7 @@ class FoodReferenceNutritionProjection:
     sugar_100g: float = 0.0
     density_g_ml: float | None = None
     servings: list[FoodReferenceServingProjection] = field(default_factory=list)
+    name_normalized: str | None = None
 
 
 class FoodReferenceRepositoryPort(Protocol):
@@ -39,3 +40,14 @@ class FoodReferenceRepositoryPort(Protocol):
         food_reference_id: int,
     ) -> FoodReferenceNutritionProjection | None:
         """Return one canonical food-reference nutrition projection."""
+
+    async def list_catalog_seed_candidates(
+        self,
+    ) -> list[FoodReferenceNutritionProjection]:
+        """Return lightweight projections for catalog ingredient resolver ranking."""
+
+    async def find_catalog_seed_candidates_by_normalized_name(
+        self,
+        name_normalized: str,
+    ) -> list[FoodReferenceNutritionProjection]:
+        """Return candidate projections by exact normalized name for seed imports."""

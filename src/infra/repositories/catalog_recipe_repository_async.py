@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,6 +15,8 @@ from src.domain.model.meal_recommendation.catalog_recipe import (
 )
 from src.domain.ports.catalog_recipe_repository_port import (
     CatalogMealRepositoryPort,
+    CatalogMealSeedExisting,
+    CatalogMealSeedWrite,
 )
 from src.domain.services.meal_recommendation.ingredient_quantity_conversion_service import (
     IngredientQuantityConversionService,
@@ -78,6 +80,54 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
         """Temporary compatibility: the four-table catalog has no release row."""
 
         return None
+
+    async def find_seed_existing(
+        self,
+        *,
+        catalog_key: str,
+        content_hash: str,
+    ) -> CatalogMealSeedExisting | None:
+        result = await self._session.execute(
+            select(MealCatalogORM.catalog_key, MealCatalogORM.content_hash).where(
+                or_(
+                    MealCatalogORM.catalog_key == catalog_key,
+                    MealCatalogORM.content_hash == content_hash,
+                )
+            )
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return CatalogMealSeedExisting(
+            catalog_key=cast(str, row.catalog_key),
+            content_hash=cast(str, row.content_hash),
+        )
+
+    async def add_seed_meal(self, seed: CatalogMealSeedWrite) -> None:
+        row = MealCatalogORM(
+            catalog_key=seed.catalog_key,
+            content_hash=seed.content_hash,
+            name=seed.name,
+            cuisine=seed.cuisine,
+            description=seed.description,
+            image_url=seed.image_url,
+            breakfast_eligible="breakfast" in seed.meal_types,
+            lunch_eligible="lunch" in seed.meal_types,
+            dinner_eligible="dinner" in seed.meal_types,
+            snack_eligible="snack" in seed.meal_types,
+            is_active=True,
+        )
+        row.ingredients = [
+            MealCatalogIngredientORM(
+                food_reference_id=item.food_reference_id,
+                display_name=item.display_name,
+                quantity=item.quantity,
+                unit=item.unit,
+            )
+            for item in seed.ingredients
+        ]
+        self._session.add(row)
+        await self._session.flush()
 
 
 def _meal_type_column(meal_type: str):

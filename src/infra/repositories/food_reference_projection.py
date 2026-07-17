@@ -77,6 +77,7 @@ def food_reference_model_to_nutrition_projection(
         fiber_100g=model.fiber_100g or 0.0,
         sugar_100g=model.sugar_100g or 0.0,
         density_g_ml=model.density,
+        name_normalized=model.name_normalized,
         servings=[
             FoodReferenceServingProjection(
                 name=item["name"],

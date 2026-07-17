@@ -16,11 +16,23 @@ class _Session:
         self.added = []
         self.flushed = False
 
-    def add(self, row):
+    async def add_seed_meal(self, row):
         self.added.append(row)
-
-    async def flush(self):
         self.flushed = True
+
+    async def find_seed_existing(self, *, catalog_key, content_hash):
+        return None
+
+
+class _FoodReferenceRepository:
+    async def get_nutrition_projection(self, food_reference_id):
+        return None
+
+    async def list_catalog_seed_candidates(self):
+        return []
+
+    async def find_catalog_seed_candidates_by_normalized_name(self, name_normalized):
+        return []
 
 
 class _Importer(CatalogMealSeedImporter):
@@ -38,6 +50,7 @@ class _Importer(CatalogMealSeedImporter):
         self.session = _Session()
         super().__init__(
             self.session,
+            _FoodReferenceRepository(),
             approved_mappings=approved_mappings,
             auto_resolve_threshold=auto_resolve_threshold,
             resolve_all_best_effort=resolve_all_best_effort,
@@ -136,7 +149,7 @@ async def test_import_inserts_catalog_meal_without_derived_nutrition_snapshots()
     assert importer.session.flushed is True
     row = importer.session.added[0]
     assert row.catalog_key == "vn-rice-breakfast"
-    assert row.breakfast_eligible is True
+    assert row.meal_types == ("breakfast",)
     assert not hasattr(row, "protein_g")
     assert not hasattr(row, "servings")
     assert row.ingredients[0].food_reference_id == 7

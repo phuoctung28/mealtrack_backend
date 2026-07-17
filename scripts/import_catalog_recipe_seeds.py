@@ -18,6 +18,12 @@ from src.domain.services.meal_recommendation.catalog_recipe_seed_validator impor
     validate_catalog_seed_manifest,
 )
 from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.repositories.catalog_recipe_repository_async import (
+    AsyncCatalogMealRepository,
+)
+from src.infra.repositories.food_reference_repository_async import (
+    AsyncFoodReferenceRepository,
+)
 
 
 def main() -> None:
@@ -174,8 +180,11 @@ async def _run_import(
         if uow.session is None:
             raise RuntimeError("AsyncUnitOfWork did not initialize a database session")
         await uow.session.execute(text("select 1"))
+        catalog_repository = AsyncCatalogMealRepository(uow.session)
+        food_reference_repository = AsyncFoodReferenceRepository(uow.session)
         preview = await CatalogMealSeedImporter(
-            uow.session,
+            catalog_repository,
+            food_reference_repository,
             dry_run=True,
             approved_mappings=approved_mappings,
             auto_resolve_threshold=auto_resolve_threshold,
@@ -184,7 +193,8 @@ async def _run_import(
         if dry_run or not preview.is_successful:
             return preview
         summary = await CatalogMealSeedImporter(
-            uow.session,
+            catalog_repository,
+            food_reference_repository,
             dry_run=False,
             approved_mappings=approved_mappings,
             auto_resolve_threshold=auto_resolve_threshold,

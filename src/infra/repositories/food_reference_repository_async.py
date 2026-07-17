@@ -71,6 +71,52 @@ class AsyncFoodReferenceRepository:
         model = result.scalar_one_or_none()
         return food_reference_model_to_nutrition_projection(model) if model else None
 
+    async def list_catalog_seed_candidates(
+        self,
+    ) -> list[FoodReferenceNutritionProjection]:
+        result = await self._session.execute(
+            select(
+                FoodReferenceModel.id,
+                FoodReferenceModel.name,
+                FoodReferenceModel.name_normalized,
+                FoodReferenceModel.source,
+                FoodReferenceModel.is_verified,
+                FoodReferenceModel.protein_100g,
+                FoodReferenceModel.carbs_100g,
+                FoodReferenceModel.fat_100g,
+                FoodReferenceModel.fiber_100g,
+                FoodReferenceModel.sugar_100g,
+                FoodReferenceModel.density,
+            ).order_by(
+                FoodReferenceModel.is_verified.desc(),
+                FoodReferenceModel.id.asc(),
+            )
+        )
+        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+
+    async def find_catalog_seed_candidates_by_normalized_name(
+        self,
+        name_normalized: str,
+    ) -> list[FoodReferenceNutritionProjection]:
+        result = await self._session.execute(
+            select(
+                FoodReferenceModel.id,
+                FoodReferenceModel.name,
+                FoodReferenceModel.name_normalized,
+                FoodReferenceModel.source,
+                FoodReferenceModel.is_verified,
+                FoodReferenceModel.protein_100g,
+                FoodReferenceModel.carbs_100g,
+                FoodReferenceModel.fat_100g,
+                FoodReferenceModel.fiber_100g,
+                FoodReferenceModel.sugar_100g,
+                FoodReferenceModel.density,
+            )
+            .where(FoodReferenceModel.name_normalized == name_normalized)
+            .order_by(FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc())
+        )
+        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+
     async def get_by_fdc_id(self, fdc_id: int) -> dict[str, Any] | None:
         stmt = (
             select(FoodReferenceModel)
@@ -261,3 +307,19 @@ class AsyncFoodReferenceRepository:
         if extra_nutrients is not None:
             model.nutrient_rows = build_food_reference_nutrient_rows(extra_nutrients)
         await self._session.flush()
+
+
+def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjection:
+    return FoodReferenceNutritionProjection(
+        id=int(row.id),
+        name=str(row.name),
+        source=str(row.source),
+        is_verified=bool(row.is_verified),
+        protein_100g=row.protein_100g,
+        carbs_100g=row.carbs_100g,
+        fat_100g=row.fat_100g,
+        fiber_100g=row.fiber_100g or 0.0,
+        sugar_100g=row.sugar_100g or 0.0,
+        density_g_ml=row.density,
+        name_normalized=row.name_normalized,
+    )

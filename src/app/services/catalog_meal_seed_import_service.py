@@ -8,12 +8,15 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import Any
 
-from sqlalchemy import or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
+from src.domain.ports.catalog_recipe_repository_port import (
+    CatalogMealRepositoryPort,
+    CatalogMealSeedExisting,
+    CatalogMealSeedIngredientWrite,
+    CatalogMealSeedWrite,
+)
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
+    FoodReferenceRepositoryPort,
 )
 from src.domain.services.meal_recommendation.ingredient_quantity_conversion_service import (
     IngredientQuantityConversionError,
@@ -22,14 +25,6 @@ from src.domain.services.meal_recommendation.ingredient_quantity_conversion_serv
 )
 from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
     normalize_food_name,
-)
-from src.infra.database.models.food_reference_model import FoodReferenceModel
-from src.infra.database.models.meal_recommendation import (
-    MealCatalogIngredientORM,
-    MealCatalogORM,
-)
-from src.infra.repositories.food_reference_projection import (
-    food_reference_model_to_nutrition_projection,
 )
 
 
@@ -148,7 +143,8 @@ class CatalogMealSeedImporter:
 
     def __init__(
         self,
-        session: AsyncSession,
+        catalog_repository: CatalogMealRepositoryPort,
+        food_reference_repository: FoodReferenceRepositoryPort,
         *,
         dry_run: bool = False,
         approved_mappings: dict[str, int] | None = None,
@@ -156,7 +152,8 @@ class CatalogMealSeedImporter:
         resolve_all_best_effort: bool = False,
         converter: IngredientQuantityConversionService | None = None,
     ) -> None:
-        self._session = session
+        self._catalog_repository = catalog_repository
+        self._food_reference_repository = food_reference_repository
         self._dry_run = dry_run
         self._approved_mappings = {
             normalize_food_name(key): int(value)
@@ -214,30 +211,25 @@ class CatalogMealSeedImporter:
         if self._dry_run:
             return "inserted"
 
-        row = MealCatalogORM(
+        seed = CatalogMealSeedWrite(
             catalog_key=catalog_key,
             content_hash=content_hash,
             name=str(recipe["name"]).strip(),
             cuisine=str(recipe["cuisine"]).strip(),
             description=_optional_string(recipe.get("description")),
             image_url=_optional_string(recipe.get("image_url")),
-            breakfast_eligible="breakfast" in recipe["meal_types"],
-            lunch_eligible="lunch" in recipe["meal_types"],
-            dinner_eligible="dinner" in recipe["meal_types"],
-            snack_eligible="snack" in recipe["meal_types"],
-            is_active=True,
+            meal_types=tuple(str(item).strip() for item in recipe["meal_types"]),
+            ingredients=tuple(
+                CatalogMealSeedIngredientWrite(
+                    food_reference_id=item.food_reference_id,
+                    display_name=item.display_name,
+                    quantity=item.quantity,
+                    unit=item.unit,
+                )
+                for item in resolved_ingredients
+            ),
         )
-        row.ingredients = [
-            MealCatalogIngredientORM(
-                food_reference_id=item.food_reference_id,
-                display_name=item.display_name,
-                quantity=item.quantity,
-                unit=item.unit,
-            )
-            for item in resolved_ingredients
-        ]
-        self._session.add(row)
-        await self._session.flush()
+        await self._catalog_repository.add_seed_meal(seed)
         return "inserted"
 
     async def _resolve_ingredients(
@@ -353,16 +345,11 @@ class CatalogMealSeedImporter:
         self,
         catalog_key: str,
         content_hash: str,
-    ) -> MealCatalogORM | None:
-        result = await self._session.execute(
-            select(MealCatalogORM).where(
-                or_(
-                    MealCatalogORM.catalog_key == catalog_key,
-                    MealCatalogORM.content_hash == content_hash,
-                )
-            )
+    ) -> CatalogMealSeedExisting | None:
+        return await self._catalog_repository.find_seed_existing(
+            catalog_key=catalog_key,
+            content_hash=content_hash,
         )
-        return result.scalars().first()
 
     async def _get_reference_by_id(
         self,
@@ -371,56 +358,20 @@ class CatalogMealSeedImporter:
         for row in await self._all_candidate_rows():
             if row.food_reference_id == food_reference_id:
                 return _projection_from_search_row(row)
-        result = await self._session.execute(
-            select(FoodReferenceModel)
-            .where(FoodReferenceModel.id == food_reference_id)
-            .options(
-                selectinload(FoodReferenceModel.serving_size_rows),
-                selectinload(FoodReferenceModel.nutrient_rows),
-            )
+        return await self._food_reference_repository.get_nutrition_projection(
+            food_reference_id
         )
-        row = result.scalars().first()
-        return food_reference_model_to_nutrition_projection(row) if row else None
 
     async def _find_reference_candidates_by_normalized_name(
         self,
         name_normalized: str,
     ) -> list[CatalogSeedResolutionCandidate]:
-        result = await self._session.execute(
-            select(
-                FoodReferenceModel.id,
-                FoodReferenceModel.name,
-                FoodReferenceModel.name_normalized,
-                FoodReferenceModel.source,
-                FoodReferenceModel.is_verified,
-                FoodReferenceModel.protein_100g,
-                FoodReferenceModel.carbs_100g,
-                FoodReferenceModel.fat_100g,
-                FoodReferenceModel.fiber_100g,
-                FoodReferenceModel.sugar_100g,
-                FoodReferenceModel.density,
-            )
-            .where(FoodReferenceModel.name_normalized == name_normalized)
-            .order_by(FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc())
+        rows = await self._food_reference_repository.find_catalog_seed_candidates_by_normalized_name(
+            name_normalized
         )
         return [
-            _candidate_from_search_row(
-                _FoodReferenceSearchRow(
-                    food_reference_id=int(row.id),
-                    name=str(row.name),
-                    name_normalized=row.name_normalized,
-                    source=str(row.source),
-                    is_verified=bool(row.is_verified),
-                    protein_100g=row.protein_100g,
-                    carbs_100g=row.carbs_100g,
-                    fat_100g=row.fat_100g,
-                    fiber_100g=row.fiber_100g or 0.0,
-                    sugar_100g=row.sugar_100g or 0.0,
-                    density_g_ml=row.density,
-                ),
-                1.0,
-            )
-            for row in result.all()
+            _candidate_from_search_row(_search_row_from_projection(row), 1.0)
+            for row in rows
         ]
 
     async def _ranked_candidates(
@@ -441,39 +392,9 @@ class CatalogMealSeedImporter:
     async def _all_candidate_rows(self) -> list[_FoodReferenceSearchRow]:
         if self._candidate_rows is not None:
             return self._candidate_rows
-        result = await self._session.execute(
-            select(
-                FoodReferenceModel.id,
-                FoodReferenceModel.name,
-                FoodReferenceModel.name_normalized,
-                FoodReferenceModel.source,
-                FoodReferenceModel.is_verified,
-                FoodReferenceModel.protein_100g,
-                FoodReferenceModel.carbs_100g,
-                FoodReferenceModel.fat_100g,
-                FoodReferenceModel.fiber_100g,
-                FoodReferenceModel.sugar_100g,
-                FoodReferenceModel.density,
-            ).order_by(
-                FoodReferenceModel.is_verified.desc(),
-                FoodReferenceModel.id.asc(),
-            )
-        )
         self._candidate_rows = [
-            _FoodReferenceSearchRow(
-                food_reference_id=int(row.id),
-                name=str(row.name),
-                name_normalized=row.name_normalized,
-                source=str(row.source),
-                is_verified=bool(row.is_verified),
-                protein_100g=row.protein_100g,
-                carbs_100g=row.carbs_100g,
-                fat_100g=row.fat_100g,
-                fiber_100g=row.fiber_100g or 0.0,
-                sugar_100g=row.sugar_100g or 0.0,
-                density_g_ml=row.density,
-            )
-            for row in result.all()
+            _search_row_from_projection(row)
+            for row in await self._food_reference_repository.list_catalog_seed_candidates()
         ]
         return self._candidate_rows
 
@@ -528,6 +449,24 @@ def _projection_from_search_row(
         sugar_100g=row.sugar_100g,
         density_g_ml=row.density_g_ml,
         servings=[],
+    )
+
+
+def _search_row_from_projection(
+    row: FoodReferenceNutritionProjection,
+) -> _FoodReferenceSearchRow:
+    return _FoodReferenceSearchRow(
+        food_reference_id=row.id,
+        name=row.name,
+        name_normalized=row.name_normalized or normalize_food_name(row.name),
+        source=row.source,
+        is_verified=row.is_verified,
+        protein_100g=row.protein_100g,
+        carbs_100g=row.carbs_100g,
+        fat_100g=row.fat_100g,
+        fiber_100g=row.fiber_100g,
+        sugar_100g=row.sugar_100g,
+        density_g_ml=row.density_g_ml,
     )
 
 
