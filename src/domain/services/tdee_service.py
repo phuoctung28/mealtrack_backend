@@ -2,6 +2,7 @@ from src.domain.constants import NutritionConstants, TDEEConstants
 from src.domain.model.user import (
     Goal,
     JobType,
+    MacroPreset,
     MacroTargets,
     Sex,
     TdeeRequest,
@@ -31,6 +32,7 @@ class TdeeCalculationService:
             request.training_level,
             bmr=bmr,
             sex=request.sex,
+            macro_preset=request.macro_preset,
         )
         return TdeeResponse(
             bmr=round(bmr, 1),
@@ -38,6 +40,7 @@ class TdeeCalculationService:
             goal=request.goal,
             macros=macro_targets,
             formula_used=formula_name,
+            macro_preset=request.macro_preset,
         )
 
     def _calculate_bmr(self, request: TdeeRequest) -> tuple[float, str]:
@@ -80,6 +83,7 @@ class TdeeCalculationService:
         training_level: TrainingLevel = None,
         bmr: float = None,
         sex: Sex = None,
+        macro_preset: MacroPreset = MacroPreset.STANDARD,
     ) -> MacroTargets:
         """Calculate macro targets using weight-based approach.
 
@@ -119,6 +123,9 @@ class TdeeCalculationService:
                 else TDEEConstants.MIN_CALORIES_MALE
             )
             calories = max(calories, bmr, clinical_min)
+
+        if macro_preset == MacroPreset.KETO:
+            return self.allocate_preset_macros(calories, macro_preset)
 
         # Calculate protein from body weight (g/kg)
         # Use training-level-aware protein if provided, otherwise use default
@@ -171,6 +178,47 @@ class TdeeCalculationService:
             fat=rounded_fat,
             carbs=rounded_carbs,
         )
+
+    @staticmethod
+    def allocate_preset_macros(calories: float, preset: MacroPreset) -> MacroTargets:
+        """Allocate grams from the active diet policy and derive calories from grams."""
+        if preset != MacroPreset.KETO:
+            raise ValueError(f"Unsupported calculated preset: {preset.value}")
+        protein = round(
+            calories * 0.20 / NutritionConstants.CALORIES_PER_GRAM_PROTEIN, 1
+        )
+        carbs = round(calories * 0.05 / NutritionConstants.CALORIES_PER_GRAM_CARBS, 1)
+        fat = round(calories * 0.75 / NutritionConstants.CALORIES_PER_GRAM_FAT, 1)
+        derived = round(
+            protein * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
+            + carbs * NutritionConstants.CALORIES_PER_GRAM_CARBS
+            + fat * NutritionConstants.CALORIES_PER_GRAM_FAT,
+            1,
+        )
+        return MacroTargets(calories=derived, protein=protein, carbs=carbs, fat=fat)
+
+    @staticmethod
+    def scale_macros(macros: MacroTargets, requested_calories: float) -> MacroTargets:
+        """Scale an already resolved allocation; rounded grams remain canonical."""
+        if macros.calories <= 0:
+            raise ValueError("Cannot scale an empty macro target")
+        ratio = requested_calories / macros.calories
+        protein, carbs, fat = (
+            round(macros.protein * ratio, 1),
+            round(macros.carbs * ratio, 1),
+            round(macros.fat * ratio, 1),
+        )
+        calories = round(protein * 4 + carbs * 4 + fat * 9, 1)
+        return MacroTargets(calories=calories, protein=protein, carbs=carbs, fat=fat)
+
+    @staticmethod
+    def apply_adjusted_macro_policy(
+        calories: float, macros: MacroTargets, preset: MacroPreset, is_custom: bool
+    ) -> MacroTargets:
+        """Keep adjusted targets on the resolved policy, not the previous preset."""
+        if preset == MacroPreset.KETO and not is_custom:
+            return TdeeCalculationService.allocate_preset_macros(calories, preset)
+        return macros
 
     def calculate_macros(
         self,

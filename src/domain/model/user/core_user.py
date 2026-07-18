@@ -7,7 +7,6 @@ and are independent of the database or any other infrastructure.
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Optional, List
 from uuid import UUID
 
 from src.domain.model.auth.auth_provider import AuthProvider
@@ -30,25 +29,26 @@ class UserProfileDomainModel(BaseDomainModel):
     fitness_goal: str
     meals_per_day: int
     is_current: bool = True
-    body_fat_percentage: Optional[float] = None
-    date_of_birth: Optional[date] = None
-    target_weight_kg: Optional[float] = None
+    body_fat_percentage: float | None = None
+    date_of_birth: date | None = None
+    target_weight_kg: float | None = None
     snacks_per_day: int = 1
-    dietary_preferences: List[str] = field(default_factory=list)
-    health_conditions: List[str] = field(default_factory=list)
-    allergies: List[str] = field(default_factory=list)
-    pain_points: List[str] = field(default_factory=list)
-    training_level: Optional[str] = None
-    referral_sources: List[str] = field(default_factory=list)
-    challenge_duration: Optional[str] = None
-    training_types: Optional[List[str]] = None
-    custom_protein_g: Optional[float] = None
-    custom_carbs_g: Optional[float] = None
-    custom_fat_g: Optional[float] = None
-    goal_start_weight_kg: Optional[float] = None
-    goal_started_at: Optional[datetime] = None
+    dietary_preferences: list[str] = field(default_factory=list)
+    health_conditions: list[str] = field(default_factory=list)
+    allergies: list[str] = field(default_factory=list)
+    pain_points: list[str] = field(default_factory=list)
+    training_level: str | None = None
+    referral_sources: list[str] = field(default_factory=list)
+    challenge_duration: str | None = None
+    training_types: list[str] | None = None
+    custom_protein_g: float | None = None
+    custom_carbs_g: float | None = None
+    custom_fat_g: float | None = None
+    goal_start_weight_kg: float | None = None
+    goal_started_at: datetime | None = None
     journey_progress_seed_percent: float = 0.0
-    daily_water_goal_ml: Optional[int] = None
+    daily_water_goal_ml: int | None = None
+    profile_target_revision: int = 1
 
 
 @dataclass(kw_only=True)
@@ -64,16 +64,16 @@ class UserDomainModel(BaseDomainModel):
     onboarding_completed: bool = False
     last_accessed: datetime = field(default_factory=utc_now)
     timezone: str = "UTC"
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    display_name: Optional[str] = None
-    photo_url: Optional[str] = None
-    deleted_at: Optional[datetime] = None
-    profiles: List[UserProfileDomainModel] = field(default_factory=list)
+    first_name: str | None = None
+    last_name: str | None = None
+    phone_number: str | None = None
+    display_name: str | None = None
+    photo_url: str | None = None
+    deleted_at: datetime | None = None
+    profiles: list[UserProfileDomainModel] = field(default_factory=list)
 
     @property
-    def current_profile(self) -> Optional[UserProfileDomainModel]:
+    def current_profile(self) -> UserProfileDomainModel | None:
         """Get the current active profile."""
         return next((p for p in self.profiles if p.is_current), None)
 

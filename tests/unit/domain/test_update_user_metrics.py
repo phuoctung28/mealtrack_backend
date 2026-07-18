@@ -109,6 +109,29 @@ class TestUpdateUserMetricsCommandHandler:
         assert profile.is_current is True
         mock_uow.users.update_profile.assert_called_once_with(profile)
 
+    async def test_target_change_increments_revision_once_and_cache_failure_is_non_fatal(self):
+        profile = _make_profile(profile_target_revision=1)
+        mock_uow = _make_mock_uow(profile)
+        cache = MagicMock()
+        cache.invalidate = AsyncMock(side_effect=RuntimeError("redis unavailable"))
+
+        await UpdateUserMetricsCommandHandler(mock_uow, cache).handle(
+            UpdateUserMetricsCommand(user_id="test_user", weight_kg=75.0)
+        )
+
+        assert profile.profile_target_revision == 2
+        mock_uow.users.update_profile.assert_awaited_once_with(profile)
+
+    async def test_identical_target_input_does_not_increment_revision(self):
+        profile = _make_profile(profile_target_revision=1)
+        mock_uow = _make_mock_uow(profile)
+
+        await UpdateUserMetricsCommandHandler(mock_uow).handle(
+            UpdateUserMetricsCommand(user_id="test_user", weight_kg=70.0)
+        )
+
+        assert profile.profile_target_revision == 1
+
     async def test_update_job_type_and_training_only(self):
         """Test updating only job type and training."""
         profile = _make_profile()

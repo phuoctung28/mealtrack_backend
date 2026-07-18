@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class Sex(Enum):
@@ -41,6 +40,11 @@ class UnitSystem(Enum):
     IMPERIAL = "imperial"
 
 
+class MacroPreset(Enum):
+    STANDARD = "standard"
+    KETO = "keto"
+
+
 @dataclass
 class TdeeRequest:
     """Domain model for TDEE calculation request."""
@@ -49,13 +53,14 @@ class TdeeRequest:
     sex: Sex
     height: float
     weight: float
-    body_fat_pct: Optional[float]
+    body_fat_pct: float | None
     job_type: JobType
     training_days_per_week: int  # 0-7
     training_minutes_per_session: int  # 15-180
     goal: Goal
     unit_system: UnitSystem = UnitSystem.METRIC
-    training_level: Optional[TrainingLevel] = None
+    training_level: TrainingLevel | None = None
+    macro_preset: MacroPreset = MacroPreset.STANDARD
 
     def __post_init__(self):
         """Validate invariants."""
@@ -87,10 +92,12 @@ class TdeeRequest:
             raise ValueError(
                 f"Training days per week must be between 0-7: {self.training_days_per_week}"
             )
-        # Allow 0 minutes when no training days (sedentary user)
+        # Persisted legacy (0, 15) profiles are normalized while read.
         if self.training_days_per_week == 0:
-            if self.training_minutes_per_session != 0:
-                self.training_minutes_per_session = 0  # Normalize
+            if self.training_minutes_per_session in (0, 15):
+                self.training_minutes_per_session = 0
+            else:
+                raise ValueError("Training minutes must be 0 when training days are 0")
         elif not (15 <= self.training_minutes_per_session <= 180):
             raise ValueError(
                 f"Training minutes per session must be between 15-180: {self.training_minutes_per_session}"
@@ -131,9 +138,10 @@ class TdeeResponse:
     tdee: float
     goal: Goal
     macros: MacroTargets
-    formula_used: Optional[str] = (
+    formula_used: str | None = (
         None  # BMR formula used (e.g., "Mifflin-St Jeor", "Katch-McArdle")
     )
+    macro_preset: MacroPreset = MacroPreset.STANDARD
 
     def to_dict(self) -> dict:
         """Convert to dictionary format for API response."""
@@ -141,6 +149,7 @@ class TdeeResponse:
             "bmr": self.bmr,
             "tdee": self.tdee,
             "goal": self.goal.value,
+            "macro_preset": self.macro_preset.value,
             "macros": {
                 "calories": self.macros.calories,
                 "protein": self.macros.protein,

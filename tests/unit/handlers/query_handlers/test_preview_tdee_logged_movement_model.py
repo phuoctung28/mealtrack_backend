@@ -27,3 +27,4 @@ async def test_preview_tdee_activity_multiplier_excludes_training_volume():
     assert result["bmr"] == pytest.approx(1780.0, abs=0.1)
     assert result["tdee"] == pytest.approx(2136.0, abs=0.1)
     assert result["activity_multiplier"] == 1.2
+    assert result["calculation_contract"] == "onboarding_preview_v2"

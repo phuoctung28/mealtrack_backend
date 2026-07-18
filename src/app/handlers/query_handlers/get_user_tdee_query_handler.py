@@ -14,7 +14,7 @@ from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.constants import NutritionConstants, TDEEConstants
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import Sex, TdeeRequest, UnitSystem
+from src.domain.model.user import MacroPreset, Sex, TdeeRequest, UnitSystem
 from src.domain.ports.cache_port import CachePort
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user.profile import UserProfile
@@ -37,14 +37,32 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
 
     async def handle(self, query: GetUserTdeeQuery) -> dict[str, Any]:
         cache_key, ttl = CacheKeys.user_tdee(query.user_id)
+        current_revision = await self._current_profile_revision(query.user_id)
         if self.cache_service:
             cached = await self.cache_service.get_json(cache_key)
-            if cached is not None:
+            if (
+                cached is not None
+                and cached.get("profile_target_revision") == current_revision
+            ):
                 return cached
         result = await self._compute_tdee(query)
         if self.cache_service:
             await self.cache_service.set_json(cache_key, result, ttl)
         return result
+
+    async def _current_profile_revision(self, user_id: str) -> int:
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
+                select(UserProfile.profile_target_revision).where(
+                    UserProfile.user_id == user_id, UserProfile.is_current.is_(True)
+                )
+            )
+            revision = result.scalar_one_or_none()
+        if revision is None:
+            raise ResourceNotFoundException(
+                f"Current profile for user {user_id} not found"
+            )
+        return revision
 
     async def _compute_tdee(self, query: GetUserTdeeQuery) -> dict[str, Any]:
         """Get user's TDEE calculation based on current profile."""
@@ -63,9 +81,18 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
                     f"Current profile for user {query.user_id} not found"
                 )
 
+            macro_preset = (
+                MacroPreset.KETO
+                if any(
+                    value.casefold() == "keto"
+                    for value in (profile.dietary_preferences or [])
+                )
+                else MacroPreset.STANDARD
+            )
+
             # Check for custom macro overrides first
             if profile.has_custom_macros:
-                return self._build_custom_macros_response(query, profile)
+                return self._build_custom_macros_response(query, profile, macro_preset)
 
             # Map profile data to TDEE request using centralized mapper
             sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
@@ -89,6 +116,7 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC,
                 training_level=training_level,
+                macro_preset=macro_preset,
             )
 
             # Calculate TDEE
@@ -99,20 +127,24 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
                 profile.job_type, 1.2
             )
 
+            macros = self._canonical_macros(
+                result.macros.protein,
+                result.macros.carbs,
+                result.macros.fat,
+            )
+
             return {
                 "user_id": query.user_id,
                 "bmr": result.bmr,
                 "tdee": result.tdee,
-                "target_calories": round(result.macros.calories, 0),
+                "target_calories": macros["calories"],
                 "activity_multiplier": round(base_multiplier, 3),
                 "formula_used": result.formula_used,
                 "is_custom": False,
-                "macros": {
-                    "protein": round(result.macros.protein, 1),
-                    "carbs": round(result.macros.carbs, 1),
-                    "fat": round(result.macros.fat, 1),
-                    "calories": round(result.macros.calories, 1),
-                },
+                "macro_preset": result.macro_preset.value,
+                "profile_target_revision": profile.profile_target_revision,
+                "target_revision": profile.profile_target_revision,
+                "macros": macros,
                 "profile_data": {
                     "age": profile.age,
                     "gender": profile.gender,
@@ -127,13 +159,13 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
             }
 
     def _build_custom_macros_response(
-        self, query: GetUserTdeeQuery, profile
+        self, query: GetUserTdeeQuery, profile, macro_preset: MacroPreset
     ) -> dict[str, Any]:
         """Build response using custom macro overrides, still calculating BMR/TDEE for reference."""
-        custom_calories = (
-            profile.custom_protein_g * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
-            + profile.custom_carbs_g * NutritionConstants.CALORIES_PER_GRAM_CARBS
-            + profile.custom_fat_g * NutritionConstants.CALORIES_PER_GRAM_FAT
+        macros = self._canonical_macros(
+            profile.custom_protein_g,
+            profile.custom_carbs_g,
+            profile.custom_fat_g,
         )
 
         # Still calculate BMR/TDEE for reference display
@@ -156,6 +188,7 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
             body_fat_pct=profile.body_fat_percentage,
             unit_system=UnitSystem.METRIC,
             training_level=training_level,
+            macro_preset=macro_preset,
         )
         result = self.tdee_service.calculate_tdee(tdee_request)
 
@@ -165,16 +198,14 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
             "user_id": query.user_id,
             "bmr": result.bmr,
             "tdee": result.tdee,
-            "target_calories": round(custom_calories, 0),
+            "target_calories": macros["calories"],
             "activity_multiplier": round(base_multiplier, 3),
             "formula_used": result.formula_used,
             "is_custom": True,
-            "macros": {
-                "protein": round(profile.custom_protein_g, 1),
-                "carbs": round(profile.custom_carbs_g, 1),
-                "fat": round(profile.custom_fat_g, 1),
-                "calories": round(custom_calories, 1),
-            },
+            "macro_preset": macro_preset.value,
+            "profile_target_revision": profile.profile_target_revision,
+            "target_revision": profile.profile_target_revision,
+            "macros": macros,
             "profile_data": {
                 "age": profile.age,
                 "gender": profile.gender,
@@ -186,4 +217,22 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, dict[str, Any]]):
                 "fitness_goal": profile.fitness_goal,
                 "body_fat_percentage": profile.body_fat_percentage,
             },
+        }
+
+    @staticmethod
+    def _canonical_macros(protein: float, carbs: float, fat: float) -> dict[str, float]:
+        """Round macro grams first, then derive the canonical calorie target."""
+        protein = round(protein, 1)
+        carbs = round(carbs, 1)
+        fat = round(fat, 1)
+        return {
+            "protein": protein,
+            "carbs": carbs,
+            "fat": fat,
+            "calories": round(
+                protein * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
+                + carbs * NutritionConstants.CALORIES_PER_GRAM_CARBS
+                + fat * NutritionConstants.CALORIES_PER_GRAM_FAT,
+                1,
+            ),
         }

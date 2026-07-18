@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from src.domain.model.user import MacroTargets
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     build_tdee_request,
 )
@@ -207,7 +208,9 @@ class DailyContextPrecomputeService:
                            up.body_fat_percentage, up.job_type,
                            up.training_days_per_week,
                            up.training_minutes_per_session,
-                           up.fitness_goal, up.training_level,
+                           up.fitness_goal, up.training_level, up.dietary_preferences,
+                           up.custom_protein_g, up.custom_carbs_g, up.custom_fat_g,
+                           up.profile_target_revision,
                            u.language_code
                     FROM user_profiles up
                     JOIN users u ON u.id = up.user_id
@@ -387,7 +390,9 @@ class DailyContextPrecomputeService:
                     SELECT age, gender, height_cm, weight_kg, body_fat_percentage,
                            job_type, training_days_per_week,
                            training_minutes_per_session,
-                           fitness_goal, training_level
+                           fitness_goal, training_level, dietary_preferences,
+                           custom_protein_g, custom_carbs_g, custom_fat_g,
+                           profile_target_revision
                     FROM user_profiles
                     WHERE user_id = :user_id AND is_current = true
                 """),
@@ -396,17 +401,31 @@ class DailyContextPrecomputeService:
             profile_row = profile_result.fetchone()
 
         if not profile_row:
-            return 2000  # Default fallback
+            raise ValueError("Current target profile is unavailable")
 
         try:
             tdee_request = build_tdee_request(profile_row)
             result = self._tdee_service.calculate_tdee(tdee_request)
+            is_custom = all(
+                isinstance(getattr(profile_row, field, None), (int, float))
+                for field in ("custom_protein_g", "custom_carbs_g", "custom_fat_g")
+            )
             week_start = target_date - timedelta(days=target_date.weekday())
             weekly_budget = await uow.weekly_budgets.find_by_user_and_week(
                 user_id, week_start
             )
             if not weekly_budget:
+                if is_custom:
+                    return int(
+                        round(
+                            profile_row.custom_protein_g * 4
+                            + profile_row.custom_carbs_g * 4
+                            + profile_row.custom_fat_g * 9
+                        )
+                    )
                 return int(round(result.macros.calories))
+            if weekly_budget.target_revision != profile_row.profile_target_revision:
+                raise ValueError("Weekly target revision is stale")
 
             effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
                 uow=uow,
@@ -421,9 +440,21 @@ class DailyContextPrecomputeService:
                 bmr=result.bmr,
                 user_timezone=user_timezone,
             )
-            return int(round(effective.adjusted.calories))
+            adjusted = effective.adjusted
+            policy_macros = self._tdee_service.apply_adjusted_macro_policy(
+                adjusted.calories,
+                MacroTargets(
+                    calories=adjusted.calories,
+                    protein=adjusted.protein,
+                    carbs=adjusted.carbs,
+                    fat=adjusted.fat,
+                ),
+                tdee_request.macro_preset,
+                is_custom,
+            )
+            return int(round(policy_macros.calories))
         except Exception:
-            return 2000
+            raise
 
     # ------------------------------------------------------------------
     # Async DB work
@@ -501,6 +532,11 @@ class DailyContextPrecomputeService:
                         up.training_minutes_per_session,
                         up.fitness_goal,
                         up.training_level,
+                        up.dietary_preferences,
+                        up.custom_protein_g,
+                        up.custom_carbs_g,
+                        up.custom_fat_g,
+                        up.profile_target_revision,
                         u.language_code
                     FROM user_profiles up
                     JOIN users u ON u.id = up.user_id
@@ -564,7 +600,7 @@ class DailyContextPrecomputeService:
             for user_id in user_ids:
                 profile = profiles_by_user.get(user_id)
                 if profile is None:
-                    calorie_goals[user_id] = 2000
+                    logger.warning("Skipping notification target without profile for %s", user_id)
                     continue
                 try:
                     calorie_goals[user_id] = await self._get_user_calorie_goal(
@@ -572,12 +608,10 @@ class DailyContextPrecomputeService:
                     )
                 except Exception as exc:
                     logger.warning(
-                        "TDEE calculation failed for user %s: %s "
-                        "— using 2000 kcal fallback",
+                        "TDEE calculation failed for user %s: %s; skipping target-bearing notification",
                         user_id,
                         exc,
                     )
-                    calorie_goals[user_id] = 2000
 
             # ---- Query 5 / bulk INSERT: pre-build notification rows ----
             notif_rows = self._build_notification_rows(
@@ -627,7 +661,9 @@ class DailyContextPrecomputeService:
             if not tokens:
                 continue
 
-            calorie_goal = calorie_goals.get(user_id, 2000)
+            calorie_goal = calorie_goals.get(user_id)
+            if calorie_goal is None:
+                continue
             profile = profiles_by_user.get(user_id)
             gender = (profile.gender if profile else None) or "male"
             language_code = _resolve_notification_language(
@@ -641,6 +677,7 @@ class DailyContextPrecomputeService:
                 "calories_consumed": int(round(consumed_by_user.get(user_id, 0.0))),
                 "gender": gender,
                 "language_code": language_code,
+                "target_revision": profile.profile_target_revision if profile else None,
             }
 
             if pref.meal_reminders_enabled:

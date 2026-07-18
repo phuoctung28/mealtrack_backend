@@ -13,8 +13,10 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition.macros import Macros
+from src.domain.model.user import MacroPreset, MacroTargets
 from src.domain.ports.cache_port import CachePort
 from src.domain.services.meal_calorie_service import effective_meal_calories
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import (
     ensure_utc,
@@ -54,13 +56,14 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str,
         key, ttl = CacheKeys.nutrition_bulk(
             query.user_id, query.start_date, query.end_date
         )
-        cached_or_fresh = await self.cache_service.get_or_set(
-            key, lambda: self._compute(query), ttl
-        )
-        if cached_or_fresh is not None:
-            return cached_or_fresh
-        # get_or_set returns None only if the factory did; _compute never does.
-        return await self._compute(query)
+        # A target-bearing cache is valid only for the current DB profile fence.
+        _, _, _, revision, _, _ = await self._get_user_targets(query.user_id)
+        cached = await self.cache_service.get_json(key)
+        if revision is not None and cached and cached.get("target_revision") == revision:
+            return cached
+        result = await self._compute(query)
+        await self.cache_service.set_json(key, result, ttl)
+        return result
 
     async def _compute(self, query: GetNutritionBulkQuery) -> dict[str, Any]:
         """Build the bulk nutrition response (uncached)."""
@@ -79,7 +82,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str,
                 projection=MealProjection.MACROS_ONLY,
             )
 
-            target_calories, target_macros, bmr = await self._get_user_targets(
+            target_calories, target_macros, bmr, target_revision, macro_preset, is_custom = await self._get_user_targets(
                 query.user_id
             )
 
@@ -147,7 +150,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str,
             )
 
             weekly_summary = None
-            if weekly_budget:
+            if weekly_budget and weekly_budget.target_revision == target_revision:
                 base_daily = target_calories or (weekly_budget.target_calories / 7)
                 effective = (
                     await WeeklyBudgetService.get_effective_adjusted_daily_async(
@@ -165,6 +168,17 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str,
                     )
                 )
                 adjusted = effective.adjusted
+                adjusted_macros = TdeeCalculationService.apply_adjusted_macro_policy(
+                    adjusted.calories,
+                    MacroTargets(
+                        calories=adjusted.calories,
+                        protein=adjusted.protein,
+                        carbs=adjusted.carbs,
+                        fat=adjusted.fat,
+                    ),
+                    macro_preset,
+                    is_custom,
+                )
                 consumed = effective.consumed_total
                 weekly_summary = {
                     "week_start_date": week_start.isoformat(),
@@ -173,9 +187,15 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str,
                     "remaining_calories": round(
                         weekly_budget.target_calories - consumed["calories"], 1
                     ),
-                    "adjusted_daily_calories": adjusted.calories,
+                    "adjusted_daily_calories": adjusted_macros.calories,
+                    "adjusted_daily_protein": adjusted_macros.protein,
+                    "adjusted_daily_carbs": adjusted_macros.carbs,
+                    "adjusted_daily_fat": adjusted_macros.fat,
                     "remaining_days": adjusted.remaining_days,
+                    "target_revision": weekly_budget.target_revision,
                 }
+            elif weekly_budget:
+                logger.warning("Refusing stale weekly target row for user %s", query.user_id)
 
             cache_version = self._compute_cache_version(dates_result, weekly_summary)
 
@@ -183,6 +203,9 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str,
             "dates": dates_result,
             "weekly_budget": weekly_summary,
             "cache_version": cache_version,
+            "profile_target_revision": target_revision,
+            "target_revision": target_revision,
+            "macro_preset": macro_preset.value,
         }
 
     def _local_day_utc_range(self, target: date, user_tz_str: str):
@@ -295,10 +318,13 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, dict[str,
                 tdee_result.get("target_calories"),
                 tdee_result.get("macros", {}),
                 tdee_result.get("bmr", 1800),
+                tdee_result.get("profile_target_revision"),
+                MacroPreset(tdee_result.get("macro_preset", "standard")),
+                bool(tdee_result.get("is_custom")),
             )
         except Exception as e:
             logger.warning(f"Could not fetch TDEE for user {user_id}: {e}")
-            return (None, None, 1800)
+            return (None, None, 1800, None, MacroPreset.STANDARD, False)
 
     def _compute_cache_version(self, dates: dict[str, Any], weekly: dict | None) -> str:
         """Compute a version hash for cache staleness detection."""

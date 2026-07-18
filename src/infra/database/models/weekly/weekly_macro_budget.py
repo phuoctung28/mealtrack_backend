@@ -2,7 +2,16 @@
 Weekly macro budget database model.
 """
 
-from sqlalchemy import Column, Date, Float, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Date,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 
 from src.infra.database.base import Base
 from src.infra.database.models.base import TimestampMixin
@@ -38,6 +47,7 @@ class WeeklyMacroBudgetORM(Base, TimestampMixin):
     consumed_protein = Column(Float, default=0.0, nullable=False)
     consumed_carbs = Column(Float, default=0.0, nullable=False)
     consumed_fat = Column(Float, default=0.0, nullable=False)
+    target_revision = Column(Integer, nullable=False, default=1)
 
     # Unique constraint and indexes
     __table_args__ = (
