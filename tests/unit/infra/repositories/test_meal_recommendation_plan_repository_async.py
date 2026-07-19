@@ -141,7 +141,7 @@ def _catalog_meal(catalog_meal_id: str, name: str) -> CatalogMeal:
 
 @pytest.mark.asyncio
 async def test_save_new_active_plan_supersedes_existing_and_flushes_candidate_rows():
-    session = _AsyncSession([_Result()])
+    session = _AsyncSession([_Result(), _Result(rows=_plan_to_candidate_rows(_plan()))])
     repo = AsyncMealRecommendationPlanRepository(session)
 
     saved = await repo.save_new_active_plan(_plan())
@@ -153,6 +153,7 @@ async def test_save_new_active_plan_supersedes_existing_and_flushes_candidate_ro
     assert session.added_rows[1].user_id is None
     session.flush.assert_awaited_once()
     session.begin_nested.assert_called_once()
+    assert session.execute.await_count == 2
 
 
 @pytest.mark.asyncio

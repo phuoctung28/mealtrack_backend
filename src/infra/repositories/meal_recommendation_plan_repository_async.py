@@ -101,7 +101,10 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                 await self._session.flush()
         except IntegrityError as exc:
             raise MealRecommendationPersistenceConflictError from exc
-        return _rows_to_plan(rows)
+        loaded_rows = await self._load_batch(user_id=plan.user_id, batch_id=plan.id)
+        if not loaded_rows:
+            raise MealRecommendationNotFoundError
+        return _rows_to_plan(loaded_rows)
 
     async def swap_slot(
         self,
