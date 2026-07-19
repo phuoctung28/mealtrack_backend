@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from src.api.base_dependencies import (
     get_meal_recommendation_analytics_service,
-    get_meal_recommendation_cohort_service,
 )
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -18,7 +17,6 @@ from src.api.routes.v1.meal_recommendation_route_support import (
     LogRecommendedMealRequest,
     SwapMealRecommendationSlotRequest,
     capture_plan_events,
-    ensure_recommendations_enabled,
     record_operation_latency,
     to_response,
 )
@@ -36,9 +34,6 @@ from src.app.queries.user import GetUserTimezoneQuery
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
 )
-from src.app.services.meal_recommendation_cohort_service import (
-    MealRecommendationCohortService,
-)
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationCreationError,
 )
@@ -54,9 +49,6 @@ async def create_three_day_recommendations(
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
-    cohort_service: MealRecommendationCohortService = Depends(
-        get_meal_recommendation_cohort_service
-    ),
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
@@ -65,7 +57,6 @@ async def create_three_day_recommendations(
 
     started = perf_counter()
     metric_status = "error"
-    ensure_recommendations_enabled(user_id, cohort_service, operation="create")
     normalized_idempotency_key = idempotency_key.strip()
     try:
         if not normalized_idempotency_key:
@@ -136,16 +127,12 @@ async def swap_meal_recommendation_slot(
     body: SwapMealRecommendationSlotRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
-    cohort_service: MealRecommendationCohortService = Depends(
-        get_meal_recommendation_cohort_service
-    ),
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
 ) -> MealRecommendationPlanResponse:
     started = perf_counter()
     metric_status = "error"
-    ensure_recommendations_enabled(user_id, cohort_service, operation="swap")
     try:
         plan = await event_bus.send(
             SwapMealRecommendationSlotCommand(
@@ -180,16 +167,12 @@ async def log_recommended_meal(
     body: LogRecommendedMealRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
-    cohort_service: MealRecommendationCohortService = Depends(
-        get_meal_recommendation_cohort_service
-    ),
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
 ) -> MealRecommendationPlanResponse:
     started = perf_counter()
     metric_status = "error"
-    ensure_recommendations_enabled(user_id, cohort_service, operation="log")
     try:
         plan = await event_bus.send(
             LogRecommendedMealCommand(

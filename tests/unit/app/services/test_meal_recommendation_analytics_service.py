@@ -5,9 +5,6 @@ import pytest
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
 )
-from src.app.services.meal_recommendation_cohort_service import (
-    MealRecommendationCohortService,
-)
 from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
 
 
@@ -38,46 +35,6 @@ def _plan() -> PersistedMealRecommendationPlan:
         idempotency_key="key-1",
         request_fingerprint="f" * 64,
     )
-
-
-def test_cohort_service_is_default_off_and_requires_hard_switch():
-    assert not MealRecommendationCohortService(enabled=False).is_enabled_for_user(
-        "user-1"
-    )
-    assert not MealRecommendationCohortService(
-        enabled=False,
-        internal_user_ids="user-1",
-    ).is_enabled_for_user("user-1")
-
-
-def test_cohort_service_allows_internal_users_after_hard_switch():
-    service = MealRecommendationCohortService(
-        enabled=True,
-        internal_user_ids=" user-1 , user-2 ",
-    )
-
-    assert service.is_enabled_for_user("user-1")
-    assert not service.is_enabled_for_user("user-3")
-
-
-def test_cohort_service_percentage_fails_closed_without_salt():
-    service = MealRecommendationCohortService(
-        enabled=True,
-        cohort_percent=100,
-        cohort_salt="",
-    )
-
-    assert not service.is_enabled_for_user("user-1")
-
-
-def test_cohort_service_percentage_is_deterministic_with_salt():
-    service = MealRecommendationCohortService(
-        enabled=True,
-        cohort_percent=100,
-        cohort_salt="salt",
-    )
-
-    assert service.is_enabled_for_user("user-1")
 
 
 @pytest.mark.asyncio

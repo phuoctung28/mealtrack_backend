@@ -215,7 +215,7 @@ Ready:
 Environment prerequisites:
 
 - Full production catalog import is not complete; live dev DB currently has only the first imported sample set.
-- Recommendation feature is cohort-gated, so test users must be enabled.
+- Recommendation endpoints are available without a backend rollout gate.
 
 ## Mobile Team Can Start Now
 

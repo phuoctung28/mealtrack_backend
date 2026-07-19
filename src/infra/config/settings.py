@@ -291,23 +291,7 @@ class Settings(BaseSettings):
         description="Meal analysis graph version emitted in workflow state.",
     )
 
-    # Catalog meal recommendations rollout and analytics
-    MEAL_RECOMMENDATIONS_ENABLED: bool = Field(
-        default=False,
-        description="Hard backend kill switch for catalog meal recommendations.",
-    )
-    MEAL_RECOMMENDATIONS_INTERNAL_USER_IDS: str = Field(
-        default="",
-        description="Comma-separated user IDs allowed when the hard switch is enabled.",
-    )
-    MEAL_RECOMMENDATIONS_COHORT_PERCENT: int = Field(
-        default=0,
-        description="Deterministic HMAC rollout percentage from 0 to 100.",
-    )
-    MEAL_RECOMMENDATIONS_COHORT_SALT: str = Field(
-        default="",
-        description="HMAC salt for deterministic rollout cohorts; empty fails closed.",
-    )
+    # Catalog meal recommendations analytics
     MEAL_RECOMMENDATIONS_ANALYTICS_SALT: str = Field(
         default="",
         description="HMAC salt for PostHog recommendation identities; empty disables analytics.",

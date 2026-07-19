@@ -5,7 +5,6 @@ from __future__ import annotations
 from time import perf_counter
 from typing import Literal
 
-from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 from src.api.schemas.response.meal_recommendation_responses import (
@@ -19,12 +18,9 @@ from src.api.schemas.response.meal_recommendation_responses import (
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
 )
-from src.app.services.meal_recommendation_cohort_service import (
-    MealRecommendationCohortService,
-)
 from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
 from src.domain.model.meal_recommendation.catalog_recipe import CatalogMeal
-from src.observability import distribution_metric, increment_metric, log_event
+from src.observability import distribution_metric, increment_metric
 
 
 class SwapMealRecommendationSlotRequest(BaseModel):
@@ -52,37 +48,6 @@ class LogRecommendedMealRequest(BaseModel):
         if not normalized:
             raise ValueError("request_id is required")
         return normalized
-
-
-def ensure_recommendations_enabled(
-    user_id: str,
-    cohort_service: MealRecommendationCohortService,
-    *,
-    operation: str,
-) -> None:
-    if cohort_service.is_enabled_for_user(user_id):
-        return
-    increment_metric(
-        "meal_recommendation.requests",
-        attributes={
-            "component": "meal_recommendation",
-            "operation": operation,
-            "status": "disabled",
-        },
-    )
-    log_event(
-        "info",
-        "meal_recommendation.disabled",
-        attributes={
-            "component": "meal_recommendation",
-            "operation": operation,
-            "status": "disabled",
-        },
-    )
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="Meal recommendations are not available",
-    )
 
 
 def record_operation_latency(operation: str, started: float, status_value: str) -> None:

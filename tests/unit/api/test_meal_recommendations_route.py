@@ -36,16 +36,6 @@ class _EventBus:
         return _plan()
 
 
-class _EnabledGate:
-    def is_enabled_for_user(self, user_id):
-        return True
-
-
-class _DisabledGate:
-    def is_enabled_for_user(self, user_id):
-        return False
-
-
 class _Analytics:
     def __init__(self):
         self.events = []
@@ -100,25 +90,10 @@ async def test_create_three_day_recommendations_rejects_blank_idempotency_key():
             request=_request(),
             idempotency_key="   ",
             user_id="user-1",
-            cohort_service=_EnabledGate(),
             analytics_service=_Analytics(),
         )
 
     assert exc_info.value.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_create_three_day_recommendations_is_default_off():
-    with pytest.raises(HTTPException) as exc_info:
-        await create_three_day_recommendations(
-            request=_request(),
-            idempotency_key="key-1",
-            user_id="user-1",
-            cohort_service=_DisabledGate(),
-            analytics_service=_Analytics(),
-        )
-
-    assert exc_info.value.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -131,7 +106,6 @@ async def test_create_three_day_recommendations_snapshots_target_and_timezone():
         idempotency_key=" key-1 ",
         user_id="user-1",
         event_bus=event_bus,
-        cohort_service=_EnabledGate(),
         analytics_service=analytics,
     )
 
@@ -164,7 +138,6 @@ async def test_swap_route_sends_expected_selection_version_command():
         ),
         user_id="user-1",
         event_bus=event_bus,
-        cohort_service=_EnabledGate(),
         analytics_service=_Analytics(),
     )
 
@@ -187,7 +160,6 @@ async def test_log_route_sends_recommended_meal_command():
         body=LogRecommendedMealRequest(request_id="log-1"),
         user_id="user-1",
         event_bus=event_bus,
-        cohort_service=_EnabledGate(),
         analytics_service=_Analytics(),
     )
 
