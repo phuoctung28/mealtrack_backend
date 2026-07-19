@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,6 +15,7 @@ from src.domain.model.meal_recommendation.catalog_recipe import (
 )
 from src.domain.ports.catalog_recipe_repository_port import (
     CatalogMealRepositoryPort,
+    CatalogMealRevision,
     CatalogMealSeedExisting,
     CatalogMealSeedWrite,
 )
@@ -65,6 +66,25 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
 
         result = await self._session.execute(stmt)
         return [_meal_to_domain(row) for row in result.scalars().unique().all()]
+
+    async def get_active_catalog_revision(self) -> CatalogMealRevision:
+        result = await self._session.execute(
+            select(
+                func.count(func.distinct(MealCatalogORM.id)),
+                func.max(MealCatalogORM.updated_at),
+                func.max(FoodReferenceModel.updated_at),
+            )
+            .select_from(MealCatalogORM)
+            .outerjoin(MealCatalogIngredientORM)
+            .outerjoin(FoodReferenceModel)
+            .where(MealCatalogORM.is_active.is_(True))
+        )
+        active_count, catalog_updated_at, food_reference_updated_at = result.one()
+        return CatalogMealRevision(
+            active_count=int(active_count or 0),
+            catalog_updated_at=catalog_updated_at,
+            food_reference_updated_at=food_reference_updated_at,
+        )
 
     async def get_meal(self, catalog_meal_id: str) -> CatalogMeal | None:
         result = await self._session.execute(

@@ -5,12 +5,17 @@ from src.app.events.base import EventHandler, handles
 from src.app.services.recommended_meal_materialization_service import (
     RecommendedMealMaterializationService,
 )
-from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
+from src.domain.model.meal_recommendation import (
+    PersistedMealRecommendationSlotMutationResult,
+)
 
 
 @handles(LogRecommendedMealCommand)
 class LogRecommendedMealCommandHandler(
-    EventHandler[LogRecommendedMealCommand, PersistedMealRecommendationPlan]
+    EventHandler[
+        LogRecommendedMealCommand,
+        PersistedMealRecommendationSlotMutationResult,
+    ]
 ):
     def __init__(
         self,
@@ -22,7 +27,7 @@ class LogRecommendedMealCommandHandler(
 
     async def handle(
         self, command: LogRecommendedMealCommand
-    ) -> PersistedMealRecommendationPlan:
+    ) -> PersistedMealRecommendationSlotMutationResult:
         async with self.uow as uow:
             plan, slot, replayed = await uow.meal_recommendation_plans.claim_slot_log(
                 user_id=command.user_id,
@@ -31,7 +36,11 @@ class LogRecommendedMealCommandHandler(
                 request_id=command.request_id,
             )
             if replayed:
-                return plan
+                return PersistedMealRecommendationSlotMutationResult(
+                    plan_id=plan.id,
+                    user_id=plan.user_id,
+                    slot=slot,
+                )
             meal = await self.materializer.materialize(uow, plan=plan, slot=slot)
             return await uow.meal_recommendation_plans.finalize_slot_logged(
                 user_id=command.user_id,

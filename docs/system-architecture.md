@@ -131,6 +131,14 @@ downloading Cloudinary bytes. Graph nodes must not import provider SDKs,
 6. `VisionResponseParser` maps validated label data into `Nutrition` and `food_label_metadata`.
 7. Handler persists a READY `Meal(source="food_label")`, invalidates meal caches, and does not create hydration side effects.
 
+## Data Flow Example: Meal Recommendation Plan
+
+1. `POST /v1/meal-recommendations/three-day` resolves timezone and daily calories, then builds or replays a durable recommendation plan.
+2. The plan-level response is compact: it includes only the selected slots. Slot ingredients, alternatives, and scores stay out of the summary payload.
+3. `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` hydrates one selected slot and its alternatives when the client needs drill-down data.
+4. `swap` and `log` return the changed-slot detail shape so the mobile client can patch its cached plan without reloading everything.
+5. Recommendation analytics are scheduled through `BackgroundTaskManager` when available. Catalog meals are read from the process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback. Meal-history affinity is projected from aggregate linked ingredient buckets instead of loading the full meal graph, and logging a recommended meal reuses the already loaded selected catalog projection without fabricating image data.
+
 ---
 
 ## Affiliate System Boundary

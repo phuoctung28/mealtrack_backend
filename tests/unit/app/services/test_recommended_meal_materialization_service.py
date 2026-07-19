@@ -12,6 +12,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
     CatalogMealIngredient,
+    PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
@@ -76,6 +77,28 @@ def _plan_and_slot():
         idempotency_key="key",
         request_fingerprint="f" * 64,
     )
+    catalog_meal = CatalogMeal(
+        id="catalog-1",
+        catalog_key="catalog-key",
+        content_hash="a" * 64,
+        name="Catalog Recipe",
+        cuisine="vietnamese",
+        description=None,
+        image_url=None,
+        protein_g=Decimal("30"),
+        carbs_g=Decimal("50"),
+        fat_g=Decimal("10"),
+        fiber_g=Decimal("5"),
+        meal_types=("breakfast",),
+        ingredients=(
+            CatalogMealIngredient(
+                food_reference_id=123,
+                display_name="Ingredient",
+                quantity=Decimal("100"),
+                unit="g",
+            ),
+        ),
+    )
     slot = PersistedMealRecommendationSlot(
         id="slot-1",
         slot_date=date(2026, 7, 16),
@@ -85,6 +108,18 @@ def _plan_and_slot():
         target_calories=500,
         score=1.0,
         position=0,
+        selected=PersistedMealRecommendationCandidate(
+            id="candidate-1",
+            slot_id="slot-1",
+            recommendation_date=date(2026, 7, 16),
+            meal_type="breakfast",
+            catalog_meal_id="catalog-1",
+            candidate_rank=0,
+            is_selected=True,
+            score=Decimal("1.0"),
+            selection_version=1,
+            catalog_meal=catalog_meal,
+        ),
     )
     return plan, slot
 
@@ -103,15 +138,19 @@ async def test_materializer_preserves_food_reference_ids_and_macro_snapshot():
     assert meal.nutrition is not None
     assert meal.nutrition.macros.protein == 30
     assert meal.nutrition.food_items[0].food_reference_id == 123
+    assert meal.image is None
 
 
 @pytest.mark.asyncio
-async def test_materializer_fails_with_public_error_when_recipe_missing():
+async def test_materializer_fails_with_public_error_when_selected_meal_missing():
     plan, slot = _plan_and_slot()
+    slot = PersistedMealRecommendationSlot(
+        **{**slot.__dict__, "selected": None}
+    )
 
     with pytest.raises(MealRecommendationNotFoundError):
         await RecommendedMealMaterializationService().materialize(
-            _Uow(_MissingCatalogRepo()),
+            _Uow(),
             plan=plan,
             slot=slot,
         )

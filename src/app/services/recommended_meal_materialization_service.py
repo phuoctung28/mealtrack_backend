@@ -7,7 +7,7 @@ from uuid import uuid4
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationNotFoundError,
 )
-from src.domain.model.meal import Meal, MealImage, MealStatus
+from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_recommendation import (
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
@@ -26,9 +26,9 @@ class RecommendedMealMaterializationService:
         plan: PersistedMealRecommendationPlan,
         slot: PersistedMealRecommendationSlot,
     ) -> Meal:
-        catalog_meal = await uow.catalog_recipes.get_meal(slot.catalog_meal_id)
-        if catalog_meal is None:
+        if slot.selected is None or slot.selected.catalog_meal is None:
             raise MealRecommendationNotFoundError
+        catalog_meal = slot.selected.catalog_meal
 
         food_items = [
             FoodItem(
@@ -48,12 +48,7 @@ class RecommendedMealMaterializationService:
             status=MealStatus.READY,
             created_at=meal_time,
             ready_at=meal_time,
-            image=MealImage(
-                image_id=str(uuid4()),
-                format="jpeg",
-                size_bytes=1,
-                url=None,
-            ),
+            image=None,
             dish_name=catalog_meal.name,
             nutrition=Nutrition(
                 macros=Macros(

@@ -1,6 +1,6 @@
 # Backend Codebase Summary
 
-**Generated:** July 5, 2026
+**Generated:** July 19, 2026
 **Status:** Production-ready snapshot of the live backend codebase
 **Runtime:** FastAPI 0.136.3 on Python 3.13.2 with async SQLAlchemy 2.0
 
@@ -10,20 +10,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Source files | 635 Python files in `src/` |
-| Source LOC | 56,132 LOC in `src/` |
-| Test files | 312 Python files in `tests/` |
+| Source files | 693 Python files in `src/` |
+| Source LOC | 62,521 LOC in `src/` |
+| Test files | 337 Python files in `tests/` |
 | Collected tests | 1,600+ collected tests |
-| API router files | 28 route files under `src/api/routes/`; 26 contain endpoint decorators |
-| API endpoints | 88 endpoint decorators under `src/api/routes/` |
-| CQRS command files | 50 |
-| CQRS query files | 52 |
-| CQRS event files | 14 |
-| CQRS handler files | 86 |
-| Domain service files | 60 |
-| Port files | 27 |
-| Database model files | 48 |
-| ORM table declarations | 39 |
+| API router files | 30 route files under `src/api/routes/`; 27 contain endpoint decorators |
+| API endpoints | 94 endpoint decorators under `src/api/routes/` |
+| CQRS command files | 56 |
+| CQRS query files | 55 |
+| CQRS event files | 25 |
+| CQRS handler files | 94 |
+| Domain service files | 68 |
+| Port files | 31 |
+| Database model files | 51 |
+| ORM table declarations | 41 |
 
 ---
 
@@ -31,10 +31,10 @@
 
 | Layer | Files | LOC | Notes |
 |-------|-------|-----|-------|
-| API | 91 | 11,323 | Routes, middleware, schemas, dependency wiring, and API mappers |
-| Application | 207 | 11,333 | Commands, queries, handlers, and orchestration services |
-| Domain | 174 | 17,397 | Entities, services, ports, policies, and bounded contexts |
-| Infrastructure | 154 | 15,337 | Database, cache, adapters, observability, and service integrations |
+| API | 95 | 12,072 | Routes, middleware, schemas, dependency wiring, and API mappers |
+| Application | 238 | 13,901 | Commands, queries, handlers, and orchestration services |
+| Domain | 190 | 18,933 | Entities, services, ports, policies, and bounded contexts |
+| Infrastructure | 161 | 16,873 | Database, cache, adapters, observability, and service integrations |
 
 ---
 
@@ -63,17 +63,23 @@ The current HTTP surface includes:
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `src/api/routes/v1/` | 25 | Versioned REST route modules |
-| `src/api/schemas/` | 35 | Pydantic DTOs |
-| `src/app/commands/` | 50 | Write-operation command packages |
-| `src/app/queries/` | 52 | Read-operation query packages |
-| `src/app/handlers/` | 86 | CQRS handler packages |
-| `src/domain/model/` | 63 | Domain entities and value objects |
-| `src/domain/services/` | 60 | Domain services and policies |
-| `src/infra/database/models/` | 48 | ORM model packages and table declarations |
-| `src/infra/repositories/` | 23 | Data access adapters |
+| `src/api/routes/v1/` | 27 | Versioned REST route modules |
+| `src/api/schemas/` | 36 | Pydantic DTOs |
+| `src/app/commands/` | 56 | Write-operation command packages |
+| `src/app/queries/` | 55 | Read-operation query packages |
+| `src/app/handlers/` | 94 | CQRS handler packages |
+| `src/domain/model/` | 66 | Domain entities and value objects |
+| `src/domain/services/` | 68 | Domain services and policies |
+| `src/infra/database/models/` | 51 | ORM model packages and table declarations |
+| `src/infra/repositories/` | 25 | Data access adapters |
 | `src/infra/services/` | 27 | Infrastructure services and AI providers |
-| `tests/` | 312 | Unit, architecture, migration, and explicit integration tests |
+| `tests/` | 337 | Unit, architecture, migration, and explicit integration tests |
+
+---
+
+## Recent Characterization Work
+
+- **Meal Recommendation Performance Redesign:** `/v1/meal-recommendations/three-day` and `GET /v1/meal-recommendations/{plan_id}` now return compact selected-slot summaries; `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` hydrates one slot plus alternatives; swap/log return changed-slot detail responses; catalog meals use a process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback.
 
 ---
 
@@ -84,14 +90,14 @@ The current HTTP surface includes:
 ## Recent Features (June 2026)
 
 - **Canonical AI Nutrition Contracts + Validation Retry:** `src/domain/model/ai/nutrition_contracts.py` defines image and text nutrition contracts with bounded food counts, strict quantity validation, and backend-calorie authority; invalid structured meal image/text output now retries exactly once before a controlled `AIOutputValidationError`, while ingredient recognition keeps its unstructured `{name, confidence, category}` contract and the legacy parser no longer silently drops invalid AI food items.
-- **Notification / Push Overhaul:** Platform-specific payload builders (`src/infra/services/push/`); Android high-priority FCM, APNs Time Sensitive with `interruption-level` in payload body; trial-expiry pushes at T-2d and T-1d; notifications rescheduled on timezone changes; cron push (`src/cron/push.py`) precomputes notification rows, schedules trial-expiry rows, dispatches due rows through database row claiming, and cleans expired rows
-- **RevenueCat Webhook Expansion:** Full lifecycle coverage (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER); referral credit/revoke on purchase/refund; PostHog lifecycle mirroring
-- **PostHog Analytics Adapter:** `src/infra/adapters/posthog_adapter.py` — fire-and-forget async capture; enabled by `POSTHOG_API_KEY`
-- **Parallel Recipe Generator:** `src/domain/services/meal_suggestion/parallel_recipe_generator.py` with per-recipe attempt logic in `recipe_attempt_builder.py`; 3-phase pipeline: name generation → parallel recipe generation → translation
-- **Cron Lifecycle Email Service:** `src/cron/email.py` runs re-engagement and trial-expiry lifecycle emails via `CronLifecycleEmailService`
-- **Configurable Referral Commission:** `REFERRAL_COMMISSIONS` env var (JSON dict, per-currency, default 2 USD)
-- **Variable-Length Referral Codes:** 3–15 character codes
-- **AI Handshake Guest Trial Quota (Postgres):** `src/api/services/guest_parse_quota.py` + table `ai_handshake_guest_trial_quotas`; enforces one-shot AI trial per guest install HMAC hash using Postgres row-level locking (INSERT+conflict → SELECT FOR UPDATE); Redis not required for this endpoint.
+- **Notification / Push Overhaul:** Platform-specific payload builders (`src/infra/services/push/`); Android high-priority FCM, APNs Time Sensitive with `interruption-level` in payload body; trial-expiry pushes at T-2d and T-1d; notifications rescheduled on timezone changes; cron push (`src/cron/push.py`) precomputes notification rows, schedules trial-expiry rows, dispatches due rows through database row claiming, and cleans expired rows.
+- **RevenueCat Webhook Expansion:** Full lifecycle coverage (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER); referral credit/revoke on purchase/refund; PostHog lifecycle mirroring.
+- **PostHog Analytics Adapter:** `src/infra/adapters/posthog_adapter.py` - fire-and-forget async capture; enabled by `POSTHOG_API_KEY`.
+- **Parallel Recipe Generator:** `src/domain/services/meal_suggestion/parallel_recipe_generator.py` with per-recipe attempt logic in `recipe_attempt_builder.py`; 3-phase pipeline: name generation → parallel recipe generation → translation.
+- **Cron Lifecycle Email Service:** `src/cron/email.py` runs re-engagement and trial-expiry lifecycle emails via `CronLifecycleEmailService`.
+- **Configurable Referral Commission:** `REFERRAL_COMMISSIONS` env var (JSON dict, per-currency, default 2 USD).
+- **Variable-Length Referral Codes:** 3–15 character codes.
+- **AI Handshake Guest Trial Quota (Postgres):** `src/api/services/guest_parse_quota.py` + table `ai_handshake_guest_trial_quotas`; enforces one-shot AI trial per guest install HMAC hash using Postgres row-level locking (INSERT+conflict -> SELECT FOR UPDATE); Redis not required for this endpoint.
 
 ---
 

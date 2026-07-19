@@ -3,6 +3,9 @@ from datetime import date, datetime
 from typing import Any
 
 from src.domain.model.meal import Meal, MealStatus
+from src.domain.services.meal_recommendation.ingredient_affinity_service import (
+    IngredientHistoryBucket,
+)
 
 
 class MealRepositoryPort(ABC):
@@ -108,6 +111,18 @@ class MealRepositoryPort(ABC):
         projection: Any = None,
     ) -> list[Meal]:
         """Find meals created within a local date range, inclusive."""
+        return []
+
+    async def aggregate_linked_ingredient_history(
+        self,
+        *,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        reference_date: date,
+        user_timezone: str | None = None,
+    ) -> list[IngredientHistoryBucket]:
+        """Return linked canonical ingredient usage buckets for recommendations."""
         return []
 
     @abstractmethod

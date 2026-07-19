@@ -33,12 +33,34 @@ class MealRecommendationCatalogMealResponse(BaseModel):
     ingredients: list[MealRecommendationIngredientResponse]
 
 
+class MealRecommendationCatalogMealSummaryResponse(BaseModel):
+    id: str
+    name: str
+    cuisine: str
+    image_url: str | None = None
+    calories: int
+    macros: MealRecommendationMacrosResponse
+
+
 class MealRecommendationAlternativeResponse(BaseModel):
     id: str
     catalog_meal_id: str
     catalog_meal: MealRecommendationCatalogMealResponse
     score: float
     candidate_rank: int
+
+
+class MealRecommendationSlotSummaryResponse(BaseModel):
+    id: str
+    slot_date: date
+    day_index: int
+    meal_type: str
+    catalog_meal_id: str
+    catalog_meal: MealRecommendationCatalogMealSummaryResponse
+    target_calories: int
+    position: int
+    selection_version: int
+    logged_meal_id: str | None = None
 
 
 class MealRecommendationSlotResponse(BaseModel):
@@ -54,6 +76,22 @@ class MealRecommendationSlotResponse(BaseModel):
     selection_version: int
     logged_meal_id: str | None = None
     alternatives: list[MealRecommendationAlternativeResponse]
+
+
+class MealRecommendationPlanSummaryResponse(BaseModel):
+    id: str
+    status: str
+    timezone: str
+    start_date: date
+    daily_calories: int
+    algorithm_version: str
+    allergy_evaluated: bool = False
+    slots: list[MealRecommendationSlotSummaryResponse]
+
+
+class MealRecommendationSlotDetailResponse(BaseModel):
+    plan_id: str
+    slot: MealRecommendationSlotResponse
 
 
 class MealRecommendationPlanResponse(BaseModel):

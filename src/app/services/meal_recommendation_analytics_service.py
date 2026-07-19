@@ -47,6 +47,24 @@ class MealRecommendationAnalyticsService:
             },
         )
 
+    async def capture_slot_response(
+        self,
+        *,
+        user_id: str,
+        event: str,
+        plan_id: str,
+    ) -> None:
+        if not self.adapter or not self.salt:
+            return
+        await self.adapter.capture(
+            distinct_id=_pseudonymous_id(user_id, self.salt),
+            event=event,
+            properties={
+                "schema_version": "meal_recommendation_v1",
+                "plan_id_hash": _pseudonymous_id(plan_id, self.salt),
+            },
+        )
+
 
 def _pseudonymous_id(user_id: str, salt: str) -> str:
     digest = hmac.new(

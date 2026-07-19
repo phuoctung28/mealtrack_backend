@@ -12,6 +12,8 @@ The feature recommends 3 meals per day for 3 continuous days:
 
 The backend does not call an LLM at recommendation time. It uses a curated `meal_catalog`, computes nutrition from `food_reference` ingredients, ranks catalog meals deterministically, and stores a durable plan.
 
+The current mobile contract is compact by default: plan reads return selected slots only, while slot-detail and mutation responses hydrate one slot at a time for local cache patching.
+
 ## Backend Engine
 
 Algorithm: `catalog_deterministic_v1`
@@ -36,12 +38,13 @@ On app open or recommendation screen entry:
 
 1. Call `POST /v1/meal-recommendations/three-day`.
 2. Use a stable `Idempotency-Key` for the current auto-generation attempt.
-3. Render returned 3-day plan.
+3. Cache the returned compact plan summary by `plan_id` and render the selected slots immediately.
 4. Let user:
    - view meal details
    - swap a slot
    - log a recommended meal
-5. Re-read the plan with `GET /v1/meal-recommendations/{plan_id}` when needed.
+5. Fetch `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` when the user drills into a slot or needs alternatives.
+6. Merge swap/log responses back into the cached plan instead of reloading the full plan.
 
 ## API Contracts
 
@@ -70,6 +73,11 @@ Behavior:
 GET /v1/meal-recommendations/{plan_id}
 Authorization: Bearer <firebase-jwt>
 ```
+
+Behavior:
+
+- Returns the compact plan summary for the owner-scoped plan.
+- The response includes selected slots only. Slot ingredients, alternatives, and scores are omitted from the summary payload.
 
 ### Swap Slot
 
@@ -108,87 +116,20 @@ Authorization: Bearer <firebase-jwt>
 
 Behavior:
 
-- Materializes the selected catalog meal as a normal meal.
+- Materializes the selected catalog meal as a normal meal using the already loaded selected catalog projection.
 - Preserves ingredient `food_reference_id`.
 - Marks the recommendation slot as logged.
 - Safe to retry with the same `request_id`.
 
 ## Response Shape
 
-The recommendation response is display-complete. Each selected slot and alternative includes renderable catalog meal details.
+The plan summary is compact:
 
-```json
-{
-  "id": "plan-id",
-  "status": "active",
-  "timezone": "America/Los_Angeles",
-  "start_date": "2026-07-17",
-  "daily_calories": 2000,
-  "algorithm_version": "catalog_deterministic_v1",
-  "allergy_evaluated": false,
-  "slots": [
-    {
-      "id": "slot-id",
-      "slot_date": "2026-07-17",
-      "day_index": 0,
-      "meal_type": "breakfast",
-      "catalog_meal_id": "catalog-meal-id",
-      "catalog_meal": {
-        "id": "catalog-meal-id",
-        "name": "Teriyaki Chicken Rice",
-        "cuisine": "japanese",
-        "description": "Display copy",
-        "image_url": "https://...",
-        "calories": 640,
-        "macros": {
-          "protein_g": 38.5,
-          "carbs_g": 72.1,
-          "fat_g": 18.3,
-          "fiber_g": 4.2,
-          "sugar_g": 8.1
-        },
-        "ingredients": [
-          {
-            "food_reference_id": 123,
-            "display_name": "Chicken breast",
-            "quantity": 120,
-            "unit": "g"
-          }
-        ]
-      },
-      "target_calories": 500,
-      "score": 0.94,
-      "position": 0,
-      "selection_version": 1,
-      "logged_meal_id": null,
-      "alternatives": [
-        {
-          "id": "candidate-id",
-          "catalog_meal_id": "alternative-catalog-meal-id",
-          "catalog_meal": {
-            "id": "alternative-catalog-meal-id",
-            "name": "Chicken Rice Bowl",
-            "cuisine": "vietnamese",
-            "description": "Display copy",
-            "image_url": "https://...",
-            "calories": 590,
-            "macros": {
-              "protein_g": 34.2,
-              "carbs_g": 68.0,
-              "fat_g": 16.5,
-              "fiber_g": 3.8,
-              "sugar_g": 5.4
-            },
-            "ingredients": []
-          },
-          "score": 0.91,
-          "candidate_rank": 1
-        }
-      ]
-    }
-  ]
-}
-```
+- plan metadata: `id`, `status`, `timezone`, `start_date`, `daily_calories`, `algorithm_version`, `allergy_evaluated`
+- slot summary: `id`, `slot_date`, `day_index`, `meal_type`, `catalog_meal_id`, compact `catalog_meal`, `target_calories`, `position`, `selection_version`, `logged_meal_id`
+- omitted from plan summary: `score`, `alternatives`, and `catalog_meal.ingredients`
+
+Use `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` for the hydrated selected slot payload when the user needs details or alternatives.
 
 ## Error Handling
 
@@ -207,9 +148,9 @@ Ready:
 - Catalog importer exists.
 - Catalog nutrition is computed from ingredients and `food_reference`.
 - Deterministic 3-day recommendation engine exists.
-- Create, get, swap, and log endpoints exist.
+- Create, get, slot-detail, swap, and log endpoints exist.
 - Operation idempotency exists.
-- Recommendation responses include renderable selected and alternative meal details.
+- Recommendation read paths now use the compact/delta contract for mobile cache patching.
 - Focused backend tests pass.
 
 Environment prerequisites:
@@ -222,9 +163,9 @@ Environment prerequisites:
 Mobile can start:
 
 - screen structure for 3-day plan
-- local state model for plan/slot/alternative/logged state
+- local state model for compact plan + hydrated slot detail state
 - API client methods
 - idempotency key generation
 - swap/log retry behavior
 - loading/error/empty states
-- rendering selected meal cards and alternative cards from embedded `catalog_meal`
+- rendering selected meal cards from summary data and alternative cards from hydrated slot detail

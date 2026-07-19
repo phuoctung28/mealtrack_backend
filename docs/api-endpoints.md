@@ -101,6 +101,22 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | POST | `/v1/meal-suggestions/recipes` | Generate recipe batch |
 | POST | `/v1/meal-suggestions/save` | Save a meal suggestion |
 
+## Meal Recommendations
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/v1/meal-recommendations/three-day` | Create or replay a 3-day catalog plan; returns compact selected-slot summaries only |
+| GET | `/v1/meal-recommendations/{plan_id}` | Read the owner-scoped compact plan summary |
+| GET | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}` | Read one hydrated selected slot with alternatives |
+| POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/swap` | Swap a slot and return the changed-slot detail response |
+| POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/log` | Log the selected recommendation and return the changed-slot detail response |
+
+### Meal Recommendation Contract
+
+- `create` and `get` return the compact summary contract: selected slots only, with no slot-level ingredients, alternatives, or scores in the plan payload.
+- Slot detail hydrates exactly one selected slot plus its alternatives. Mutation responses reuse the same changed-slot shape so clients can patch cached plans in place.
+- Recommendation analytics are scheduled through `BackgroundTaskManager` when the dependency is available; the route falls back to inline capture when it is not.
+
 ---
 
 ## Saved Suggestions

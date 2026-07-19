@@ -12,16 +12,20 @@ from src.api.base_dependencies import (
 )
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.dependencies.task_manager import get_optional_task_manager
 from src.api.middleware.rate_limit import limiter
 from src.api.routes.v1.meal_recommendation_route_support import (
     LogRecommendedMealRequest,
     SwapMealRecommendationSlotRequest,
     capture_plan_events,
+    capture_slot_event,
     record_operation_latency,
-    to_response,
+    to_slot_detail_response,
+    to_summary_response,
 )
 from src.api.schemas.response.meal_recommendation_responses import (
-    MealRecommendationPlanResponse,
+    MealRecommendationPlanSummaryResponse,
+    MealRecommendationSlotDetailResponse,
 )
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
@@ -29,7 +33,10 @@ from src.app.commands.meal_recommendation import (
     SwapMealRecommendationSlotCommand,
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
-from src.app.queries.meal_recommendation import GetMealRecommendationPlanQuery
+from src.app.queries.meal_recommendation import (
+    GetMealRecommendationPlanQuery,
+    GetMealRecommendationSlotDetailQuery,
+)
 from src.app.queries.user import GetUserTimezoneQuery
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
@@ -42,7 +49,7 @@ from src.domain.utils.timezone_utils import get_zone_info
 router = APIRouter(prefix="/v1/meal-recommendations", tags=["Meal Recommendations"])
 
 
-@router.post("/three-day", response_model=MealRecommendationPlanResponse)
+@router.post("/three-day", response_model=MealRecommendationPlanSummaryResponse)
 @limiter.limit("5/minute")
 async def create_three_day_recommendations(
     request: Request,
@@ -52,7 +59,8 @@ async def create_three_day_recommendations(
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
-) -> MealRecommendationPlanResponse:
+    task_manager=Depends(get_optional_task_manager),
+) -> MealRecommendationPlanSummaryResponse:
     """Create or replay a durable three-day catalog recommendation plan."""
 
     started = perf_counter()
@@ -104,12 +112,13 @@ async def create_three_day_recommendations(
                 status_code=exc.status_code,
                 detail=exc.public_detail,
             ) from exc
-        response = to_response(plan)
+        response = to_summary_response(plan)
         await capture_plan_events(
             analytics_service,
             user_id=user_id,
             plan=plan,
             events=("plan_shown", "alternatives_shown"),
+            task_manager=task_manager,
         )
         metric_status = "success"
         return response
@@ -120,7 +129,10 @@ async def create_three_day_recommendations(
         record_operation_latency("create", started, metric_status)
 
 
-@router.post("/{plan_id}/slots/{slot_id}/swap", response_model=MealRecommendationPlanResponse)
+@router.post(
+    "/{plan_id}/slots/{slot_id}/swap",
+    response_model=MealRecommendationSlotDetailResponse,
+)
 async def swap_meal_recommendation_slot(
     plan_id: str,
     slot_id: str,
@@ -130,11 +142,12 @@ async def swap_meal_recommendation_slot(
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
-) -> MealRecommendationPlanResponse:
+    task_manager=Depends(get_optional_task_manager),
+) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
     try:
-        plan = await event_bus.send(
+        result = await event_bus.send(
             SwapMealRecommendationSlotCommand(
                 user_id=user_id,
                 plan_id=plan_id,
@@ -148,19 +161,23 @@ async def swap_meal_recommendation_slot(
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    response = to_response(plan)
-    await capture_plan_events(
+    response = to_slot_detail_response(result.plan_id, result.slot)
+    await capture_slot_event(
         analytics_service,
         user_id=user_id,
-        plan=plan,
-        events=("swap_selected",),
+        event="swap_selected",
+        plan_id=result.plan_id,
+        task_manager=task_manager,
     )
     metric_status = "success"
     record_operation_latency("swap", started, metric_status)
     return response
 
 
-@router.post("/{plan_id}/slots/{slot_id}/log", response_model=MealRecommendationPlanResponse)
+@router.post(
+    "/{plan_id}/slots/{slot_id}/log",
+    response_model=MealRecommendationSlotDetailResponse,
+)
 async def log_recommended_meal(
     plan_id: str,
     slot_id: str,
@@ -170,11 +187,12 @@ async def log_recommended_meal(
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
-) -> MealRecommendationPlanResponse:
+    task_manager=Depends(get_optional_task_manager),
+) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
     try:
-        plan = await event_bus.send(
+        result = await event_bus.send(
             LogRecommendedMealCommand(
                 user_id=user_id,
                 plan_id=plan_id,
@@ -185,19 +203,20 @@ async def log_recommended_meal(
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    response = to_response(plan)
-    await capture_plan_events(
+    response = to_slot_detail_response(result.plan_id, result.slot)
+    await capture_slot_event(
         analytics_service,
         user_id=user_id,
-        plan=plan,
-        events=("meal_logged",),
+        event="meal_logged",
+        plan_id=result.plan_id,
+        task_manager=task_manager,
     )
     metric_status = "success"
     record_operation_latency("log", started, metric_status)
     return response
 
 
-@router.get("/{plan_id}", response_model=MealRecommendationPlanResponse)
+@router.get("/{plan_id}", response_model=MealRecommendationPlanSummaryResponse)
 async def get_meal_recommendation_plan(
     plan_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -205,7 +224,8 @@ async def get_meal_recommendation_plan(
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
-) -> MealRecommendationPlanResponse:
+    task_manager=Depends(get_optional_task_manager),
+) -> MealRecommendationPlanSummaryResponse:
     """Read an owner-scoped durable recommendation plan."""
 
     started = perf_counter()
@@ -217,13 +237,56 @@ async def get_meal_recommendation_plan(
         metric_status = "http_404"
         record_operation_latency("read", started, metric_status)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    response = to_response(plan)
+    response = to_summary_response(plan)
     await capture_plan_events(
         analytics_service,
         user_id=user_id,
         plan=plan,
         events=("plan_shown", "alternatives_shown"),
+        task_manager=task_manager,
     )
     metric_status = "success"
     record_operation_latency("read", started, metric_status)
+    return response
+
+
+@router.get(
+    "/{plan_id}/slots/{slot_id}",
+    response_model=MealRecommendationSlotDetailResponse,
+)
+async def get_meal_recommendation_slot_detail(
+    plan_id: str,
+    slot_id: str,
+    user_id: str = Depends(get_current_user_id),
+    event_bus=Depends(get_configured_event_bus),
+    analytics_service: MealRecommendationAnalyticsService = Depends(
+        get_meal_recommendation_analytics_service
+    ),
+    task_manager=Depends(get_optional_task_manager),
+) -> MealRecommendationSlotDetailResponse:
+    """Read one owner-scoped recommendation slot with alternatives."""
+
+    started = perf_counter()
+    metric_status = "error"
+    slot = await event_bus.send(
+        GetMealRecommendationSlotDetailQuery(
+            user_id=user_id,
+            plan_id=plan_id,
+            slot_id=slot_id,
+        )
+    )
+    if slot is None:
+        metric_status = "http_404"
+        record_operation_latency("slot_detail", started, metric_status)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    response = to_slot_detail_response(plan_id, slot)
+    await capture_slot_event(
+        analytics_service,
+        user_id=user_id,
+        event="slot_detail_shown",
+        plan_id=plan_id,
+        task_manager=task_manager,
+    )
+    metric_status = "success"
+    record_operation_latency("slot_detail", started, metric_status)
     return response

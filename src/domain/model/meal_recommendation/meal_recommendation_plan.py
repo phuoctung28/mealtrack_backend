@@ -67,3 +67,12 @@ class PersistedMealRecommendationPlan:
     request_fingerprint: str
     slots: tuple[PersistedMealRecommendationSlot, ...] = field(default_factory=tuple)
     created_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class PersistedMealRecommendationSlotMutationResult:
+    """Changed-slot result for recommendation swap/log mutations."""
+
+    plan_id: str
+    user_id: str
+    slot: PersistedMealRecommendationSlot

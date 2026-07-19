@@ -11,6 +11,8 @@ from src.api.routes.v1.meal_recommendations import (
     LogRecommendedMealRequest,
     SwapMealRecommendationSlotRequest,
     create_three_day_recommendations,
+    get_meal_recommendation_plan,
+    get_meal_recommendation_slot_detail,
     log_recommended_meal,
     swap_meal_recommendation_slot,
 )
@@ -20,7 +22,14 @@ from src.app.commands.meal_recommendation import (
     SwapMealRecommendationSlotCommand,
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.app.queries.meal_recommendation import (
+    GetMealRecommendationPlanQuery,
+    GetMealRecommendationSlotDetailQuery,
+)
 from src.app.queries.user import GetUserTimezoneQuery
+from src.domain.model.meal_recommendation import (
+    PersistedMealRecommendationSlotMutationResult,
+)
 
 
 class _EventBus:
@@ -33,6 +42,16 @@ class _EventBus:
             return "Asia/Ho_Chi_Minh"
         if isinstance(message, GetWeeklyBudgetQuery):
             return {"adjusted_daily_calories": 2150}
+        if isinstance(message, GetMealRecommendationPlanQuery):
+            return _plan()
+        if isinstance(message, GetMealRecommendationSlotDetailQuery):
+            return _plan().slots[0]
+        if isinstance(message, (SwapMealRecommendationSlotCommand, LogRecommendedMealCommand)):
+            return PersistedMealRecommendationSlotMutationResult(
+                plan_id="plan-1",
+                user_id="user-1",
+                slot=_plan().slots[0],
+            )
         return _plan()
 
 
@@ -42,6 +61,18 @@ class _Analytics:
 
     async def capture_plan_response(self, *, user_id, event, plan):
         self.events.append((user_id, event, plan.id))
+
+    async def capture_slot_response(self, *, user_id, event, plan_id):
+        self.events.append((user_id, event, plan_id))
+
+
+class _TaskManager:
+    def __init__(self):
+        self.tasks = []
+
+    def spawn(self, name, coro):
+        self.tasks.append((name, coro))
+        coro.close()
 
 
 def _request(timezone: str = "Asia/Ho_Chi_Minh") -> Request:
@@ -115,6 +146,8 @@ async def test_create_three_day_recommendations_snapshots_target_and_timezone():
         if isinstance(item, CreateThreeDayMealRecommendationCommand)
     )
     assert response.id == "plan-1"
+    assert not hasattr(response.slots[0], "alternatives")
+    assert not hasattr(response.slots[0].catalog_meal, "ingredients")
     assert command.idempotency_key == "key-1"
     assert command.timezone == "Asia/Ho_Chi_Minh"
     assert command.daily_calories == 2150
@@ -125,10 +158,62 @@ async def test_create_three_day_recommendations_snapshots_target_and_timezone():
 
 
 @pytest.mark.asyncio
+async def test_create_three_day_recommendations_enqueues_analytics_when_task_manager_exists():
+    event_bus = _EventBus()
+    analytics = _Analytics()
+    task_manager = _TaskManager()
+
+    response = await create_three_day_recommendations(
+        request=_request(),
+        idempotency_key="key-1",
+        user_id="user-1",
+        event_bus=event_bus,
+        analytics_service=analytics,
+        task_manager=task_manager,
+    )
+
+    assert response.id == "plan-1"
+    assert analytics.events == []
+    assert [name for name, _ in task_manager.tasks] == ["meal_recommendation_analytics"]
+
+
+@pytest.mark.asyncio
+async def test_get_plan_returns_owner_scoped_compact_summary():
+    response = await get_meal_recommendation_plan(
+        plan_id="plan-1",
+        user_id="user-1",
+        event_bus=_EventBus(),
+        analytics_service=_Analytics(),
+    )
+
+    assert response.id == "plan-1"
+    assert response.slots[0].catalog_meal.name == "Breakfast Rice"
+    assert response.slots[0].catalog_meal.calories == 380
+    assert not hasattr(response.slots[0], "alternatives")
+    assert not hasattr(response.slots[0].catalog_meal, "ingredients")
+
+
+@pytest.mark.asyncio
+async def test_get_slot_detail_returns_one_hydrated_slot_with_alternatives():
+    response = await get_meal_recommendation_slot_detail(
+        plan_id="plan-1",
+        slot_id="slot-1",
+        user_id="user-1",
+        event_bus=_EventBus(),
+        analytics_service=_Analytics(),
+    )
+
+    assert response.plan_id == "plan-1"
+    assert response.slot.id == "slot-1"
+    assert response.slot.catalog_meal.ingredients[0].display_name == "Rice"
+    assert response.slot.alternatives[0].catalog_meal.name == "Chicken Bowl"
+
+
+@pytest.mark.asyncio
 async def test_swap_route_sends_expected_selection_version_command():
     event_bus = _EventBus()
 
-    await swap_meal_recommendation_slot(
+    response = await swap_meal_recommendation_slot(
         plan_id="plan-1",
         slot_id="slot-1",
         body=SwapMealRecommendationSlotRequest(
@@ -148,13 +233,15 @@ async def test_swap_route_sends_expected_selection_version_command():
     )
     assert command.expected_selection_version == 1
     assert command.alternative_catalog_meal_id == "selection_version-2"
+    assert response.plan_id == "plan-1"
+    assert response.slot.id == "slot-1"
 
 
 @pytest.mark.asyncio
 async def test_log_route_sends_recommended_meal_command():
     event_bus = _EventBus()
 
-    await log_recommended_meal(
+    response = await log_recommended_meal(
         plan_id="plan-1",
         slot_id="slot-1",
         body=LogRecommendedMealRequest(request_id="log-1"),
@@ -167,3 +254,5 @@ async def test_log_route_sends_recommended_meal_command():
         item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
     )
     assert command.request_id == "log-1"
+    assert response.plan_id == "plan-1"
+    assert response.slot.id == "slot-1"
