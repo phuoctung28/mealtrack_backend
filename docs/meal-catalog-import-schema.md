@@ -206,6 +206,22 @@ When dry-run passes with `import=passed`, import into the configured database:
   --resolver-map scripts/data/meal-catalog-resolver-map.json
 ```
 
+After import, generate missing catalog image URLs through Cloudflare Workers AI:
+
+```bash
+.venv/bin/python scripts/generate_catalog_meal_images.py --limit 10
+```
+
+First test one prompt without calling Cloudflare:
+
+```bash
+.venv/bin/python scripts/generate_catalog_meal_images.py --limit 1 --dry-run
+```
+
+The tool reads `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and optional
+`CLOUDFLARE_WORKERS_AI_IMAGE_MODEL` from `.env`. It stores the returned
+Cloudflare `result.image` URL in `meal_catalog.image_url`.
+
 ## Bootstrap Mode
 
 For early MVP catalog loading, use best-effort mode when we want the importer to

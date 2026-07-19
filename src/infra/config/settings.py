@@ -253,6 +253,10 @@ class Settings(BaseSettings):
         default=60,
         description="HTTP timeout for Workers AI requests (thinking models need ≥60s)",
     )
+    CLOUDFLARE_WORKERS_AI_IMAGE_MODEL: str = Field(
+        default="openai/gpt-image-2",
+        description="Workers AI model for catalog meal image generation.",
+    )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,
         description="Enable Cloudflare Workers AI for vision tasks",
