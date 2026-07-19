@@ -56,6 +56,7 @@ def _make_service(
     ref_result=None,
     resolver_result=None,
     gen_result=None,
+    redis_client=None,
 ) -> NutritionLookupService:
     """Build a NutritionLookupService with all dependencies mocked."""
     repo = MagicMock()
@@ -74,6 +75,7 @@ def _make_service(
         food_ref_repo=repo,
         ingredient_nutrition_resolver=resolver,
         generation_service=gen,
+        redis_client=redis_client,
     )
 
 
@@ -124,6 +126,25 @@ async def test_t1_hit_returns_correct_macros():
     assert result.calories == pytest.approx(round(expected_cal, 1))
     # Resolver should NOT be called
     svc._resolver.resolve.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cached_t1_result_preserves_food_reference_id():
+    """Warm Redis lookup preserves canonical food reference identity."""
+    redis = MagicMock()
+    redis.get = AsyncMock(return_value=None)
+    redis.set = AsyncMock()
+    ref = _make_ref(ref_id=77)
+    svc = _make_service(ref_result=ref, redis_client=redis)
+
+    cold = await svc._lookup_ingredient("chicken breast", 100.0)
+    payload = redis.set.await_args.args[1]
+    redis.get.return_value = payload
+    warm = await svc._lookup_ingredient("chicken breast", 200.0)
+
+    assert cold.food_reference_id == 77
+    assert warm.food_reference_id == 77
+    assert warm.protein == pytest.approx(cold.protein * 2)
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +504,7 @@ async def test_t3_ai_estimate_respects_10s_timeout():
     # simulating the internal 10s budget being exceeded.
     async def timed_out_wait_for(coro, timeout):
         coro.close()  # clean up the coroutine to avoid ResourceWarning
-        raise asyncio.TimeoutError("simulated 10s timeout")
+        raise TimeoutError("simulated 10s timeout")
 
     with patch(
         "src.domain.services.meal_suggestion.nutrition_lookup_service.asyncio.wait_for",

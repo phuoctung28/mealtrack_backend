@@ -7,7 +7,6 @@ Verifies:
   - MacroValidationService.validate_deterministic is called (via side-effect check)
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -52,7 +51,7 @@ def _make_session() -> SuggestionSession:
 
 
 def _make_ingredient_macros(
-    name: str, tier: str = "T1_food_reference"
+    name: str, tier: str = "T1_food_reference", food_reference_id: int | None = 700
 ) -> IngredientMacros:
     return IngredientMacros(
         name=name,
@@ -64,6 +63,7 @@ def _make_ingredient_macros(
         fiber=0.5,
         sugar=0.0,
         source_tier=tier,
+        food_reference_id=food_reference_id,
     )
 
 
@@ -157,6 +157,7 @@ async def test_attempt_recipe_generation_uses_deterministic_macros():
     assert result.macros.protein == 52.0
     assert result.macros.carbs == 38.0
     assert result.macros.fat == 8.0
+    assert result.ingredients[0].food_reference_id == 700
 
     # Verify NutritionLookupService was called with the correct ingredients
     nutrition_lookup.calculate_meal_macros.assert_called_once()
@@ -250,7 +251,7 @@ async def test_attempt_recipe_generation_returns_none_on_timeout():
     session = _make_session()
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan_async = AsyncMock(side_effect=asyncio.TimeoutError())
+    generation_service.generate_meal_plan_async = AsyncMock(side_effect=TimeoutError())
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
 

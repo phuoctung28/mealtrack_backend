@@ -226,6 +226,9 @@ class FoodItemResponse(BaseModel):
         None, description="Custom nutrition per 100g for custom ingredients"
     )
     fdc_id: int | None = Field(None, description="USDA FDC ID if available")
+    food_reference_id: int | None = Field(
+        None, description="Canonical food reference ID if available"
+    )
     is_custom: bool = Field(False, description="Whether this is a custom ingredient")
     allowed_units: list[ServingUnitResponse] = Field(
         default_factory=list,

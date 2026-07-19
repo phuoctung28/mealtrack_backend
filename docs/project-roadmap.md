@@ -15,6 +15,12 @@
 - [x] `FoodLabelImageAnalysisStrategy` handles multilingual labels and returns the strict `FoodLabelNutritionResponse` contract.
 - [x] Failed label reads do not persist meals; successful scans persist READY `Meal(source="food_label")` rows and invalidate meal caches without hydration side effects.
 
+### July 2026: Catalog Meal Recommendation MVP - Phase 2
+- [x] Canonical `food_reference_id` now survives meal, suggestion, save, edit, and cache paths.
+- [x] Catalog ingredient quantities resolve strictly; unsafe or ambiguous conversions fail closed.
+- [x] Food-reference nutrition projections are typed, and save-fallback calories use the fiber-aware macro formula.
+- [x] Existing `/v1/meal-suggestions` AI flow remains additive and unchanged aside from canonical ID preservation and fallback calories.
+
 ### June 2026: Python 3.13 and Dependency Standardization
 - [x] Upgraded runtime, Docker, CI, and documented backend baseline to Python 3.13.
 - [x] Upgraded FastAPI and core production libraries to current Python 3.13-compatible releases.

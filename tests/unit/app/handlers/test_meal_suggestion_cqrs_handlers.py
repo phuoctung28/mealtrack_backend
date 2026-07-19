@@ -6,10 +6,12 @@ from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.meal_suggestion import (
     DiscoverMealsCommand,
     GenerateMealRecipesCommand,
+    IngredientItem,
 )
 from src.app.handlers.command_handlers.meal_suggestion import (
     DiscoverMealsCommandHandler,
     GenerateMealRecipesCommandHandler,
+    SaveMealSuggestionCommandHandler,
 )
 from src.domain.model.meal_suggestion import SuggestionSession
 from src.domain.model.meal_suggestion.meal_suggestion import (
@@ -380,6 +382,49 @@ async def test_generate_meal_recipes_handler_legacy_meal_names_uses_phase2():
     assert [r.meal_name for r in recipes] == ["Grilled Chicken", "Pasta Primavera"]
     service._recipe_generator._phase2_generate_recipes.assert_awaited_once()
     service._recipe_generator.generate_selected_recipes.assert_not_awaited()
+
+
+def test_save_meal_suggestion_handler_preserves_food_reference_id_in_items():
+    """Saved suggestion ingredients keep canonical identity through macro handling."""
+    handler = SaveMealSuggestionCommandHandler(uow=AsyncMock())
+    direct_items = handler._build_food_items(
+        [
+            IngredientItem(
+                name="Chicken",
+                amount=100,
+                unit="g",
+                food_reference_id=1001,
+                protein=31,
+                carbs=0,
+                fat=4,
+                fiber=2,
+            )
+        ],
+        total_protein=31,
+        total_carbs=0,
+        total_fat=4,
+        total_fiber=2,
+    )
+    distributed_items = handler._build_food_items(
+        [
+            IngredientItem(
+                name="Rice",
+                amount=100,
+                unit="g",
+                food_reference_id=1002,
+            )
+        ],
+        total_protein=3,
+        total_carbs=28,
+        total_fat=1,
+        total_fiber=4,
+    )
+
+    assert direct_items[0].food_reference_id == 1001
+    assert direct_items[0].macros.fiber == 2
+    assert distributed_items[0].food_reference_id == 1002
+    assert distributed_items[0].macros.carbs == 28
+    assert distributed_items[0].macros.fiber == 4
 
 
 def _recipe(recipe_id: str, name: str, calories: float) -> MealSuggestion:

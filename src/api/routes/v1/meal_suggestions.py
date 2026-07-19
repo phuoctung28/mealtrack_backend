@@ -237,16 +237,22 @@ async def save_meal_suggestion(
     for the specified date so that it participates in daily macros and history.
     """
     language = get_request_language(request)
+    derived_calories = round(
+        body.protein * 4
+        + max(body.carbs - body.fiber, 0) * 4
+        + body.fiber * 2
+        + body.fat * 9
+    )
     command = SaveMealSuggestionCommand(
         user_id=user_id,
         suggestion_id=body.suggestion_id,
         name=body.name,
         meal_type=body.meal_type,
-        calories=body.calories
-        or round(body.protein * 4 + body.carbs * 4 + body.fat * 9),
+        calories=body.calories or derived_calories,
         protein=body.protein,
         carbs=body.carbs,
         fat=body.fat,
+        fiber=body.fiber,
         description=body.description,
         estimated_cook_time_minutes=body.estimated_cook_time_minutes,
         ingredients=[
@@ -255,9 +261,11 @@ async def save_meal_suggestion(
                 amount=i.amount,
                 unit=i.unit,
                 calories=i.calories,
+                food_reference_id=i.food_reference_id,
                 protein=i.protein,
                 carbs=i.carbs,
                 fat=i.fat,
+                fiber=i.fiber,
             )
             for i in body.ingredients
         ],

@@ -19,6 +19,11 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
+from src.app.commands.meal_recommendation import (
+    CreateThreeDayMealRecommendationCommand,
+    LogRecommendedMealCommand,
+    SwapMealRecommendationSlotCommand,
+)
 from src.app.commands.meal_suggestion import (
     DiscoverMealsCommand,
     GenerateMealRecipesCommand,
@@ -101,6 +106,11 @@ from src.app.handlers.command_handlers.delete_weight_entry_command_handler impor
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
     MarkCheatDayCommandHandler,
 )
+from src.app.handlers.command_handlers.meal_recommendation import (
+    CreateThreeDayMealRecommendationCommandHandler,
+    LogRecommendedMealCommandHandler,
+    SwapMealRecommendationSlotCommandHandler,
+)
 from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
     SyncWeightEntriesCommandHandler,
 )
@@ -128,6 +138,7 @@ from src.app.handlers.query_handlers import (
     GetUserOnboardingStatusQueryHandler,
     GetUserProfileQueryHandler,
     GetUserTdeeQueryHandler,
+    GetUserTimezoneQueryHandler,
     GetWeeklyBudgetQueryHandler,
     LookupBarcodeQueryHandler,
     PreviewTdeeQueryHandler,
@@ -138,6 +149,9 @@ from src.app.handlers.query_handlers.get_activities_presence_query_handler impor
 )
 from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
     GetCheatDaysQueryHandler,
+)
+from src.app.handlers.query_handlers.get_meal_recommendation_plan_query_handler import (
+    GetMealRecommendationPlanQueryHandler,
 )
 from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
     GetNutritionBulkQueryHandler,
@@ -160,13 +174,18 @@ from src.app.queries.meal import (
     GetMealsByDateQuery,
     GetStreakQuery,
 )
+from src.app.queries.meal_recommendation import GetMealRecommendationPlanQuery
 from src.app.queries.movement import GetDailyMovementQuery, GetMovementCatalogQuery
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.nutrition import GetActivitiesPresenceQuery, GetNutritionBulkQuery
 from src.app.queries.progress import GetJourneyProgressQuery
 from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.app.queries.tdee import GetUserTdeeQuery, PreviewTdeeQuery
-from src.app.queries.user import GetUserMetricsQuery, GetUserProfileQuery
+from src.app.queries.user import (
+    GetUserMetricsQuery,
+    GetUserProfileQuery,
+    GetUserTimezoneQuery,
+)
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
 )
@@ -544,6 +563,23 @@ def get_configured_event_bus() -> EventBus:
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
 
+    event_bus.register_handler(
+        CreateThreeDayMealRecommendationCommand,
+        CreateThreeDayMealRecommendationCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        SwapMealRecommendationSlotCommand,
+        SwapMealRecommendationSlotCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        LogRecommendedMealCommand,
+        LogRecommendedMealCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        GetMealRecommendationPlanQuery,
+        GetMealRecommendationPlanQueryHandler(AsyncUnitOfWork),
+    )
+
     # Register meal suggestion handlers
     event_bus.register_handler(
         DiscoverMealsCommand,
@@ -598,6 +634,9 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetUserProfileQuery,
         GetUserProfileQueryHandler(cache_service=cache_service),
+    )
+    event_bus.register_handler(
+        GetUserTimezoneQuery, GetUserTimezoneQueryHandler(AsyncUnitOfWork)
     )
     event_bus.register_handler(
         GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler()

@@ -3,9 +3,13 @@ from unittest.mock import MagicMock
 from src.infra.database.models.food_reference_nutrient import (
     FoodReferenceNutrientModel,
 )
+from src.infra.database.models.food_reference_serving_size import (
+    FoodReferenceServingSizeModel,
+)
 from src.infra.repositories.food_reference_projection import (
     build_food_reference_serving_rows,
     food_reference_model_to_dict,
+    food_reference_model_to_nutrition_projection,
 )
 
 
@@ -88,3 +92,40 @@ def test_food_reference_projection_returns_allowed_units_from_serving_rows():
         {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
         {"unit": "serving", "gram_weight": 85.0, "description": "serving"},
     ]
+
+
+def test_food_reference_nutrition_projection_uses_normalized_serving_rows():
+    model = _make_food_reference_model("soy_sauce")
+    model.id = 44
+    model.name = "Soy sauce"
+    model.source = "catalog_seed"
+    model.is_verified = True
+    model.density = 1.2
+    model.serving_size_rows = [
+        FoodReferenceServingSizeModel(
+            name="tbsp",
+            grams=None,
+            milliliters=15,
+            is_default=True,
+        )
+    ]
+
+    result = food_reference_model_to_nutrition_projection(model)
+
+    assert result.id == 44
+    assert result.source == "catalog_seed"
+    assert result.is_verified is True
+    assert result.density_g_ml == 1.2
+    assert result.servings[0].name == "tbsp"
+    assert result.servings[0].milliliters == 15
+
+
+def test_food_reference_nutrition_projection_supports_legacy_serving_json():
+    model = _make_food_reference_model("rice")
+    model.serving_size_rows = []
+    model.serving_sizes = [{"unit": "bowl", "gram_weight": 180}]
+
+    result = food_reference_model_to_nutrition_projection(model)
+
+    assert result.servings[0].name == "bowl"
+    assert result.servings[0].grams == 180

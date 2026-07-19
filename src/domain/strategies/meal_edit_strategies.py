@@ -6,11 +6,9 @@ Each strategy encapsulates the logic for add, update, or remove operations.
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from typing import Dict
 
 from src.domain.model.meal.food_item_change import FoodItemChange
-from src.domain.model.nutrition import FoodItem
-from src.domain.model.nutrition import Macros
+from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.services import NutritionCalculationService
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
@@ -36,7 +34,7 @@ class FoodItemChangeStrategy(ABC):
 
     @abstractmethod
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """
         Apply the change to the food items dictionary.
@@ -52,7 +50,7 @@ class RemoveFoodItemStrategy(FoodItemChangeStrategy):
     """Strategy for removing a food item."""
 
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """Remove food item from dictionary."""
         if not change.id:
@@ -67,7 +65,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
     """Strategy for updating an existing food item."""
 
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """Update existing food item with new quantity/unit or custom nutrition."""
         if not change.id or change.id not in food_items_dict:
@@ -100,6 +98,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                 micros=existing_item.micros,
                 confidence=0.8,
                 fdc_id=existing_item.fdc_id,
+                food_reference_id=existing_item.food_reference_id,
                 is_custom=True,
                 allowed_units=change.allowed_units or existing_item.allowed_units,
             )
@@ -134,6 +133,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     micros=existing_item.micros,
                     confidence=0.9,
                     fdc_id=existing_item.fdc_id,
+                    food_reference_id=existing_item.food_reference_id,
                     is_custom=existing_item.is_custom,
                     allowed_units=change.allowed_units or existing_item.allowed_units,
                 )
@@ -154,7 +154,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
 
     def _apply_simple_scaling(
         self,
-        food_items_dict: Dict[str, FoodItem],
+        food_items_dict: dict[str, FoodItem],
         change: FoodItemChange,
         existing_item: FoodItem,
         new_quantity: float,
@@ -193,6 +193,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             micros=existing_item.micros,
             confidence=existing_item.confidence,
             fdc_id=existing_item.fdc_id,
+            food_reference_id=existing_item.food_reference_id,
             is_custom=existing_item.is_custom,
             allowed_units=change.allowed_units or existing_item.allowed_units,
         )
@@ -209,7 +210,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
         self.food_service = food_service
 
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """Add new food item to dictionary."""
         new_item_id = str(uuid.uuid4())
@@ -312,7 +313,7 @@ class FoodItemChangeStrategyFactory:
     @staticmethod
     def create_strategies(
         nutrition_service: NutritionCalculationService, food_service=None
-    ) -> Dict[str, FoodItemChangeStrategy]:
+    ) -> dict[str, FoodItemChangeStrategy]:
         """Create all available strategies."""
         return {
             "add": AddFoodItemStrategy(nutrition_service, food_service),

@@ -19,6 +19,7 @@ class FoodItem:
     micros: Micros | None = None
     confidence: float = 1.0  # 0.0-1.0 confidence score from AI or lookup
     fdc_id: int | None = None  # USDA FDC ID if available
+    food_reference_id: int | None = None
     is_custom: bool = False  # Whether this is a custom ingredient
     allowed_units: list[dict[str, Any]] | None = None
 
@@ -60,6 +61,8 @@ class FoodItem:
             result["micros"] = self.micros.to_dict()
         if self.fdc_id:
             result["fdc_id"] = self.fdc_id
+        if self.food_reference_id:
+            result["food_reference_id"] = self.food_reference_id
         if self.allowed_units:
             result["allowed_units"] = self.allowed_units
         return result
