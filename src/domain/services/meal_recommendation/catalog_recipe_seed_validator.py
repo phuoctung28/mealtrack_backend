@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 REQUIRED_CUISINES = ("vietnamese", "japanese", "korean")
-REQUIRED_MEAL_TYPES = ("breakfast", "lunch", "dinner")
+ALLOWED_MEAL_TYPES = ("breakfast", "lunch", "dinner", "snack")
+REQUIRED_COVERAGE_MEAL_TYPES = ("breakfast", "lunch", "dinner")
 PRODUCTION_CUISINE_COUNTS = {
     "vietnamese": 60,
     "japanese": 60,
@@ -91,11 +92,11 @@ def validate_catalog_seed_manifest(
                 )
 
     coverage_dict = {
-        cuisine: {meal_type: counts.get(meal_type, 0) for meal_type in REQUIRED_MEAL_TYPES}
+        cuisine: {meal_type: counts.get(meal_type, 0) for meal_type in ALLOWED_MEAL_TYPES}
         for cuisine, counts in coverage.items()
     }
     for cuisine in REQUIRED_CUISINES:
-        for meal_type in REQUIRED_MEAL_TYPES:
+        for meal_type in REQUIRED_COVERAGE_MEAL_TYPES:
             count = coverage[cuisine][meal_type]
             if count < min_per_cuisine_meal_type:
                 errors.append(
@@ -143,7 +144,7 @@ def _validate_recipe(
         errors.append(f"recipes[{index}].meal_types must be a non-empty array")
         meal_types = []
     for meal_type in meal_types:
-        if meal_type not in REQUIRED_MEAL_TYPES:
+        if meal_type not in ALLOWED_MEAL_TYPES:
             errors.append(f"recipes[{index}].meal_types has invalid value: {meal_type}")
         elif cuisine is not None:
             coverage[cuisine][meal_type] += 1

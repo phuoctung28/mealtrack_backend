@@ -124,6 +124,24 @@ def test_manifest_allows_null_food_reference_id_for_import_time_lookup():
     assert result.is_valid is True
 
 
+def test_manifest_allows_snack_meal_type():
+    manifest = {
+        "release_key": "test-release",
+        "expected_recipe_count": 1,
+        "recipes": [_recipe("vn-snack", "vietnamese", "snack")],
+    }
+
+    result = validate_catalog_seed_manifest(
+        manifest,
+        expected_recipe_count=1,
+        min_per_cuisine_meal_type=0,
+        expected_cuisine_counts=None,
+    )
+
+    assert result.is_valid is True
+    assert result.coverage["vietnamese"]["snack"] == 1
+
+
 def test_manifest_rejects_invalid_food_reference_id_type():
     manifest = {
         "release_key": "test-release",
