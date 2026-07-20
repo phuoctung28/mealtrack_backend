@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 
 from src.domain.model.meal_recommendation.catalog_recipe import CatalogMeal
 
@@ -40,6 +41,15 @@ class CatalogMealSeedExisting:
     content_hash: str
 
 
+@dataclass(frozen=True, order=True)
+class CatalogMealRevision:
+    """Comparable active catalog revision."""
+
+    active_count: int
+    catalog_updated_at: datetime | None
+    food_reference_updated_at: datetime | None
+
+
 class CatalogMealRepositoryPort(ABC):
     """Read/write contract for catalog meals during the rework."""
 
@@ -51,6 +61,10 @@ class CatalogMealRepositoryPort(ABC):
         meal_type: str | None = None,
     ) -> list[CatalogMeal]:
         """Return active catalog meals."""
+
+    @abstractmethod
+    async def get_active_catalog_revision(self) -> CatalogMealRevision:
+        """Return a lightweight comparable active catalog revision."""
 
     @abstractmethod
     async def get_meal(self, catalog_meal_id: str) -> CatalogMeal | None:

@@ -2,19 +2,24 @@
 
 from src.app.commands.meal_recommendation import SwapMealRecommendationSlotCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
+from src.domain.model.meal_recommendation import (
+    PersistedMealRecommendationSlotMutationResult,
+)
 
 
 @handles(SwapMealRecommendationSlotCommand)
 class SwapMealRecommendationSlotCommandHandler(
-    EventHandler[SwapMealRecommendationSlotCommand, PersistedMealRecommendationPlan]
+    EventHandler[
+        SwapMealRecommendationSlotCommand,
+        PersistedMealRecommendationSlotMutationResult,
+    ]
 ):
     def __init__(self, uow):
         self.uow = uow
 
     async def handle(
         self, command: SwapMealRecommendationSlotCommand
-    ) -> PersistedMealRecommendationPlan:
+    ) -> PersistedMealRecommendationSlotMutationResult:
         async with self.uow as uow:
             return await uow.meal_recommendation_plans.swap_slot(
                 user_id=command.user_id,

@@ -16,6 +16,15 @@ class IngredientHistoryEvent:
 
 
 @dataclass(frozen=True)
+class IngredientHistoryBucket:
+    """Aggregated canonical ingredient usage for one local age-day bucket."""
+
+    food_reference_id: int
+    age_days: int
+    capped_grams: float
+
+
+@dataclass(frozen=True)
 class IngredientAffinityProfile:
     """Normalized 90-day ingredient affinity weights."""
 
@@ -46,6 +55,38 @@ class IngredientAffinityService:
             value = min(event.grams, 500.0) / 100.0 * recency_weight
             weighted[event.food_reference_id] = (
                 weighted.get(event.food_reference_id, 0.0) + value
+            )
+            total += value
+
+        if total <= 0:
+            return IngredientAffinityProfile(weights={}, confidence=0.0)
+
+        normalized = {
+            food_reference_id: value / total
+            for food_reference_id, value in weighted.items()
+        }
+        confidence = min(1.0, total / 25.0)
+        return IngredientAffinityProfile(weights=normalized, confidence=confidence)
+
+    def build_profile_from_buckets(
+        self,
+        buckets: list[IngredientHistoryBucket],
+    ) -> IngredientAffinityProfile:
+        weighted: dict[int, float] = {}
+        total = 0.0
+
+        for bucket in buckets:
+            if (
+                bucket.food_reference_id <= 0
+                or bucket.capped_grams <= 0
+                or bucket.age_days < 0
+                or bucket.age_days > 90
+            ):
+                continue
+            recency_weight = max(0.1, 1.0 - (bucket.age_days / 90))
+            value = bucket.capped_grams / 100.0 * recency_weight
+            weighted[bucket.food_reference_id] = (
+                weighted.get(bucket.food_reference_id, 0.0) + value
             )
             total += value
 

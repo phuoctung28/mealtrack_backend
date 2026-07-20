@@ -31,6 +31,7 @@ from src.domain.model.meal_recommendation import (
     MealRecommendationAlternative,
     MealRecommendationPlan,
     MealRecommendationSlot,
+    PersistedMealRecommendationSlotMutationResult,
 )
 from src.domain.services.meal_recommendation.ingredient_affinity_service import (
     IngredientAffinityProfile,
@@ -43,6 +44,7 @@ class _PlanRepo:
         self.lock_generation_for_user = AsyncMock()
         self.get_by_idempotency_key = AsyncMock(side_effect=self._get_by_key)
         self.get_by_id = AsyncMock(return_value=_plan())
+        self.get_summary = AsyncMock(return_value=_plan())
         self.save_new_active_plan = AsyncMock(side_effect=lambda plan: plan)
 
     async def _get_by_key(self, **kwargs):
@@ -75,7 +77,13 @@ class _LogPlanRepo(_PlanRepo):
     def __init__(self, *, replayed=False):
         super().__init__()
         self.claim_slot_log = AsyncMock(return_value=(_plan(), _plan().slots[0], replayed))
-        self.finalize_slot_logged = AsyncMock(return_value=_plan())
+        self.finalize_slot_logged = AsyncMock(
+            return_value=PersistedMealRecommendationSlotMutationResult(
+                plan_id="plan-1",
+                user_id="user-1",
+                slot=_plan().slots[0],
+            )
+        )
 
 
 class _Materializer:
@@ -244,7 +252,7 @@ async def test_query_handler_reads_owner_scoped_plan():
 
     assert result is not None
     assert result.id == "plan-1"
-    plans.get_by_id.assert_awaited_once_with(user_id="user-1", plan_id="plan-1")
+    plans.get_summary.assert_awaited_once_with(user_id="user-1", plan_id="plan-1")
 
 
 @pytest.mark.asyncio
@@ -258,7 +266,7 @@ async def test_log_handler_replays_without_materializing_duplicate_meal():
 
     result = await handler.handle(_log_command())
 
-    assert result.id == "plan-1"
+    assert result.plan_id == "plan-1"
     plans.claim_slot_log.assert_awaited_once()
     materializer.materialize.assert_not_awaited()
     plans.finalize_slot_logged.assert_not_awaited()
@@ -275,7 +283,7 @@ async def test_log_handler_claims_materializes_then_finalizes():
 
     result = await handler.handle(_log_command())
 
-    assert result.id == "plan-1"
+    assert result.plan_id == "plan-1"
     plans.claim_slot_log.assert_awaited_once()
     materializer.materialize.assert_awaited_once()
     plans.finalize_slot_logged.assert_awaited_once_with(

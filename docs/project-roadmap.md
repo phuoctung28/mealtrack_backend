@@ -9,6 +9,14 @@
 
 ## Completed Phases
 
+### July 2026: Meal Recommendation Performance Redesign
+- [x] `POST /v1/meal-recommendations/three-day` and `GET /v1/meal-recommendations/{plan_id}` now return compact selected-slot summaries instead of full hydrated plans.
+- [x] `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` returns one hydrated selected slot plus alternatives for drill-down.
+- [x] `swap` and `log` return changed-slot detail responses so clients can patch the cached plan in place.
+- [x] Recommendation analytics schedule through `BackgroundTaskManager` when available.
+- [x] Catalog meals use a process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback.
+- [x] Meal-history affinity now uses aggregate linked ingredient buckets, and logged recommended meals reuse the loaded selected catalog projection without fabricating an image.
+
 ### July 2026: Food-Label Image Scan
 - [x] `/v1/meals/food-label/scan-by-url` analyzes Nutrition Facts label images directly from Cloudinary bytes.
 - [x] Optional `label_crop_image_url` and crop metadata let mobile send a nutrition-panel crop while retaining the original image record.

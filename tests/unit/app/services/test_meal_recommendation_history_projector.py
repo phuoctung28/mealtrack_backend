@@ -1,57 +1,41 @@
 from datetime import UTC, datetime
-from uuid import uuid4
 
 import pytest
 
 from src.app.services.meal_recommendation_history_projector import (
     MealRecommendationHistoryProjector,
 )
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+from src.domain.services.meal_recommendation.ingredient_affinity_service import (
+    IngredientHistoryBucket,
+)
 
 
 class _MealRepo:
-    def __init__(self, meals):
-        self.meals = meals
+    def __init__(self, buckets):
+        self.buckets = buckets
         self.call = None
 
-    async def find_by_date_range(self, **kwargs):
+    async def aggregate_linked_ingredient_history(self, **kwargs):
         self.call = kwargs
-        return self.meals
+        return self.buckets
+
+    async def find_by_date_range(self, **kwargs):
+        raise AssertionError("history projector must use aggregate history")
 
 
 class _Uow:
-    def __init__(self, meals):
-        self.meals = _MealRepo(meals)
-
-
-def _meal(food_reference_id: int | None) -> Meal:
-    return Meal(
-        meal_id=str(uuid4()),
-        user_id=str(uuid4()),
-        status=MealStatus.READY,
-        created_at=datetime(2026, 7, 10, tzinfo=UTC),
-        ready_at=datetime(2026, 7, 10, tzinfo=UTC),
-        image=None,
-        nutrition=Nutrition(
-            macros=Macros(protein=20, carbs=30, fat=10),
-            food_items=[
-                FoodItem(
-                    id=str(uuid4()),
-                    name="Ingredient",
-                    quantity=120,
-                    unit="g",
-                    macros=Macros(protein=10, carbs=10, fat=5),
-                    food_reference_id=food_reference_id,
-                )
-            ],
-        ),
-    )
+    def __init__(self, buckets):
+        self.meals = _MealRepo(buckets)
 
 
 @pytest.mark.asyncio
-async def test_history_projector_uses_recent_linked_food_reference_events():
-    uow = _Uow([_meal(11), _meal(None)])
+async def test_history_projector_uses_aggregate_linked_food_reference_buckets():
+    uow = _Uow(
+        [
+            IngredientHistoryBucket(food_reference_id=11, age_days=1, capped_grams=120),
+            IngredientHistoryBucket(food_reference_id=0, age_days=1, capped_grams=120),
+        ]
+    )
 
     profile = await MealRecommendationHistoryProjector().build_affinity(
         uow,
@@ -62,4 +46,10 @@ async def test_history_projector_uses_recent_linked_food_reference_events():
 
     assert set(profile.weights) == {11}
     assert profile.confidence > 0
-    assert uow.meals.call["limit"] == 5000
+    assert uow.meals.call == {
+        "user_id": "user-1",
+        "start_date": datetime(2026, 4, 17, tzinfo=UTC).date(),
+        "end_date": datetime(2026, 7, 15, tzinfo=UTC).date(),
+        "user_timezone": "UTC",
+        "reference_date": datetime(2026, 7, 16, tzinfo=UTC).date(),
+    }

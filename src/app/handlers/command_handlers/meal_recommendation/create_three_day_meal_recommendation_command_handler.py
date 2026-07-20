@@ -45,10 +45,12 @@ class CreateThreeDayMealRecommendationCommandHandler(
         uow,
         optimizer: ThreeDayPlanOptimizer | None = None,
         history_projector: MealRecommendationHistoryProjector | None = None,
+        catalog_snapshot_service=None,
     ):
         self.uow = uow
         self.optimizer = optimizer or ThreeDayPlanOptimizer()
         self.history_projector = history_projector or MealRecommendationHistoryProjector()
+        self.catalog_snapshot_service = catalog_snapshot_service
 
     async def handle(
         self,
@@ -69,7 +71,11 @@ class CreateThreeDayMealRecommendationCommandHandler(
                     raise MealRecommendationIdempotencyConflictError
                 return existing
 
-            catalog_meals = await uow.catalog_recipes.list_active_meals()
+            if self.catalog_snapshot_service is not None:
+                snapshot = await self.catalog_snapshot_service.get_snapshot(uow)
+                catalog_meals = list(snapshot.meals)
+            else:
+                catalog_meals = await uow.catalog_recipes.list_active_meals()
             if not catalog_meals:
                 raise MealRecommendationCatalogUnavailableError
 

@@ -198,6 +198,73 @@ def test_three_day_optimizer_produces_9_slots_and_45_alternatives():
         assert slot.catalog_meal.id not in {item.catalog_meal.id for item in alternatives}
 
 
+def test_three_day_optimizer_matches_normal_golden_ids_and_scores():
+    profile = IngredientAffinityService().build_profile(
+        [], now=datetime(2026, 7, 16, tzinfo=UTC)
+    )
+
+    result = ThreeDayPlanOptimizer().build_plan(
+        _candidate_pool(),
+        daily_calories=2000,
+        affinity=profile,
+        cuisines={"vietnamese"},
+    )
+
+    assert not isinstance(result, MealRecommendationInsufficiency)
+    assert [
+        (slot.day_index, slot.meal_type, slot.catalog_meal.id, round(slot.score, 6))
+        for slot in result.slots
+    ] == [
+        (0, "breakfast", "breakfast-00", 0.82),
+        (0, "lunch", "lunch-00", 0.82),
+        (0, "dinner", "dinner-00", 0.82),
+        (1, "breakfast", "breakfast-01", 0.81836),
+        (1, "lunch", "lunch-01", 0.818907),
+        (1, "dinner", "dinner-01", 0.818907),
+        (2, "breakfast", "breakfast-02", 0.81672),
+        (2, "lunch", "lunch-02", 0.817813),
+        (2, "dinner", "dinner-02", 0.817813),
+    ]
+    assert {
+        key: [(item.catalog_meal.id, round(item.score, 6)) for item in alternatives]
+        for key, alternatives in result.alternatives.items()
+    } == _expected_normal_alternatives()
+
+
+def test_three_day_optimizer_matches_affinity_golden_ids_and_scores():
+    profile = IngredientAffinityService().build_profile(
+        [IngredientHistoryEvent(3, datetime(2026, 7, 15, tzinfo=UTC), 250)],
+        now=datetime(2026, 7, 16, tzinfo=UTC),
+    )
+
+    result = ThreeDayPlanOptimizer().build_plan(
+        _candidate_pool(),
+        daily_calories=2000,
+        affinity=profile,
+        cuisines={"vietnamese"},
+    )
+
+    assert not isinstance(result, MealRecommendationInsufficiency)
+    assert [
+        (slot.day_index, slot.meal_type, slot.catalog_meal.id, round(slot.score, 6))
+        for slot in result.slots
+    ] == [
+        (0, "breakfast", "breakfast-02", 0.83452),
+        (0, "lunch", "lunch-02", 0.835613),
+        (0, "dinner", "dinner-02", 0.835613),
+        (1, "breakfast", "breakfast-00", 0.82),
+        (1, "lunch", "lunch-00", 0.82),
+        (1, "dinner", "dinner-00", 0.82),
+        (2, "breakfast", "breakfast-01", 0.81836),
+        (2, "lunch", "lunch-01", 0.818907),
+        (2, "dinner", "dinner-01", 0.818907),
+    ]
+    assert {
+        key: [(item.catalog_meal.id, round(item.score, 6)) for item in alternatives]
+        for key, alternatives in result.alternatives.items()
+    } == _expected_normal_alternatives()
+
+
 def test_three_day_optimizer_returns_typed_insufficiency_for_sparse_catalog():
     profile = IngredientAffinityService().build_profile([], now=datetime.now(UTC))
 
@@ -221,6 +288,53 @@ def test_optimizer_is_repeatable_for_same_inputs():
 
     assert not isinstance(first, MealRecommendationInsufficiency)
     assert not isinstance(second, MealRecommendationInsufficiency)
-    assert [slot.catalog_meal.id for slot in first.slots] == [
-        slot.catalog_meal.id for slot in second.slots
+    assert _slot_golden(first) == _slot_golden(second)
+    assert _alternative_golden(first) == _alternative_golden(second)
+
+
+def _slot_golden(plan):
+    return [
+        (slot.day_index, slot.meal_type, slot.catalog_meal.id, round(slot.score, 6))
+        for slot in plan.slots
     ]
+
+
+def _alternative_golden(plan):
+    return {
+        key: [(item.catalog_meal.id, round(item.score, 6)) for item in alternatives]
+        for key, alternatives in plan.alternatives.items()
+    }
+
+
+def _expected_normal_alternatives():
+    breakfast = [
+        ("breakfast-03", 0.81508),
+        ("breakfast-04", 0.81344),
+        ("breakfast-05", 0.8118),
+        ("breakfast-06", 0.81016),
+        ("breakfast-07", 0.80852),
+    ]
+    lunch = [
+        ("lunch-03", 0.81672),
+        ("lunch-04", 0.815627),
+        ("lunch-05", 0.814533),
+        ("lunch-06", 0.81344),
+        ("lunch-07", 0.812347),
+    ]
+    dinner = [
+        ("dinner-03", 0.81672),
+        ("dinner-04", 0.815627),
+        ("dinner-05", 0.814533),
+        ("dinner-06", 0.81344),
+        ("dinner-07", 0.812347),
+    ]
+    return {
+        (day_index, "breakfast"): breakfast
+        for day_index in range(3)
+    } | {
+        (day_index, "lunch"): lunch
+        for day_index in range(3)
+    } | {
+        (day_index, "dinner"): dinner
+        for day_index in range(3)
+    }

@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from src.domain.model.meal_recommendation import (
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
+    PersistedMealRecommendationSlotMutationResult,
 )
 
 
@@ -21,6 +22,25 @@ class MealRecommendationPlanRepositoryPort(ABC):
         plan_id: str,
     ) -> PersistedMealRecommendationPlan | None:
         """Return an owner-scoped plan by ID."""
+
+    @abstractmethod
+    async def get_summary(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+    ) -> PersistedMealRecommendationPlan | None:
+        """Return selected owner-scoped slots without alternatives."""
+
+    @abstractmethod
+    async def get_slot_detail(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+    ) -> PersistedMealRecommendationSlot | None:
+        """Return one owner-scoped hydrated slot with alternatives."""
 
     @abstractmethod
     async def get_by_idempotency_key(
@@ -54,8 +74,8 @@ class MealRecommendationPlanRepositoryPort(ABC):
         expected_version: int,
         alternative_catalog_meal_id: str | None,
         reason: str,
-    ) -> PersistedMealRecommendationPlan:
-        """Swap one owned slot and return the updated plan."""
+    ) -> PersistedMealRecommendationSlotMutationResult:
+        """Swap one owned slot and return the changed slot."""
 
     @abstractmethod
     async def claim_slot_log(
@@ -65,7 +85,11 @@ class MealRecommendationPlanRepositoryPort(ABC):
         plan_id: str,
         slot_id: str,
         request_id: str,
-    ) -> tuple[PersistedMealRecommendationPlan, PersistedMealRecommendationSlot, bool]:
+    ) -> tuple[
+        PersistedMealRecommendationPlan,
+        PersistedMealRecommendationSlot,
+        bool,
+    ]:
         """Claim a slot log request before materializing a normal meal."""
 
     @abstractmethod
@@ -77,5 +101,5 @@ class MealRecommendationPlanRepositoryPort(ABC):
         slot_id: str,
         request_id: str,
         meal_id: str,
-    ) -> PersistedMealRecommendationPlan:
-        """Attach a materialized meal to a claimed slot log and return the plan."""
+    ) -> PersistedMealRecommendationSlotMutationResult:
+        """Attach a materialized meal to a claimed slot log and return the slot."""

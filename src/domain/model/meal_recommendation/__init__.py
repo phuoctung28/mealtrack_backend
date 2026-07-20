@@ -13,6 +13,7 @@ from .meal_recommendation_plan import (
     PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
+    PersistedMealRecommendationSlotMutationResult,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "PersistedMealRecommendationCandidate",
     "PersistedMealRecommendationPlan",
     "PersistedMealRecommendationSlot",
+    "PersistedMealRecommendationSlotMutationResult",
 ]

@@ -153,6 +153,9 @@ from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
 from src.app.handlers.query_handlers.get_meal_recommendation_plan_query_handler import (
     GetMealRecommendationPlanQueryHandler,
 )
+from src.app.handlers.query_handlers.get_meal_recommendation_slot_detail_query_handler import (
+    GetMealRecommendationSlotDetailQueryHandler,
+)
 from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
     GetNutritionBulkQueryHandler,
 )
@@ -174,7 +177,10 @@ from src.app.queries.meal import (
     GetMealsByDateQuery,
     GetStreakQuery,
 )
-from src.app.queries.meal_recommendation import GetMealRecommendationPlanQuery
+from src.app.queries.meal_recommendation import (
+    GetMealRecommendationPlanQuery,
+    GetMealRecommendationSlotDetailQuery,
+)
 from src.app.queries.movement import GetDailyMovementQuery, GetMovementCatalogQuery
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.nutrition import GetActivitiesPresenceQuery, GetNutritionBulkQuery
@@ -193,6 +199,7 @@ from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
 from src.app.queries.weight import GetWeightEntriesQuery
+from src.app.services.catalog_meal_snapshot_service import CatalogMealSnapshotService
 from src.infra.event_bus import EventBus, PyMediatorEventBus
 
 logger = logging.getLogger(__name__)
@@ -565,7 +572,10 @@ def get_configured_event_bus() -> EventBus:
 
     event_bus.register_handler(
         CreateThreeDayMealRecommendationCommand,
-        CreateThreeDayMealRecommendationCommandHandler(uow=AsyncUnitOfWork()),
+        CreateThreeDayMealRecommendationCommandHandler(
+            uow=AsyncUnitOfWork(),
+            catalog_snapshot_service=CatalogMealSnapshotService(),
+        ),
     )
     event_bus.register_handler(
         SwapMealRecommendationSlotCommand,
@@ -578,6 +588,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetMealRecommendationPlanQuery,
         GetMealRecommendationPlanQueryHandler(AsyncUnitOfWork),
+    )
+    event_bus.register_handler(
+        GetMealRecommendationSlotDetailQuery,
+        GetMealRecommendationSlotDetailQueryHandler(AsyncUnitOfWork),
     )
 
     # Register meal suggestion handlers

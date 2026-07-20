@@ -24,7 +24,7 @@ class GetMealRecommendationPlanQueryHandler(
         query: GetMealRecommendationPlanQuery,
     ) -> PersistedMealRecommendationPlan | None:
         async with self._uow_factory() as uow:
-            return await uow.meal_recommendation_plans.get_by_id(
+            return await uow.meal_recommendation_plans.get_summary(
                 user_id=query.user_id,
                 plan_id=query.plan_id,
             )

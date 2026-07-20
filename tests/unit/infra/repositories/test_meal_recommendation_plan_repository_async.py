@@ -17,6 +17,7 @@ from src.domain.model.meal_recommendation import (
 )
 from src.infra.repositories.meal_recommendation_plan_repository_async import (
     AsyncMealRecommendationPlanRepository,
+    _operation_fingerprint,
 )
 
 
@@ -141,7 +142,7 @@ def _catalog_meal(catalog_meal_id: str, name: str) -> CatalogMeal:
 
 @pytest.mark.asyncio
 async def test_save_new_active_plan_supersedes_existing_and_flushes_candidate_rows():
-    session = _AsyncSession([_Result(), _Result(rows=_plan_to_candidate_rows(_plan()))])
+    session = _AsyncSession([_Result()])
     repo = AsyncMealRecommendationPlanRepository(session)
 
     saved = await repo.save_new_active_plan(_plan())
@@ -153,7 +154,7 @@ async def test_save_new_active_plan_supersedes_existing_and_flushes_candidate_ro
     assert session.added_rows[1].user_id is None
     session.flush.assert_awaited_once()
     session.begin_nested.assert_called_once()
-    assert session.execute.await_count == 2
+    assert session.execute.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -204,14 +205,66 @@ class _LogReplayRepo(AsyncMealRecommendationPlanRepository):
     async def _get_operation_replay(self, *, user_id, operation_type, request_id):
         return self.replay
 
-    async def _load_batch_for_update(self, *, user_id, batch_id):
-        return _plan_to_candidate_rows(_plan())
+    async def _load_slot_for_update(self, *, user_id, batch_id, slot_id):
+        rows = _plan_to_candidate_rows(_plan())
+        return rows[0], rows
 
 
 @pytest.mark.asyncio
 async def test_claim_slot_log_rejects_reused_request_id_for_different_slot():
     repo = _LogReplayRepo(
         replay=SimpleNamespace(batch_id="plan-1", slot_id="other-slot")
+    )
+
+    with pytest.raises(MealRecommendationIdempotencyConflictError):
+        await repo.claim_slot_log(
+            user_id="user-1",
+            plan_id="plan-1",
+            slot_id="slot-1",
+            request_id="log-1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_claim_slot_log_replay_returns_stored_logged_meal_id():
+    repo = _LogReplayRepo(
+        replay=SimpleNamespace(
+            batch_id="plan-1",
+            slot_id="slot-1",
+            request_fingerprint=_operation_fingerprint(
+                plan_id="plan-1",
+                slot_id="slot-1",
+                meal_id="meal-replayed",
+            ),
+            result_logged_meal_id="meal-replayed",
+        )
+    )
+
+    plan, slot, replayed = await repo.claim_slot_log(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="log-1",
+    )
+
+    assert replayed is True
+    assert slot.logged_meal_id == "meal-replayed"
+    assert plan.slots[0].logged_meal_id == "meal-replayed"
+
+
+@pytest.mark.asyncio
+async def test_claim_slot_log_rejects_replay_with_wrong_fingerprint():
+    repo = _LogReplayRepo(
+        replay=SimpleNamespace(
+            batch_id="plan-1",
+            slot_id="slot-1",
+            request_fingerprint=_operation_fingerprint(
+                plan_id="plan-1",
+                slot_id="slot-1",
+                meal_id="other-meal",
+            ),
+            result_logged_meal_id="meal-replayed",
+        )
     )
 
     with pytest.raises(MealRecommendationIdempotencyConflictError):
