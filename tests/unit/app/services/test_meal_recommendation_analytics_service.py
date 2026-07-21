@@ -30,7 +30,6 @@ def _plan() -> PersistedMealRecommendationPlan:
         timezone="UTC",
         start_date=date(2026, 7, 16),
         daily_calories=2000,
-        algorithm_version="catalog_deterministic_v1",
         operation="three_day",
         idempotency_key="key-1",
         request_fingerprint="f" * 64,
@@ -54,7 +53,6 @@ async def test_analytics_uses_pseudonymous_id_and_bounded_properties():
     assert payload["event"] == "plan_shown"
     assert set(payload["properties"]) == {
         "schema_version",
-        "algorithm_version",
         "slots_count",
         "alternatives_count",
     }
@@ -72,3 +70,20 @@ async def test_analytics_disabled_without_salt():
     )
 
     assert adapter.payloads == []
+
+
+@pytest.mark.asyncio
+async def test_slot_analytics_uses_hashed_plan_id_only():
+    adapter = _Adapter()
+    service = MealRecommendationAnalyticsService(salt="salt", adapter=adapter)
+
+    await service.capture_slot_response(
+        user_id="raw-user-id",
+        event="swap_selected",
+        plan_id="plan-1",
+    )
+
+    payload = adapter.payloads[0]
+    assert payload["distinct_id"].startswith("meal-rec-v1:")
+    assert payload["properties"]["plan_id_hash"].startswith("meal-rec-v1:")
+    assert "plan-1" not in payload["properties"].values()

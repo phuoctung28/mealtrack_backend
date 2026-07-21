@@ -16,6 +16,8 @@
 - [x] Recommendation analytics schedule through `BackgroundTaskManager` when available.
 - [x] Catalog meals use a process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback.
 - [x] Meal-history affinity now uses aggregate linked ingredient buckets, and logged recommended meals reuse the loaded selected catalog projection without fabricating an image.
+- [x] Meal recommendation ranking uses snapshot-scoped IDF, confidence-scaled ingredient similarity, and bounded top-30 diversity reranking for new plan generation.
+- [ ] Merge/deploy still requires staging p95 and representative quality evidence; local synthetic benchmark evidence is not a production gate by itself.
 
 ### July 2026: Food-Label Image Scan
 - [x] `/v1/meals/food-label/scan-by-url` analyzes Nutrition Facts label images directly from Cloudinary bytes.

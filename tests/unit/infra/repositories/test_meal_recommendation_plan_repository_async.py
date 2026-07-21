@@ -93,7 +93,6 @@ def _plan() -> PersistedMealRecommendationPlan:
         timezone="UTC",
         start_date=date(2026, 7, 16),
         daily_calories=2000,
-        algorithm_version="catalog_deterministic_v1",
         operation="three_day",
         idempotency_key="key-1",
         request_fingerprint="f" * 64,
@@ -300,7 +299,6 @@ def _plan_to_candidate_rows(plan):
                     timezone=plan.timezone if candidate.id == plan.id else None,
                     start_date=plan.start_date if candidate.id == plan.id else None,
                     target_calories=plan.daily_calories if candidate.id == plan.id else None,
-                    algorithm_version=plan.algorithm_version if candidate.id == plan.id else None,
                     operation=plan.operation if candidate.id == plan.id else None,
                     idempotency_key=plan.idempotency_key if candidate.id == plan.id else None,
                     request_fingerprint=plan.request_fingerprint

@@ -14,8 +14,15 @@ from src.domain.services.meal_recommendation.calorie_allocation_policy import (
     MEAL_TYPE_ORDER,
     CalorieAllocationPolicy,
 )
+from src.domain.services.meal_recommendation.catalog_ingredient_statistics_service import (
+    CatalogIngredientStatistics,
+    CatalogIngredientStatisticsService,
+)
 from src.domain.services.meal_recommendation.ingredient_affinity_service import (
     IngredientAffinityProfile,
+)
+from src.domain.services.meal_recommendation.plan_diversity_reranking_service import (
+    PlanDiversityRerankingService,
 )
 from src.domain.services.meal_recommendation.recipe_scoring_service import (
     RecipeScore,
@@ -25,7 +32,6 @@ from src.domain.services.meal_recommendation.slot_alternative_service import (
     SlotAlternativeService,
 )
 
-ALGORITHM_VERSION = "catalog_deterministic_v1"
 PLAN_DAYS = 3
 
 
@@ -37,10 +43,12 @@ class ThreeDayPlanOptimizer:
         allocation: CalorieAllocationPolicy | None = None,
         scoring: RecipeScoringService | None = None,
         alternatives: SlotAlternativeService | None = None,
+        diversity: PlanDiversityRerankingService | None = None,
     ):
         self._allocation = allocation or CalorieAllocationPolicy()
         self._scoring = scoring or RecipeScoringService()
         self._alternatives = alternatives or SlotAlternativeService(self._scoring)
+        self._diversity = diversity or PlanDiversityRerankingService()
 
     def build_plan(
         self,
@@ -49,6 +57,8 @@ class ThreeDayPlanOptimizer:
         daily_calories: int,
         affinity: IngredientAffinityProfile,
         cuisines: set[str] | None = None,
+        user_id: str | None = None,
+        ingredient_statistics: CatalogIngredientStatistics | None = None,
     ) -> MealRecommendationPlan | MealRecommendationInsufficiency:
         candidates = _filter_supported_catalog_meals(catalog_meals, cuisines)
         if len({catalog_meal.id for catalog_meal in candidates}) < PLAN_DAYS * len(MEAL_TYPE_ORDER):
@@ -60,12 +70,14 @@ class ThreeDayPlanOptimizer:
             )
 
         allocations = self._allocation.allocate(daily_calories)
+        statistics = ingredient_statistics or CatalogIngredientStatisticsService().build(candidates)
         ranked_pools = {
             meal_type: self._scoring.rank(
                 candidates,
                 meal_type=meal_type,
                 target_calories=allocations[meal_type],
                 affinity=affinity,
+                ingredient_statistics=statistics,
             )
             for meal_type in MEAL_TYPE_ORDER
         }
@@ -79,6 +91,11 @@ class ThreeDayPlanOptimizer:
                     ranked_pools[meal_type],
                     target_calories=target_calories,
                     selected_ids=selected_ids,
+                )
+                ranked = self._diversity.rerank_shortlist(
+                    ranked,
+                    comparison_meals=tuple(slot.catalog_meal for slot in slots),
+                    ingredient_statistics=statistics,
                 )
                 if not ranked:
                     return MealRecommendationInsufficiency(
@@ -108,13 +125,18 @@ class ThreeDayPlanOptimizer:
                 target_calories=slot.target_calories,
                 selected_catalog_meal_id=slot.catalog_meal.id,
                 selected_catalog_meal_ids=selected_ids,
+                comparison_meals=tuple(
+                    selected_slot.catalog_meal
+                    for selected_slot in slots
+                    if selected_slot.catalog_meal.id != slot.catalog_meal.id
+                ),
+                ingredient_statistics=statistics,
             )
             if isinstance(result, MealRecommendationInsufficiency):
                 return result
             alternatives[(slot.day_index, slot.meal_type)] = result
 
         return MealRecommendationPlan(
-            algorithm_version=ALGORITHM_VERSION,
             slots=tuple(slots),
             alternatives=alternatives,
         )
@@ -192,13 +214,27 @@ class ThreeDayPlanOptimizer:
         target_calories: int,
         selected_catalog_meal_id: str,
         selected_catalog_meal_ids: set[str],
+        comparison_meals: tuple[CatalogMeal, ...] = (),
+        ingredient_statistics: CatalogIngredientStatistics | None = None,
         count: int = 5,
     ) -> tuple[MealRecommendationAlternative, ...] | MealRecommendationInsufficiency:
         excluded = set(selected_catalog_meal_ids)
         excluded.add(selected_catalog_meal_id)
-        ranked = [
-            item for item in ranked_pool if item.catalog_meal.id not in excluded
-        ]
+        ranked = self._rank_pool_with_fallback(
+            ranked_pool,
+            target_calories=target_calories,
+            selected_ids=excluded,
+        )
+        ranked = self._diversity.rerank_shortlist(
+            ranked,
+            comparison_meals=comparison_meals,
+            ingredient_statistics=(
+                ingredient_statistics
+                or CatalogIngredientStatisticsService().build(
+                    [item.catalog_meal for item in ranked]
+                )
+            ),
+        )
         if len(ranked) < count:
             return MealRecommendationInsufficiency(
                 reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_ALTERNATIVES,

@@ -12,6 +12,10 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 )
 from src.domain.model.meal_recommendation import CatalogMeal
 from src.domain.ports.catalog_recipe_repository_port import CatalogMealRevision
+from src.domain.services.meal_recommendation.catalog_ingredient_statistics_service import (
+    CatalogIngredientStatistics,
+    CatalogIngredientStatisticsService,
+)
 from src.observability import increment_metric
 
 
@@ -21,6 +25,7 @@ class CatalogMealSnapshot:
 
     revision: CatalogMealRevision
     meals: tuple[CatalogMeal, ...]
+    ingredient_statistics: CatalogIngredientStatistics
     refreshed_at: float
     expires_at: float
 
@@ -34,10 +39,12 @@ class CatalogMealSnapshotService:
         ttl_seconds: float = 300,
         failure_retry_seconds: float = 30,
         clock: Callable[[], float] = monotonic,
+        statistics_service: CatalogIngredientStatisticsService | None = None,
     ) -> None:
         self._ttl_seconds = ttl_seconds
         self._failure_retry_seconds = failure_retry_seconds
         self._clock = clock
+        self._statistics_service = statistics_service or CatalogIngredientStatisticsService()
         self._lock = asyncio.Lock()
         self._snapshot: CatalogMealSnapshot | None = None
         self._next_refresh_after = 0.0
@@ -60,6 +67,7 @@ class CatalogMealSnapshotService:
             refreshed = CatalogMealSnapshot(
                 revision=snapshot.revision,
                 meals=snapshot.meals,
+                ingredient_statistics=snapshot.ingredient_statistics,
                 refreshed_at=snapshot.refreshed_at,
                 expires_at=now + self._ttl_seconds,
             )
@@ -97,6 +105,7 @@ class CatalogMealSnapshotService:
                 snapshot = CatalogMealSnapshot(
                     revision=loaded_revision,
                     meals=meals,
+                    ingredient_statistics=self._statistics_service.build(meals),
                     refreshed_at=now,
                     expires_at=now + self._ttl_seconds,
                 )

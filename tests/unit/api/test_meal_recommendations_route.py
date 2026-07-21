@@ -62,8 +62,8 @@ class _Analytics:
     async def capture_plan_response(self, *, user_id, event, plan):
         self.events.append((user_id, event, plan.id))
 
-    async def capture_slot_response(self, *, user_id, event, plan_id):
-        self.events.append((user_id, event, plan_id))
+    async def capture_slot_response(self, **kwargs):
+        self.events.append(kwargs)
 
 
 class _TaskManager:

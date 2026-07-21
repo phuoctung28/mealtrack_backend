@@ -355,6 +355,9 @@ def get_configured_event_bus() -> EventBus:
         FoodReferenceValidationService,
     )
     from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+    from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
+        ThreeDayPlanOptimizer,
+    )
     from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Synchronous invalidation service — handlers await this before returning,
@@ -574,6 +577,7 @@ def get_configured_event_bus() -> EventBus:
         CreateThreeDayMealRecommendationCommand,
         CreateThreeDayMealRecommendationCommandHandler(
             uow=AsyncUnitOfWork(),
+            optimizer=ThreeDayPlanOptimizer(),
             catalog_snapshot_service=CatalogMealSnapshotService(),
         ),
     )

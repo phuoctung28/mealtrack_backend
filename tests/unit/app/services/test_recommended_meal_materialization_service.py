@@ -72,7 +72,6 @@ def _plan_and_slot():
         timezone="UTC",
         start_date=date(2026, 7, 16),
         daily_calories=2000,
-        algorithm_version="catalog_deterministic_v1",
         operation="three_day",
         idempotency_key="key",
         request_fingerprint="f" * 64,

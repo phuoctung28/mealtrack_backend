@@ -61,7 +61,7 @@ def test_current_response_contract_is_full_plan_with_hydrated_candidates():
     assert sum(len(slot.alternatives) for slot in response.slots) == 45
     assert response.slots[0].catalog_meal.ingredients[0].display_name == "Rice"
     assert response.slots[0].alternatives[0].catalog_meal.ingredients[0].unit == "g"
-    assert _json_size(response) == 28206
+    assert _json_size(response) == 28159
     assert "alternatives" in payload["slots"][0]
     assert "ingredients" in payload["slots"][0]["catalog_meal"]
 
@@ -192,7 +192,6 @@ def _full_plan() -> PersistedMealRecommendationPlan:
         timezone="Asia/Ho_Chi_Minh",
         start_date=date(2026, 7, 20),
         daily_calories=2000,
-        algorithm_version="catalog_deterministic_v1",
         operation="three_day",
         idempotency_key="key-1",
         request_fingerprint="f" * 64,
