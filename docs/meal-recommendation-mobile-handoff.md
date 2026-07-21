@@ -16,7 +16,7 @@ The current mobile contract is compact by default: plan reads return selected sl
 
 ## Backend Engine
 
-Algorithm: `catalog_deterministic_v1`
+Algorithm: deterministic catalog ranking
 
 Core behavior:
 
@@ -125,7 +125,7 @@ Behavior:
 
 The plan summary is compact:
 
-- plan metadata: `id`, `status`, `timezone`, `start_date`, `daily_calories`, `algorithm_version`, `allergy_evaluated`
+- plan metadata: `id`, `status`, `timezone`, `start_date`, `daily_calories`, `allergy_evaluated`
 - slot summary: `id`, `slot_date`, `day_index`, `meal_type`, `catalog_meal_id`, compact `catalog_meal`, `target_calories`, `position`, `selection_version`, `logged_meal_id`
 - omitted from plan summary: `score`, `alternatives`, and `catalog_meal.ingredients`
 

@@ -61,7 +61,6 @@ class PersistedMealRecommendationPlan:
     timezone: str
     start_date: date
     daily_calories: int
-    algorithm_version: str
     operation: str
     idempotency_key: str
     request_fingerprint: str

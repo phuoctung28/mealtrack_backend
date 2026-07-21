@@ -106,11 +106,10 @@ class _Uow:
 
 
 class _Optimizer:
-    def build_plan(self, catalog_meals, *, daily_calories, affinity):
+    def build_plan(self, catalog_meals, *, daily_calories, affinity, **kwargs):
         recipe = _catalog_meal("catalog-1")
         alternative = _catalog_meal("catalog-2")
         return MealRecommendationPlan(
-            algorithm_version="catalog_deterministic_v1",
             slots=(
                 MealRecommendationSlot(
                     day_index=0,

@@ -113,7 +113,6 @@ def upgrade() -> None:
         sa.Column("timezone", sa.String(length=64), nullable=True),
         sa.Column("start_date", sa.Date(), nullable=True),
         sa.Column("target_calories", sa.Integer(), nullable=True),
-        sa.Column("algorithm_version", sa.String(length=80), nullable=True),
         sa.Column("operation", sa.String(length=40), nullable=True),
         sa.Column("idempotency_key", sa.String(length=160), nullable=True),
         sa.Column("request_fingerprint", sa.String(length=64), nullable=True),
@@ -151,13 +150,13 @@ def upgrade() -> None:
             "("
             "id = batch_id AND user_id IS NOT NULL AND status IS NOT NULL "
             "AND timezone IS NOT NULL AND start_date IS NOT NULL "
-            "AND target_calories IS NOT NULL AND algorithm_version IS NOT NULL "
+            "AND target_calories IS NOT NULL "
             "AND operation IS NOT NULL AND idempotency_key IS NOT NULL "
             "AND request_fingerprint IS NOT NULL"
             ") OR ("
             "id <> batch_id AND user_id IS NULL AND status IS NULL "
             "AND timezone IS NULL AND start_date IS NULL "
-            "AND target_calories IS NULL AND algorithm_version IS NULL "
+            "AND target_calories IS NULL "
             "AND operation IS NULL AND idempotency_key IS NULL "
             "AND request_fingerprint IS NULL AND superseded_at IS NULL"
             ")",

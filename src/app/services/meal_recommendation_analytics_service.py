@@ -41,7 +41,6 @@ class MealRecommendationAnalyticsService:
             event=event,
             properties={
                 "schema_version": "meal_recommendation_v1",
-                "algorithm_version": plan.algorithm_version,
                 "slots_count": len(plan.slots),
                 "alternatives_count": sum(len(slot.alternatives) for slot in plan.slots),
             },
@@ -56,13 +55,14 @@ class MealRecommendationAnalyticsService:
     ) -> None:
         if not self.adapter or not self.salt:
             return
+        properties = {
+            "schema_version": "meal_recommendation_v1",
+            "plan_id_hash": _pseudonymous_id(plan_id, self.salt),
+        }
         await self.adapter.capture(
             distinct_id=_pseudonymous_id(user_id, self.salt),
             event=event,
-            properties={
-                "schema_version": "meal_recommendation_v1",
-                "plan_id_hash": _pseudonymous_id(plan_id, self.salt),
-            },
+            properties=properties,
         )
 
 

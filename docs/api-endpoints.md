@@ -116,6 +116,7 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 - `create` and `get` return the compact summary contract: selected slots only, with no slot-level ingredients, alternatives, or scores in the plan payload.
 - Slot detail hydrates exactly one selected slot plus its alternatives. Mutation responses reuse the same changed-slot shape so clients can patch cached plans in place.
 - Recommendation analytics are scheduled through `BackgroundTaskManager` when the dependency is available; the route falls back to inline capture when it is not.
+- New plan generation uses snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded diversity reranking. Existing persisted plans replay their stored candidates and scores. This does not change endpoint paths.
 
 ---
 

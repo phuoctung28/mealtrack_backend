@@ -105,7 +105,6 @@ class MealRecommendationAlternative:
 class MealRecommendationPlan:
     """Pure-domain deterministic recommendation result."""
 
-    algorithm_version: str
     slots: tuple[MealRecommendationSlot, ...]
     alternatives: dict[tuple[int, str], tuple[MealRecommendationAlternative, ...]]
 

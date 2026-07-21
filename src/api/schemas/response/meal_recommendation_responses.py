@@ -84,7 +84,6 @@ class MealRecommendationPlanSummaryResponse(BaseModel):
     timezone: str
     start_date: date
     daily_calories: int
-    algorithm_version: str
     allergy_evaluated: bool = False
     slots: list[MealRecommendationSlotSummaryResponse]
 
@@ -100,6 +99,5 @@ class MealRecommendationPlanResponse(BaseModel):
     timezone: str
     start_date: date
     daily_calories: int
-    algorithm_version: str
     allergy_evaluated: bool = False
     slots: list[MealRecommendationSlotResponse]

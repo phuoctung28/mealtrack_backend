@@ -68,6 +68,11 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 ### Repository Pattern
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
 
+### Meal Recommendation Ranking
+Catalog-backed meal recommendations use snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded top-30 diversity reranking for new plan generation, without changing endpoint paths.
+
+The active catalog snapshot owns both immutable meal projections and snapshot-scoped ingredient IDF statistics. Persisted plans replay their stored candidates and scores instead of recalculating.
+
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 

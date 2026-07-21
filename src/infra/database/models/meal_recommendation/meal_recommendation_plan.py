@@ -64,7 +64,6 @@ class MealRecommendationORM(Base):
     timezone = Column(String(64), nullable=True)
     start_date = Column(Date, nullable=True)
     target_calories = Column(Integer, nullable=True)
-    algorithm_version = Column(String(80), nullable=True)
     operation = Column(String(40), nullable=True)
     idempotency_key = Column(String(160), nullable=True)
     request_fingerprint = Column(String(64), nullable=True)
@@ -103,13 +102,13 @@ class MealRecommendationORM(Base):
             "("
             "id = batch_id AND user_id IS NOT NULL AND status IS NOT NULL "
             "AND timezone IS NOT NULL AND start_date IS NOT NULL "
-            "AND target_calories IS NOT NULL AND algorithm_version IS NOT NULL "
+            "AND target_calories IS NOT NULL "
             "AND operation IS NOT NULL AND idempotency_key IS NOT NULL "
             "AND request_fingerprint IS NOT NULL"
             ") OR ("
             "id <> batch_id AND user_id IS NULL AND status IS NULL "
             "AND timezone IS NULL AND start_date IS NULL "
-            "AND target_calories IS NULL AND algorithm_version IS NULL "
+            "AND target_calories IS NULL "
             "AND operation IS NULL AND idempotency_key IS NULL "
             "AND request_fingerprint IS NULL AND superseded_at IS NULL"
             ")",

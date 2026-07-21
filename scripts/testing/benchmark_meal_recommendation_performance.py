@@ -65,7 +65,11 @@ def main() -> None:
             "samples": args.samples,
         },
         "results": [
-            _benchmark_catalog_size(size, warmups=args.warmups, samples=args.samples)
+            _benchmark_catalog_size(
+                size,
+                warmups=args.warmups,
+                samples=args.samples,
+            )
             for size in sizes
         ],
     }
@@ -73,7 +77,12 @@ def main() -> None:
     output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
 
 
-def _benchmark_catalog_size(catalog_size: int, *, warmups: int, samples: int) -> dict:
+def _benchmark_catalog_size(
+    catalog_size: int,
+    *,
+    warmups: int,
+    samples: int,
+) -> dict:
     catalog = _catalog(catalog_size)
     affinity = IngredientAffinityService().build_profile(
         [], now=datetime(2026, 7, 20, tzinfo=UTC)
@@ -187,7 +196,6 @@ def _build_persisted_plan(
         timezone="UTC",
         start_date=start_date,
         daily_calories=2000,
-        algorithm_version=result.algorithm_version,
         operation="three_day",
         idempotency_key="synthetic-key",
         request_fingerprint="f" * 64,

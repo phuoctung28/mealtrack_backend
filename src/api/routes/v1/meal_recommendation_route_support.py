@@ -124,7 +124,6 @@ def to_response(
         timezone=plan.timezone,
         start_date=plan.start_date,
         daily_calories=plan.daily_calories,
-        algorithm_version=plan.algorithm_version,
         allergy_evaluated=False,
         slots=[
             MealRecommendationSlotResponse(
@@ -166,7 +165,6 @@ def to_summary_response(
         timezone=plan.timezone,
         start_date=plan.start_date,
         daily_calories=plan.daily_calories,
-        algorithm_version=plan.algorithm_version,
         allergy_evaluated=False,
         slots=[
             MealRecommendationSlotSummaryResponse(

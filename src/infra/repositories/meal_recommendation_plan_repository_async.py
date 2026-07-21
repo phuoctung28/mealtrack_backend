@@ -153,6 +153,9 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         if replay is not None:
             if cast(str, replay.request_fingerprint) != fingerprint:
                 raise MealRecommendationIdempotencyConflictError
+            anchor = await self._load_anchor(user_id=user_id, batch_id=plan_id)
+            if anchor is None:
+                raise MealRecommendationNotFoundError
             slot = await self.get_slot_detail(
                 user_id=user_id, plan_id=plan_id, slot_id=slot_id
             )
@@ -466,7 +469,6 @@ def _plan_to_rows(plan: PersistedMealRecommendationPlan) -> list[MealRecommendat
                     timezone=plan.timezone if candidate.id == plan.id else None,
                     start_date=plan.start_date if candidate.id == plan.id else None,
                     target_calories=plan.daily_calories if candidate.id == plan.id else None,
-                    algorithm_version=plan.algorithm_version if candidate.id == plan.id else None,
                     operation=plan.operation if candidate.id == plan.id else None,
                     idempotency_key=plan.idempotency_key if candidate.id == plan.id else None,
                     request_fingerprint=plan.request_fingerprint if candidate.id == plan.id else None,
@@ -539,7 +541,6 @@ def _rows_to_plan(rows: list[MealRecommendationORM]) -> PersistedMealRecommendat
         timezone=cast(str, anchor.timezone),
         start_date=cast(date, anchor.start_date),
         daily_calories=cast(int, anchor.target_calories),
-        algorithm_version=cast(str, anchor.algorithm_version),
         operation=cast(str, anchor.operation),
         idempotency_key=cast(str, anchor.idempotency_key),
         request_fingerprint=cast(str, anchor.request_fingerprint),
@@ -588,7 +589,6 @@ def _rows_to_summary(rows: list[MealRecommendationORM]) -> PersistedMealRecommen
         timezone=cast(str, anchor.timezone),
         start_date=cast(date, anchor.start_date),
         daily_calories=cast(int, anchor.target_calories),
-        algorithm_version=cast(str, anchor.algorithm_version),
         operation=cast(str, anchor.operation),
         idempotency_key=cast(str, anchor.idempotency_key),
         request_fingerprint=cast(str, anchor.request_fingerprint),
@@ -640,7 +640,6 @@ def _plan_from_anchor_and_slot(
         timezone=cast(str, anchor.timezone),
         start_date=cast(date, anchor.start_date),
         daily_calories=cast(int, anchor.target_calories),
-        algorithm_version=cast(str, anchor.algorithm_version),
         operation=cast(str, anchor.operation),
         idempotency_key=cast(str, anchor.idempotency_key),
         request_fingerprint=cast(str, anchor.request_fingerprint),

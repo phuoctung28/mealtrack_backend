@@ -74,8 +74,10 @@ class CreateThreeDayMealRecommendationCommandHandler(
             if self.catalog_snapshot_service is not None:
                 snapshot = await self.catalog_snapshot_service.get_snapshot(uow)
                 catalog_meals = list(snapshot.meals)
+                ingredient_statistics = snapshot.ingredient_statistics
             else:
                 catalog_meals = await uow.catalog_recipes.list_active_meals()
+                ingredient_statistics = None
             if not catalog_meals:
                 raise MealRecommendationCatalogUnavailableError
 
@@ -87,8 +89,10 @@ class CreateThreeDayMealRecommendationCommandHandler(
             )
             result = self.optimizer.build_plan(
                 catalog_meals,
+                user_id=command.user_id,
                 daily_calories=command.daily_calories,
                 affinity=affinity,
+                ingredient_statistics=ingredient_statistics,
             )
             if isinstance(result, MealRecommendationInsufficiency):
                 raise MealRecommendationInsufficientCatalogError(result.message)
@@ -169,7 +173,6 @@ def _to_persisted_plan(
         timezone=command.timezone,
         start_date=command.start_date,
         daily_calories=command.daily_calories,
-        algorithm_version=plan.algorithm_version,
         operation=command.operation,
         idempotency_key=command.idempotency_key,
         request_fingerprint=fingerprint,
