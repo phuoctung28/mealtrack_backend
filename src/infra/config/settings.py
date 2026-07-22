@@ -254,7 +254,7 @@ class Settings(BaseSettings):
         description="HTTP timeout for Workers AI requests (thinking models need ≥60s)",
     )
     CLOUDFLARE_WORKERS_AI_IMAGE_MODEL: str = Field(
-        default="openai/gpt-image-2",
+        default="@cf/black-forest-labs/flux-2-klein-9b",
         description="Workers AI model for catalog meal image generation.",
     )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(

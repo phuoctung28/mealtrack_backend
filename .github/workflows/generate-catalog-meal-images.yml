@@ -1,0 +1,121 @@
+name: Generate Catalog Meal Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Maximum missing catalog meals to process"
+        required: true
+        default: "25"
+      catalog_keys:
+        description: "Optional comma-separated catalog_key allowlist"
+        required: false
+        default: ""
+      dry_run:
+        description: "Preview selected meals without generating images"
+        required: true
+        type: boolean
+        default: false
+      include_existing:
+        description: "Regenerate rows that already have image_url"
+        required: true
+        type: boolean
+        default: false
+      size:
+        description: "Image size passed to Workers AI"
+        required: true
+        default: "1024x1024"
+      timeout:
+        description: "Cloudflare request timeout seconds"
+        required: true
+        default: "120"
+
+env:
+  PYTHON_VERSION: "3.13.2"
+  CLOUDFLARE_WORKERS_AI_IMAGE_MODEL: "@cf/black-forest-labs/flux-2-klein-9b"
+
+jobs:
+  generate:
+    name: Generate Missing Catalog Meal Images
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate required secrets
+        env:
+          APP_DATABASE_URL: ${{ secrets.APP_DATABASE_URL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          test -n "$APP_DATABASE_URL" || (echo "APP_DATABASE_URL secret is required" && exit 1)
+          if [ "$DRY_RUN" != "true" ]; then
+            test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "CLOUDFLARE_ACCOUNT_ID secret is required" && exit 1)
+            test -n "$CLOUDFLARE_API_TOKEN" || (echo "CLOUDFLARE_API_TOKEN secret is required" && exit 1)
+            test -n "$CLOUDINARY_CLOUD_NAME" || (echo "CLOUDINARY_CLOUD_NAME secret is required" && exit 1)
+            test -n "$CLOUDINARY_API_KEY" || (echo "CLOUDINARY_API_KEY secret is required" && exit 1)
+            test -n "$CLOUDINARY_API_SECRET" || (echo "CLOUDINARY_API_SECRET secret is required" && exit 1)
+          fi
+
+      - name: Generate image URLs
+        env:
+          APP_DATABASE_URL: ${{ secrets.APP_DATABASE_URL }}
+          DB_CONNECTION_MODE: direct_pool
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          LIMIT: ${{ inputs.limit }}
+          CATALOG_KEYS: ${{ inputs.catalog_keys }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          INCLUDE_EXISTING: ${{ inputs.include_existing }}
+          SIZE: ${{ inputs.size }}
+          TIMEOUT: ${{ inputs.timeout }}
+        run: |
+          set -euo pipefail
+
+          args=(
+            --limit "$LIMIT"
+            --size "$SIZE"
+            --timeout "$TIMEOUT"
+          )
+
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+
+          if [ "$INCLUDE_EXISTING" = "true" ]; then
+            args+=(--include-existing)
+          fi
+
+          if [ -n "$CATALOG_KEYS" ]; then
+            IFS=',' read -ra keys <<< "$CATALOG_KEYS"
+            for key in "${keys[@]}"; do
+              trimmed="$(echo "$key" | xargs)"
+              if [ -n "$trimmed" ]; then
+                args+=(--catalog-key "$trimmed")
+              fi
+            done
+          fi
+
+          python scripts/generate_catalog_meal_images.py "${args[@]}"

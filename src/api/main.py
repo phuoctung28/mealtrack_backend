@@ -47,6 +47,7 @@ from src.api.middleware.rate_limit import limiter
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
+from src.api.routes.v1.admin_meal_catalog import router as admin_meal_catalog_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
@@ -308,6 +309,7 @@ add_dev_auth_bypass(app)
 # Include all routers
 app.include_router(root_health_router)
 app.include_router(health_router)
+app.include_router(admin_meal_catalog_router)
 app.include_router(meals_router)
 app.include_router(meal_scan_by_url_router)
 app.include_router(activities_router)

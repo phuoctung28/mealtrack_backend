@@ -159,6 +159,7 @@ allow_indirect_imports = True
 unmatched_ignore_imports_alerting = none
 ignore_imports =
     src.api.base_dependencies -> src.infra.adapters.cloudinary_image_store
+    src.api.base_dependencies -> src.infra.adapters.cloudflare_workers_image_generator
     src.api.base_dependencies -> src.infra.adapters.deepl_translation_adapter
     src.api.base_dependencies -> src.infra.adapters.fat_secret_service
     src.api.base_dependencies -> src.infra.adapters.food_cache_service
@@ -176,6 +177,7 @@ ignore_imports =
     src.api.base_dependencies -> src.infra.database.uow_async
     src.api.base_dependencies -> src.infra.repositories.food_reference_repository
     src.api.base_dependencies -> src.infra.repositories.food_reference_uow_adapter
+    src.api.base_dependencies -> src.infra.repositories.admin_meal_catalog_repository_async
     src.api.base_dependencies -> src.infra.repositories.meal_repository
     src.api.base_dependencies -> src.infra.repositories.meal_suggestion_repository
     src.api.base_dependencies -> src.infra.repositories.meal_translation_repository

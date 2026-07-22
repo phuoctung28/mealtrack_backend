@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import secrets
+from ipaddress import ip_address
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.params import Depends as DependsMarker
@@ -306,6 +307,28 @@ async def require_admin(
             detail="Admin access required",
         )
     return email
+
+
+async def require_admin_or_local(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> str:
+    """Allow local loopback admin access in development; require admin otherwise."""
+
+    if _is_local_development_request(request):
+        return "local-development"
+    token = await verify_firebase_token(request, credentials)
+    return await require_admin(token.get("email"))
+
+
+def _is_local_development_request(request: Request) -> bool:
+    if settings.ENVIRONMENT != "development":
+        return False
+    host = request.client.host if request.client else ""
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return host == "localhost"
 
 
 async def require_monitoring_access(request: Request) -> None:

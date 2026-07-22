@@ -67,7 +67,7 @@ gpt-5.4-mini-2026-03-17  →  @cf/google/gemma-4-26b-a4b-it
 ```
 
 **Catalog image generation:** `scripts/generate_catalog_meal_images.py` calls
-Cloudflare Workers AI `openai/gpt-image-2` after catalog import and writes the
+Cloudflare Workers AI `@cf/black-forest-labs/flux-2-klein-9b` after catalog import and writes the
 returned image URL to `meal_catalog.image_url`.
 
 **Text purposes routed through Cloudflare by default:**
@@ -166,7 +166,7 @@ Config:
 | `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery,parse_text,barcode` | Text purposes that prefer CF first, with OpenAI fallback |
 | `CLOUDFLARE_WORKERS_AI_JSON_MODE` | `true` | Reserved; currently unused by LangChain adapter |
 | `CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS` | `60` | HTTP timeout per request |
-| `CLOUDFLARE_WORKERS_AI_IMAGE_MODEL` | `openai/gpt-image-2` | Model used by the catalog image generation script |
+| `CLOUDFLARE_WORKERS_AI_IMAGE_MODEL` | `@cf/black-forest-labs/flux-2-klein-9b` | Model used by the catalog image generation script |
 | `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision as image-analysis fallback after OpenAI |
 | `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
 | `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Image purposes that include CF vision as fallback |
