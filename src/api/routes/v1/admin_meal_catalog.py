@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.base_dependencies import (
     get_admin_meal_catalog_repository,
-    get_catalog_image_generator,
+    get_catalog_image_generator_factory,
 )
 from src.api.dependencies.auth import require_admin_or_local
 from src.api.schemas.response.admin_meal_catalog_responses import (
@@ -61,7 +61,7 @@ async def list_admin_meal_catalog(
 async def generate_admin_meal_catalog_image(
     catalog_id: str,
     repository=Depends(get_admin_meal_catalog_repository),
-    generator=Depends(get_catalog_image_generator),
+    generator_factory=Depends(get_catalog_image_generator_factory),
     _admin: str = Depends(require_admin_or_local),
 ) -> AdminMealCatalogGenerateImageResponse:
     row = await repository.get_meal_row(catalog_id)
@@ -73,6 +73,7 @@ async def generate_admin_meal_catalog_image(
             detail="Catalog meal already has an image_url",
         )
 
+    generator = generator_factory()
     try:
         image_url = await generator.generate_url(
             build_catalog_meal_image_prompt(row),

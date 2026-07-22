@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.api.base_dependencies import (
     get_admin_meal_catalog_repository,
-    get_catalog_image_generator,
+    get_catalog_image_generator_factory,
 )
 from src.api.dependencies.auth import require_admin_or_local
 from src.api.routes.v1 import admin_meal_catalog as route_mod
@@ -178,7 +178,7 @@ def _client(repository, *, generator=None, use_route_auth=False):
     if not use_route_auth:
         app.dependency_overrides[require_admin_or_local] = lambda: "admin@nutree.ai"
     if generator is not None:
-        app.dependency_overrides[get_catalog_image_generator] = lambda: generator
+        app.dependency_overrides[get_catalog_image_generator_factory] = lambda: lambda: generator
     return TestClient(app, client=("127.0.0.1", 50000))
 
 

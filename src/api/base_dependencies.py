@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Callable
 from importlib import import_module
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
@@ -184,6 +185,12 @@ def get_catalog_image_generator() -> CloudflareWorkersImageGenerator:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+
+
+def get_catalog_image_generator_factory() -> Callable[[], CloudflareWorkersImageGenerator]:
+    """Return a lazy generator factory so routes can finish cheap prechecks first."""
+
+    return get_catalog_image_generator
 
 
 # Food Mapping Service
