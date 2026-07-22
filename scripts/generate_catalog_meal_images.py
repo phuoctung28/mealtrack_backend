@@ -9,14 +9,18 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.app.services.catalog_meal_image_prompt_service import (
+    build_catalog_meal_image_prompt,
+)
 from src.infra.adapters.cloudflare_workers_image_generator import (
     CloudflareWorkersImageGenerator,
 )
+from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.database.models.meal_recommendation import MealCatalogORM
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -32,7 +36,10 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--model",
-        default=os.getenv("CLOUDFLARE_WORKERS_AI_IMAGE_MODEL", "openai/gpt-image-2"),
+        default=os.getenv(
+            "CLOUDFLARE_WORKERS_AI_IMAGE_MODEL",
+            "@cf/black-forest-labs/flux-2-klein-9b",
+        ),
     )
     parser.add_argument("--quality", default="medium")
     parser.add_argument("--size", default="1024x1024")
@@ -46,6 +53,7 @@ def main() -> None:
     summary = asyncio.run(_run(args))
     print(f"selected={summary['selected']}")
     print(f"updated={summary['updated']}")
+    print(f"skipped={summary['skipped']}")
     print(f"failed={summary['failed']}")
     if summary["failed"]:
         raise SystemExit(1)
@@ -59,8 +67,9 @@ async def _run(args) -> dict[str, int]:
             api_token=os.getenv("CLOUDFLARE_API_TOKEN", ""),
             model=args.model,
             timeout=args.timeout,
+            image_store=CloudinaryImageStore(),
         )
-    selected = updated = failed = 0
+    selected = updated = skipped = failed = 0
     async with AsyncUnitOfWork() as uow:
         if uow.session is None:
             raise RuntimeError("AsyncUnitOfWork did not initialize a database session")
@@ -93,12 +102,24 @@ async def _run(args) -> dict[str, int]:
                     file=sys.stderr,
                 )
                 continue
-            meal.image_url = image_url
-            await uow.session.flush()
-            await uow.commit()
-            updated += 1
-            print(f"image_url={image_url}")
-    return {"selected": selected, "updated": updated, "failed": failed}
+            persisted = await _set_image_url(
+                uow.session,
+                str(meal.id),
+                image_url,
+                include_existing=args.include_existing,
+            )
+            if persisted:
+                await uow.commit()
+                updated += 1
+                print(f"image_url={image_url}")
+            else:
+                await uow.rollback()
+                skipped += 1
+                print(
+                    f"image_generation_skipped catalog_key={meal.catalog_key}: image_url already set",
+                    file=sys.stderr,
+                )
+    return {"selected": selected, "updated": updated, "skipped": skipped, "failed": failed}
 
 
 async def _load_target_meals(
@@ -118,27 +139,28 @@ async def _load_target_meals(
     if catalog_keys:
         stmt = stmt.where(MealCatalogORM.catalog_key.in_(catalog_keys))
     if not include_existing:
-        stmt = stmt.where(MealCatalogORM.image_url.is_(None))
+        stmt = stmt.where(_missing_image_filter())
     result = await session.execute(stmt)
     return list(result.scalars().unique().all())
 
 
-def build_catalog_meal_image_prompt(meal: MealCatalogORM) -> str:
-    ingredients = ", ".join(
-        str(item.display_name)
-        for item in sorted(
-            meal.ingredients,
-            key=lambda ingredient: str(ingredient.display_name).lower(),
-        )[:8]
-    )
-    cuisine = str(meal.cuisine).strip()
-    name = str(meal.name).strip()
-    ingredient_sentence = f" Visible ingredients: {ingredients}." if ingredients else ""
-    return (
-        f"Photorealistic editorial food photo of {name}, a {cuisine} meal."
-        f"{ingredient_sentence} Single plated serving, natural daylight, clean table, "
-        "appetizing realistic texture, no people, no packaging, no text, no logo, no watermark."
-    )
+async def _set_image_url(
+    session,
+    catalog_id: str,
+    image_url: str,
+    *,
+    include_existing: bool,
+) -> bool:
+    stmt = update(MealCatalogORM).where(MealCatalogORM.id == catalog_id)
+    if not include_existing:
+        stmt = stmt.where(_missing_image_filter())
+    result = await session.execute(stmt.values(image_url=image_url))
+    await session.flush()
+    return bool(result.rowcount)
+
+
+def _missing_image_filter():
+    return or_(MealCatalogORM.image_url.is_(None), func.trim(MealCatalogORM.image_url) == "")
 
 
 if __name__ == "__main__":

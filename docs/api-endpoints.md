@@ -1,11 +1,11 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** July 5, 2026
+**Last Updated:** July 22, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
 Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
-**Surface:** 28 route files, 27 router registrations, 26 endpoint-bearing route modules, and 88 endpoint decorators.
+**Surface:** 31 route files, 29 router registrations, and 97 endpoint decorators.
 
 ---
 
@@ -272,6 +272,17 @@ Codes are 3–15 characters. Commission rates set via `REFERRAL_COMMISSIONS` env
 | GET | `/v1/feature-flags/{feature_name}` | Get individual flag |
 | POST | `/v1/feature-flags/` | Create feature flag |
 | PUT | `/v1/feature-flags/{feature_name}` | Update feature flag |
+
+---
+
+## Admin Meal Catalog
+
+Privileged endpoints require Firebase auth and an email in `ADMIN_EMAILS`.
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/v1/admin/meal-catalog` | List catalog meals with pagination, search, cuisine, meal type, image, and active filters |
+| POST | `/v1/admin/meal-catalog/{catalog_id}/generate-image` | Generate and persist an image URL for a catalog meal that is missing one |
 
 ---
 
