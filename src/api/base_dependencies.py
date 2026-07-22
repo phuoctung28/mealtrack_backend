@@ -4,6 +4,9 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
+from fastapi import Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
 )
@@ -13,6 +16,9 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.food_mapping_service import FoodMappingService
+from src.infra.adapters.cloudflare_workers_image_generator import (
+    CloudflareWorkersImageGenerator,
+)
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
@@ -25,6 +31,9 @@ from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
+from src.infra.repositories.admin_meal_catalog_repository_async import (
+    AsyncAdminMealCatalogRepository,
+)
 from src.infra.services.firebase_service import FirebaseService
 
 if TYPE_CHECKING:
@@ -149,6 +158,32 @@ def get_cache_service() -> CacheService | None:
 def get_cache_monitor() -> CacheMonitor:
     """Return shared cache monitor for metrics."""
     return _cache_monitor
+
+
+def get_admin_meal_catalog_repository(
+    db: AsyncSession = Depends(get_async_db),
+) -> AsyncAdminMealCatalogRepository:
+    """Return admin catalog repository bound to the request session."""
+
+    return AsyncAdminMealCatalogRepository(db)
+
+
+def get_catalog_image_generator() -> CloudflareWorkersImageGenerator:
+    """Return catalog image generator configured with Cloudflare and Cloudinary."""
+
+    try:
+        return CloudflareWorkersImageGenerator(
+            account_id=settings.CLOUDFLARE_ACCOUNT_ID,
+            api_token=settings.CLOUDFLARE_API_TOKEN,
+            model=settings.CLOUDFLARE_WORKERS_AI_IMAGE_MODEL,
+            timeout=settings.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS,
+            image_store=CloudinaryImageStore(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
 
 
 # Food Mapping Service

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from ipaddress import ip_address
-from typing import Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.api.dependencies.auth import require_admin, security, verify_firebase_token
+from src.api.base_dependencies import (
+    get_admin_meal_catalog_repository,
+    get_catalog_image_generator,
+)
+from src.api.dependencies.auth import require_admin_or_local
 from src.api.schemas.response.admin_meal_catalog_responses import (
     AdminMealCatalogGenerateImageResponse,
     AdminMealCatalogIngredientResponse,
@@ -19,39 +20,9 @@ from src.api.schemas.response.admin_meal_catalog_responses import (
 from src.app.services.catalog_meal_image_prompt_service import (
     build_catalog_meal_image_prompt,
 )
-from src.infra.adapters.cloudflare_workers_image_generator import (
-    CloudflareWorkersImageGenerator,
-)
-from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-from src.infra.config.settings import settings
-from src.infra.database.config_async import get_async_db
-from src.infra.repositories.admin_meal_catalog_repository_async import (
-    AdminCatalogMealProjection,
-    AsyncAdminMealCatalogRepository,
-)
 
 router = APIRouter(prefix="/v1/admin/meal-catalog", tags=["Admin Meal Catalog"])
 MealType = Literal["breakfast", "lunch", "dinner", "snack"]
-
-
-async def require_admin_or_local(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> str:
-    if _is_local_development_request(request):
-        return "local-development"
-    token = await verify_firebase_token(request, credentials)
-    return await require_admin(token.get("email"))
-
-
-def _is_local_development_request(request: Request) -> bool:
-    if settings.ENVIRONMENT != "development":
-        return False
-    host = request.client.host if request.client else ""
-    try:
-        return ip_address(host).is_loopback
-    except ValueError:
-        return host == "localhost"
 
 
 @router.get("", response_model=AdminMealCatalogListResponse)
@@ -63,10 +34,9 @@ async def list_admin_meal_catalog(
     meal_type: MealType | None = Query(None),
     has_image: bool | None = Query(None),
     is_active: bool | None = Query(None),
-    db: AsyncSession = Depends(get_async_db),
+    repository=Depends(get_admin_meal_catalog_repository),
     _admin: str = Depends(require_admin_or_local),
 ) -> AdminMealCatalogListResponse:
-    repository = AsyncAdminMealCatalogRepository(db)
     page = await repository.list_meals(
         limit=limit,
         offset=offset,
@@ -90,10 +60,10 @@ async def list_admin_meal_catalog(
 )
 async def generate_admin_meal_catalog_image(
     catalog_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    repository=Depends(get_admin_meal_catalog_repository),
+    generator=Depends(get_catalog_image_generator),
     _admin: str = Depends(require_admin_or_local),
 ) -> AdminMealCatalogGenerateImageResponse:
-    repository = AsyncAdminMealCatalogRepository(db)
     row = await repository.get_meal_row(catalog_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -103,7 +73,6 @@ async def generate_admin_meal_catalog_image(
             detail="Catalog meal already has an image_url",
         )
 
-    generator = _catalog_image_generator()
     try:
         image_url = await generator.generate_url(
             build_catalog_meal_image_prompt(row),
@@ -122,7 +91,7 @@ async def generate_admin_meal_catalog_image(
             status_code=status.HTTP_409_CONFLICT,
             detail="Catalog meal already has an image_url",
         )
-    await db.commit()
+    await repository.commit()
     updated = await repository.get_meal(catalog_id)
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -132,23 +101,7 @@ async def generate_admin_meal_catalog_image(
     )
 
 
-def _catalog_image_generator() -> CloudflareWorkersImageGenerator:
-    try:
-        return CloudflareWorkersImageGenerator(
-            account_id=settings.CLOUDFLARE_ACCOUNT_ID,
-            api_token=settings.CLOUDFLARE_API_TOKEN,
-            model=settings.CLOUDFLARE_WORKERS_AI_IMAGE_MODEL,
-            timeout=settings.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS,
-            image_store=CloudinaryImageStore(),
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
-
-
-def _item_response(item: AdminCatalogMealProjection) -> AdminMealCatalogItemResponse:
+def _item_response(item: Any) -> AdminMealCatalogItemResponse:
     meal = item.meal
     return AdminMealCatalogItemResponse(
         id=meal.id,

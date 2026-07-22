@@ -6,9 +6,13 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.api.base_dependencies import (
+    get_admin_meal_catalog_repository,
+    get_catalog_image_generator,
+)
+from src.api.dependencies.auth import require_admin_or_local
 from src.api.routes.v1 import admin_meal_catalog as route_mod
 from src.domain.model.meal_recommendation import CatalogMeal, CatalogMealIngredient
-from src.infra.database.config_async import get_async_db
 from src.infra.repositories.admin_meal_catalog_repository_async import (
     AdminCatalogMealPage,
     AdminCatalogMealProjection,
@@ -17,7 +21,7 @@ from src.infra.repositories.admin_meal_catalog_repository_async import (
 
 def test_list_admin_meal_catalog_returns_frontend_contract(monkeypatch):
     repository = _Repository(page_items=(_projection(),))
-    client = _client(monkeypatch, repository)
+    client = _client(repository)
 
     response = client.get(
         "/v1/admin/meal-catalog",
@@ -50,7 +54,7 @@ def test_list_admin_meal_catalog_returns_frontend_contract(monkeypatch):
 
 
 def test_list_admin_meal_catalog_rejects_invalid_meal_type(monkeypatch):
-    client = _client(monkeypatch, _Repository())
+    client = _client(_Repository())
 
     response = client.get(
         "/v1/admin/meal-catalog",
@@ -65,7 +69,7 @@ def test_generate_image_updates_missing_image_meal(monkeypatch):
     generator = SimpleNamespace(
         generate_url=AsyncMock(return_value="https://img.test/pho.jpg")
     )
-    client = _client(monkeypatch, repository, generator=generator)
+    client = _client(repository, generator=generator)
 
     response = client.post("/v1/admin/meal-catalog/catalog-1/generate-image")
 
@@ -82,7 +86,7 @@ def test_generate_image_rejects_when_another_request_wrote_first(monkeypatch):
     generator = SimpleNamespace(
         generate_url=AsyncMock(return_value="https://img.test/pho.jpg")
     )
-    client = _client(monkeypatch, repository, generator=generator)
+    client = _client(repository, generator=generator)
 
     response = client.post("/v1/admin/meal-catalog/catalog-1/generate-image")
 
@@ -92,7 +96,7 @@ def test_generate_image_rejects_when_another_request_wrote_first(monkeypatch):
 
 
 def test_generate_image_rejects_unknown_catalog_id(monkeypatch):
-    client = _client(monkeypatch, _Repository(row=None))
+    client = _client(_Repository(row=None))
 
     response = client.post("/v1/admin/meal-catalog/missing/generate-image")
 
@@ -101,7 +105,6 @@ def test_generate_image_rejects_unknown_catalog_id(monkeypatch):
 
 def test_generate_image_rejects_existing_image(monkeypatch):
     client = _client(
-        monkeypatch,
         _Repository(row=_row(image_url="https://old.test/x.jpg")),
     )
 
@@ -117,10 +120,10 @@ def test_admin_gate_is_required_for_catalog_view(monkeypatch):
         return {"email": "reader@example.com"}
 
     monkeypatch.setattr(auth_dep.settings, "ADMIN_EMAILS", "")
-    monkeypatch.setattr(route_mod, "verify_firebase_token", fake_verify_firebase_token)
+    monkeypatch.setattr(auth_dep, "verify_firebase_token", fake_verify_firebase_token)
     app = FastAPI()
     app.include_router(route_mod.router)
-    app.dependency_overrides[get_async_db] = lambda: _Repository()
+    app.dependency_overrides[get_admin_meal_catalog_repository] = lambda: _Repository()
 
     response = TestClient(app).get(
         "/v1/admin/meal-catalog?limit=25&offset=0",
@@ -132,7 +135,7 @@ def test_admin_gate_is_required_for_catalog_view(monkeypatch):
 
 def test_local_development_allows_catalog_view_without_admin(monkeypatch):
     repository = _Repository(page_items=(_projection(),))
-    client = _client(monkeypatch, repository, use_route_auth=True)
+    client = _client(repository, use_route_auth=True)
 
     response = client.get("/v1/admin/meal-catalog?limit=25&offset=0")
 
@@ -147,6 +150,7 @@ class _Repository:
         self.write_succeeds = write_succeeds
         self.list_kwargs = {}
         self.saved_image_url = None
+        self.commit = AsyncMock()
 
     async def list_meals(self, **kwargs):
         self.list_kwargs = kwargs
@@ -167,24 +171,14 @@ class _Repository:
         return _projection(image_url=self.saved_image_url)
 
 
-class _Session:
-    def __init__(self, repository):
-        self.repository = repository
-        self.commit = AsyncMock()
-
-
-def _client(monkeypatch, repository, *, generator=None, use_route_auth=False):
+def _client(repository, *, generator=None, use_route_auth=False):
     app = FastAPI()
     app.include_router(route_mod.router)
-    session = _Session(repository)
-    monkeypatch.setattr(route_mod, "AsyncAdminMealCatalogRepository", lambda db: db.repository)
-    app.dependency_overrides[get_async_db] = lambda: session
+    app.dependency_overrides[get_admin_meal_catalog_repository] = lambda: repository
     if not use_route_auth:
-        app.dependency_overrides[route_mod.require_admin_or_local] = (
-            lambda: "admin@nutree.ai"
-        )
+        app.dependency_overrides[require_admin_or_local] = lambda: "admin@nutree.ai"
     if generator is not None:
-        monkeypatch.setattr(route_mod, "_catalog_image_generator", lambda: generator)
+        app.dependency_overrides[get_catalog_image_generator] = lambda: generator
     return TestClient(app, client=("127.0.0.1", 50000))
 
 

@@ -100,6 +100,9 @@ class AsyncAdminMealCatalogRepository:
         await self._session.flush()
         return bool(result.rowcount)
 
+    async def commit(self) -> None:
+        await self._session.commit()
+
 
 def _catalog_filters(
     *,
