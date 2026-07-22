@@ -49,22 +49,15 @@ class RequestLoggerMiddleware:
             return
 
         request = Request(scope)
-        if request.url.path in self.SKIP_PATHS:
+        if scope.get("path") in self.SKIP_PATHS:
             await self.app(scope, receive, send)
             return
 
         request_id = uuid.uuid4().hex[:8]
         scope.setdefault("state", {})
         scope["state"]["request_id"] = request_id
-        set_request_context(
-            request_id=request_id,
-            method=request.method,
-            path=request.url.path,
-            user_id=self._get_user_id(request),
-        )
-
         start_time = time.time()
-        self._log_request(request, request_id)
+        self._log_request(request.method, request_id)
 
         response_logged = False
 
@@ -77,7 +70,14 @@ class RequestLoggerMiddleware:
                 headers.append("X-Response-Time", f"{elapsed:.3f}s")
                 await send(message)
                 # Log after delivery so elapsed reflects actual time-to-first-byte
-                self._log_response(request, message["status"], request_id, elapsed)
+                set_request_context(
+                    request_id=request_id,
+                    method=request.method,
+                    path=get_route_template(scope),
+                )
+                self._log_response(
+                    scope, request.method, message["status"], request_id, elapsed
+                )
                 response_logged = True
             else:
                 await send(message)
@@ -89,22 +89,23 @@ class RequestLoggerMiddleware:
             # Only log [RES-...] if http.response.start was never sent — avoids a
             # duplicate log line when the app raises mid-stream after headers went out.
             if not response_logged:
-                self._log_response(request, 500, request_id, elapsed)
-            self._log_error(request, request_id, elapsed, e)
+                set_request_context(
+                    request_id=request_id,
+                    method=request.method,
+                    path=get_route_template(scope),
+                )
+                self._log_response(scope, request.method, 500, request_id, elapsed)
+            self._log_error(scope, request.method, request_id, elapsed, e)
             raise
 
-    def _log_request(self, request: Request, request_id: str) -> None:
-        client_ip = self._get_client_ip(request)
-        user_id = self._get_user_id(request)
-        user_str = f" user={user_id}" if user_id else ""
-        logger.info(
-            f"[REQ-{request_id}] {request.method} {request.url.path}"
-            f" client={client_ip}{user_str}"
-        )
+    def _log_request(self, method: str, request_id: str) -> None:
+        """Log only pre-routing metadata; resolved paths are never safe here."""
+        logger.info("[REQ-%s] method=%s request_class=http", request_id, method)
 
     def _log_response(
         self,
-        request: Request,
+        scope: Scope,
+        method: str,
         status_code: int,
         request_id: str,
         elapsed: float,
@@ -118,13 +119,18 @@ class RequestLoggerMiddleware:
             log_level = logging.WARNING
         logger.log(
             log_level,
-            f"[RES-{request_id}] {request.method} {request.url.path}"
-            f" status={status_code} elapsed={elapsed:.3f}s",
+            "[RES-%s] method=%s route=%s status=%s elapsed=%.3fs",
+            request_id,
+            method,
+            get_route_template(scope),
+            status_code,
+            elapsed,
         )
 
     def _log_error(
         self,
-        request: Request,
+        scope: Scope,
+        method: str,
         request_id: str,
         elapsed: float,
         error: Exception,
@@ -134,23 +140,21 @@ class RequestLoggerMiddleware:
         # re-raises after calling the handler, so this path fires every time;
         # logging at WARNING avoids a duplicate ERROR/Sentry issue per request.
         logger.warning(
-            f"[ERR-{request_id}] {request.method} {request.url.path}"
-            f" elapsed={elapsed:.3f}s error={type(error).__name__}"
+            "[ERR-%s] method=%s route=%s elapsed=%.3fs error_type=%s",
+            request_id,
+            method,
+            get_route_template(scope),
+            elapsed,
+            type(error).__name__,
         )
 
-    def _get_client_ip(self, request: Request) -> str:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        if request.client:
-            return request.client.host
-        return "unknown"
 
-    def _get_user_id(self, request: Request) -> str | None:
-        try:
-            return getattr(request.state, "user_id", None)
-        except AttributeError:
-            return None
+def get_route_template(scope: Scope | Request) -> str:
+    """Return a FastAPI route template, never an incoming resolved path."""
+    raw_scope = scope.scope if isinstance(scope, Request) else scope
+    route = raw_scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) and path.startswith("/") else "unmatched"
 
 
 def get_request_id(request: Request) -> str | None:

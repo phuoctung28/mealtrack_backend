@@ -7,7 +7,7 @@ Monorepo submodule. 4-layer Clean + CQRS + PyMediator event bus.
 | Item | Value |
 |------|-------|
 | **Framework** | FastAPI 0.115+ / Python 3.13 |
-| **Database** | MySQL 8.0 + SQLAlchemy 2.0 |
+| **Database** | PostgreSQL (Neon) + SQLAlchemy 2.0 |
 | **Migrations** | Alembic |
 | **Event Bus** | PyMediator (singleton) |
 | **AI** | Google Gemini (multi-model) |
@@ -36,9 +36,9 @@ black src/ tests/ && flake8 src/ && mypy src/ && pytest
 - Domain layer has ZERO external dependencies
 
 **Event Bus**: PyMediator with singleton registry pattern (see `docs/cqrs-guide.md`)
-- Commands emit events (don't return data)
+- Commands may return typed domain entities, DTOs, or explicit outcomes to their route/application caller; commands still own writes and must not be invoked handler-to-handler.
 - Queries return immediately
-- Events processed asynchronously
+- Events are side-effect-only and return no result; they are processed asynchronously.
 
 **Calories = Derived from Macros** (non-negotiable)
 - Backend is source of truth: `P*4 + (C-fiber)*4 + fiber*2 + F*9`

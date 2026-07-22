@@ -11,10 +11,11 @@ prevents duplicate Sentry issues per failure event.
 
 import logging
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.api.exceptions import MealTrackException, create_http_exception
+from src.api.middleware.request_logger import get_route_template
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -40,11 +41,12 @@ async def _ai_unavailable_handler(
 ) -> JSONResponse:
     """Log degraded AI state at WARNING; return 503 without ERROR."""
     logger.warning(
-        "AI provider unavailable: %s",
+        "AI provider unavailable: error_type=%s route=%s",
         type(exc).__name__,
+        get_route_template(request),
         extra={
             "error_code": "AI_UNAVAILABLE",
-            "attempted_models": exc.attempted_models,
+            "route": get_route_template(request),
         },
     )
     return JSONResponse(
@@ -71,16 +73,15 @@ async def _unexpected_exception_handler(
     """
     request_id = getattr(getattr(request, "state", None), "request_id", None)
     logger.error(
-        "Unexpected error handling %s %s: %s",
+        "Unexpected error: method=%s route=%s error_type=%s",
         request.method,
-        request.url.path,
+        get_route_template(request),
         type(exc).__name__,
-        exc_info=True,
         extra={
             "error_type": type(exc).__name__,
             "request_id": request_id,
             "method": request.method,
-            "path": request.url.path,
+            "route": get_route_template(request),
         },
     )
     return JSONResponse(

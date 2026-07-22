@@ -25,7 +25,7 @@ Each layer has ZERO knowledge of layers above it. Domain layer is completely ind
 
 ## Commands (Write Operations)
 
-Named with imperative verbs. Validated in `__post_init__()`. Return domain entity or None.
+Named with imperative verbs. Validated in `__post_init__()`. A command handler may return a typed domain entity, DTO, or explicit outcome to its route/application caller; this is the command result boundary, not an event response. Commands do not call other handlers directly, and repositories flush while the owning UoW commits or rolls back.
 
 ```python
 @dataclass
@@ -158,6 +158,8 @@ async with AsyncUnitOfWork() as uow:
 | Single responsibility: one use case per command/query | Commands, Queries |
 | Validation in `__post_init__()` | Commands |
 | Never change state | Queries, Events |
+| May return typed result to caller | Commands, Queries |
+| Side-effect-only; return `None` | Events |
 | Always async | All handlers |
 | Fire-and-forget (no wait) | Events |
 

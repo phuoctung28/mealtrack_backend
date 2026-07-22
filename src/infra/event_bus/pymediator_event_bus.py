@@ -117,7 +117,10 @@ class PyMediatorEventBus(EventBus):
             for param in signature.parameters.values()
             if param.default is inspect.Parameter.empty
             and param.kind
-            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
         ]
         if required_params:
             return handler
@@ -132,7 +135,7 @@ class PyMediatorEventBus(EventBus):
             self._domain_event_subscribers[event_type] = []
 
         self._domain_event_subscribers[event_type].append(handler)
-        logger.debug(f"Subscribed to {event_type.__name__}")
+        logger.debug("event_bus stage=subscribed event_type=%s", event_type.__name__)
 
     async def send(self, event: Event) -> Any:
         """Send a command/query and get the result."""
@@ -160,29 +163,35 @@ class PyMediatorEventBus(EventBus):
                 isinstance(e, DomainEvent) for e in result
             ):
                 logger.debug(
-                    f"Publishing {len(result)} domain events from command result"
+                    "event_bus stage=publish_result event_type=%s", event_type.__name__
                 )
                 for domain_event in result:
                     await self.publish(domain_event)
             elif isinstance(result, dict) and "events" in result:
                 events = result.get("events", [])
                 logger.debug(
-                    f"Publishing {len(events)} domain events from command result"
+                    "event_bus stage=publish_result event_type=%s", event_type.__name__
                 )
                 for domain_event in events:
                     if isinstance(domain_event, DomainEvent):
                         await self.publish(domain_event)
             return result
 
-        except (MealTrackException, AIUnavailableError) as e:
+        except (MealTrackException, AIUnavailableError) as error:
             # Controlled application exceptions and degraded AI-provider failures
             # are converted to proper HTTP responses by the API layer. Keep this
             # at debug so routine control flow does not produce duplicate ERRORs.
-            logger.debug(f"Application exception handling {event_type.__name__}: {str(e)}")
+            logger.debug(
+                "event_bus stage=application_exception event_type=%s error_type=%s",
+                event_type.__name__,
+                type(error).__name__,
+            )
             raise
-        except Exception as e:
+        except Exception as error:
             logger.error(
-                f"Error handling {event_type.__name__}: {str(e)}", exc_info=True
+                "event_bus stage=handler_error event_type=%s error_type=%s",
+                event_type.__name__,
+                type(error).__name__,
             )
             raise
 
@@ -191,13 +200,13 @@ class PyMediatorEventBus(EventBus):
         event_type = type(event)
 
         if event_type not in self._domain_event_subscribers:
-            logger.debug(f"No subscribers for {event_type.__name__}")
+            logger.debug(
+                "event_bus stage=no_subscribers event_type=%s", event_type.__name__
+            )
             return
 
         subscribers = self._domain_event_subscribers[event_type]
-        logger.debug(
-            f"Publishing {event_type.__name__} to {len(subscribers)} subscribers"
-        )
+        logger.debug("event_bus stage=publishing event_type=%s", event_type.__name__)
 
         # Execute subscribers concurrently
         tasks = []
@@ -214,22 +223,27 @@ class PyMediatorEventBus(EventBus):
         if tasks:
             # Execute all tasks in the background (fire-and-forget)
             async def run_tasks_in_background():
-                logger.debug(f"Starting background processing for {event_type.__name__}")
+                logger.debug(
+                    "event_bus stage=background_start event_type=%s",
+                    event_type.__name__,
+                )
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Log any exceptions
-                for i, result in enumerate(results):
+                for result in results:
                     if isinstance(result, Exception):
                         logger.error(
-                            f"Subscriber {i} for {event_type.__name__} failed: {result}",
-                            exc_info=result,
+                            "event_bus stage=subscriber_error event_type=%s error_type=%s",
+                            event_type.__name__,
+                            type(result).__name__,
                         )
                 logger.debug(
-                    f"Background processing completed for {event_type.__name__}"
+                    "event_bus stage=background_complete event_type=%s",
+                    event_type.__name__,
                 )
 
             # Schedule the task to run in the background (managed lifecycle)
-            logger.debug(f"Scheduling background task for {event_type.__name__}")
+            logger.debug("event_bus stage=scheduled event_type=%s", event_type.__name__)
             self._task_manager.spawn(
                 f"event_bus:{event_type.__name__}",
                 run_tasks_in_background(),

@@ -88,7 +88,7 @@ class TestRequestLogging:
 
         # Check log contains request info
         assert any("[REQ-" in record.message for record in caplog.records)
-        assert any("GET /test" in record.message for record in caplog.records)
+        assert any("method=GET" in record.message for record in caplog.records)
 
     def test_logs_response(self, client, caplog):
         """Should log response details."""
@@ -142,9 +142,9 @@ class TestErrorLogging:
 
         err_logs = [r for r in caplog.records if "[ERR-" in r.message]
         assert len(err_logs) >= 1
-        assert all(r.levelname == "WARNING" for r in err_logs), (
-            "[ERR-...] middleware log must be WARNING, not ERROR"
-        )
+        assert all(
+            r.levelname == "WARNING" for r in err_logs
+        ), "[ERR-...] middleware log must be WARNING, not ERROR"
 
     @pytest.mark.parametrize("status_code", [400, 401, 403, 404])
     def test_expected_client_errors_log_at_info(self, app, caplog, status_code):

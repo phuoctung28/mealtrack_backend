@@ -84,7 +84,11 @@ def test_facade_delegates_to_configured_connector():
 
     assert connector.calls == [
         ("initialize",),
-        ("capture_exception", error, {"component": "cron"}),
+        (
+            "capture_exception",
+            error,
+            {"component": "cron", "error_type": "RuntimeError"},
+        ),
         ("capture_message", "hello", "error", {"operation": "send"}),
         ("log_event", "info", "cron started", {"component": "cron"}),
         ("increment_metric", "cron.started", 1.0, None, {"component": "cron"}),
@@ -118,6 +122,33 @@ def test_cache_hit_is_safe_observability_attribute_and_tag():
         "cache_hit": "true",
     }
     assert filter_safe_tags(attributes)["cache_hit"] == "true"
+
+
+def test_facade_drops_sentinel_identifiers_and_payloads_from_metrics():
+    connector = RecordingConnector()
+    set_observability_connector_for_test(connector)
+
+    increment_metric(
+        "reliable_write.request.count",
+        attributes={
+            "action": "manual_meal",
+            "outcome": "committed",
+            "operation_id": "operation-sentinel",
+            "entity_id": "entity-sentinel",
+            "fingerprint": "fingerprint-sentinel",
+            "payload": {"weight": "weight-sentinel"},
+        },
+    )
+
+    assert connector.calls == [
+        (
+            "increment_metric",
+            "reliable_write.request.count",
+            1.0,
+            None,
+            {"action": "manual_meal", "outcome": "committed"},
+        )
+    ]
 
 
 def test_meal_scan_rejection_image_context_is_safe_but_not_tagged():
