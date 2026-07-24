@@ -15,7 +15,8 @@ tests/
 └── integration/         # Integration tests (with database)
     ├── test_meal_query_handlers.py
     ├── test_user_query_handlers.py
-    └── test_event_driven_flow.py
+    ├── test_event_driven_flow.py
+    └── postgres/       # Real PostgreSQL catalog/recommendation gates
 ```
 
 ## Test Categories
@@ -42,29 +43,30 @@ tests/
 ### 1. Database Isolation
 - Each test runs in a transaction that's rolled back
 - No test data pollution between tests
-- MySQL test database with automatic cleanup
-- CI uses MySQL service container
+- Default unit tests mock database dependencies
+- PostgreSQL integration tests use explicit cleanup/truncation
+- CI uses a PostgreSQL service container for catalog/recommendation gates
 
-#### GitHub Actions MySQL Service Container
-The CI pipeline uses a Docker service container for MySQL:
+#### GitHub Actions PostgreSQL Service Container
+The catalog integration CI job uses `pgvector/pgvector:pg16`:
 ```yaml
 services:
-  mysql:
-    image: mysql:8.0
+  postgres:
+    image: pgvector/pgvector:pg16
     env:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: mealtrack_test
-      MYSQL_USER: test_user
-      MYSQL_PASSWORD: test_password
+      POSTGRES_DB: nutree_test
+      POSTGRES_USER: nutree
+      POSTGRES_PASSWORD: nutree
     ports:
-      - 3306:3306
+      - 5432:5432
 ```
 
 This container:
 - Runs alongside the test job
-- Is accessible at `localhost:3306`
+- Is accessible at `localhost:5432`
 - Automatically creates the test database
 - Is destroyed after tests complete
+- Is initialized through `scripts/init_postgres_db.py`
 
 ### 2. Mock Services
 - `MockImageStore`: In-memory image storage
@@ -133,6 +135,10 @@ pytest tests/unit/test_meal_command_handlers.py::TestUploadMealImageCommandHandl
 # Run with markers
 pytest -m unit
 pytest -m "unit and not slow"
+
+# Run real PostgreSQL catalog gates
+TEST_DATABASE_URL=postgresql+asyncpg://nutree:nutree@localhost:5432/nutree_test \
+  pytest tests/integration/postgres -o addopts="" -m integration -q
 
 # Run with coverage
 pytest --cov=src --cov-report=html

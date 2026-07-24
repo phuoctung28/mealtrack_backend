@@ -16,7 +16,7 @@ from src.domain.services.meal_recommendation.catalog_ingredient_statistics_servi
     CatalogIngredientStatistics,
     CatalogIngredientStatisticsService,
 )
-from src.observability import increment_metric
+from src.observability import distribution_metric, gauge_metric, increment_metric
 
 
 @dataclass(frozen=True)
@@ -53,6 +53,7 @@ class CatalogMealSnapshotService:
         now = self._clock()
         snapshot = self._snapshot
         if snapshot is not None and snapshot.expires_at > now:
+            self._record_snapshot_metrics(snapshot, status="warm")
             return snapshot
 
         revision = await uow.catalog_recipes.get_active_catalog_revision()
@@ -72,9 +73,12 @@ class CatalogMealSnapshotService:
                 expires_at=now + self._ttl_seconds,
             )
             self._snapshot = refreshed
+            self._record_snapshot_metrics(refreshed, status="unchanged")
             return refreshed
 
-        return await self._refresh_singleflight(uow, expected_revision=revision)
+        snapshot = await self._refresh_singleflight(uow, expected_revision=revision)
+        self._record_snapshot_metrics(snapshot, status="returned")
+        return snapshot
 
     async def _refresh_singleflight(
         self,
@@ -115,6 +119,10 @@ class CatalogMealSnapshotService:
                     "meal_recommendation.catalog_snapshot.refresh",
                     attributes={"status": "success"},
                 )
+                increment_metric(
+                    "meal_catalog.snapshot.refresh",
+                    attributes={"status": "success"},
+                )
                 return snapshot
             except Exception:
                 if current is not None:
@@ -123,9 +131,40 @@ class CatalogMealSnapshotService:
                         "meal_recommendation.catalog_snapshot.refresh",
                         attributes={"status": "last_good"},
                     )
+                    increment_metric(
+                        "meal_catalog.snapshot.refresh",
+                        attributes={"status": "last_good"},
+                    )
+                    increment_metric(
+                        "meal_catalog.snapshot.last_good",
+                        attributes={"status": "last_good"},
+                    )
                     return current
                 increment_metric(
                     "meal_recommendation.catalog_snapshot.refresh",
                     attributes={"status": "cold_failure"},
                 )
+                increment_metric(
+                    "meal_catalog.snapshot.refresh",
+                    attributes={"status": "cold_failure"},
+                )
                 raise
+
+    def _record_snapshot_metrics(
+        self,
+        snapshot: CatalogMealSnapshot,
+        *,
+        status: str,
+    ) -> None:
+        attributes = {"operation": "snapshot", "status": status}
+        gauge_metric(
+            "meal_catalog.snapshot.active_meals",
+            len(snapshot.meals),
+            attributes=attributes,
+        )
+        distribution_metric(
+            "meal_catalog.snapshot.age_seconds",
+            max(0.0, self._clock() - snapshot.refreshed_at),
+            unit="second",
+            attributes=attributes,
+        )

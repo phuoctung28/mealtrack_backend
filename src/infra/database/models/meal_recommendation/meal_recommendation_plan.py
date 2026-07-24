@@ -49,6 +49,8 @@ class MealRecommendationORM(Base):
     score = Column(Numeric(10, 6), nullable=False)
     selection_version = Column(Integer, nullable=False, default=1)
     logged_at = Column(DateTime(timezone=True), nullable=True)
+    shown_at = Column(DateTime(timezone=True), nullable=True)
+    skipped_at = Column(DateTime(timezone=True), nullable=True)
     logged_meal_id = Column(
         String(36),
         ForeignKey("meal.meal_id", ondelete="SET NULL"),
@@ -97,6 +99,10 @@ class MealRecommendationORM(Base):
             "(logged_at IS NULL AND logged_meal_id IS NULL) "
             "OR (logged_at IS NOT NULL AND logged_meal_id IS NOT NULL)",
             name="ck_meal_recommendations_logged_coherent",
+        ),
+        CheckConstraint(
+            "skipped_at IS NULL OR (logged_at IS NULL AND logged_meal_id IS NULL)",
+            name="ck_meal_recommendations_skip_terminal",
         ),
         CheckConstraint(
             "("
@@ -212,7 +218,7 @@ class MealRecommendationOperationORM(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "operation_type IN ('swap', 'log')",
+            "operation_type IN ('swap', 'log', 'skip')",
             name="ck_meal_recommendation_operations_type",
         ),
         CheckConstraint(
@@ -230,6 +236,9 @@ class MealRecommendationOperationORM(Base):
             ") OR ("
             "operation_type = 'log' AND result_logged_meal_id IS NOT NULL "
             "AND result_catalog_meal_id IS NULL"
+            ") OR ("
+            "operation_type = 'skip' AND result_selection_version IS NULL "
+            "AND result_catalog_meal_id IS NULL AND result_logged_meal_id IS NULL"
             ")",
             name="ck_meal_recommendation_operations_payload",
         ),

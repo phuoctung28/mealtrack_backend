@@ -73,6 +73,18 @@ Catalog-backed meal recommendations use snapshot-scoped ingredient IDF, confiden
 
 The active catalog snapshot owns both immutable meal projections and snapshot-scoped ingredient IDF statistics. Persisted plans replay their stored candidates and scores instead of recalculating.
 
+Phase 0 persistence is four-table only: `meal_catalog`,
+`meal_catalog_ingredients`, `meal_recommendations`, and
+`meal_recommendation_operations`. The AI `/v1/meal-suggestions` flow remains a
+separate additive system and is not a fallback or replacement for these
+catalog-backed recommendations.
+
+### Local-First Food Search
+Manual food search reads Redis cache when available, then searches verified
+`food_reference` rows locally before provider fill. Cache, provider, and
+translation failures degrade to bounded local results when possible. Local
+result calories are always derived from stored macros using the backend formula.
+
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 
@@ -141,7 +153,7 @@ downloading Cloudinary bytes. Graph nodes must not import provider SDKs,
 1. `POST /v1/meal-recommendations/three-day` resolves timezone and daily calories, then builds or replays a durable recommendation plan.
 2. The plan-level response is compact: it includes only the selected slots. Slot ingredients, alternatives, and scores stay out of the summary payload.
 3. `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` hydrates one selected slot and its alternatives when the client needs drill-down data.
-4. `swap` and `log` return the changed-slot detail shape so the mobile client can patch its cached plan without reloading everything.
+4. `swap`, `log`, and `skip` return the changed-slot detail shape so the mobile client can patch its cached plan without reloading everything.
 5. Recommendation analytics are scheduled through `BackgroundTaskManager` when available. Catalog meals are read from the process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback. Meal-history affinity is projected from aggregate linked ingredient buckets instead of loading the full meal graph, and logging a recommended meal reuses the already loaded selected catalog projection without fabricating image data.
 
 ---

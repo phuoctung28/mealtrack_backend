@@ -120,6 +120,29 @@ def test_cache_hit_is_safe_observability_attribute_and_tag():
     assert filter_safe_tags(attributes)["cache_hit"] == "true"
 
 
+def test_food_search_source_and_language_are_safe_metric_tags():
+    attributes = {
+        "operation": "search",
+        "source": "local",
+        "language": "vi",
+        "status": "success",
+        "query": "do not export",
+    }
+
+    assert filter_safe_attributes(attributes) == {
+        "operation": "search",
+        "source": "local",
+        "language": "vi",
+        "status": "success",
+    }
+    assert filter_safe_tags(attributes) == {
+        "operation": "search",
+        "source": "local",
+        "language": "vi",
+        "status": "success",
+    }
+
+
 def test_meal_scan_rejection_image_context_is_safe_but_not_tagged():
     attributes = {
         "component": "meal_scan",

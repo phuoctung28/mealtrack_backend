@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -7,6 +7,7 @@ import pytest
 
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationIdempotencyConflictError,
+    MealRecommendationTerminalStateError,
 )
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
@@ -209,6 +210,54 @@ class _LogReplayRepo(AsyncMealRecommendationPlanRepository):
         return rows[0], rows
 
 
+class _SlotMutationRepo(AsyncMealRecommendationPlanRepository):
+    def __init__(self, *, replay=None, selected_overrides=None):
+        super().__init__(_AsyncSession())
+        self.replay = replay
+        self.selected_overrides = selected_overrides or {}
+
+    async def _get_operation_replay(self, *, user_id, operation_type, request_id):
+        return self.replay
+
+    async def _load_anchor(self, *, user_id, batch_id):
+        return _plan_to_candidate_rows(_plan())[0]
+
+    async def _load_slot_for_update(self, *, user_id, batch_id, slot_id):
+        rows = _plan_to_candidate_rows(_plan())
+        for key, value in self.selected_overrides.items():
+            setattr(rows[0], key, value)
+        return rows[0], rows
+
+    async def get_slot_detail(self, *, user_id, plan_id, slot_id):
+        rows = _plan_to_candidate_rows(_plan())
+        for key, value in self.selected_overrides.items():
+            setattr(rows[0], key, value)
+        return self._rows_to_slot_for_test(rows[0], rows)
+
+    def _rows_to_slot_for_test(self, anchor, rows):
+        from src.infra.repositories.meal_recommendation_plan_repository_async import (
+            _rows_to_slot_detail,
+        )
+
+        return _rows_to_slot_detail(anchor, rows)
+
+
+class _ConcurrentSkipReplayRepo(_SlotMutationRepo):
+    def __init__(self, *, selected_overrides=None):
+        super().__init__(selected_overrides=selected_overrides)
+        self.replay_calls = 0
+
+    async def _get_operation_replay(self, *, user_id, operation_type, request_id):
+        self.replay_calls += 1
+        if self.replay_calls == 1:
+            return None
+        return session_operation(
+            operation_type="skip",
+            request_id=request_id,
+            fingerprint=_operation_fingerprint(plan_id="plan-1", slot_id="slot-1"),
+        )
+
+
 @pytest.mark.asyncio
 async def test_claim_slot_log_rejects_reused_request_id_for_different_slot():
     repo = _LogReplayRepo(
@@ -275,6 +324,93 @@ async def test_claim_slot_log_rejects_replay_with_wrong_fingerprint():
         )
 
 
+@pytest.mark.asyncio
+async def test_skip_slot_is_terminal_and_idempotent():
+    repo = _SlotMutationRepo()
+
+    first = await repo.skip_slot(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="skip-1",
+    )
+    replay = _SlotMutationRepo(
+        replay=session_operation(
+            operation_type="skip",
+            request_id="skip-1",
+            fingerprint=_operation_fingerprint(plan_id="plan-1", slot_id="slot-1"),
+        ),
+        selected_overrides={"skipped_at": first.slot.skipped_at},
+    )
+
+    replay_result = await replay.skip_slot(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="skip-1",
+    )
+
+    assert first.slot.skipped_at is not None
+    assert replay_result.slot.skipped_at == first.slot.skipped_at
+    with pytest.raises(MealRecommendationTerminalStateError):
+        await _SlotMutationRepo(
+            selected_overrides={"skipped_at": first.slot.skipped_at}
+        ).swap_slot(
+            user_id="user-1",
+            plan_id="plan-1",
+            slot_id="slot-1",
+            request_id="swap-after-skip",
+            expected_version=first.slot.selection_version,
+            alternative_catalog_meal_id=None,
+            reason="user_requested",
+        )
+
+
+@pytest.mark.asyncio
+async def test_skip_slot_rechecks_replay_after_row_lock():
+    skipped_at = datetime(2026, 7, 16)
+    repo = _ConcurrentSkipReplayRepo(selected_overrides={"skipped_at": skipped_at})
+
+    result = await repo.skip_slot(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="skip-1",
+    )
+
+    assert repo.replay_calls == 2
+    assert result.slot.skipped_at == skipped_at
+    assert repo._session.added_rows == []
+
+
+@pytest.mark.asyncio
+async def test_claim_slot_log_rejects_skipped_slot():
+    repo = _LogReplayRepo(replay=None)
+    repo._load_slot_for_update = AsyncMock(  # type: ignore[method-assign]
+        return_value=(
+            _plan_to_candidate_rows(_plan())[0],
+            [
+                SimpleNamespace(
+                    **{
+                        **row.__dict__,
+                        "skipped_at": datetime(2026, 7, 16),
+                        "shown_at": None,
+                    }
+                )
+                for row in _plan_to_candidate_rows(_plan())
+            ],
+        )
+    )
+
+    with pytest.raises(MealRecommendationTerminalStateError):
+        await repo.claim_slot_log(
+            user_id="user-1",
+            plan_id="plan-1",
+            slot_id="slot-1",
+            request_id="log-after-skip",
+        )
+
+
 def _plan_to_candidate_rows(plan):
     rows = []
     for slot in plan.slots:
@@ -294,6 +430,8 @@ def _plan_to_candidate_rows(plan):
                     selection_version=candidate.selection_version,
                     logged_at=None,
                     logged_meal_id=None,
+                    skipped_at=None,
+                    shown_at=None,
                     user_id=plan.user_id if candidate.id == plan.id else None,
                     status=plan.status if candidate.id == plan.id else None,
                     timezone=plan.timezone if candidate.id == plan.id else None,
@@ -309,3 +447,13 @@ def _plan_to_candidate_rows(plan):
                 )
             )
     return rows
+
+
+def session_operation(*, operation_type, request_id, fingerprint):
+    return SimpleNamespace(
+        operation_type=operation_type,
+        request_id=request_id,
+        batch_id="plan-1",
+        slot_id="slot-1",
+        request_fingerprint=fingerprint,
+    )

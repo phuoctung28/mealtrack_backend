@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from decimal import Decimal
 from typing import cast
 
@@ -17,6 +18,7 @@ from src.domain.ports.catalog_recipe_repository_port import (
     CatalogMealRepositoryPort,
     CatalogMealRevision,
     CatalogMealSeedExisting,
+    CatalogMealSeedSignature,
     CatalogMealSeedWrite,
 )
 from src.domain.services.meal_recommendation.ingredient_quantity_conversion_service import (
@@ -149,6 +151,31 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
         self._session.add(row)
         await self._session.flush()
 
+    async def lock_seed_import(self) -> None:
+        await self._session.execute(
+            select(func.pg_advisory_xact_lock(func.hashtext("meal_catalog_seed_import")))
+        )
+
+    async def list_seed_signatures(self) -> list[CatalogMealSeedSignature]:
+        result = await self._session.execute(
+            select(MealCatalogORM)
+            .options(selectinload(MealCatalogORM.ingredients))
+            .order_by(MealCatalogORM.id)
+        )
+        return [
+            CatalogMealSeedSignature(
+                catalog_key=cast(str, row.catalog_key),
+                content_hash=cast(str, row.content_hash),
+                normalized_name=_normalize_catalog_text(cast(str, row.name)),
+                normalized_cuisine=_normalize_catalog_text(cast(str, row.cuisine)),
+                food_reference_ids=frozenset(
+                    cast(int, ingredient.food_reference_id)
+                    for ingredient in row.ingredients
+                ),
+            )
+            for row in result.scalars().unique().all()
+        ]
+
 
 def _meal_type_column(meal_type: str):
     if meal_type == "breakfast":
@@ -259,3 +286,7 @@ def _meal_types(row: MealCatalogORM) -> tuple[str, ...]:
 
 def _decimal(value) -> Decimal:
     return value if isinstance(value, Decimal) else Decimal(str(value or "0"))
+
+
+def _normalize_catalog_text(value: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", value).split()).casefold()

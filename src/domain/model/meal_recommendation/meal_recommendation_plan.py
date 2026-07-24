@@ -25,6 +25,8 @@ class PersistedMealRecommendationCandidate:
     catalog_meal: CatalogMeal | None = None
     logged_at: datetime | None = None
     logged_meal_id: str | None = None
+    shown_at: datetime | None = None
+    skipped_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,8 @@ class PersistedMealRecommendationSlot:
     position: int
     selection_version: int = 1
     logged_meal_id: str | None = None
+    shown_at: datetime | None = None
+    skipped_at: datetime | None = None
     selected: PersistedMealRecommendationCandidate | None = None
     alternatives: tuple[PersistedMealRecommendationCandidate, ...] = ()
 

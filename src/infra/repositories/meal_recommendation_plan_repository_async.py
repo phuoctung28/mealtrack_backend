@@ -18,6 +18,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationInvalidAlternativeError,
     MealRecommendationNotFoundError,
     MealRecommendationPersistenceConflictError,
+    MealRecommendationTerminalStateError,
     MealRecommendationVersionConflictError,
 )
 from src.domain.model.meal_recommendation import (
@@ -175,8 +176,8 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         selected = _selected_row(rows, slot_id)
         if int(cast(int, selected.selection_version)) != expected_version:
             raise MealRecommendationVersionConflictError
-        if selected.logged_at:
-            raise MealRecommendationInvalidAlternativeError
+        if selected.logged_at or getattr(selected, "skipped_at", None):
+            raise MealRecommendationTerminalStateError
 
         alternatives = sorted(
             (
@@ -217,6 +218,95 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                 request_fingerprint=fingerprint,
                 result_selection_version=new_version,
                 result_catalog_meal_id=cast(str, target.catalog_meal_id),
+            )
+        )
+        await self._flush_operations()
+        return PersistedMealRecommendationSlotMutationResult(
+            plan_id=plan_id,
+            user_id=user_id,
+            slot=_rows_to_slot_detail(anchor, rows),
+        )
+
+    async def mark_shown(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_ids: tuple[str, ...],
+    ) -> None:
+        if not slot_ids:
+            return
+        if await self._load_anchor(user_id=user_id, batch_id=plan_id) is None:
+            return
+        await self._session.execute(
+            update(MealRecommendationORM)
+            .where(MealRecommendationORM.batch_id == plan_id)
+            .where(MealRecommendationORM.slot_id.in_(slot_ids))
+            .where(MealRecommendationORM.is_selected.is_(True))
+            .where(MealRecommendationORM.shown_at.is_(None))
+            .values(shown_at=datetime.now(UTC))
+        )
+
+    async def skip_slot(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+    ) -> PersistedMealRecommendationSlotMutationResult:
+        fingerprint = _operation_fingerprint(plan_id=plan_id, slot_id=slot_id)
+        replay = await self._get_operation_replay(
+            user_id=user_id, operation_type="skip", request_id=request_id
+        )
+        if replay is not None:
+            if cast(str, replay.request_fingerprint) != fingerprint:
+                raise MealRecommendationIdempotencyConflictError
+            slot = await self.get_slot_detail(
+                user_id=user_id,
+                plan_id=plan_id,
+                slot_id=slot_id,
+            )
+            if slot is None:
+                raise MealRecommendationNotFoundError
+            return PersistedMealRecommendationSlotMutationResult(
+                plan_id=plan_id,
+                user_id=user_id,
+                slot=slot,
+            )
+
+        anchor, rows = await self._load_slot_for_update(
+            user_id=user_id, batch_id=plan_id, slot_id=slot_id
+        )
+        if not rows:
+            raise MealRecommendationNotFoundError
+        replay = await self._get_operation_replay(
+            user_id=user_id, operation_type="skip", request_id=request_id
+        )
+        if replay is not None:
+            if cast(str, replay.request_fingerprint) != fingerprint:
+                raise MealRecommendationIdempotencyConflictError
+            return PersistedMealRecommendationSlotMutationResult(
+                plan_id=plan_id,
+                user_id=user_id,
+                slot=_rows_to_slot_detail(anchor, rows),
+            )
+        selected = _selected_row(rows, slot_id)
+        if (
+            selected.logged_meal_id
+            or selected.logged_at
+            or getattr(selected, "skipped_at", None)
+        ):
+            raise MealRecommendationTerminalStateError
+        selected.skipped_at = datetime.now(UTC)  # type: ignore[assignment]
+        self._session.add(
+            MealRecommendationOperationORM(
+                user_id=user_id,
+                batch_id=plan_id,
+                slot_id=slot_id,
+                operation_type="skip",
+                request_id=request_id,
+                request_fingerprint=fingerprint,
             )
         )
         await self._flush_operations()
@@ -269,6 +359,8 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         selected = _selected_row(rows, slot_id)
         if selected.logged_meal_id:
             raise MealRecommendationAlreadyLoggedError
+        if getattr(selected, "skipped_at", None):
+            raise MealRecommendationTerminalStateError
         return plan, slot, False
 
     async def finalize_slot_logged(
@@ -294,6 +386,8 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                     slot=_rows_to_slot_detail(anchor, rows),
                 )
             raise MealRecommendationAlreadyLoggedError
+        if getattr(selected, "skipped_at", None):
+            raise MealRecommendationTerminalStateError
         now = datetime.now(UTC)
         selected.logged_meal_id = meal_id  # type: ignore[assignment]
         selected.logged_at = now  # type: ignore[assignment]
@@ -464,6 +558,8 @@ def _plan_to_rows(plan: PersistedMealRecommendationPlan) -> list[MealRecommendat
                     selection_version=candidate.selection_version,
                     logged_at=candidate.logged_at,
                     logged_meal_id=candidate.logged_meal_id,
+                    shown_at=candidate.shown_at,
+                    skipped_at=candidate.skipped_at,
                     user_id=plan.user_id if candidate.id == plan.id else None,
                     status=plan.status if candidate.id == plan.id else None,
                     timezone=plan.timezone if candidate.id == plan.id else None,
@@ -494,6 +590,8 @@ def _slot_candidates(
             score=Decimal(str(slot.score)),
             selection_version=slot.selection_version,
             logged_meal_id=slot.logged_meal_id,
+            shown_at=slot.shown_at,
+            skipped_at=slot.skipped_at,
         ),
         *slot.alternatives,
     )
@@ -529,6 +627,8 @@ def _rows_to_plan(rows: list[MealRecommendationORM]) -> PersistedMealRecommendat
                 position=position,
                 selection_version=cast(int, selected.selection_version),
                 logged_meal_id=cast(str | None, selected.logged_meal_id),
+                shown_at=cast(datetime | None, getattr(selected, "shown_at", None)),
+                skipped_at=cast(datetime | None, getattr(selected, "skipped_at", None)),
                 selected=selected_candidate,
                 alternatives=alternatives,
             )
@@ -578,6 +678,8 @@ def _rows_to_summary(rows: list[MealRecommendationORM]) -> PersistedMealRecommen
                 position=position,
                 selection_version=cast(int, row.selection_version),
                 logged_meal_id=cast(str | None, row.logged_meal_id),
+                shown_at=cast(datetime | None, getattr(row, "shown_at", None)),
+                skipped_at=cast(datetime | None, getattr(row, "skipped_at", None)),
                 selected=selected_candidate,
                 alternatives=(),
             )
@@ -624,6 +726,8 @@ def _rows_to_slot_detail(
         position=0,
         selection_version=cast(int, selected.selection_version),
         logged_meal_id=cast(str | None, selected.logged_meal_id),
+        shown_at=cast(datetime | None, getattr(selected, "shown_at", None)),
+        skipped_at=cast(datetime | None, getattr(selected, "skipped_at", None)),
         selected=selected_candidate,
         alternatives=alternatives,
     )
@@ -664,6 +768,8 @@ def _candidate_to_domain(
         catalog_meal=_candidate_catalog_meal(row),
         logged_at=cast(datetime | None, row.logged_at),
         logged_meal_id=cast(str | None, row.logged_meal_id),
+        shown_at=cast(datetime | None, getattr(row, "shown_at", None)),
+        skipped_at=cast(datetime | None, getattr(row, "skipped_at", None)),
     )
 
 

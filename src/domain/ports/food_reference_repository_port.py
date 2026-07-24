@@ -32,6 +32,25 @@ class FoodReferenceNutritionProjection:
     name_normalized: str | None = None
 
 
+@dataclass(frozen=True)
+class FoodReferenceSearchProjection:
+    """Local food search result shaped before API response mapping."""
+
+    id: int
+    name: str
+    name_normalized: str | None
+    brand: str | None
+    source: str
+    is_verified: bool
+    protein_100g: float | None
+    carbs_100g: float | None
+    fat_100g: float | None
+    fiber_100g: float = 0.0
+    sugar_100g: float = 0.0
+    serving_size: str | None = None
+    allowed_units: list[dict] = field(default_factory=list)
+
+
 class FoodReferenceRepositoryPort(Protocol):
     """Repository contract for typed canonical food-reference projections."""
 
@@ -51,3 +70,11 @@ class FoodReferenceRepositoryPort(Protocol):
         name_normalized: str,
     ) -> list[FoodReferenceNutritionProjection]:
         """Return candidate projections by exact normalized name for seed imports."""
+
+    async def search_local(
+        self,
+        query: str,
+        region: str,
+        limit: int,
+    ) -> list[FoodReferenceSearchProjection]:
+        """Return bounded, verified-first local search results."""

@@ -1,6 +1,15 @@
 from pathlib import Path
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+
 MIGRATION = Path("migrations/versions/20260716000001_add_catalog_recipe_tables.py")
+FOOD_SEARCH_INDEX_MIGRATION = Path(
+    "migrations/versions/20260723000001_add_food_reference_search_index.py"
+)
+SKIP_STATE_MIGRATION = Path(
+    "migrations/versions/20260724000001_add_meal_recommendation_skip_state.py"
+)
 REMOVED_MIGRATIONS = (
     Path("migrations/versions/20260716000002_add_meal_recommendation_plan_tables.py"),
     Path("migrations/versions/20260716000003_add_recommendation_swaps_and_interactions.py"),
@@ -15,6 +24,45 @@ def test_catalog_rework_uses_exactly_four_feature_tables() -> None:
     assert 'op.create_table(\n        "meal_recommendations",' in text
     assert 'op.create_table(\n        "meal_recommendation_operations",' in text
     assert not any(path.exists() for path in REMOVED_MIGRATIONS)
+
+
+def test_catalog_schema_has_one_head_and_no_stored_calories() -> None:
+    script_dir = ScriptDirectory.from_config(Config("alembic.ini"))
+    text = MIGRATION.read_text()
+    catalog_section = text.split('"meal_catalog_ingredients"')[0]
+
+    assert [
+        revision.revision for revision in script_dir.get_revisions("heads")
+    ] == ["20260724000001"]
+    assert '"calories"' not in catalog_section
+
+
+def test_food_reference_search_index_uses_trigram_without_dropping_extension() -> None:
+    text = FOOD_SEARCH_INDEX_MIGRATION.read_text()
+
+    assert 'down_revision = "20260716000001"' in text
+    assert "CREATE EXTENSION IF NOT EXISTS pg_trgm" in text
+    assert "ux_food_reference_name_normalized" in text
+    assert "ix_food_reference_name_normalized_trgm" in text
+    assert "gin_trgm_ops" in text
+    assert "DROP EXTENSION" not in text
+
+
+def test_skip_state_is_forward_migration_not_deployed_baseline_edit() -> None:
+    baseline_text = MIGRATION.read_text()
+    skip_text = SKIP_STATE_MIGRATION.read_text()
+
+    assert 'down_revision = "20260723000001"' in skip_text
+    assert '"shown_at"' not in baseline_text
+    assert '"skipped_at"' not in baseline_text
+    assert "operation_type IN ('swap', 'log')" in baseline_text
+    assert "operation_type IN ('swap', 'log', 'skip')" not in baseline_text
+
+    assert 'sa.Column("shown_at"' in skip_text
+    assert 'sa.Column("skipped_at"' in skip_text
+    assert "ck_meal_recommendations_skip_terminal" in skip_text
+    assert "operation_type IN ('swap', 'log', 'skip')" in skip_text
+    assert "operation_type = 'skip'" in skip_text
 
 
 def test_meal_catalog_has_duplicate_guards_and_no_calorie_column() -> None:
@@ -62,10 +110,8 @@ def test_candidate_rows_enforce_selection_owner_and_idempotency_invariants() -> 
     assert "uq_meal_recommendations_anchor_idempotency" in text
     assert "uq_meal_recommendations_logged_meal" in text
     for removed_column in (
-        '"shown_at"',
         '"selected_at"',
         '"swapped_at"',
-        '"skipped_at"',
         '"target_protein_g"',
         '"target_carbs_g"',
         '"target_fat_g"',

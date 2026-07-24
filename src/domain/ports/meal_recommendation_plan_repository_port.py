@@ -78,6 +78,27 @@ class MealRecommendationPlanRepositoryPort(ABC):
         """Swap one owned slot and return the changed slot."""
 
     @abstractmethod
+    async def mark_shown(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_ids: tuple[str, ...],
+    ) -> None:
+        """Persist first-shown timestamps for selected owner-scoped slots."""
+
+    @abstractmethod
+    async def skip_slot(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+    ) -> PersistedMealRecommendationSlotMutationResult:
+        """Skip one owned slot and return the changed slot."""
+
+    @abstractmethod
     async def claim_slot_log(
         self,
         *,

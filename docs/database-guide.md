@@ -4,6 +4,7 @@
 **Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
 **Migrations:** Alembic via `migrations/versions/` and `migrations/run.py`
 **Tables:** 39 ORM model files across core, normalized tracking, referral, notification, and cache models
+**Extensions:** `vector` for embeddings and `pg_trgm` for indexed local food search
 
 ---
 
@@ -95,6 +96,10 @@ instead of the request/runtime session factory.
 | **food_reference** | Barcode/food data | barcode, name, name_normalized, nutrition data |
 | **food_reference_serving_sizes** | Normalized serving conversions | food_reference_id, name, grams, milliliters, is_default, position |
 | **food_reference_nutrients** | Normalized extended nutrients | food_reference_id, nutrient_key, amount, unit |
+| **meal_catalog** | Curated catalog meals for recommendations | catalog_key, cuisine, meal_types, content_hash, is_active, image_url |
+| **meal_catalog_ingredients** | Catalog ingredients linked to canonical foods | catalog_meal_id, food_reference_id, display_name, quantity, unit |
+| **meal_recommendations** | Durable selected and alternative recommendation candidates | batch_id, slot_id, catalog_meal_id, score, selection_version, shown/skipped/logged state |
+| **meal_recommendation_operations** | Idempotent recommendation mutation replay | request_id, operation_type, request_fingerprint, result fields |
 | **hydration_entries** | Normalized hydration logs | user_id, drink_id, volume_ml, credited_ml, macro facts, logged_at, legacy_meal_id |
 | **meal_instruction_steps** | Normalized recipe steps | meal_id, instruction, duration_minutes, position |
 | **user_fcm_tokens** | Push tokens | user_id, fcm_token, device_type, is_active |
@@ -141,6 +146,8 @@ Meal (1:N) MealInstructionStep
 Nutrition (1:N) FoodItem
 SavedSuggestion (1:N) SavedSuggestionItem, SavedSuggestionStep
 FoodReference (1:N) FoodReferenceServingSize, FoodReferenceNutrient
+MealCatalog (1:N) MealCatalogIngredient
+MealCatalog (1:N) MealRecommendation selected/alternative candidates
 ```
 
 ---
@@ -175,6 +182,8 @@ migration/admin URLs.
 
 | Version | Changes |
 |---------|---------|
+| 20260723000001 | Add `pg_trgm`, unique normalized food-reference index, and trigram search index |
+| 20260716000001 | Add four-table meal catalog recommendation foundation |
 | 20260624000001 | Add journey_progress_seed_percent for existing-user journey progress seeding |
 | 20260620000001 | Add source_offering_id to promo codes |
 | 20260619000001 | Add ai_handshake_guest_trial_quotas for one-shot guest quota state |
@@ -219,6 +228,9 @@ concurrent requests.
 - `joinedload` / `selectinload` for known relationship paths
 - Direct-pool defaults: 3 base + 2 overflow connections per worker, recycled every 120 seconds
 - Redis cache-aside for frequently read data (see `external-services.md`)
+- Local food search uses `food_reference.name_normalized`, a unique normalized-name
+  constraint, and a `pg_trgm` GIN index. Results are verified-first,
+  region/global scoped, bounded to 50, and deduplicated by normalized name.
 
 ---
 

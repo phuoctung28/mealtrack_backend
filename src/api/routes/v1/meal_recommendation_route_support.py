@@ -54,6 +54,18 @@ class LogRecommendedMealRequest(BaseModel):
         return normalized
 
 
+class SkipMealRecommendationSlotRequest(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=160)
+
+    @field_validator("request_id")
+    @classmethod
+    def normalize_request_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("request_id is required")
+        return normalized
+
+
 def record_operation_latency(operation: str, started: float, status_value: str) -> None:
     elapsed_ms = (perf_counter() - started) * 1000
     attributes = {
@@ -138,6 +150,8 @@ def to_response(
                 position=slot.position,
                 selection_version=slot.selection_version,
                 logged_meal_id=slot.logged_meal_id,
+                shown_at=slot.shown_at,
+                skipped_at=slot.skipped_at,
                 alternatives=[
                     MealRecommendationAlternativeResponse(
                         id=alternative.id,
@@ -180,6 +194,8 @@ def to_summary_response(
                 position=slot.position,
                 selection_version=slot.selection_version,
                 logged_meal_id=slot.logged_meal_id,
+                shown_at=slot.shown_at,
+                skipped_at=slot.skipped_at,
             )
             for slot in plan.slots
         ],
@@ -204,6 +220,8 @@ def to_slot_detail_response(
             position=slot.position,
             selection_version=slot.selection_version,
             logged_meal_id=slot.logged_meal_id,
+            shown_at=slot.shown_at,
+            skipped_at=slot.skipped_at,
             alternatives=[
                 MealRecommendationAlternativeResponse(
                     id=alternative.id,

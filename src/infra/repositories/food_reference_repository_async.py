@@ -5,13 +5,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
+    FoodReferenceSearchProjection,
+)
+from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
+    normalize_food_name,
 )
 from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.repositories.food_reference_projection import (
@@ -139,6 +143,44 @@ class AsyncFoodReferenceRepository:
         )
         result = await self._session.execute(stmt)
         return [food_reference_model_to_dict(row) for row in result.scalars().all()]
+
+    async def search_local(
+        self,
+        query: str,
+        region: str,
+        limit: int,
+    ) -> list[FoodReferenceSearchProjection]:
+        normalized_query = normalize_food_name(query)
+        if not normalized_query:
+            return []
+
+        bounded_limit = min(max(limit, 1), 50)
+        similarity_score = func.similarity(
+            FoodReferenceModel.name_normalized,
+            normalized_query,
+        )
+        stmt = (
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.name_normalized.isnot(None))
+            .where(FoodReferenceModel.region.in_([region, "global"]))
+            .where(
+                or_(
+                    FoodReferenceModel.name_normalized.ilike(
+                        f"%{normalized_query}%"
+                    ),
+                    similarity_score >= 0.15,
+                )
+            )
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+            .order_by(
+                FoodReferenceModel.is_verified.desc(),
+                similarity_score.desc(),
+                FoodReferenceModel.id.asc(),
+            )
+            .limit(bounded_limit * 3)
+        )
+        result = await self._session.execute(stmt)
+        return _dedupe_search_projections(result.scalars().all(), bounded_limit)
 
     async def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update a food reference by barcode without owning commit."""
@@ -323,3 +365,36 @@ def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjec
         density_g_ml=row.density,
         name_normalized=row.name_normalized,
     )
+
+
+def _dedupe_search_projections(
+    models: list[FoodReferenceModel],
+    limit: int,
+) -> list[FoodReferenceSearchProjection]:
+    seen: set[str] = set()
+    projections: list[FoodReferenceSearchProjection] = []
+    for model in models:
+        normalized_name = model.name_normalized or normalize_food_name(model.name)
+        if normalized_name in seen:
+            continue
+        seen.add(normalized_name)
+        projections.append(
+            FoodReferenceSearchProjection(
+                id=model.id,
+                name=model.name,
+                name_normalized=model.name_normalized,
+                brand=model.brand,
+                source=model.source,
+                is_verified=model.is_verified,
+                protein_100g=model.protein_100g,
+                carbs_100g=model.carbs_100g,
+                fat_100g=model.fat_100g,
+                fiber_100g=model.fiber_100g or 0.0,
+                sugar_100g=model.sugar_100g or 0.0,
+                serving_size=model.serving_size,
+                allowed_units=food_reference_model_to_dict(model)["allowed_units"],
+            )
+        )
+        if len(projections) >= limit:
+            break
+    return projections

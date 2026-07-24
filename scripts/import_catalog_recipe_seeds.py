@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.app.services.catalog_meal_seed_import_service import CatalogMealSeedImporter
 from src.domain.services.meal_recommendation.catalog_recipe_seed_validator import (
     PRODUCTION_CUISINE_COUNTS,
+    CatalogSeedValidationResult,
     validate_catalog_seed_manifest,
 )
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -143,7 +144,11 @@ def main() -> None:
         report_path = Path(args.resolver_report)
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(
-            json.dumps(summary.resolution_report(), indent=2, sort_keys=True),
+            json.dumps(
+                _build_import_report(validation=result, summary=summary),
+                indent=2,
+                sort_keys=True,
+            ),
             encoding="utf-8",
         )
         print(f"resolver_report={report_path}")
@@ -166,6 +171,22 @@ def _load_resolver_map(path: str | None) -> dict[str, int]:
     if not isinstance(data, dict):
         raise ValueError("resolver map must be a JSON object")
     return {str(key): int(value) for key, value in data.items()}
+
+
+def _build_import_report(
+    *,
+    validation: CatalogSeedValidationResult,
+    summary,
+) -> dict:
+    report = summary.resolution_report()
+    report["manifest_digest"] = validation.manifest_digest
+    report["recipe_count"] = validation.recipe_count
+    report["coverage"] = {
+        cuisine: dict(sorted(meal_counts.items()))
+        for cuisine, meal_counts in sorted(validation.coverage.items())
+    }
+    report["validation_errors"] = list(validation.errors)
+    return report
 
 
 async def _run_import(

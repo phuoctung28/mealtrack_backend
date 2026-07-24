@@ -229,6 +229,24 @@ Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
 | Pollinations / Google Imagen | Generated image fallback adapters | provider-specific adapter config |
 | Resend | Lifecycle and webhook-triggered email | `RESEND_API_KEY`, `EMAIL_ENABLED`, `EMAIL_FROM` |
 
+### Meal Catalog Provider Outages
+
+Use [Provider Outage Runbook](./runbooks/provider-outage.md) when FatSecret,
+USDA, DeepL, Cloudflare Workers AI, or Redis degrades during catalog or food
+search traffic.
+
+- `/v1/foods/search` is local-first: Redis cache errors are treated as misses,
+  verified `food_reference` results are returned first, and provider enrichment
+  can degrade to local-only results.
+- `FAIL_ON_CACHE_ERROR=false` is the expected production posture for optional
+  caches. Redis-backed required state must be documented separately and may fail
+  fast.
+- Provider credentials are read from configured environment/secret storage.
+  Never paste credentials, tokens, raw search text, meal payloads, or user IDs
+  into incident notes.
+- Catalog image generation can be paused during Cloudflare Workers AI outage;
+  existing catalog rows remain readable.
+
 ---
 
 ## RevenueCat

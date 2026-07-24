@@ -76,3 +76,57 @@ jobs:
           path: |
             coverage.xml
             htmlcov/
+
+  postgres-integration:
+    name: 🐘 PostgreSQL Integration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nutree
+          POSTGRES_PASSWORD: nutree
+          POSTGRES_DB: nutree_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nutree -d nutree_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://nutree:nutree@localhost:5432/nutree_test
+      DATABASE_URL: postgresql+psycopg2://nutree:nutree@localhost:5432/nutree_test
+      DATABASE_URL_DIRECT: postgresql+psycopg2://nutree:nutree@localhost:5432/nutree_test
+      PYTHONPATH: .
+      TESTING: true
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 📦 Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: 🗄️ Initialize PostgreSQL Schema
+        run: python scripts/init_postgres_db.py
+
+      - name: 🧪 Run PostgreSQL Integration Tests
+        run: pytest tests/integration/postgres -o addopts="" -m integration -q

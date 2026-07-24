@@ -24,8 +24,15 @@ class GetMealRecommendationSlotDetailQueryHandler(
         query: GetMealRecommendationSlotDetailQuery,
     ) -> PersistedMealRecommendationSlot | None:
         async with self._uow_factory() as uow:
-            return await uow.meal_recommendation_plans.get_slot_detail(
+            slot = await uow.meal_recommendation_plans.get_slot_detail(
                 user_id=query.user_id,
                 plan_id=query.plan_id,
                 slot_id=query.slot_id,
             )
+            if slot is not None:
+                await uow.meal_recommendation_plans.mark_shown(
+                    user_id=query.user_id,
+                    plan_id=query.plan_id,
+                    slot_ids=(query.slot_id,),
+                )
+            return slot

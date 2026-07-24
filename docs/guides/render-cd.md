@@ -9,6 +9,11 @@ Render should run database migrations before starting the new web service:
 3. Start web service only if pre-deploy succeeds.
 4. Health check `/health`.
 
+For meal catalog releases, use
+[Meal Catalog Release Runbook](../runbooks/meal-catalog-release.md) after the
+Render pre-deploy migration succeeds. That runbook covers manifest digest,
+staging import/replay counts, smoke requests, load gates, and rollback order.
+
 ## Render Settings
 
 Production service:
@@ -71,3 +76,9 @@ python migrations/run.py
 
 Do not downgrade production schema during an incident unless the migration is
 known to be destructive and data ownership has been reviewed.
+
+For catalog-specific incidents, use
+[Meal Catalog Incident Runbook](../runbooks/meal-catalog-incident.md). Prefer
+client entry-point disablement, previous GHCR SHA restore, or reviewed
+`is_active=false` catalog-row deactivation before considering a production
+schema downgrade.
