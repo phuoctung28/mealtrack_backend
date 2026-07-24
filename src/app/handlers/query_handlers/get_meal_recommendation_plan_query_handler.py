@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal_recommendation import GetMealRecommendationPlanQuery
 from src.domain.model.meal_recommendation import PersistedMealRecommendationPlan
+from src.domain.utils.timezone_utils import get_zone_info
 
 
 @handles(GetMealRecommendationPlanQuery)
@@ -28,6 +31,10 @@ class GetMealRecommendationPlanQueryHandler(
                 user_id=query.user_id,
                 plan_id=query.plan_id,
             )
+            if plan is not None and plan.is_expired(
+                datetime.now(get_zone_info(plan.timezone)).date()
+            ):
+                return None
             if plan is not None:
                 await uow.meal_recommendation_plans.mark_shown(
                     user_id=query.user_id,

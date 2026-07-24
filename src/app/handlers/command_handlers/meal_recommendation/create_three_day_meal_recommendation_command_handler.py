@@ -49,7 +49,9 @@ class CreateThreeDayMealRecommendationCommandHandler(
     ):
         self.uow = uow
         self.optimizer = optimizer or ThreeDayPlanOptimizer()
-        self.history_projector = history_projector or MealRecommendationHistoryProjector()
+        self.history_projector = (
+            history_projector or MealRecommendationHistoryProjector()
+        )
         self.catalog_snapshot_service = catalog_snapshot_service
 
     async def handle(
@@ -69,7 +71,8 @@ class CreateThreeDayMealRecommendationCommandHandler(
             if existing is not None:
                 if existing.request_fingerprint != fingerprint:
                     raise MealRecommendationIdempotencyConflictError
-                return existing
+                if not existing.is_expired(command.start_date):
+                    return existing
 
             if self.catalog_snapshot_service is not None:
                 snapshot = await self.catalog_snapshot_service.get_snapshot(uow)
@@ -110,7 +113,9 @@ class CreateThreeDayMealRecommendationCommandHandler(
                     raise
                 if replay.request_fingerprint != fingerprint:
                     raise MealRecommendationIdempotencyConflictError from None
-                return replay
+                if not replay.is_expired(command.start_date):
+                    return replay
+                raise
 
 
 def _to_persisted_plan(
