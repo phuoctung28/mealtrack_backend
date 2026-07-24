@@ -67,19 +67,37 @@ Validate and resolve only:
 ```bash
 .venv/bin/python scripts/import_catalog_recipe_seeds.py \
   --manifest scripts/data/meal-recommendation-recipes.json \
-  --dry-run \
-  --resolver-report plans/reports/meal-catalog-resolver-report.json
+  --resolver-map scripts/data/meal-recommendation-resolver-map.json \
+  --resolver-report plans/reports/meal-catalog-production-import-report.json \
+  --dry-run
 ```
 
 Import into the configured database:
 
 ```bash
 .venv/bin/python scripts/import_catalog_recipe_seeds.py \
-  --manifest scripts/data/meal-recommendation-recipes.json
+  --manifest scripts/data/meal-recommendation-recipes.json \
+  --resolver-map scripts/data/meal-recommendation-resolver-map.json \
+  --resolver-report plans/reports/meal-catalog-production-import-report.json
 ```
 
 The import is additive. Exact duplicates are skipped. A reused `recipe_key` with
 changed content fails so existing recommendation history is not rewritten.
+Near-duplicate meals are withheld for human review and reported under
+`review_required`; they are not auto-merged or silently accepted.
+
+The JSON report written by `--resolver-report` is deterministic and includes:
+
+| Field | Notes |
+| --- | --- |
+| `manifest_digest` | Stable SHA-256 digest of the exact manifest content. |
+| `recipe_count` | Number of recipes validated. |
+| `coverage` | Cuisine and meal-type counts used for production coverage gates. |
+| `inserted` | Rows inserted by this run. |
+| `skipped_existing` | Exact existing rows skipped by content hash. |
+| `issues` | Ingredient resolution failures requiring resolver-map entries. |
+| `review_required` | Near-duplicate meal dispositions requiring `approve_distinct` or `reject`. |
+| `errors` / `validation_errors` | Import and schema validation failures. |
 
 ## Ingredient Resolution
 
@@ -135,6 +153,27 @@ Use it with:
 The importer only auto-resolves verified food references above the configured
 fuzzy threshold. Unverified or ambiguous candidates are written to the resolver
 report for review.
+
+## Production Corpus Gate
+
+Production import requires exactly 180 reviewed meals:
+
+- 60 Vietnamese, 60 Japanese, 60 Korean.
+- At least 5 eligible breakfast, lunch, and dinner recipes per cuisine.
+- Zero schema validation errors.
+- Zero unresolved ingredient `issues`.
+- Zero unreviewed near-duplicate `review_required` items.
+
+For every near duplicate, record one explicit disposition outside the importer:
+`approve_distinct` when the meals are intentionally separate catalog entries, or
+`reject` when the candidate should be removed or rewritten. The importer does
+not accept a duplicate-threshold override as production evidence.
+
+If licensing permits repository storage, commit
+`scripts/data/meal-recommendation-recipes.json` and
+`scripts/data/meal-recommendation-resolver-map.json`. If not, store only the
+manifest digest plus the secret-manager or object-store retrieval procedure; do
+not commit a public URL for private corpus content.
 
 ## Resolver Workflow
 

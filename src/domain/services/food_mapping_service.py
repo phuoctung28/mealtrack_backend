@@ -50,6 +50,41 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
 class FoodMappingService(FoodMappingServicePort):
     def map_search_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        if item.get("source") == "food_reference":
+            protein = item.get("protein_100g") or 0
+            carbs = item.get("carbs_100g") or 0
+            fat = item.get("fat_100g") or 0
+            fiber = item.get("fiber_100g") or 0
+            calories = protein * 4 + max(carbs - fiber, 0) * 4 + fiber * 2 + fat * 9
+            return {
+                "fdc_id": None,
+                "food_id": f"food_reference:{item.get('food_reference_id')}",
+                "food_reference_id": item.get("food_reference_id"),
+                "name": item.get("description"),
+                "brand": item.get("brand"),
+                "data_type": "food_reference",
+                "serving_size": item.get("serving_description"),
+                "serving_unit": "g",
+                "calories": calories,
+                "nutrients": {
+                    "protein": item.get("protein_100g"),
+                    "fat": item.get("fat_100g"),
+                    "carbs": item.get("carbs_100g"),
+                    "fiber": item.get("fiber_100g"),
+                    "sugar": item.get("sugar_100g"),
+                },
+                "source": "food_reference",
+                "provider_source": item.get("provider_source"),
+                "is_verified": item.get("is_verified"),
+                "allowed_units": item.get("allowed_units") or DEFAULT_ALLOWED_UNITS,
+                "custom_nutrition": {
+                    "calories_per_100g": calories,
+                    "protein_per_100g": protein,
+                    "carbs_per_100g": carbs,
+                    "fat_per_100g": fat,
+                },
+            }
+
         # Handle fatsecret results with embedded nutrition
         if item.get("source") == "fatsecret":
             return {

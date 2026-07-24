@@ -65,3 +65,10 @@ class MealRecommendationAlreadyLoggedError(MealRecommendationCreationError):
 
     public_detail = "Meal recommendation slot is already logged"
     status_code = 409
+
+
+class MealRecommendationTerminalStateError(MealRecommendationCreationError):
+    """Raised when a terminal slot outcome already exists."""
+
+    public_detail = "Meal recommendation slot already has a terminal outcome"
+    status_code = 409

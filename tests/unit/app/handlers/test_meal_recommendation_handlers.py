@@ -10,6 +10,7 @@ from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_asyn
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    SkipMealRecommendationSlotCommand,
 )
 from src.app.handlers.command_handlers.meal_recommendation.create_three_day_meal_recommendation_command_handler import (
     CreateThreeDayMealRecommendationCommandHandler,
@@ -17,6 +18,9 @@ from src.app.handlers.command_handlers.meal_recommendation.create_three_day_meal
 )
 from src.app.handlers.command_handlers.meal_recommendation.log_recommended_meal_command_handler import (
     LogRecommendedMealCommandHandler,
+)
+from src.app.handlers.command_handlers.meal_recommendation.skip_meal_recommendation_slot_command_handler import (
+    SkipMealRecommendationSlotCommandHandler,
 )
 from src.app.handlers.query_handlers.get_meal_recommendation_plan_query_handler import (
     GetMealRecommendationPlanQueryHandler,
@@ -45,6 +49,7 @@ class _PlanRepo:
         self.get_by_idempotency_key = AsyncMock(side_effect=self._get_by_key)
         self.get_by_id = AsyncMock(return_value=_plan())
         self.get_summary = AsyncMock(return_value=_plan())
+        self.mark_shown = AsyncMock()
         self.save_new_active_plan = AsyncMock(side_effect=lambda plan: plan)
 
     async def _get_by_key(self, **kwargs):
@@ -78,6 +83,18 @@ class _LogPlanRepo(_PlanRepo):
         super().__init__()
         self.claim_slot_log = AsyncMock(return_value=(_plan(), _plan().slots[0], replayed))
         self.finalize_slot_logged = AsyncMock(
+            return_value=PersistedMealRecommendationSlotMutationResult(
+                plan_id="plan-1",
+                user_id="user-1",
+                slot=_plan().slots[0],
+            )
+        )
+
+
+class _SkipPlanRepo(_PlanRepo):
+    def __init__(self):
+        super().__init__()
+        self.skip_slot = AsyncMock(
             return_value=PersistedMealRecommendationSlotMutationResult(
                 plan_id="plan-1",
                 user_id="user-1",
@@ -252,6 +269,11 @@ async def test_query_handler_reads_owner_scoped_plan():
     assert result is not None
     assert result.id == "plan-1"
     plans.get_summary.assert_awaited_once_with(user_id="user-1", plan_id="plan-1")
+    plans.mark_shown.assert_awaited_once_with(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_ids=("slot-1",),
+    )
 
 
 @pytest.mark.asyncio
@@ -291,4 +313,27 @@ async def test_log_handler_claims_materializes_then_finalizes():
         slot_id="slot-1",
         request_id="log-1",
         meal_id="meal-1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_skip_handler_skips_slot_without_materializing_meal():
+    plans = _SkipPlanRepo()
+    handler = SkipMealRecommendationSlotCommandHandler(uow=_Uow(plans, _CatalogRepo()))
+
+    result = await handler.handle(
+        SkipMealRecommendationSlotCommand(
+            user_id="user-1",
+            plan_id="plan-1",
+            slot_id="slot-1",
+            request_id="skip-1",
+        )
+    )
+
+    assert result.plan_id == "plan-1"
+    plans.skip_slot.assert_awaited_once_with(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="skip-1",
     )

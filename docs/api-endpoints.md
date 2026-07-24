@@ -110,13 +110,16 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}` | Read one hydrated selected slot with alternatives |
 | POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/swap` | Swap a slot and return the changed-slot detail response |
 | POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/log` | Log the selected recommendation and return the changed-slot detail response |
+| POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/skip` | Skip the selected recommendation and return the changed-slot detail response |
 
 ### Meal Recommendation Contract
 
 - `create` and `get` return the compact summary contract: selected slots only, with no slot-level ingredients, alternatives, or scores in the plan payload.
 - Slot detail hydrates exactly one selected slot plus its alternatives. Mutation responses reuse the same changed-slot shape so clients can patch cached plans in place.
+- `swap`, `log`, and `skip` are owner-scoped, idempotent by request ID, and reject already terminal selected slots.
+- `shown_at`, `skipped_at`, and `logged_at` are backend-owned outcome fields. Clients must not infer terminal state by recalculating recommendation logic.
 - Recommendation analytics are scheduled through `BackgroundTaskManager` when the dependency is available; the route falls back to inline capture when it is not.
-- New plan generation uses snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded diversity reranking. Existing persisted plans replay their stored candidates and scores. This does not change endpoint paths.
+- New plan generation uses snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded diversity reranking. Existing persisted plans replay their stored candidates and scores. This does not change endpoint paths and does not touch `/v1/meal-suggestions`.
 
 ---
 
@@ -134,11 +137,22 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| GET | `/v1/foods/search` | Search USDA foods |
-| GET | `/v1/foods/{fdc_id}/details` | Get food details by FDC ID |
+| GET | `/v1/foods/search` | Authenticated local-first food search with provider fill |
+| GET | `/v1/foods/autocomplete` | Authenticated local-first autocomplete |
+| GET | `/v1/foods/{fdc_id}/details` | Authenticated provider food details by FDC ID |
 | GET | `/v1/foods/barcode/{barcode}` | Barcode lookup (cache -> FatSecret -> OpenFoodFacts -> USDA FDC -> estimates) |
 | POST | `/v1/ingredients/recognize` | Recognize ingredients from image |
 | GET | `/v1/ingredients/health` | Ingredient recognition health |
+
+### Food Search Contract
+
+- Food search routes require Firebase JWT in production and are rate limited.
+- Search order is Redis cache, local `food_reference`, then provider fill for remaining limit.
+- Local results are returned before provider results, deduped by normalized name, and include `food_reference_id`.
+- Redis cache failures are treated as misses for optional food-search caching.
+- Provider or translation outages return bounded local results when available.
+- Calories in local results are derived from macros with the backend formula:
+  `P*4 + max(C-fiber, 0)*4 + fiber*2 + F*9`.
 
 ### Barcode Lookup Contract
 

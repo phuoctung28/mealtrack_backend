@@ -9,6 +9,51 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 )
 from src.domain.model.meal_recommendation import CatalogMeal
 from src.domain.ports.catalog_recipe_repository_port import CatalogMealRevision
+from src.observability import (
+    reset_observability_connector_for_test,
+    set_observability_connector_for_test,
+)
+
+
+class _Metrics:
+    def __init__(self):
+        self.calls = []
+
+    def initialize(self):
+        return None
+
+    def capture_exception(self, error, *, context=None):
+        return None
+
+    def capture_message(self, message, *, level="info", context=None):
+        return None
+
+    def log_event(self, level, message, *, attributes=None):
+        return None
+
+    def increment_metric(self, name, value=1.0, *, unit=None, attributes=None):
+        self.calls.append(("increment", name, value, unit, attributes))
+
+    def gauge_metric(self, name, value, *, unit=None, attributes=None):
+        self.calls.append(("gauge", name, value, unit, attributes))
+
+    def distribution_metric(self, name, value, *, unit=None, attributes=None):
+        self.calls.append(("distribution", name, value, unit, attributes))
+
+    def set_request_context(self, *, request_id, method, path, user_id=None):
+        return None
+
+    def start_span(self, *, operation, description=None, context=None):
+        from contextlib import nullcontext
+
+        return nullcontext()
+
+    def flush(self, *, timeout=5):
+        return None
+
+
+def teardown_function():
+    reset_observability_connector_for_test()
 
 
 class _Clock:
@@ -94,6 +139,61 @@ async def test_snapshot_cold_failure_fails_closed():
 
     with pytest.raises(MealRecommendationCatalogUnavailableError):
         await service.get_snapshot(_Uow(catalog))
+
+
+@pytest.mark.asyncio
+async def test_snapshot_metrics_record_refresh_count_age_and_active_meals():
+    metrics = _Metrics()
+    set_observability_connector_for_test(metrics)
+    clock = _Clock()
+    catalog = _CatalogRepo()
+    service = CatalogMealSnapshotService(clock=clock)
+
+    await service.get_snapshot(_Uow(catalog))
+
+    assert (
+        "increment",
+        "meal_catalog.snapshot.refresh",
+        1.0,
+        None,
+        {"status": "success"},
+    ) in metrics.calls
+    assert any(
+        call[:2] == ("gauge", "meal_catalog.snapshot.active_meals")
+        and call[2] == 1
+        and call[4] == {"operation": "snapshot", "status": "returned"}
+        for call in metrics.calls
+    )
+    assert any(
+        call[:2] == ("distribution", "meal_catalog.snapshot.age_seconds")
+        and call[4] == {"operation": "snapshot", "status": "returned"}
+        for call in metrics.calls
+    )
+
+
+@pytest.mark.asyncio
+async def test_snapshot_last_good_metric_records_no_payload_details():
+    metrics = _Metrics()
+    set_observability_connector_for_test(metrics)
+    clock = _Clock()
+    catalog = _CatalogRepo()
+    service = CatalogMealSnapshotService(ttl_seconds=10, clock=clock)
+    await service.get_snapshot(_Uow(catalog))
+    clock.value += 11
+    catalog.revision = _revision(2)
+    catalog.meals = RuntimeError("db unavailable")
+
+    await service.get_snapshot(_Uow(catalog))
+
+    assert (
+        "increment",
+        "meal_catalog.snapshot.last_good",
+        1.0,
+        None,
+        {"status": "last_good"},
+    ) in metrics.calls
+    assert "Meal meal-1" not in str(metrics.calls)
+    assert "key-meal-1" not in str(metrics.calls)
 
 
 def _revision(value: int) -> CatalogMealRevision:

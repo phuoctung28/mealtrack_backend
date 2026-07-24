@@ -1,0 +1,1009 @@
+{
+  "dry_run": true,
+  "errors": [
+    "recipes[0].ingredients[0] needs_review: 'Rice noodles, cooked' normalized='rice noodles'",
+    "recipes[1].ingredients[0] needs_review: 'Rice noodles, cooked' normalized='rice noodles'",
+    "recipes[2].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[3].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[4].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[5].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[6].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[7].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[8].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[9].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[10].ingredients[0] needs_review: 'Rice noodles, cooked' normalized='rice noodles'",
+    "recipes[11].ingredients[0] needs_review: 'Rice noodles, cooked' normalized='rice noodles'",
+    "recipes[12].ingredients[0] needs_review: 'Rice noodles, cooked' normalized='rice noodles'",
+    "recipes[13].ingredients[0] needs_review: 'Wheat noodles, cooked' normalized='wheat noodles'",
+    "recipes[14].ingredients[0] needs_review: 'Tapioca noodles, cooked' normalized='tapioca noodles'",
+    "recipes[15].ingredients[0] needs_review: 'Tapioca noodles, cooked' normalized='tapioca noodles'",
+    "recipes[16].ingredients[0] needs_review: 'Rice noodles, cooked' normalized='rice noodles'",
+    "recipes[17].ingredients[0] needs_review: 'Glass noodles, cooked' normalized='glass noodles'",
+    "recipes[18].ingredients[0] needs_review: 'Glass noodles, cooked' normalized='glass noodles'",
+    "recipes[19].ingredients[0] needs_review: 'Rice porridge, cooked' normalized='rice porridge'",
+    "recipes[20].ingredients[0] needs_review: 'Rice porridge, cooked' normalized='rice porridge'",
+    "recipes[21].ingredients[0] needs_review: 'Sticky rice, cooked' normalized='sticky rice'",
+    "recipes[22].ingredients[0] needs_review: 'Sticky rice, cooked' normalized='sticky rice'",
+    "recipes[23].ingredients[0] needs_review: 'Baguette' normalized='baguette'",
+    "recipes[24].ingredients[0] needs_review: 'Baguette' normalized='baguette'",
+    "recipes[25].ingredients[0] needs_review: 'Baguette' normalized='baguette'",
+    "recipes[26].ingredients[0] needs_review: 'Steamed bun' normalized='steamed bun'",
+    "recipes[27].ingredients[0] needs_review: 'Steamed rice rolls' normalized='steamed rice rolls'",
+    "recipes[28].ingredients[0] needs_review: 'Steamed rice rolls' normalized='steamed rice rolls'",
+    "recipes[29].ingredients[0] needs_review: 'Broken rice, cooked' normalized='broken rice'",
+    "recipes[30].ingredients[0] needs_review: 'Broken rice, cooked' normalized='broken rice'",
+    "recipes[31].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[32].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[33].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[34].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[35].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[36].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[37].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[38].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[39].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[40].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[41].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[42].ingredients[0] needs_review: 'Baguette' normalized='baguette'",
+    "recipes[43].ingredients[0] needs_review: 'Beef sirloin, cooked' normalized='beef sirloin'",
+    "recipes[44].ingredients[0] needs_review: 'Rice flour' normalized='rice flour'",
+    "recipes[45].ingredients[0] needs_review: 'Rice flour' normalized='rice flour'",
+    "recipes[46].ingredients[0] needs_review: 'Rice paper' normalized='rice paper'",
+    "recipes[47].ingredients[0] needs_review: 'Rice vermicelli, cooked' normalized='rice vermicelli'",
+    "recipes[48].ingredients[0] needs_review: 'Baguette' normalized='baguette'",
+    "recipes[49].ingredients[0] needs_review: 'Rice paper' normalized='rice paper'",
+    "recipes[50].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[51].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[52].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[53].ingredients[0] needs_review: 'Korean rice cakes' normalized='korean rice cakes'",
+    "recipes[54].ingredients[0] needs_review: 'Korean rice cakes' normalized='korean rice cakes'",
+    "recipes[55].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[56].ingredients[0] needs_review: 'Chicken thigh, fried' normalized='chicken thigh'",
+    "recipes[57].ingredients[0] needs_review: 'Wheat noodles, cooked' normalized='wheat noodles'",
+    "recipes[58].ingredients[0] needs_review: 'Instant noodles' normalized='instant noodles'",
+    "recipes[59].ingredients[0] needs_review: 'Glass noodles, cooked' normalized='glass noodles'",
+    "recipes[60].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[61].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[62].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[63].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[64].ingredients[0] needs_review: 'Hot dog sausage, cooked' normalized='hot dog sausage'",
+    "recipes[65].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[66].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[67].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[68].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[69].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[70].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[71].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[72].ingredients[0] needs_review: 'Wheat noodles, cooked' normalized='wheat noodles'",
+    "recipes[73].ingredients[0] needs_review: 'Wheat noodles, cooked' normalized='wheat noodles'",
+    "recipes[74].ingredients[0] needs_review: 'Udon noodles, cooked' normalized='udon noodles'",
+    "recipes[75].ingredients[0] needs_review: 'Wheat noodles, cooked' normalized='wheat noodles'",
+    "recipes[76].ingredients[0] needs_review: 'Sushi rice, cooked' normalized='sushi rice'",
+    "recipes[77].ingredients[0] needs_review: 'Sushi rice, cooked' normalized='sushi rice'",
+    "recipes[78].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[79].ingredients[0] needs_review: 'Wheat flour' normalized='wheat flour'",
+    "recipes[80].ingredients[0] needs_review: 'Pasta, cooked' normalized='pasta'",
+    "recipes[81].ingredients[0] needs_review: 'Pasta, cooked' normalized='pasta'",
+    "recipes[82].ingredients[0] needs_review: 'Burger bun' normalized='burger bun'",
+    "recipes[83].ingredients[0] needs_review: 'Chicken thigh, fried' normalized='chicken thigh'",
+    "recipes[84].ingredients[0] needs_review: 'Pizza crust' normalized='pizza crust'",
+    "recipes[85].ingredients[0] needs_review: 'Sandwich bread' normalized='sandwich bread'",
+    "recipes[86].ingredients[0] needs_review: 'Croissant' normalized='croissant'",
+    "recipes[87].ingredients[0] needs_review: 'Sandwich bread' normalized='sandwich bread'",
+    "recipes[88].ingredients[0] needs_review: 'Flour tortilla' normalized='flour tortilla'",
+    "recipes[89].ingredients[0] needs_review: 'Sandwich bread' normalized='sandwich bread'",
+    "recipes[90].ingredients[0] needs_review: 'Brown rice, cooked' normalized='brown rice'",
+    "recipes[91].ingredients[0] needs_review: 'Salmon, cooked' normalized='salmon'",
+    "recipes[92].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[93].ingredients[0] needs_review: 'Brown rice, cooked' normalized='brown rice'",
+    "recipes[94].ingredients[0] needs_review: 'Greek yogurt' normalized='greek yogurt'",
+    "recipes[95].ingredients[0] needs_review: 'Instant noodles' normalized='instant noodles'",
+    "recipes[96].ingredients[0] needs_review: 'White rice, cooked' normalized='white rice'",
+    "recipes[97].ingredients[0] needs_review: 'Sandwich bread' normalized='sandwich bread'",
+    "recipes[98].ingredients[0] needs_review: 'Whole wheat bread' normalized='wheat bread'",
+    "recipes[99].ingredients[0] needs_review: 'Milk' normalized='milk'"
+  ],
+  "inserted": 0,
+  "issues": [
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice noodles, cooked",
+      "normalized_name": "rice noodles",
+      "reason": "needs_review",
+      "recipe_index": 0,
+      "recipe_key": "vn-pho-bo-001"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice noodles, cooked",
+      "normalized_name": "rice noodles",
+      "reason": "needs_review",
+      "recipe_index": 1,
+      "recipe_key": "vn-pho-ga-002"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 2,
+      "recipe_key": "vn-bun-bo-hue-003"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 3,
+      "recipe_key": "vn-bun-cha-ha-noi-004"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 4,
+      "recipe_key": "vn-bun-rieu-cua-005"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 5,
+      "recipe_key": "vn-bun-thit-nuong-006"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 6,
+      "recipe_key": "vn-bun-mam-007"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 7,
+      "recipe_key": "vn-bun-ca-008"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 8,
+      "recipe_key": "vn-bun-oc-009"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 9,
+      "recipe_key": "vn-bun-moc-010"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice noodles, cooked",
+      "normalized_name": "rice noodles",
+      "reason": "needs_review",
+      "recipe_index": 10,
+      "recipe_key": "vn-hu-tieu-nam-vang-011"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice noodles, cooked",
+      "normalized_name": "rice noodles",
+      "reason": "needs_review",
+      "recipe_index": 11,
+      "recipe_key": "vn-hu-tieu-kho-012"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice noodles, cooked",
+      "normalized_name": "rice noodles",
+      "reason": "needs_review",
+      "recipe_index": 12,
+      "recipe_key": "vn-mi-quang-013"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Wheat noodles, cooked",
+      "normalized_name": "wheat noodles",
+      "reason": "needs_review",
+      "recipe_index": 13,
+      "recipe_key": "vn-cao-lau-014"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Tapioca noodles, cooked",
+      "normalized_name": "tapioca noodles",
+      "reason": "needs_review",
+      "recipe_index": 14,
+      "recipe_key": "vn-banh-canh-cua-015"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Tapioca noodles, cooked",
+      "normalized_name": "tapioca noodles",
+      "reason": "needs_review",
+      "recipe_index": 15,
+      "recipe_key": "vn-banh-canh-gio-heo-016"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice noodles, cooked",
+      "normalized_name": "rice noodles",
+      "reason": "needs_review",
+      "recipe_index": 16,
+      "recipe_key": "vn-banh-da-cua-017"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Glass noodles, cooked",
+      "normalized_name": "glass noodles",
+      "reason": "needs_review",
+      "recipe_index": 17,
+      "recipe_key": "vn-mien-ga-018"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Glass noodles, cooked",
+      "normalized_name": "glass noodles",
+      "reason": "needs_review",
+      "recipe_index": 18,
+      "recipe_key": "vn-mien-luon-019"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice porridge, cooked",
+      "normalized_name": "rice porridge",
+      "reason": "needs_review",
+      "recipe_index": 19,
+      "recipe_key": "vn-chao-ga-020"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice porridge, cooked",
+      "normalized_name": "rice porridge",
+      "reason": "needs_review",
+      "recipe_index": 20,
+      "recipe_key": "vn-chao-long-021"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sticky rice, cooked",
+      "normalized_name": "sticky rice",
+      "reason": "needs_review",
+      "recipe_index": 21,
+      "recipe_key": "vn-xoi-man-022"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sticky rice, cooked",
+      "normalized_name": "sticky rice",
+      "reason": "needs_review",
+      "recipe_index": 22,
+      "recipe_key": "vn-xoi-ga-023"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Baguette",
+      "normalized_name": "baguette",
+      "reason": "needs_review",
+      "recipe_index": 23,
+      "recipe_key": "vn-banh-mi-thit-024"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Baguette",
+      "normalized_name": "baguette",
+      "reason": "needs_review",
+      "recipe_index": 24,
+      "recipe_key": "vn-banh-mi-op-la-025"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Baguette",
+      "normalized_name": "baguette",
+      "reason": "needs_review",
+      "recipe_index": 25,
+      "recipe_key": "vn-banh-mi-ga-nuong-026"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Steamed bun",
+      "normalized_name": "steamed bun",
+      "reason": "needs_review",
+      "recipe_index": 26,
+      "recipe_key": "vn-banh-bao-thit-trung-027"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Steamed rice rolls",
+      "normalized_name": "steamed rice rolls",
+      "reason": "needs_review",
+      "recipe_index": 27,
+      "recipe_key": "vn-banh-cuon-cha-lua-028"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Steamed rice rolls",
+      "normalized_name": "steamed rice rolls",
+      "reason": "needs_review",
+      "recipe_index": 28,
+      "recipe_key": "vn-banh-uot-thit-nuong-029"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Broken rice, cooked",
+      "normalized_name": "broken rice",
+      "reason": "needs_review",
+      "recipe_index": 29,
+      "recipe_key": "vn-com-tam-suon-bi-cha-030"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Broken rice, cooked",
+      "normalized_name": "broken rice",
+      "reason": "needs_review",
+      "recipe_index": 30,
+      "recipe_key": "vn-com-tam-suon-trung-031"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 31,
+      "recipe_key": "vn-com-ga-hoi-an-032"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 32,
+      "recipe_key": "vn-com-ga-xoi-mo-033"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 33,
+      "recipe_key": "vn-com-thit-kho-trung-034"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 34,
+      "recipe_key": "vn-com-ca-kho-to-035"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 35,
+      "recipe_key": "vn-com-suon-nuong-036"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 36,
+      "recipe_key": "vn-com-bo-luc-lac-037"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 37,
+      "recipe_key": "vn-com-chien-duong-chau-038"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 38,
+      "recipe_key": "vn-com-chien-hai-san-039"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 39,
+      "recipe_key": "vn-com-ga-kho-gung-040"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 40,
+      "recipe_key": "vn-com-ca-chien-sot-ca-041"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 41,
+      "recipe_key": "vn-com-dau-hu-sot-ca-042"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Baguette",
+      "normalized_name": "baguette",
+      "reason": "needs_review",
+      "recipe_index": 42,
+      "recipe_key": "vn-bo-kho-banh-mi-043"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Beef sirloin, cooked",
+      "normalized_name": "beef sirloin",
+      "reason": "needs_review",
+      "recipe_index": 43,
+      "recipe_key": "vn-bo-ne-044"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice flour",
+      "normalized_name": "rice flour",
+      "reason": "needs_review",
+      "recipe_index": 44,
+      "recipe_key": "vn-banh-xeo-tom-thit-045"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice flour",
+      "normalized_name": "rice flour",
+      "reason": "needs_review",
+      "recipe_index": 45,
+      "recipe_key": "vn-banh-khot-tom-046"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice paper",
+      "normalized_name": "rice paper",
+      "reason": "needs_review",
+      "recipe_index": 46,
+      "recipe_key": "vn-goi-cuon-tom-thit-047"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice vermicelli, cooked",
+      "normalized_name": "rice vermicelli",
+      "reason": "needs_review",
+      "recipe_index": 47,
+      "recipe_key": "vn-bun-dau-mam-tom-048"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Baguette",
+      "normalized_name": "baguette",
+      "reason": "needs_review",
+      "recipe_index": 48,
+      "recipe_key": "vn-pha-lau-banh-mi-049"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Rice paper",
+      "normalized_name": "rice paper",
+      "reason": "needs_review",
+      "recipe_index": 49,
+      "recipe_key": "vn-banh-trang-tron-050"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 50,
+      "recipe_key": "kr-beef-bibimbap-051"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 51,
+      "recipe_key": "kr-bulgogi-rice-bowl-052"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 52,
+      "recipe_key": "kr-kimchi-fried-rice-053"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Korean rice cakes",
+      "normalized_name": "korean rice cakes",
+      "reason": "needs_review",
+      "recipe_index": 53,
+      "recipe_key": "kr-tteokbokki-054"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Korean rice cakes",
+      "normalized_name": "korean rice cakes",
+      "reason": "needs_review",
+      "recipe_index": 54,
+      "recipe_key": "kr-cheese-tteokbokki-055"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 55,
+      "recipe_key": "kr-gimbap-056"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Chicken thigh, fried",
+      "normalized_name": "chicken thigh",
+      "reason": "needs_review",
+      "recipe_index": 56,
+      "recipe_key": "kr-fried-chicken-057"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Wheat noodles, cooked",
+      "normalized_name": "wheat noodles",
+      "reason": "needs_review",
+      "recipe_index": 57,
+      "recipe_key": "kr-jajangmyeon-058"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Instant noodles",
+      "normalized_name": "instant noodles",
+      "reason": "needs_review",
+      "recipe_index": 58,
+      "recipe_key": "kr-spicy-ramyeon-egg-059"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Glass noodles, cooked",
+      "normalized_name": "glass noodles",
+      "reason": "needs_review",
+      "recipe_index": 59,
+      "recipe_key": "kr-japchae-060"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 60,
+      "recipe_key": "kr-kimchi-jjigae-061"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 61,
+      "recipe_key": "kr-sundubu-jjigae-062"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 62,
+      "recipe_key": "kr-samgyeopsal-rice-set-063"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 63,
+      "recipe_key": "kr-dakgalbi-rice-064"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Hot dog sausage, cooked",
+      "normalized_name": "hot dog sausage",
+      "reason": "needs_review",
+      "recipe_index": 64,
+      "recipe_key": "kr-korean-corn-dog-065"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 65,
+      "recipe_key": "jp-gyudon-066"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 66,
+      "recipe_key": "jp-katsudon-067"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 67,
+      "recipe_key": "jp-oyakodon-068"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 68,
+      "recipe_key": "jp-chicken-teriyaki-rice-069"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 69,
+      "recipe_key": "jp-salmon-teriyaki-rice-070"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 70,
+      "recipe_key": "jp-chicken-katsu-curry-071"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 71,
+      "recipe_key": "jp-beef-curry-rice-072"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Wheat noodles, cooked",
+      "normalized_name": "wheat noodles",
+      "reason": "needs_review",
+      "recipe_index": 72,
+      "recipe_key": "jp-tonkotsu-ramen-073"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Wheat noodles, cooked",
+      "normalized_name": "wheat noodles",
+      "reason": "needs_review",
+      "recipe_index": 73,
+      "recipe_key": "jp-shoyu-ramen-074"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Udon noodles, cooked",
+      "normalized_name": "udon noodles",
+      "reason": "needs_review",
+      "recipe_index": 74,
+      "recipe_key": "jp-beef-udon-075"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Wheat noodles, cooked",
+      "normalized_name": "wheat noodles",
+      "reason": "needs_review",
+      "recipe_index": 75,
+      "recipe_key": "jp-yakisoba-076"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sushi rice, cooked",
+      "normalized_name": "sushi rice",
+      "reason": "needs_review",
+      "recipe_index": 76,
+      "recipe_key": "jp-salmon-sushi-set-077"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sushi rice, cooked",
+      "normalized_name": "sushi rice",
+      "reason": "needs_review",
+      "recipe_index": 77,
+      "recipe_key": "jp-california-roll-078"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 78,
+      "recipe_key": "jp-tuna-mayo-onigiri-079"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Wheat flour",
+      "normalized_name": "wheat flour",
+      "reason": "needs_review",
+      "recipe_index": 79,
+      "recipe_key": "jp-takoyaki-080"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Pasta, cooked",
+      "normalized_name": "pasta",
+      "reason": "needs_review",
+      "recipe_index": 80,
+      "recipe_key": "vn-spaghetti-bolognese-081"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Pasta, cooked",
+      "normalized_name": "pasta",
+      "reason": "needs_review",
+      "recipe_index": 81,
+      "recipe_key": "vn-creamy-chicken-pasta-082"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Burger bun",
+      "normalized_name": "burger bun",
+      "reason": "needs_review",
+      "recipe_index": 82,
+      "recipe_key": "vn-cheeseburger-fries-083"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Chicken thigh, fried",
+      "normalized_name": "chicken thigh",
+      "reason": "needs_review",
+      "recipe_index": 83,
+      "recipe_key": "vn-fried-chicken-fries-084"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Pizza crust",
+      "normalized_name": "pizza crust",
+      "reason": "needs_review",
+      "recipe_index": 84,
+      "recipe_key": "vn-pepperoni-pizza-085"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sandwich bread",
+      "normalized_name": "sandwich bread",
+      "reason": "needs_review",
+      "recipe_index": 85,
+      "recipe_key": "vn-club-sandwich-086"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Croissant",
+      "normalized_name": "croissant",
+      "reason": "needs_review",
+      "recipe_index": 86,
+      "recipe_key": "vn-ham-cheese-croissant-087"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sandwich bread",
+      "normalized_name": "sandwich bread",
+      "reason": "needs_review",
+      "recipe_index": 87,
+      "recipe_key": "vn-tuna-mayo-sandwich-088"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Flour tortilla",
+      "normalized_name": "flour tortilla",
+      "reason": "needs_review",
+      "recipe_index": 88,
+      "recipe_key": "vn-grilled-chicken-wrap-089"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sandwich bread",
+      "normalized_name": "sandwich bread",
+      "reason": "needs_review",
+      "recipe_index": 89,
+      "recipe_key": "vn-sausage-egg-breakfast-sandwich-090"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Brown rice, cooked",
+      "normalized_name": "brown rice",
+      "reason": "needs_review",
+      "recipe_index": 90,
+      "recipe_key": "vn-grilled-chicken-brown-rice-bowl-091"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Salmon, cooked",
+      "normalized_name": "salmon",
+      "reason": "needs_review",
+      "recipe_index": 91,
+      "recipe_key": "vn-salmon-sweet-potato-salad-092"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 92,
+      "recipe_key": "vn-lean-beef-rice-broccoli-093"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Brown rice, cooked",
+      "normalized_name": "brown rice",
+      "reason": "needs_review",
+      "recipe_index": 93,
+      "recipe_key": "vn-tofu-brown-rice-vegetable-bowl-094"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Greek yogurt",
+      "normalized_name": "greek yogurt",
+      "reason": "needs_review",
+      "recipe_index": 94,
+      "recipe_key": "vn-greek-yogurt-granola-fruit-095"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Instant noodles",
+      "normalized_name": "instant noodles",
+      "reason": "needs_review",
+      "recipe_index": 95,
+      "recipe_key": "vn-instant-noodles-egg-sausage-096"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "White rice, cooked",
+      "normalized_name": "white rice",
+      "reason": "needs_review",
+      "recipe_index": 96,
+      "recipe_key": "vn-microwave-chicken-rice-bowl-097"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Sandwich bread",
+      "normalized_name": "sandwich bread",
+      "reason": "needs_review",
+      "recipe_index": 97,
+      "recipe_key": "vn-ham-cheese-triangle-sandwich-098"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Whole wheat bread",
+      "normalized_name": "wheat bread",
+      "reason": "needs_review",
+      "recipe_index": 98,
+      "recipe_key": "vn-banana-peanut-butter-toast-099"
+    },
+    {
+      "candidates": [],
+      "ingredient_index": 0,
+      "ingredient_name": "Milk",
+      "normalized_name": "milk",
+      "reason": "needs_review",
+      "recipe_index": 99,
+      "recipe_key": "vn-banana-oat-protein-shake-100"
+    }
+  ],
+  "skipped_existing": 0
+}

@@ -3,7 +3,7 @@ PostgreSQL / Neon database initialisation script.
 
 Use this instead of `alembic upgrade head` when setting up a fresh PostgreSQL
 database. It:
-  1. Creates the pgvector extension
+  1. Creates required PostgreSQL extensions
   2. Creates all tables from the current SQLAlchemy models
   3. Stamps Alembic so future `alembic upgrade head` calls only run NEW migrations
 
@@ -47,10 +47,9 @@ if "+psycopg2" not in _sync_url and _sync_url.startswith("postgresql://"):
 
 engine = create_engine(_sync_url, pool_pre_ping=True)
 
-from src.infra.database.base import Base  # noqa: E402
-
 # Import every model so they register themselves on Base.metadata
 import src.infra.database.models  # noqa: F401, E402
+from src.infra.database.base import Base  # noqa: E402
 
 
 def db_is_fresh() -> bool:
@@ -128,10 +127,11 @@ def main():
 
     print("Fresh database detected — building schema from models...")
 
-    # 1. Enable pgvector extension
+    # 1. Enable required PostgreSQL extensions
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    print("  pgvector extension enabled.")
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+    print("  PostgreSQL extensions enabled.")
 
     # 2. Create all tables from current SQLAlchemy models
     Base.metadata.create_all(engine)

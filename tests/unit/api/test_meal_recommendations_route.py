@@ -9,16 +9,19 @@ from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_asyn
 from src.api.routes.v1.meal_recommendation_route_support import to_response
 from src.api.routes.v1.meal_recommendations import (
     LogRecommendedMealRequest,
+    SkipMealRecommendationSlotRequest,
     SwapMealRecommendationSlotRequest,
     create_three_day_recommendations,
     get_meal_recommendation_plan,
     get_meal_recommendation_slot_detail,
     log_recommended_meal,
+    skip_meal_recommendation_slot,
     swap_meal_recommendation_slot,
 )
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    SkipMealRecommendationSlotCommand,
     SwapMealRecommendationSlotCommand,
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
@@ -46,7 +49,14 @@ class _EventBus:
             return _plan()
         if isinstance(message, GetMealRecommendationSlotDetailQuery):
             return _plan().slots[0]
-        if isinstance(message, (SwapMealRecommendationSlotCommand, LogRecommendedMealCommand)):
+        if isinstance(
+            message,
+            (
+                SwapMealRecommendationSlotCommand,
+                LogRecommendedMealCommand,
+                SkipMealRecommendationSlotCommand,
+            ),
+        ):
             return PersistedMealRecommendationSlotMutationResult(
                 plan_id="plan-1",
                 user_id="user-1",
@@ -112,6 +122,11 @@ def test_swap_request_rejects_unsupported_reason():
 def test_log_request_rejects_blank_request_id_after_trim():
     with pytest.raises(ValidationError):
         LogRecommendedMealRequest(request_id="   ")
+
+
+def test_skip_request_rejects_blank_request_id_after_trim():
+    with pytest.raises(ValidationError):
+        SkipMealRecommendationSlotRequest(request_id="   ")
 
 
 @pytest.mark.asyncio
@@ -214,6 +229,7 @@ async def test_swap_route_sends_expected_selection_version_command():
     event_bus = _EventBus()
 
     response = await swap_meal_recommendation_slot(
+        request=_request(),
         plan_id="plan-1",
         slot_id="slot-1",
         body=SwapMealRecommendationSlotRequest(
@@ -242,6 +258,7 @@ async def test_log_route_sends_recommended_meal_command():
     event_bus = _EventBus()
 
     response = await log_recommended_meal(
+        request=_request(),
         plan_id="plan-1",
         slot_id="slot-1",
         body=LogRecommendedMealRequest(request_id="log-1"),
@@ -256,3 +273,34 @@ async def test_log_route_sends_recommended_meal_command():
     assert command.request_id == "log-1"
     assert response.plan_id == "plan-1"
     assert response.slot.id == "slot-1"
+
+
+@pytest.mark.asyncio
+async def test_skip_route_sends_skip_slot_command():
+    event_bus = _EventBus()
+
+    response = await skip_meal_recommendation_slot(
+        request=_request(),
+        plan_id="plan-1",
+        slot_id="slot-1",
+        body=SkipMealRecommendationSlotRequest(request_id="skip-1"),
+        user_id="user-1",
+        event_bus=event_bus,
+        analytics_service=_Analytics(),
+    )
+
+    command = next(
+        item for item in event_bus.commands if isinstance(item, SkipMealRecommendationSlotCommand)
+    )
+    assert command.request_id == "skip-1"
+    assert response.plan_id == "plan-1"
+    assert response.slot.id == "slot-1"
+
+
+def test_mutation_routes_have_abuse_limits():
+    for route in (
+        swap_meal_recommendation_slot,
+        log_recommended_meal,
+        skip_meal_recommendation_slot,
+    ):
+        assert getattr(route, "__wrapped__", None) is not None

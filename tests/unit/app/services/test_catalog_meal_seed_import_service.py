@@ -5,16 +5,64 @@ import pytest
 from src.app.services.catalog_meal_seed_import_service import (
     CatalogMealSeedImporter,
     CatalogSeedResolutionCandidate,
+    _content_hash,
 )
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
 )
+from src.observability import (
+    reset_observability_connector_for_test,
+    set_observability_connector_for_test,
+)
+
+
+class _Metrics:
+    def __init__(self):
+        self.calls = []
+
+    def initialize(self):
+        return None
+
+    def capture_exception(self, error, *, context=None):
+        return None
+
+    def capture_message(self, message, *, level="info", context=None):
+        return None
+
+    def log_event(self, level, message, *, attributes=None):
+        return None
+
+    def increment_metric(self, name, value=1.0, *, unit=None, attributes=None):
+        self.calls.append(("increment", name, value, unit, attributes))
+
+    def gauge_metric(self, name, value, *, unit=None, attributes=None):
+        self.calls.append(("gauge", name, value, unit, attributes))
+
+    def distribution_metric(self, name, value, *, unit=None, attributes=None):
+        self.calls.append(("distribution", name, value, unit, attributes))
+
+    def set_request_context(self, *, request_id, method, path, user_id=None):
+        return None
+
+    def start_span(self, *, operation, description=None, context=None):
+        from contextlib import nullcontext
+
+        return nullcontext()
+
+    def flush(self, *, timeout=5):
+        return None
+
+
+def teardown_function():
+    reset_observability_connector_for_test()
 
 
 class _Session:
     def __init__(self):
         self.added = []
         self.flushed = False
+        self.locked = False
+        self.signatures = []
 
     async def add_seed_meal(self, row):
         self.added.append(row)
@@ -22,6 +70,12 @@ class _Session:
 
     async def find_seed_existing(self, *, catalog_key, content_hash):
         return None
+
+    async def lock_seed_import(self):
+        self.locked = True
+
+    async def list_seed_signatures(self):
+        return list(self.signatures)
 
 
 class _FoodReferenceRepository:
@@ -59,6 +113,7 @@ class _Importer(CatalogMealSeedImporter):
         self.refs_by_name = refs_by_name or {}
         self.existing = existing
         self.candidates = candidates or []
+        self.session.signatures = []
 
     async def _get_reference_by_id(self, food_reference_id):
         if food_reference_id in self.refs_by_id:
@@ -127,6 +182,15 @@ def _manifest(*, food_reference_id=7):
             }
         ]
     }
+
+
+def _resolved_ingredient(*, food_reference_id=7, quantity=100.0, unit="g"):
+    return SimpleNamespace(
+        food_reference_id=food_reference_id,
+        display_name="Rice",
+        quantity=quantity,
+        unit=unit,
+    )
 
 
 def _egg_manifest():
@@ -321,3 +385,103 @@ async def test_import_best_effort_resolves_common_each_unit_for_egg():
     assert summary.inserted == 1
     assert summary.errors == ()
     assert importer.session.added[0].ingredients[0].unit == "each"
+
+
+def test_content_hash_is_invariant_to_unicode_case_whitespace_and_decimal_format():
+    composed = {
+        "name": "  PHỞ  ",
+        "cuisine": " Vietnamese ",
+        "description": "Display copy",
+        "image_url": "https://example.com/a.jpg",
+        "meal_types": ["lunch", "breakfast"],
+    }
+    decomposed = {
+        "name": "pho\u031b\u0309",
+        "cuisine": "vietnamese",
+        "description": "Different display copy",
+        "image_url": "https://example.com/b.jpg",
+        "meal_types": ["breakfast", "lunch"],
+    }
+
+    assert _content_hash(
+        composed,
+        [_resolved_ingredient(quantity=100)],
+    ) == _content_hash(
+        decomposed,
+        [_resolved_ingredient(quantity=100.00004, unit=" G ")],
+    )
+
+
+def test_content_hash_is_invariant_to_ingredient_order():
+    recipe = {
+        "name": "Rice Breakfast",
+        "cuisine": "vietnamese",
+        "meal_types": ["breakfast"],
+    }
+
+    assert _content_hash(
+        recipe,
+        [
+            _resolved_ingredient(food_reference_id=7, quantity=100),
+            _resolved_ingredient(food_reference_id=8, quantity=25, unit="ml"),
+        ],
+    ) == _content_hash(
+        recipe,
+        [
+            _resolved_ingredient(food_reference_id=8, quantity=25, unit="ml"),
+            _resolved_ingredient(food_reference_id=7, quantity=100),
+        ],
+    )
+
+
+@pytest.mark.asyncio
+async def test_near_duplicate_is_withheld_for_review_and_not_inserted():
+    importer = _Importer(refs_by_id={7: _reference()})
+    importer.session.signatures = [
+        SimpleNamespace(
+            catalog_key="existing-rice",
+            content_hash="different",
+            normalized_name="rice breakfast",
+            normalized_cuisine="vietnamese",
+            food_reference_ids=frozenset({7}),
+        )
+    ]
+
+    summary = await importer.import_manifest(_manifest())
+
+    assert summary.inserted == 0
+    assert summary.review_required[0].reason == "near_duplicate"
+    assert importer.session.added == []
+
+
+@pytest.mark.asyncio
+async def test_import_locks_before_writing_seed_meals():
+    importer = _Importer(refs_by_id={7: _reference()})
+
+    summary = await importer.import_manifest(_manifest())
+
+    assert summary.inserted == 1
+    assert importer.session.locked is True
+
+
+@pytest.mark.asyncio
+async def test_import_metrics_are_bounded_and_do_not_include_catalog_content():
+    metrics = _Metrics()
+    set_observability_connector_for_test(metrics)
+    importer = _Importer(refs_by_id={7: _reference()})
+
+    await importer.import_manifest(_manifest())
+
+    metric_names = [call[1] for call in metrics.calls]
+    assert metric_names == [
+        "meal_catalog.seed_import.duration_ms",
+        "meal_catalog.seed_import.imported",
+        "meal_catalog.seed_import.skipped",
+        "meal_catalog.seed_import.review_required",
+        "meal_catalog.seed_import.rejected",
+    ]
+    for call in metrics.calls:
+        assert call[4] == {"operation": "seed_import", "status": "success"}
+    assert "rice-breakfast" not in str(metrics.calls)
+    assert "Rice Breakfast" not in str(metrics.calls)
+    assert "content_hash" not in str(metrics.calls)

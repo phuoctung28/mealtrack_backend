@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from time import perf_counter
 
@@ -16,6 +17,7 @@ from src.api.dependencies.task_manager import get_optional_task_manager
 from src.api.middleware.rate_limit import limiter
 from src.api.routes.v1.meal_recommendation_route_support import (
     LogRecommendedMealRequest,
+    SkipMealRecommendationSlotRequest,
     SwapMealRecommendationSlotRequest,
     capture_plan_events,
     capture_slot_event,
@@ -30,6 +32,7 @@ from src.api.schemas.response.meal_recommendation_responses import (
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    SkipMealRecommendationSlotCommand,
     SwapMealRecommendationSlotCommand,
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
@@ -47,6 +50,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 from src.domain.utils.timezone_utils import get_zone_info
 
 router = APIRouter(prefix="/v1/meal-recommendations", tags=["Meal Recommendations"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/three-day", response_model=MealRecommendationPlanSummaryResponse)
@@ -133,7 +137,9 @@ async def create_three_day_recommendations(
     "/{plan_id}/slots/{slot_id}/swap",
     response_model=MealRecommendationSlotDetailResponse,
 )
+@limiter.limit("20/minute")
 async def swap_meal_recommendation_slot(
+    request: Request,
     plan_id: str,
     slot_id: str,
     body: SwapMealRecommendationSlotRequest,
@@ -162,8 +168,8 @@ async def swap_meal_recommendation_slot(
         metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
     response = to_slot_detail_response(result.plan_id, result.slot)
-    await capture_slot_event(
-        analytics_service,
+    await _capture_mutation_slot_event(
+        analytics_service=analytics_service,
         user_id=user_id,
         event="swap_selected",
         plan_id=result.plan_id,
@@ -178,7 +184,9 @@ async def swap_meal_recommendation_slot(
     "/{plan_id}/slots/{slot_id}/log",
     response_model=MealRecommendationSlotDetailResponse,
 )
+@limiter.limit("20/minute")
 async def log_recommended_meal(
+    request: Request,
     plan_id: str,
     slot_id: str,
     body: LogRecommendedMealRequest,
@@ -204,8 +212,8 @@ async def log_recommended_meal(
         metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
     response = to_slot_detail_response(result.plan_id, result.slot)
-    await capture_slot_event(
-        analytics_service,
+    await _capture_mutation_slot_event(
+        analytics_service=analytics_service,
         user_id=user_id,
         event="meal_logged",
         plan_id=result.plan_id,
@@ -213,6 +221,50 @@ async def log_recommended_meal(
     )
     metric_status = "success"
     record_operation_latency("log", started, metric_status)
+    return response
+
+
+@router.post(
+    "/{plan_id}/slots/{slot_id}/skip",
+    response_model=MealRecommendationSlotDetailResponse,
+)
+@limiter.limit("20/minute")
+async def skip_meal_recommendation_slot(
+    request: Request,
+    plan_id: str,
+    slot_id: str,
+    body: SkipMealRecommendationSlotRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus=Depends(get_configured_event_bus),
+    analytics_service: MealRecommendationAnalyticsService = Depends(
+        get_meal_recommendation_analytics_service
+    ),
+    task_manager=Depends(get_optional_task_manager),
+) -> MealRecommendationSlotDetailResponse:
+    started = perf_counter()
+    metric_status = "error"
+    try:
+        result = await event_bus.send(
+            SkipMealRecommendationSlotCommand(
+                user_id=user_id,
+                plan_id=plan_id,
+                slot_id=slot_id,
+                request_id=body.request_id,
+            )
+        )
+    except MealRecommendationCreationError as exc:
+        metric_status = f"http_{exc.status_code}"
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
+    response = to_slot_detail_response(result.plan_id, result.slot)
+    await _capture_mutation_slot_event(
+        analytics_service=analytics_service,
+        user_id=user_id,
+        event="meal_skipped",
+        plan_id=result.plan_id,
+        task_manager=task_manager,
+    )
+    metric_status = "success"
+    record_operation_latency("skip", started, metric_status)
     return response
 
 
@@ -290,3 +342,27 @@ async def get_meal_recommendation_slot_detail(
     metric_status = "success"
     record_operation_latency("slot_detail", started, metric_status)
     return response
+
+
+async def _capture_mutation_slot_event(
+    *,
+    analytics_service: MealRecommendationAnalyticsService,
+    user_id: str,
+    event: str,
+    plan_id: str,
+    task_manager=None,
+) -> None:
+    try:
+        await capture_slot_event(
+            analytics_service,
+            user_id=user_id,
+            event=event,
+            plan_id=plan_id,
+            task_manager=task_manager,
+        )
+    except Exception:
+        logger.warning(
+            "meal recommendation mutation analytics failed event=%s",
+            event,
+            exc_info=True,
+        )

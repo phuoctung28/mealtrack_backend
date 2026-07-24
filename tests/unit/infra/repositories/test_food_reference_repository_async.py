@@ -41,15 +41,22 @@ class _AsyncSession:
         return self._results.pop(0)
 
 
-def _food_row(name_normalized="rice", verified=False):
+def _food_row(
+    name_normalized="rice",
+    verified=False,
+    *,
+    food_id=7,
+    name="Rice",
+    region="global",
+):
     row = MagicMock()
-    row.id = 7
+    row.id = food_id
     row.barcode = None
-    row.name = "Rice"
+    row.name = name
     row.name_vi = None
     row.brand = None
     row.category = None
-    row.region = "global"
+    row.region = region
     row.fdc_id = None
     row.protein_100g = 2.7
     row.carbs_100g = 28.0
@@ -120,6 +127,46 @@ async def test_find_by_normalized_name_uses_scalars_first():
     result.scalars.return_value.first.assert_called_once()
     assert found is not None
     assert found["id"] == 7
+
+
+@pytest.mark.asyncio
+async def test_search_local_rejects_blank_query_before_db_access():
+    session = _AsyncSession([])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.search_local("   ", "US", 10)
+
+    assert result == []
+    assert session.statement is None
+
+
+@pytest.mark.asyncio
+async def test_search_local_uses_similarity_region_filter_and_bounded_limit():
+    row = _food_row(verified=True)
+    session = _AsyncSession([_Result(rows=[row])])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.search_local("rice", "VN", 500)
+
+    statement = str(session.statement)
+    assert result[0].id == 7
+    assert result[0].is_verified is True
+    assert "similarity" in statement
+    assert "food_reference.region IN" in statement
+    assert ":param_1" in statement
+
+
+@pytest.mark.asyncio
+async def test_search_local_deduplicates_by_normalized_name_after_ordering():
+    verified = _food_row(verified=True, food_id=7, name="Rice")
+    duplicate = _food_row(verified=False, food_id=8, name="Rice generic")
+    other = _food_row("rice noodles", verified=False, food_id=9, name="Rice noodles")
+    session = _AsyncSession([_Result(rows=[verified, duplicate, other])])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.search_local("rice", "US", 10)
+
+    assert [item.id for item in result] == [7, 9]
 
 
 @pytest.mark.asyncio

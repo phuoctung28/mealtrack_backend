@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -61,6 +61,8 @@ class MealRecommendationSlotSummaryResponse(BaseModel):
     position: int
     selection_version: int
     logged_meal_id: str | None = None
+    shown_at: datetime | None = None
+    skipped_at: datetime | None = None
 
 
 class MealRecommendationSlotResponse(BaseModel):
@@ -75,6 +77,8 @@ class MealRecommendationSlotResponse(BaseModel):
     position: int
     selection_version: int
     logged_meal_id: str | None = None
+    shown_at: datetime | None = None
+    skipped_at: datetime | None = None
     alternatives: list[MealRecommendationAlternativeResponse]
 
 

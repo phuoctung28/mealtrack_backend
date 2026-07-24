@@ -55,8 +55,12 @@ Verify migration deployment state and lock current external behavior before repl
 ## Success Criteria
 
 - [ ] Deployment status is evidenced, not assumed.
-- [ ] Current external behavior has characterization coverage.
-- [ ] Migration strategy is explicitly rewrite-unshipped or forward-only.
+  - Local Alembic head and catalog-table invariants are recorded in `docs/releases/meal-catalog-phase-0-evidence.md`.
+  - User confirmed the catalog migration has not deployed to production, so production read-only Alembic checks are not required for the unshipped-migration path.
+- [x] Current external behavior has characterization coverage.
+  - `tests/migrations/test_catalog_recipe_tables_migration.py` now pins the single catalog migration head and confirms no stored calorie column.
+- [x] Migration strategy is explicitly rewrite-unshipped or forward-only.
+  - Current source has one head at `20260716000001`; because it is not deployed to production, this phase can continue on the unshipped-migration path.
 
 ## Risks And Security
 

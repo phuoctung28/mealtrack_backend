@@ -9,6 +9,16 @@
 
 ## Completed Phases
 
+### July 2026: Meal Catalog Phase 0 Production Foundation
+- [x] Four-table catalog recommendation foundation uses `meal_catalog`, `meal_catalog_ingredients`, `meal_recommendations`, and `meal_recommendation_operations`.
+- [x] Catalog import is additive, content-hash protected, serialized, and withholds near duplicates for explicit review.
+- [x] Recommendation create/read/slot detail/swap/log/skip are owner-scoped and idempotent where mutations require request IDs.
+- [x] Provider-backed food routes and feature-flag reads require Firebase JWT; mutation routes retain stronger admin protection where applicable.
+- [x] Food search is local-first through indexed `food_reference` and degrades through cache/provider/translation outages.
+- [x] PostgreSQL integration gates cover import dry-run, replay, invalid-manifest rollback, concurrent import serialization, near-duplicate withholding, catalog projection, and degraded local search.
+- [ ] Approved 180-meal production corpus import/replay evidence is pending because the manifest and resolver map are not present locally.
+- [ ] Staging load, degraded-load, and rollback-drill evidence remain release gates.
+
 ### July 2026: Meal Recommendation Performance Redesign
 - [x] `POST /v1/meal-recommendations/three-day` and `GET /v1/meal-recommendations/{plan_id}` now return compact selected-slot summaries instead of full hydrated plans.
 - [x] `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` returns one hydrated selected slot plus alternatives for drill-down.

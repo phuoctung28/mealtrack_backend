@@ -22,6 +22,7 @@ from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    SkipMealRecommendationSlotCommand,
     SwapMealRecommendationSlotCommand,
 )
 from src.app.commands.meal_suggestion import (
@@ -109,6 +110,7 @@ from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
 from src.app.handlers.command_handlers.meal_recommendation import (
     CreateThreeDayMealRecommendationCommandHandler,
     LogRecommendedMealCommandHandler,
+    SkipMealRecommendationSlotCommandHandler,
     SwapMealRecommendationSlotCommandHandler,
 )
 from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
@@ -200,6 +202,10 @@ from src.app.queries.user.get_user_onboarding_status_query import (
 )
 from src.app.queries.weight import GetWeightEntriesQuery
 from src.app.services.catalog_meal_snapshot_service import CatalogMealSnapshotService
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceSearchProjection,
+)
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.event_bus import EventBus, PyMediatorEventBus
 
 logger = logging.getLogger(__name__)
@@ -207,6 +213,15 @@ logger = logging.getLogger(__name__)
 # Singleton event buses
 _food_search_event_bus: EventBus | None = None
 _configured_event_bus: EventBus | None = None
+
+
+async def _search_local_food_references(
+    query: str,
+    region: str,
+    limit: int,
+) -> list[FoodReferenceSearchProjection]:
+    async with AsyncUnitOfWork() as uow:
+        return await uow.food_references.search_local(query, region, limit)
 
 
 def get_food_search_event_bus() -> EventBus:
@@ -268,6 +283,7 @@ def get_food_search_event_bus() -> EventBus:
             food_mapping_service,
             fat_secret_service=fat_secret_service,
             translation_service=text_translation_service,
+            local_search=_search_local_food_references,
         ),
     )
     event_bus.register_handler(
@@ -494,6 +510,8 @@ def get_configured_event_bus() -> EventBus:
             food_cache_service,
             food_mapping_service,
             fat_secret_service=fat_secret_service,
+            translation_service=text_translation_service,
+            local_search=_search_local_food_references,
         ),
     )
     event_bus.register_handler(
@@ -588,6 +606,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         LogRecommendedMealCommand,
         LogRecommendedMealCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        SkipMealRecommendationSlotCommand,
+        SkipMealRecommendationSlotCommandHandler(uow=AsyncUnitOfWork()),
     )
     event_bus.register_handler(
         GetMealRecommendationPlanQuery,

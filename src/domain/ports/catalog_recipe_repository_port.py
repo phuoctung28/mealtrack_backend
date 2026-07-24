@@ -41,6 +41,17 @@ class CatalogMealSeedExisting:
     content_hash: str
 
 
+@dataclass(frozen=True)
+class CatalogMealSeedSignature:
+    """Canonical signature used to withhold near-duplicate seed meals."""
+
+    catalog_key: str
+    content_hash: str
+    normalized_name: str
+    normalized_cuisine: str
+    food_reference_ids: frozenset[int]
+
+
 @dataclass(frozen=True, order=True)
 class CatalogMealRevision:
     """Comparable active catalog revision."""
@@ -82,3 +93,11 @@ class CatalogMealRepositoryPort(ABC):
     @abstractmethod
     async def add_seed_meal(self, seed: CatalogMealSeedWrite) -> None:
         """Add one display-only catalog seed meal without owning commit."""
+
+    @abstractmethod
+    async def lock_seed_import(self) -> None:
+        """Acquire a transaction-scoped lock for seed import writes."""
+
+    @abstractmethod
+    async def list_seed_signatures(self) -> list[CatalogMealSeedSignature]:
+        """Return canonical signatures for duplicate review."""
