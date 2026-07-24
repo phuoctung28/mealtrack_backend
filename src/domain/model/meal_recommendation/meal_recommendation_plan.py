@@ -71,6 +71,14 @@ class PersistedMealRecommendationPlan:
     slots: tuple[PersistedMealRecommendationSlot, ...] = field(default_factory=tuple)
     created_at: datetime | None = None
 
+    def is_expired(self, today: date) -> bool:
+        """A plan expires after every selected slot date is before today."""
+
+        if not self.slots:
+            return True
+        latest_slot_date = max(slot.slot_date for slot in self.slots)
+        return latest_slot_date < today
+
 
 @dataclass(frozen=True)
 class PersistedMealRecommendationSlotMutationResult:

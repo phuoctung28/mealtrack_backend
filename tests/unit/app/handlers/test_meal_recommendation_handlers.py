@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -35,6 +35,9 @@ from src.domain.model.meal_recommendation import (
     MealRecommendationAlternative,
     MealRecommendationPlan,
     MealRecommendationSlot,
+    PersistedMealRecommendationCandidate,
+    PersistedMealRecommendationPlan,
+    PersistedMealRecommendationSlot,
     PersistedMealRecommendationSlotMutationResult,
 )
 from src.domain.services.meal_recommendation.ingredient_affinity_service import (
@@ -81,7 +84,9 @@ class _ConflictPlanRepo(_PlanRepo):
 class _LogPlanRepo(_PlanRepo):
     def __init__(self, *, replayed=False):
         super().__init__()
-        self.claim_slot_log = AsyncMock(return_value=(_plan(), _plan().slots[0], replayed))
+        self.claim_slot_log = AsyncMock(
+            return_value=(_plan(), _plan().slots[0], replayed)
+        )
         self.finalize_slot_logged = AsyncMock(
             return_value=PersistedMealRecommendationSlotMutationResult(
                 plan_id="plan-1",
@@ -165,6 +170,46 @@ def _command() -> CreateThreeDayMealRecommendationCommand:
     )
 
 
+def _persisted_plan_for_dates(*, start_date: date) -> PersistedMealRecommendationPlan:
+    selected = PersistedMealRecommendationCandidate(
+        id="plan-1",
+        slot_id="slot-1",
+        recommendation_date=start_date,
+        meal_type="breakfast",
+        catalog_meal_id="catalog-1",
+        candidate_rank=0,
+        is_selected=True,
+        score=Decimal("1.0"),
+        selection_version=1,
+        catalog_meal=_catalog_meal("catalog-1"),
+    )
+    return PersistedMealRecommendationPlan(
+        id="plan-1",
+        user_id="user-1",
+        status="active",
+        timezone="UTC",
+        start_date=start_date,
+        daily_calories=2000,
+        operation="three_day",
+        idempotency_key="key-1",
+        request_fingerprint=_request_fingerprint(_command()),
+        slots=(
+            PersistedMealRecommendationSlot(
+                id="slot-1",
+                slot_date=start_date,
+                day_index=0,
+                meal_type="breakfast",
+                catalog_meal_id="catalog-1",
+                target_calories=500,
+                score=1.0,
+                position=0,
+                selected=selected,
+                alternatives=(),
+            ),
+        ),
+    )
+
+
 def _catalog_meal(meal_id: str) -> CatalogMeal:
     return CatalogMeal(
         id=meal_id,
@@ -208,6 +253,24 @@ async def test_create_handler_replays_existing_idempotent_plan():
 
     assert result.id == "plan-1"
     plans.save_new_active_plan.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_handler_does_not_replay_expired_idempotent_plan():
+    plans = _PlanRepo()
+    plans.existing = _persisted_plan_for_dates(
+        start_date=_command().start_date - timedelta(days=3)
+    )
+    handler = CreateThreeDayMealRecommendationCommandHandler(
+        uow=_Uow(plans, _CatalogRepo(meals=[_catalog_meal("catalog-1")])),
+        optimizer=_Optimizer(),
+        history_projector=_HistoryProjector(),
+    )
+
+    result = await handler.handle(_command())
+
+    assert result.id != "plan-1"
+    plans.save_new_active_plan.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -258,6 +321,9 @@ async def test_create_handler_replays_after_persistence_conflict():
 @pytest.mark.asyncio
 async def test_query_handler_reads_owner_scoped_plan():
     plans = _PlanRepo()
+    plans.get_summary = AsyncMock(
+        return_value=_persisted_plan_for_dates(start_date=date.today())
+    )
     handler = GetMealRecommendationPlanQueryHandler(
         uow_factory=lambda: _Uow(plans, _CatalogRepo())
     )
@@ -274,6 +340,26 @@ async def test_query_handler_reads_owner_scoped_plan():
         plan_id="plan-1",
         slot_ids=("slot-1",),
     )
+
+
+@pytest.mark.asyncio
+async def test_query_handler_hides_expired_plan():
+    plans = _PlanRepo()
+    plans.get_summary = AsyncMock(
+        return_value=_persisted_plan_for_dates(
+            start_date=date.today() - timedelta(days=3)
+        )
+    )
+    handler = GetMealRecommendationPlanQueryHandler(
+        uow_factory=lambda: _Uow(plans, _CatalogRepo())
+    )
+
+    result = await handler.handle(
+        GetMealRecommendationPlanQuery(user_id="user-1", plan_id="plan-1")
+    )
+
+    assert result is None
+    plans.mark_shown.assert_not_awaited()
 
 
 @pytest.mark.asyncio
