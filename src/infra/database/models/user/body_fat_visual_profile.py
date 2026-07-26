@@ -17,6 +17,7 @@ class BodyFatVisualProfile(Base, BaseMixin):
     schema_version = Column(Integer, nullable=False)
     range_catalog_version = Column(Integer, nullable=False)
     sex_at_selection = Column(String(6), nullable=False)
+    start_range_id = Column(String(20), nullable=True)
     current_range_id = Column(String(20), nullable=False)
     target_range_id = Column(String(20), nullable=True)
 
@@ -36,6 +37,13 @@ class BodyFatVisualProfile(Base, BaseMixin):
             name="check_bf_visual_current_range",
         ),
         CheckConstraint(
+            "start_range_id IN "
+            "('male_8_12', 'male_13_16', 'male_17_20', 'male_21_24', "
+            "'male_25_29', 'male_30_plus', 'female_18_21', 'female_22_25', "
+            "'female_26_30', 'female_31_35', 'female_36_39', 'female_40_plus')",
+            name="check_bf_visual_start_range",
+        ),
+        CheckConstraint(
             "target_range_id IN "
             "('male_8_12', 'male_13_16', 'male_17_20', 'male_21_24', "
             "'male_25_29', 'male_30_plus', 'female_18_21', 'female_22_25', "
@@ -43,9 +51,13 @@ class BodyFatVisualProfile(Base, BaseMixin):
             name="check_bf_visual_target_range",
         ),
         CheckConstraint(
-            "(sex_at_selection = 'male' AND current_range_id LIKE 'male_%' "
+            "(sex_at_selection = 'male' "
+            "AND (start_range_id IS NULL OR start_range_id LIKE 'male_%') "
+            "AND current_range_id LIKE 'male_%' "
             "AND (target_range_id IS NULL OR target_range_id LIKE 'male_%')) OR "
-            "(sex_at_selection = 'female' AND current_range_id LIKE 'female_%' "
+            "(sex_at_selection = 'female' "
+            "AND (start_range_id IS NULL OR start_range_id LIKE 'female_%') "
+            "AND current_range_id LIKE 'female_%' "
             "AND (target_range_id IS NULL OR target_range_id LIKE 'female_%'))",
             name="check_bf_visual_ranges_match_sex",
         ),

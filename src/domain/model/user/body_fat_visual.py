@@ -44,6 +44,7 @@ class BodyFatVisualProfileSelection:
     schema_version: int
     range_catalog_version: int
     sex_at_selection: str
+    start_range_id: str | None
     current_range_id: str
     target_range_id: str | None
     id: UUID = field(default_factory=uuid4)

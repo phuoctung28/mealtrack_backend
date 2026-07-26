@@ -50,6 +50,7 @@ def valid_payload(**overrides):
         "schema_version": 1,
         "range_catalog_version": 1,
         "sex_at_selection": "male",
+        "start_range_id": None,
         "current_range_id": "male_17_20",
         "target_range_id": "male_13_16",
     }
@@ -209,13 +210,38 @@ class TestBodyFatVisualApi:
             == 1
         )
 
+    def test_put_persists_start_range_on_latest_selection(
+        self, real_handler_client, test_session
+    ):
+        client, users = real_handler_client
+
+        response = client.put(
+            "/v1/user-profiles/body-fat-visual",
+            json=valid_payload(
+                start_range_id="male_30_plus",
+                current_range_id="male_21_24",
+                target_range_id="male_13_16",
+            ),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["start_range_id"] == "male_30_plus"
+        assert response.json()["history"][0]["start_range_id"] == "male_30_plus"
+        row = test_session.scalar(
+            select(BodyFatVisualProfile).where(
+                BodyFatVisualProfile.user_id == users["one"]
+            )
+        )
+        assert row.start_range_id == "male_30_plus"
+
     @pytest.mark.parametrize(
         "payload",
         [
             valid_payload(current_range_id="male_not_in_catalog"),
+            valid_payload(start_range_id="female_22_25"),
             valid_payload(current_range_id="female_22_25"),
         ],
-        ids=["unknown-range-id", "cross-sex-range-id"],
+        ids=["unknown-range-id", "cross-sex-start-range-id", "cross-sex-range-id"],
     )
     def test_put_rejects_invalid_or_cross_sex_range_ids(
         self, real_handler_client, payload

@@ -19,13 +19,14 @@ class BodyFatVisualProfileRequest(BaseModel):
     schema_version: Literal[BODY_FAT_VISUAL_SCHEMA_VERSION]
     range_catalog_version: Literal[BODY_FAT_VISUAL_RANGE_CATALOG_VERSION]
     sex_at_selection: Literal["male", "female"]
+    start_range_id: str | None = None
     current_range_id: str
     target_range_id: str | None = None
 
     @model_validator(mode="after")
     def validate_range_sex(self) -> "BodyFatVisualProfileRequest":
         """Reject catalog identifiers that do not belong to the selected sex."""
-        for field_name in ("current_range_id", "target_range_id"):
+        for field_name in ("start_range_id", "current_range_id", "target_range_id"):
             range_id = getattr(self, field_name)
             if range_id is None:
                 continue

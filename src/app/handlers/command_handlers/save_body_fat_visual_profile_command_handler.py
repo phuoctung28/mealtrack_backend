@@ -25,6 +25,7 @@ class SaveBodyFatVisualProfileCommandHandler(
                     schema_version=command.schema_version,
                     range_catalog_version=command.range_catalog_version,
                     sex_at_selection=command.sex_at_selection,
+                    start_range_id=command.start_range_id,
                     current_range_id=command.current_range_id,
                     target_range_id=command.target_range_id,
                 )

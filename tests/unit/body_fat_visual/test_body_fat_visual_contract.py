@@ -33,6 +33,7 @@ def valid_payload(**overrides):
         "schema_version": 1,
         "range_catalog_version": 1,
         "sex_at_selection": "male",
+        "start_range_id": None,
         "current_range_id": "male_17_20",
         "target_range_id": "male_13_16",
     }
@@ -54,11 +55,18 @@ def test_visual_body_fat_request_allows_omitting_target_range():
     assert isinstance(request.range_catalog_version, int)
 
 
+def test_visual_body_fat_request_accepts_start_range():
+    request = BodyFatVisualProfileRequest(**valid_payload(start_range_id="male_21_24"))
+
+    assert request.start_range_id == "male_21_24"
+
+
 @pytest.mark.parametrize(
     "payload",
     [
         valid_payload(schema_version=2),
         valid_payload(range_catalog_version=2),
+        valid_payload(start_range_id="female_22_25"),
         valid_payload(current_range_id="female_22_25"),
         valid_payload(target_range_id="male_5_7"),
         valid_payload(unexpected=True),
@@ -114,10 +122,12 @@ async def test_save_handler_appends_separate_visual_record_only():
     record = uow.body_fat_visual_profiles.append.await_args.args[0]
     assert isinstance(record, BodyFatVisualProfileSelection)
     assert record.user_id == "user-1"
+    assert record.start_range_id is None
     assert record.current_range_id == "male_17_20"
 
 
 def test_database_target_constraint_allows_null_and_validates_present_ranges():
+    assert BodyFatVisualProfile.__table__.c.start_range_id.nullable
     assert BodyFatVisualProfile.__table__.c.target_range_id.nullable
 
     constraints = {
@@ -126,7 +136,12 @@ def test_database_target_constraint_allows_null_and_validates_present_ranges():
         if constraint.name
     }
 
+    assert "start_range_id IN" in constraints["check_bf_visual_start_range"]
     assert "target_range_id IN" in constraints["check_bf_visual_target_range"]
+    assert (
+        "start_range_id IS NULL OR start_range_id LIKE 'male_%'"
+        in constraints["check_bf_visual_ranges_match_sex"]
+    )
     assert (
         "target_range_id IS NULL OR target_range_id LIKE 'male_%'"
         in constraints["check_bf_visual_ranges_match_sex"]
@@ -139,6 +154,7 @@ def test_query_serialization_keeps_selection_versions_and_timestamp():
         schema_version=1,
         range_catalog_version=1,
         sex_at_selection="female",
+        start_range_id="female_36_39",
         current_range_id="female_31_35",
         target_range_id="female_26_30",
         updated_at=timestamp,
@@ -148,6 +164,7 @@ def test_query_serialization_keeps_selection_versions_and_timestamp():
         "schema_version": 1,
         "range_catalog_version": 1,
         "sex_at_selection": "female",
+        "start_range_id": "female_36_39",
         "current_range_id": "female_31_35",
         "target_range_id": "female_26_30",
         "updated_at": timestamp,
@@ -159,6 +176,7 @@ def test_query_serialization_allows_no_target_range():
         schema_version=1,
         range_catalog_version=1,
         sex_at_selection="male",
+        start_range_id=None,
         current_range_id="male_17_20",
         target_range_id=None,
         updated_at=datetime(2026, 7, 16, tzinfo=UTC),

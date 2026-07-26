@@ -28,6 +28,7 @@ class AsyncBodyFatVisualProfileRepository(BodyFatVisualProfileRepositoryPort):
                 schema_version=selection.schema_version,
                 range_catalog_version=selection.range_catalog_version,
                 sex_at_selection=selection.sex_at_selection,
+                start_range_id=selection.start_range_id,
                 current_range_id=selection.current_range_id,
                 target_range_id=selection.target_range_id,
             )
@@ -54,6 +55,7 @@ class AsyncBodyFatVisualProfileRepository(BodyFatVisualProfileRepositoryPort):
             schema_version=record.schema_version,
             range_catalog_version=record.range_catalog_version,
             sex_at_selection=record.sex_at_selection,
+            start_range_id=record.start_range_id,
             current_range_id=record.current_range_id,
             target_range_id=record.target_range_id,
             updated_at=record.updated_at,

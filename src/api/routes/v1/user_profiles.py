@@ -59,6 +59,7 @@ async def save_body_fat_visual_profile(
             schema_version=request.schema_version,
             range_catalog_version=request.range_catalog_version,
             sex_at_selection=request.sex_at_selection,
+            start_range_id=request.start_range_id,
             current_range_id=request.current_range_id,
             target_range_id=request.target_range_id,
         )
