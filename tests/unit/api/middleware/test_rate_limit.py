@@ -1,7 +1,9 @@
 import base64
 import json
 
-from src.api.middleware.rate_limit import get_user_id_or_ip
+import pytest
+
+from src.api.middleware.rate_limit import get_user_id_or_ip, rate_limit_exceeded_handler
 
 
 class _Req:
@@ -37,3 +39,13 @@ def test_get_user_id_or_ip_falls_back_to_ip_when_missing_auth():
     req = _Req(auth=None, ip="9.9.9.9")
     assert get_user_id_or_ip(req) == "9.9.9.9"
 
+
+@pytest.mark.asyncio
+async def test_registered_preview_rate_limit_envelope_has_retry_after():
+    response = await rate_limit_exceeded_handler(
+        _Req(None, "1.2.3.4"), type("Limit", (), {"retry_after": 23})()
+    )
+
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "23"
+    assert response.body == b'{"error":"rate_limit_exceeded","code":"preview_rate_limited"}'

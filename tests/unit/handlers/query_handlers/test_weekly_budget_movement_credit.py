@@ -4,10 +4,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from src.api.exceptions import ExternalServiceException
 from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
     GetWeeklyBudgetQueryHandler,
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.domain.model.user import MacroPreset
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.services.weekly_budget_service import (
     AdjustedDailyTargets,
@@ -96,6 +98,16 @@ async def test_weekly_budget_response_uses_movement_adjusted_calories():
             AsyncMock(return_value=(weekly_budget, 1600.0)),
         ),
         patch(
+            "src.app.handlers.query_handlers.get_user_tdee_query_handler."
+            "GetUserTdeeQueryHandler.handle",
+            new_callable=AsyncMock,
+            return_value={
+                "macro_preset": "standard",
+                "is_custom": False,
+                "profile_target_revision": 1,
+            },
+        ),
+        patch(
             "src.app.handlers.query_handlers.get_weekly_budget_query_handler."
             "WeeklyBudgetService.get_effective_adjusted_daily_async",
             AsyncMock(return_value=effective),
@@ -149,8 +161,107 @@ async def test_sync_targets_refreshes_macro_only_changes():
 
     assert updated_budget is weekly_budget
     assert bmr == 1600.0
-    assert weekly_budget.target_calories == 14000.0
+    assert weekly_budget.target_calories == 15399.3
     assert weekly_budget.target_protein == 1120.0
     assert weekly_budget.target_carbs == 1610.0
     assert weekly_budget.target_fat == pytest.approx(497.7)
     mock_uow.weekly_budgets.update.assert_awaited_once_with(weekly_budget)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("is_custom", "macros"),
+    [
+        (False, {"protein": 95.0, "carbs": 23.8, "fat": 158.3}),
+        (True, {"protein": 100.0, "carbs": 123.5, "fat": 50.0}),
+    ],
+    ids=["keto", "custom"],
+)
+async def test_weekly_create_and_stale_sync_derive_calories_from_macros(
+    is_custom, macros
+):
+    handler = GetWeeklyBudgetQueryHandler()
+    uow = MagicMock()
+    uow.weekly_budgets.create = AsyncMock()
+    uow.weekly_budgets.update = AsyncMock()
+    daily_calories = round(
+        macros["protein"] * 4 + macros["carbs"] * 4 + macros["fat"] * 9,
+        1,
+    )
+    target = {
+        "target_calories": 1900.0,
+        "macros": {**macros, "calories": daily_calories},
+        "bmr": 1600.0,
+        "profile_target_revision": 2,
+        "macro_preset": "standard" if is_custom else "keto",
+        "is_custom": is_custom,
+    }
+
+    with patch(
+        "src.app.handlers.query_handlers.get_user_tdee_query_handler."
+        "GetUserTdeeQueryHandler.handle",
+        new_callable=AsyncMock,
+        return_value=target,
+    ):
+        created, _ = await handler._create_weekly_budget(
+            uow, "u1", date(2026, 3, 9), date(2026, 3, 9)
+        )
+        stale = WeeklyMacroBudget(
+            weekly_budget_id="stale",
+            user_id="u1",
+            week_start_date=date(2026, 3, 9),
+            target_calories=13300.0,
+            target_protein=created.target_protein,
+            target_carbs=created.target_carbs,
+            target_fat=created.target_fat,
+            target_revision=1,
+        )
+        synced, _ = await handler._sync_targets_if_stale(uow, stale, "u1")
+
+    expected_weekly_calories = round(
+        created.target_protein * 4
+        + created.target_carbs * 4
+        + created.target_fat * 9,
+        1,
+    )
+    assert created.target_calories == expected_weekly_calories
+    assert synced.target_calories == expected_weekly_calories
+    assert synced.target_calories == round(daily_calories * 7, 1)
+
+
+@pytest.mark.asyncio
+async def test_unavailable_authoritative_target_writes_no_weekly_budget():
+    handler = GetWeeklyBudgetQueryHandler()
+    uow = MagicMock()
+    uow.weekly_budgets.create = AsyncMock()
+
+    with patch(
+        "src.app.handlers.query_handlers.get_user_tdee_query_handler."
+        "GetUserTdeeQueryHandler.handle",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("unavailable"),
+    ):
+        with pytest.raises(ExternalServiceException) as error:
+            await handler._create_weekly_budget(uow, "u1", date(2026, 3, 9), date(2026, 3, 9))
+
+    assert error.value.error_code == "target_unavailable"
+    uow.weekly_budgets.create.assert_not_awaited()
+
+
+def test_next_day_keto_cap_reallocates_rounded_grams_and_calories():
+    capped = AdjustedDailyTargets(
+        calories=1900.0,
+        carbs=10.0,
+        fat=200.0,
+        protein=150.0,
+        bmr_floor_active=False,
+        remaining_days=2,
+    )
+
+    result = GetWeeklyBudgetQueryHandler._apply_target_policy(
+        capped, (MacroPreset.KETO, False)
+    )
+
+    assert (result.protein, result.carbs, result.fat) == (95.0, 23.8, 158.3)
+    assert result.calories == 1899.9
+    assert result.calories == result.protein * 4 + result.carbs * 4 + result.fat * 9

@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 
 class GoalEnum(StrEnum):
@@ -49,7 +49,7 @@ class UpdateMetricsRequest(BaseModel):
         None, ge=0, le=7, description="Training days per week"
     )
     training_minutes_per_session: int | None = Field(
-        None, ge=15, le=180, description="Minutes per training session"
+        None, ge=0, le=180, description="Minutes per training session"
     )
     body_fat_percentage: float | None = Field(
         None,
@@ -85,3 +85,25 @@ class UpdateMetricsRequest(BaseModel):
         False,
         description="Reset daily water goal to weight-based calculation (35 ml/kg)",
     )
+
+    @model_validator(mode="after")
+    def validate_pair_when_complete(self):
+        # The handler merges a partial request with persisted values. Validate the
+        # complete pair here only when both fields were supplied.
+        if (
+            self.training_days_per_week is not None
+            and self.training_minutes_per_session is not None
+        ):
+            from src.domain.services.training_policy import normalize_training_pair
+
+            try:
+                self.training_days_per_week, self.training_minutes_per_session = (
+                    normalize_training_pair(
+                        self.training_days_per_week,
+                        self.training_minutes_per_session,
+                        allow_legacy=True,
+                    )
+                )
+            except ValueError as exc:
+                raise ValueError(str(exc)) from exc
+        return self

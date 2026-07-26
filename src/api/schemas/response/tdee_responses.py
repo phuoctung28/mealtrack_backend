@@ -2,7 +2,6 @@
 TDEE calculation response DTOs.
 """
 
-from typing import Optional, List, Dict
 
 from pydantic import BaseModel, Field
 
@@ -36,16 +35,24 @@ class TdeeCalculationResponse(BaseModel):
     macros: MacroTargetsResponse = Field(..., description="Macro targets for the goal")
     goal: GoalEnum = Field(..., description="Goal used for calculation")
 
+    calculation_contract: str | None = Field(
+        None,
+        description="Versioned calculation policy used to produce this response",
+    )
+
     # Additional useful information
-    activity_multiplier: Optional[float] = Field(
+    activity_multiplier: float | None = Field(
         None, description="Activity level multiplier used"
     )
-    formula_used: Optional[str] = Field(
+    formula_used: str | None = Field(
         None, description="Formula used (Mifflin-St Jeor or Katch-McArdle)"
     )
     is_custom: bool = Field(
         False,
         description="True when macros are user-customized (not algorithm-calculated)",
+    )
+    macro_preset: str | None = Field(
+        None, description="Resolved backend macro policy (standard or keto)"
     )
 
     class Config:
@@ -69,7 +76,7 @@ class TdeeCalculationResponse(BaseModel):
 class BatchTdeeCalculationResponse(BaseModel):
     """Response DTO for batch TDEE calculations."""
 
-    results: List[TdeeCalculationResponse] = Field(
+    results: list[TdeeCalculationResponse] = Field(
         ..., description="List of TDEE calculation results"
     )
     total_calculations: int = Field(
@@ -83,17 +90,17 @@ class TdeeComparisonResponse(BaseModel):
     current: TdeeCalculationResponse = Field(
         ..., description="Current TDEE calculation"
     )
-    previous: Optional[TdeeCalculationResponse] = Field(
+    previous: TdeeCalculationResponse | None = Field(
         None, description="Previous TDEE calculation for comparison"
     )
-    changes: Optional[Dict] = Field(None, description="Changes between calculations")
+    changes: dict | None = Field(None, description="Changes between calculations")
 
 
 class TdeeHistoryResponse(BaseModel):
     """Response DTO for TDEE calculation history."""
 
     user_id: str = Field(..., description="User ID")
-    calculations: List[Dict] = Field(..., description="List of historical calculations")
+    calculations: list[dict] = Field(..., description="List of historical calculations")
     total_count: int = Field(..., ge=0, description="Total number of calculations")
 
 
@@ -102,4 +109,4 @@ class TdeeErrorResponse(BaseModel):
 
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Error message")
-    field: Optional[str] = Field(None, description="Field that caused the error")
+    field: str | None = Field(None, description="Field that caused the error")

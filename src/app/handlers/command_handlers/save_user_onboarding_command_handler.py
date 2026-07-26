@@ -87,6 +87,21 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         training_types=command.training_types,
                     )
                 else:
+                    target_inputs_before = (
+                        profile.age,
+                        profile.gender,
+                        profile.height_cm,
+                        profile.weight_kg,
+                        profile.job_type,
+                        profile.training_days_per_week,
+                        profile.training_minutes_per_session,
+                        profile.fitness_goal,
+                        profile.training_level,
+                        tuple(profile.dietary_preferences or []),
+                        profile.custom_protein_g,
+                        profile.custom_carbs_g,
+                        profile.custom_fat_g,
+                    )
                     previous_target = profile.target_weight_kg
                     # Update existing profile
                     profile.age = command.age
@@ -132,6 +147,30 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.custom_carbs_g = command.custom_carbs_g
                     profile.custom_fat_g = command.custom_fat_g
 
+                if (
+                    hasattr(locals().get("profile"), "profile_target_revision")
+                    and "target_inputs_before" in locals()
+                ):
+                    target_inputs_after = (
+                        profile.age,
+                        profile.gender,
+                        profile.height_cm,
+                        profile.weight_kg,
+                        profile.job_type,
+                        profile.training_days_per_week,
+                        profile.training_minutes_per_session,
+                        profile.fitness_goal,
+                        profile.training_level,
+                        tuple(profile.dietary_preferences or []),
+                        profile.custom_protein_g,
+                        profile.custom_carbs_g,
+                        profile.custom_fat_g,
+                    )
+                    if target_inputs_before != target_inputs_after:
+                        profile.profile_target_revision = (
+                            profile.profile_target_revision or 1
+                        ) + 1
+
                 # Save profile
                 await uow.users.update_profile(profile)
                 await uow.commit()
@@ -145,4 +184,9 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
         if not self.cache_service:
             return
         cache_key, _ = CacheKeys.user_profile(user_id)
-        await self.cache_service.invalidate(cache_key)
+        try:
+            await self.cache_service.invalidate(cache_key)
+        except Exception as exc:
+            # The profile transaction has already committed. Cache readers use
+            # the revision fence, so a deletion failure is safe to log only.
+            logger.warning("Failed to invalidate profile cache for user %s: %s", user_id, exc)

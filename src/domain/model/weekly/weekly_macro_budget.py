@@ -6,7 +6,6 @@ This entity tracks weekly macro consumption against budget targets.
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 
 
 @dataclass
@@ -30,8 +29,9 @@ class WeeklyMacroBudget:
     consumed_fat: float = 0.0
 
     # Metadata
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
+    created_at: date | None = None
+    updated_at: date | None = None
+    target_revision: int = 1
 
     @property
     def remaining_calories(self) -> float:

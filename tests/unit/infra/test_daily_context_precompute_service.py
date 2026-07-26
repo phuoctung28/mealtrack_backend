@@ -131,6 +131,7 @@ async def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
         training_minutes_per_session=45,
         fitness_goal="maintain",
         training_level="beginner",
+        profile_target_revision=1,
     )
 
     mock_budget = MagicMock()
@@ -138,13 +139,15 @@ async def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
     mock_budget.target_protein = 700
     mock_budget.target_carbs = 1750
     mock_budget.target_fat = 350
+    mock_budget.target_revision = 1
 
     mock_uow = MagicMock()
     mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=mock_budget)
     mock_uow.session = MagicMock()
 
     with patch(
-        "src.infra.services.daily_context_precompute_service.WeeklyBudgetService.get_effective_adjusted_daily"
+        "src.infra.services.daily_context_precompute_service.WeeklyBudgetService.get_effective_adjusted_daily_async",
+        new_callable=AsyncMock,
     ) as mock_effective:
         mock_macros = MagicMock()
         mock_macros.calories = 2000.0
@@ -156,3 +159,78 @@ async def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
             mock_uow, "user-123", date(2026, 4, 22), mock_profile, "UTC"
         )
         assert result == 2000
+
+
+@pytest.mark.asyncio
+async def test_user_calorie_goal_rejects_stale_weekly_target_revision():
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
+
+    profile = SimpleNamespace(
+        age=30, gender="male", height_cm=175, weight_kg=70,
+        body_fat_percentage=None, job_type="desk", training_days_per_week=3,
+        training_minutes_per_session=45, fitness_goal="maintain",
+        training_level="beginner", profile_target_revision=2,
+    )
+    budget = MagicMock(target_revision=1)
+    uow = MagicMock()
+    uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=budget)
+
+    with pytest.raises(ValueError, match="stale"):
+        await DailyContextPrecomputeService()._get_user_calorie_goal(
+            uow, "u1", date(2026, 4, 22), profile, "UTC"
+        )
+
+
+@pytest.mark.asyncio
+async def test_precompute_applies_keto_policy_before_returning_adjusted_goal():
+    from src.domain.model.user import MacroPreset
+    from src.domain.services.weekly_budget_service import AdjustedDailyTargets
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
+
+    profile = SimpleNamespace(
+        age=30, gender="male", height_cm=175, weight_kg=70,
+        body_fat_percentage=None, job_type="desk", training_days_per_week=3,
+        training_minutes_per_session=45, fitness_goal="maintain",
+        training_level="beginner", dietary_preferences=["keto"],
+        custom_protein_g=None, custom_carbs_g=None, custom_fat_g=None,
+        profile_target_revision=1,
+    )
+    budget = MagicMock(
+        target_revision=1, target_calories=14000.0, target_protein=700.0,
+        target_carbs=1750.0, target_fat=350.0,
+    )
+    uow = MagicMock()
+    uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=budget)
+    svc = DailyContextPrecomputeService()
+    adjusted = AdjustedDailyTargets(1900.0, 100.0, 100.0, 100.0, False, 7)
+    effective = MagicMock(adjusted=adjusted)
+
+    with (
+        patch(
+            "src.infra.services.daily_context_precompute_service.WeeklyBudgetService.get_effective_adjusted_daily_async",
+            new_callable=AsyncMock,
+            return_value=effective,
+        ),
+        patch.object(
+            svc._tdee_service,
+            "apply_adjusted_macro_policy",
+            wraps=svc._tdee_service.apply_adjusted_macro_policy,
+        ) as apply_policy,
+    ):
+        result = await svc._get_user_calorie_goal(
+            uow, "u1", date(2026, 4, 22), profile, "UTC"
+        )
+
+    apply_policy.assert_called_once()
+    policy_macros = svc._tdee_service.allocate_preset_macros(1900.0, MacroPreset.KETO)
+    assert (policy_macros.protein, policy_macros.carbs, policy_macros.fat) == (
+        95.0,
+        23.8,
+        158.3,
+    )
+    assert policy_macros.calories == 1899.9
+    assert result == round(policy_macros.calories)
