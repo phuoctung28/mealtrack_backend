@@ -10,6 +10,9 @@ FOOD_SEARCH_INDEX_MIGRATION = Path(
 SKIP_STATE_MIGRATION = Path(
     "migrations/versions/20260724000001_add_meal_recommendation_skip_state.py"
 )
+ANCHOR_METADATA_MIGRATION = Path(
+    "migrations/versions/20260726000001_relax_meal_recommendation_anchor_metadata.py"
+)
 REMOVED_MIGRATIONS = (
     Path("migrations/versions/20260716000002_add_meal_recommendation_plan_tables.py"),
     Path("migrations/versions/20260716000003_add_recommendation_swaps_and_interactions.py"),
@@ -33,7 +36,7 @@ def test_catalog_schema_has_one_head_and_no_stored_calories() -> None:
 
     assert [
         revision.revision for revision in script_dir.get_revisions("heads")
-    ] == ["20260724000001"]
+    ] == ["20260726000001"]
     assert '"calories"' not in catalog_section
 
 
@@ -63,6 +66,23 @@ def test_skip_state_is_forward_migration_not_deployed_baseline_edit() -> None:
     assert "ck_meal_recommendations_skip_terminal" in skip_text
     assert "operation_type IN ('swap', 'log', 'skip')" in skip_text
     assert "operation_type = 'skip'" in skip_text
+
+
+def test_anchor_metadata_constraint_is_relaxed_forward() -> None:
+    text = ANCHOR_METADATA_MIGRATION.read_text()
+    upgrade_text = text.split("def upgrade", maxsplit=1)[1].split(
+        "def downgrade", maxsplit=1
+    )[0]
+    relaxed_constraint = text.split(
+        "ANCHOR_METADATA_WITHOUT_ALGORITHM_VERSION =", maxsplit=1
+    )[1].split("ANCHOR_METADATA_WITH_ALGORITHM_VERSION", maxsplit=1)[0]
+
+    assert 'down_revision = "20260724000001"' in text
+    assert "ck_meal_recommendations_anchor_metadata" in upgrade_text
+    assert "ANCHOR_METADATA_WITHOUT_ALGORITHM_VERSION" in upgrade_text
+    assert "operation IS NOT NULL" in relaxed_constraint
+    assert "request_fingerprint IS NOT NULL" in relaxed_constraint
+    assert "algorithm_version" not in relaxed_constraint
 
 
 def test_meal_catalog_has_duplicate_guards_and_no_calorie_column() -> None:
