@@ -287,21 +287,12 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
 
     @staticmethod
     async def _profile_target_revision(uow: AsyncUnitOfWorkPort, user_id: str) -> int:
-        from sqlalchemy import select
-
-        from src.infra.database.models.user.profile import UserProfile
-
-        result = await uow.session.execute(
-            select(UserProfile.profile_target_revision).where(
-                UserProfile.user_id == user_id, UserProfile.is_current.is_(True)
-            )
-        )
-        revision = result.scalar_one_or_none()
-        if revision is None:
+        profile = await uow.users.get_profile(user_id)
+        if profile is None:
             raise ExternalServiceException(
                 "Authoritative target profile is unavailable", "target_unavailable"
             )
-        return revision
+        return profile.profile_target_revision
 
     async def _current_target_policy(self, user_id: str) -> tuple[MacroPreset, bool]:
         from src.app.handlers.query_handlers.get_user_tdee_query_handler import (

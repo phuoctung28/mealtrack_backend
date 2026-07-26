@@ -677,7 +677,11 @@ class DailyContextPrecomputeService:
                 "calories_consumed": int(round(consumed_by_user.get(user_id, 0.0))),
                 "gender": gender,
                 "language_code": language_code,
-                "target_revision": profile.profile_target_revision if profile else None,
+                "target_revision": (
+                    getattr(profile, "profile_target_revision", None)
+                    if profile
+                    else None
+                ),
             }
 
             if pref.meal_reminders_enabled:
