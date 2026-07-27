@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
@@ -133,6 +133,7 @@ def _to_persisted_plan(
             is_selected=True,
             score=_decimal_score(slot.score),
             selection_version=1,
+            seen_at=datetime.now(UTC),
             catalog_meal=slot.catalog_meal,
         )
         alternatives = tuple(
@@ -146,6 +147,7 @@ def _to_persisted_plan(
                 is_selected=False,
                 score=_decimal_score(alternative.score),
                 selection_version=1,
+                seen_at=None,
                 catalog_meal=alternative.catalog_meal,
             )
             for alternative_position, alternative in enumerate(

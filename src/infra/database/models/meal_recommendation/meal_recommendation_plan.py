@@ -48,6 +48,8 @@ class MealRecommendationORM(Base):
     is_selected = Column(Boolean, nullable=False, default=False)
     score = Column(Numeric(10, 6), nullable=False)
     selection_version = Column(Integer, nullable=False, default=1)
+    seen_at = Column(DateTime(timezone=True), nullable=True)
+    retired_at = Column(DateTime(timezone=True), nullable=True)
     logged_at = Column(DateTime(timezone=True), nullable=True)
     shown_at = Column(DateTime(timezone=True), nullable=True)
     skipped_at = Column(DateTime(timezone=True), nullable=True)

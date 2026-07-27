@@ -176,7 +176,9 @@ async def swap_meal_recommendation_slot(
         task_manager=task_manager,
     )
     metric_status = "success"
-    record_operation_latency("swap", started, metric_status)
+    record_operation_latency(
+        "swap", started, metric_status, outcome=result.outcome
+    )
     return response
 
 
