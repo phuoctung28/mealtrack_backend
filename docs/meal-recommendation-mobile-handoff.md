@@ -99,6 +99,9 @@ Notes:
 
 - `expected_selection_version` prevents stale swaps.
 - If `alternative_catalog_meal_id` is omitted, backend chooses the next best alternative.
+- Automatic swaps consume unseen candidates stored for that slot. After the pool is
+  exhausted, the backend replenishes only that slot with five fresh candidates;
+  previously seen candidates remain auditable but are never selected again.
 - Use a stable `request_id` for retry safety.
 
 ### Log Recommended Meal
@@ -151,6 +154,10 @@ Ready:
 - Create, get, slot-detail, swap, and log endpoints exist.
 - Operation idempotency exists.
 - Recommendation read paths now use the compact/delta contract for mobile cache patching.
+- Candidate lifecycle state (`seen_at` and `retired_at`) is backend-owned; the
+  existing slot detail response remains unchanged, so no Flutter source change is required.
+- Replenishment emits the same delta response and must be staged with database-pool
+  and latency observation before production enablement. Daily readiness/cron remain deferred.
 - Focused backend tests pass.
 
 Environment prerequisites:

@@ -66,13 +66,21 @@ class SkipMealRecommendationSlotRequest(BaseModel):
         return normalized
 
 
-def record_operation_latency(operation: str, started: float, status_value: str) -> None:
+def record_operation_latency(
+    operation: str,
+    started: float,
+    status_value: str,
+    *,
+    outcome: str | None = None,
+) -> None:
     elapsed_ms = (perf_counter() - started) * 1000
     attributes = {
         "component": "meal_recommendation",
         "operation": operation,
         "status": status_value,
     }
+    if outcome is not None:
+        attributes["outcome"] = outcome
     distribution_metric(
         "meal_recommendation.operation.latency_ms",
         elapsed_ms,

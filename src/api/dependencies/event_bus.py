@@ -202,6 +202,9 @@ from src.app.queries.user.get_user_onboarding_status_query import (
 )
 from src.app.queries.weight import GetWeightEntriesQuery
 from src.app.services.catalog_meal_snapshot_service import CatalogMealSnapshotService
+from src.app.services.meal_recommendation_history_projector import (
+    MealRecommendationHistoryProjector,
+)
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
@@ -381,6 +384,8 @@ def get_configured_event_bus() -> EventBus:
     cache_invalidation_service = CacheInvalidationService(cache_service)
 
     event_bus = PyMediatorEventBus()
+    recommendation_snapshot = CatalogMealSnapshotService()
+    recommendation_history = MealRecommendationHistoryProjector()
     graph_settings = get_meal_analyze_graph_settings()
 
     async def find_food_references_by_normalized_names(
@@ -596,12 +601,17 @@ def get_configured_event_bus() -> EventBus:
         CreateThreeDayMealRecommendationCommandHandler(
             uow=AsyncUnitOfWork(),
             optimizer=ThreeDayPlanOptimizer(),
-            catalog_snapshot_service=CatalogMealSnapshotService(),
+            catalog_snapshot_service=recommendation_snapshot,
         ),
     )
     event_bus.register_handler(
         SwapMealRecommendationSlotCommand,
-        SwapMealRecommendationSlotCommandHandler(uow=AsyncUnitOfWork()),
+        SwapMealRecommendationSlotCommandHandler(
+            uow=AsyncUnitOfWork(),
+            optimizer=ThreeDayPlanOptimizer(),
+            catalog_snapshot_service=recommendation_snapshot,
+            history_projector=recommendation_history,
+        ),
     )
     event_bus.register_handler(
         LogRecommendedMealCommand,

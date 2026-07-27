@@ -12,6 +12,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
     CatalogMealIngredient,
+    MealRecommendationAlternative,
     PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
@@ -410,6 +411,44 @@ async def test_swap_slot_flushes_deselection_before_selecting_alternative():
     assert flush_states[0] == {"plan-1": False, "alt-1": False}
     assert flush_states[-1] == {"plan-1": False, "alt-1": True}
     assert result.slot.catalog_meal_id == "catalog-2"
+    assert repo.loaded_rows[0].retired_at is not None
+    assert repo.loaded_rows[1].seen_at is not None
+
+
+@pytest.mark.asyncio
+async def test_swap_slot_replenishes_exhausted_pool_and_marks_outcome():
+    repo = _SlotMutationRepo()
+    rows = _plan_to_candidate_rows(_plan())
+    for row in rows:
+        row.seen_at = datetime(2026, 7, 16)
+    repo._load_slot_for_update = AsyncMock(return_value=(rows[0], rows))  # type: ignore[method-assign]
+    fresh = tuple(
+        MealRecommendationAlternative(
+            day_index=0,
+            meal_type="breakfast",
+            target_calories=500,
+            catalog_meal=_catalog_meal(f"catalog-{index}", f"Fresh {index}"),
+            score=0.8,
+        )
+        for index in range(3, 8)
+    )
+
+    result = await repo.swap_slot(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="swap-replenish-1",
+        expected_version=1,
+        alternative_catalog_meal_id=None,
+        reason="user_requested",
+        replenishment_alternatives=fresh,
+    )
+
+    assert result.outcome == "replenished_candidate"
+    assert result.slot.catalog_meal_id == "catalog-3"
+    assert len(result.slot.alternatives) == 4
+    assert rows[0].retired_at is not None
+    assert len(repo._session.added_rows) == 6
 
 
 @pytest.mark.asyncio
@@ -474,6 +513,8 @@ def _plan_to_candidate_rows(plan):
                     is_selected=candidate.is_selected,
                     score=candidate.score,
                     selection_version=candidate.selection_version,
+                    seen_at=candidate.seen_at,
+                    retired_at=candidate.retired_at,
                     logged_at=None,
                     logged_meal_id=None,
                     skipped_at=None,

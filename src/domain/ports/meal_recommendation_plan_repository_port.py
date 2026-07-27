@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from src.domain.model.meal_recommendation import (
+    MealRecommendationAlternative,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
     PersistedMealRecommendationSlotMutationResult,
@@ -74,8 +75,20 @@ class MealRecommendationPlanRepositoryPort(ABC):
         expected_version: int,
         alternative_catalog_meal_id: str | None,
         reason: str,
+        replenishment_alternatives: tuple[MealRecommendationAlternative, ...] = (),
     ) -> PersistedMealRecommendationSlotMutationResult:
         """Swap one owned slot and return the changed slot."""
+
+    async def get_slot_replenishment_context(
+        self, *, user_id: str, plan_id: str, slot_id: str
+    ) -> tuple[
+        PersistedMealRecommendationSlot,
+        frozenset[str],
+        frozenset[str],
+        str,
+    ] | None:
+        """Return target slot, seen target candidates, and other selected IDs."""
+        return None
 
     @abstractmethod
     async def mark_shown(

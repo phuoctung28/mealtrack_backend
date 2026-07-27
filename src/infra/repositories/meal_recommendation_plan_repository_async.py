@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -23,6 +24,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 )
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
+    MealRecommendationAlternative,
     PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
@@ -140,6 +142,7 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         expected_version: int,
         alternative_catalog_meal_id: str | None,
         reason: str,
+        replenishment_alternatives: tuple[MealRecommendationAlternative, ...] = (),
     ) -> PersistedMealRecommendationSlotMutationResult:
         replay = await self._get_operation_replay(
             user_id=user_id, operation_type="swap", request_id=request_id
@@ -173,6 +176,17 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         )
         if not rows:
             raise MealRecommendationNotFoundError
+        replay = await self._get_operation_replay(
+            user_id=user_id, operation_type="swap", request_id=request_id
+        )
+        if replay is not None:
+            if cast(str, replay.request_fingerprint) != fingerprint:
+                raise MealRecommendationIdempotencyConflictError
+            return PersistedMealRecommendationSlotMutationResult(
+                plan_id=plan_id,
+                user_id=user_id,
+                slot=_rows_to_slot_detail(anchor, rows),
+            )
         selected = _selected_row(rows, slot_id)
         if int(cast(int, selected.selection_version)) != expected_version:
             raise MealRecommendationVersionConflictError
@@ -183,7 +197,10 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             (
                 row
                 for row in rows
-                if cast(str, row.slot_id) == slot_id and not cast(bool, row.is_selected)
+                if cast(str, row.slot_id) == slot_id
+                and not cast(bool, row.is_selected)
+                and getattr(row, "retired_at", None) is None
+                and getattr(row, "seen_at", None) is None
             ),
             key=lambda item: cast(int, item.candidate_rank),
         )
@@ -198,12 +215,54 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                 ),
                 None,
             )
+        outcome = "stored_candidate"
+        if (
+            target is None
+            and alternative_catalog_meal_id is None
+            and replenishment_alternatives
+        ):
+            now = datetime.now(UTC)
+            active_rows = [
+                row
+                for row in rows
+                if getattr(row, "retired_at", None) is None
+                and not cast(bool, row.is_selected)
+            ]
+            for row in active_rows:
+                row.retired_at = now  # type: ignore[assignment]
+            next_rank = max(
+                (cast(int, row.candidate_rank) for row in rows), default=0
+            ) + 1
+            new_rows = []
+            for position, alternative in enumerate(replenishment_alternatives):
+                row = MealRecommendationORM(
+                    id=str(uuid.uuid4()),
+                    batch_id=plan_id,
+                    slot_id=slot_id,
+                    recommendation_date=selected.recommendation_date,
+                    meal_type=selected.meal_type,
+                    catalog_meal_id=alternative.catalog_meal.id,
+                    candidate_rank=next_rank + position,
+                    is_selected=position == 0,
+                    score=Decimal(str(alternative.score)),
+                    selection_version=expected_version + 1,
+                    seen_at=now if position == 0 else None,
+                    catalog_meal=alternative.catalog_meal,
+                )
+                self._session.add(row)
+                new_rows.append(row)
+            target = new_rows[0]
+            rows.extend(new_rows)
+            outcome = "replenished_candidate"
         if target is None:
             raise MealRecommendationInvalidAlternativeError
 
         new_version = expected_version + 1
         selected.is_selected = False  # type: ignore[assignment]
         selected.selection_version = new_version  # type: ignore[assignment]
+        selected_seen_at = getattr(selected, "seen_at", None) or datetime.now(UTC)
+        selected.seen_at = selected_seen_at  # type: ignore[assignment]
+        selected.retired_at = selected_seen_at  # type: ignore[assignment]
         await self._flush_operations()
 
         for row in rows:
@@ -212,6 +271,7 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             row.selection_version = new_version  # type: ignore[assignment]
         target.is_selected = True  # type: ignore[assignment]
         target.logged_at = None  # type: ignore[assignment]
+        target.seen_at = getattr(target, "seen_at", None) or datetime.now(UTC)  # type: ignore[assignment]
         self._session.add(
             MealRecommendationOperationORM(
                 user_id=user_id,
@@ -229,7 +289,36 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             plan_id=plan_id,
             user_id=user_id,
             slot=_rows_to_slot_detail(anchor, rows),
+            outcome=outcome,
         )
+
+    async def get_slot_replenishment_context(
+        self, *, user_id: str, plan_id: str, slot_id: str
+    ) -> tuple[
+        PersistedMealRecommendationSlot,
+        frozenset[str],
+        frozenset[str],
+        str,
+    ] | None:
+        rows = await self._load_batch(user_id=user_id, batch_id=plan_id)
+        target_rows = [row for row in rows if cast(str, row.slot_id) == slot_id]
+        if not target_rows:
+            return None
+        anchor = _anchor_row(rows)
+        if anchor is None:
+            return None
+        target = _rows_to_slot_detail(anchor, target_rows)
+        seen_ids = frozenset(
+            cast(str, row.catalog_meal_id)
+            for row in target_rows
+            if getattr(row, "seen_at", None) is not None
+        )
+        other_selected_ids = frozenset(
+            cast(str, row.catalog_meal_id)
+            for row in rows
+            if cast(str, row.slot_id) != slot_id and cast(bool, row.is_selected)
+        )
+        return target, seen_ids, other_selected_ids, cast(str, anchor.timezone)
 
     async def mark_shown(
         self,
@@ -478,6 +567,7 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             select(MealRecommendationORM)
             .where(MealRecommendationORM.batch_id == batch_id)
             .where(MealRecommendationORM.slot_id == slot_id)
+            .where(MealRecommendationORM.retired_at.is_(None))
             .options(_recommendation_catalog_meal_load_options())
             .order_by(MealRecommendationORM.candidate_rank)
         )
@@ -560,6 +650,8 @@ def _plan_to_rows(plan: PersistedMealRecommendationPlan) -> list[MealRecommendat
                     is_selected=candidate.is_selected,
                     score=candidate.score,
                     selection_version=candidate.selection_version,
+                    seen_at=candidate.seen_at,
+                    retired_at=candidate.retired_at,
                     logged_at=candidate.logged_at,
                     logged_meal_id=candidate.logged_meal_id,
                     shown_at=candidate.shown_at,
@@ -608,7 +700,8 @@ def _rows_to_plan(rows: list[MealRecommendationORM]) -> PersistedMealRecommendat
     slots: list[PersistedMealRecommendationSlot] = []
     grouped: dict[str, list[MealRecommendationORM]] = {}
     for row in rows:
-        grouped.setdefault(cast(str, row.slot_id), []).append(row)
+        if getattr(row, "retired_at", None) is None:
+            grouped.setdefault(cast(str, row.slot_id), []).append(row)
 
     for position, slot_rows in enumerate(grouped.values()):
         ordered = sorted(slot_rows, key=lambda item: cast(int, item.candidate_rank))
@@ -707,7 +800,10 @@ def _rows_to_slot_detail(
     anchor: MealRecommendationORM,
     rows: list[MealRecommendationORM],
 ) -> PersistedMealRecommendationSlot:
-    ordered = sorted(rows, key=lambda item: cast(int, item.candidate_rank))
+    ordered = sorted(
+        (row for row in rows if getattr(row, "retired_at", None) is None),
+        key=lambda item: cast(int, item.candidate_rank),
+    )
     selected = next((row for row in ordered if cast(bool, row.is_selected)), None)
     if selected is None:
         raise MealRecommendationNotFoundError
@@ -770,6 +866,8 @@ def _candidate_to_domain(
         score=cast(Decimal, row.score),
         selection_version=cast(int, row.selection_version),
         catalog_meal=_candidate_catalog_meal(row),
+        seen_at=cast(datetime | None, getattr(row, "seen_at", None)),
+        retired_at=cast(datetime | None, getattr(row, "retired_at", None)),
         logged_at=cast(datetime | None, row.logged_at),
         logged_meal_id=cast(str | None, row.logged_meal_id),
         shown_at=cast(datetime | None, getattr(row, "shown_at", None)),

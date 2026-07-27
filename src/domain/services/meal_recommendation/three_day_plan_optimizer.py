@@ -253,6 +253,37 @@ class ThreeDayPlanOptimizer:
             for item in ranked[:count]
         )
 
+    def select_slot_replenishment(
+        self,
+        catalog_meals: list[CatalogMeal],
+        *,
+        meal_type: str,
+        target_calories: int,
+        excluded_catalog_meal_ids: set[str],
+        affinity: IngredientAffinityProfile,
+        comparison_meals: tuple[CatalogMeal, ...] = (),
+        ingredient_statistics: CatalogIngredientStatistics | None = None,
+        count: int = 5,
+    ) -> tuple[MealRecommendationAlternative, ...] | MealRecommendationInsufficiency:
+        ranked = self._scoring.rank(
+            _filter_supported_catalog_meals(catalog_meals, None),
+            meal_type=meal_type,
+            target_calories=target_calories,
+            affinity=affinity,
+            excluded_catalog_meal_ids=excluded_catalog_meal_ids,
+        )
+        return self._select_alternatives_from_pool(
+            ranked,
+            day_index=0,
+            meal_type=meal_type,
+            target_calories=target_calories,
+            selected_catalog_meal_id="",
+            selected_catalog_meal_ids=excluded_catalog_meal_ids,
+            comparison_meals=comparison_meals,
+            ingredient_statistics=ingredient_statistics,
+            count=count,
+        )
+
 
 def _filter_supported_catalog_meals(
     catalog_meals: list[CatalogMeal],

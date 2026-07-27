@@ -23,6 +23,8 @@ class PersistedMealRecommendationCandidate:
     score: Decimal
     selection_version: int
     catalog_meal: CatalogMeal | None = None
+    seen_at: datetime | None = None
+    retired_at: datetime | None = None
     logged_at: datetime | None = None
     logged_meal_id: str | None = None
     shown_at: datetime | None = None
@@ -79,3 +81,4 @@ class PersistedMealRecommendationSlotMutationResult:
     plan_id: str
     user_id: str
     slot: PersistedMealRecommendationSlot
+    outcome: str = "stored_candidate"
