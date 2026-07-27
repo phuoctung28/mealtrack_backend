@@ -202,11 +202,15 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             raise MealRecommendationInvalidAlternativeError
 
         new_version = expected_version + 1
+        selected.is_selected = False  # type: ignore[assignment]
+        selected.selection_version = new_version  # type: ignore[assignment]
+        await self._flush_operations()
+
         for row in rows:
             if cast(str, row.slot_id) != slot_id:
                 continue
-            row.is_selected = row.id == target.id  # type: ignore[assignment]
             row.selection_version = new_version  # type: ignore[assignment]
+        target.is_selected = True  # type: ignore[assignment]
         target.logged_at = None  # type: ignore[assignment]
         self._session.add(
             MealRecommendationOperationORM(
