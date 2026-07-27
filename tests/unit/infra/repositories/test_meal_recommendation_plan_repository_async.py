@@ -258,6 +258,21 @@ class _ConcurrentSkipReplayRepo(_SlotMutationRepo):
         )
 
 
+class _OrderedSwapFlushRepo(_SlotMutationRepo):
+    def __init__(self):
+        super().__init__()
+        self.loaded_rows = []
+
+    async def _load_slot_for_update(self, *, user_id, batch_id, slot_id):
+        anchor, rows = await super()._load_slot_for_update(
+            user_id=user_id,
+            batch_id=batch_id,
+            slot_id=slot_id,
+        )
+        self.loaded_rows = rows
+        return anchor, rows
+
+
 @pytest.mark.asyncio
 async def test_claim_slot_log_rejects_reused_request_id_for_different_slot():
     repo = _LogReplayRepo(
@@ -364,6 +379,37 @@ async def test_skip_slot_is_terminal_and_idempotent():
             alternative_catalog_meal_id=None,
             reason="user_requested",
         )
+
+
+@pytest.mark.asyncio
+async def test_swap_slot_flushes_deselection_before_selecting_alternative():
+    repo = _OrderedSwapFlushRepo()
+    flush_states = []
+
+    async def record_flush():
+        flush_states.append(
+            {
+                row.id: row.is_selected
+                for row in repo.loaded_rows
+                if row.slot_id == "slot-1"
+            }
+        )
+
+    repo._session.flush.side_effect = record_flush
+
+    result = await repo.swap_slot(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="swap-1",
+        expected_version=1,
+        alternative_catalog_meal_id=None,
+        reason="user_requested",
+    )
+
+    assert flush_states[0] == {"plan-1": False, "alt-1": False}
+    assert flush_states[-1] == {"plan-1": False, "alt-1": True}
+    assert result.slot.catalog_meal_id == "catalog-2"
 
 
 @pytest.mark.asyncio
