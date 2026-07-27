@@ -61,12 +61,28 @@ class AsyncSubscriptionRepository(SubscriptionRepositoryPort):
         return result.scalars().first()
 
     async def find_by_revenuecat_id(
-        self, revenuecat_subscriber_id: str
+        self, revenuecat_subscriber_id: str | None
     ) -> Subscription | None:
         """Find a subscription by RevenueCat subscriber ID."""
+        if not revenuecat_subscriber_id:
+            return None
         result = await self.session.execute(
             select(Subscription).where(
                 Subscription.revenuecat_subscriber_id == revenuecat_subscriber_id
+            )
+        )
+        return result.scalars().first()
+
+    async def find_by_provider_subscription(
+        self, provider: str, provider_subscription_id: str
+    ) -> Subscription | None:
+        """Find a subscription by provider-owned subscription ID."""
+        result = await self.session.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.provider == provider,
+                    Subscription.provider_subscription_id == provider_subscription_id,
+                )
             )
         )
         return result.scalars().first()

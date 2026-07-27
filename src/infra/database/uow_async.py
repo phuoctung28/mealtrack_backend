@@ -42,6 +42,9 @@ from src.infra.repositories.subscription_repository_async import (
     AsyncSubscriptionRepository,
 )
 from src.infra.repositories.user_repository_async import AsyncUserRepository
+from src.infra.repositories.web_funnel_checkout_repository import (
+    WebFunnelCheckoutRepository,
+)
 from src.infra.repositories.weekly_budget_repository_async import (
     AsyncWeeklyBudgetRepository,
 )
@@ -130,6 +133,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.promo_codes = PromoCodeRepository(session)
         self.referrals = ReferralRepository(session)
         self.affiliate_outbox = AffiliateEventOutboxRepository(session)
+        self.web_funnel_checkouts = WebFunnelCheckoutRepository(session)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         session = self.session

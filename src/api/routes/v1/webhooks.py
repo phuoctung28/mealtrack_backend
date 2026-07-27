@@ -13,18 +13,39 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
 
+from src.app.services.paypal_webhook_service import PayPalWebhookService
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.adapters.paypal_billing_adapter import PayPalBillingAdapter
 from src.infra.adapters.posthog_adapter import PostHogAdapter
-from src.observability import increment_metric
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
+from src.infra.config.settings import settings
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
+from src.observability import increment_metric
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
+
+
+@router.post("/paypal")
+async def paypal_webhook(request: Request):
+    """Handle PayPal webhooks after provider-side signature verification."""
+    raw_body = await request.body()
+    paypal = PayPalBillingAdapter(settings)
+    service = PayPalWebhookService(
+        expected_merchant_id=settings.PAYPAL_MERCHANT_ID,
+        signing_secret=settings.WEB_FUNNEL_SIGNING_SECRET,
+    )
+    async with AsyncUnitOfWork() as uow:
+        return await service.process(
+            uow=uow,
+            paypal=paypal,
+            headers=request.headers,
+            raw_body=raw_body,
+        )
 
 NON_RETRYABLE_USERLESS_EVENTS = {
     "TRANSFER",

@@ -162,6 +162,25 @@ class Settings(BaseSettings):
     )
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
+    WEB_FUNNEL_CHECKOUT_ENABLED: bool = Field(
+        default=False,
+        description="Enable creation of non-VN web funnel checkout records.",
+    )
+    WEB_FUNNEL_SIGNING_SECRET: str = Field(
+        default="",
+        description="HMAC secret for opaque web funnel checkout correlation values.",
+    )
+    WEB_FUNNEL_CLAIM_TOKEN_TTL_MINUTES: int = Field(default=60)
+    WEB_FUNNEL_PAYPAL_OFFERS_JSON: str = Field(
+        default="{}",
+        description="JSON map of offer IDs to backend-owned PayPal catalog snapshots.",
+    )
+    PAYPAL_CLIENT_ID: str = Field(default="")
+    PAYPAL_CLIENT_SECRET: str = Field(default="")
+    PAYPAL_MERCHANT_ID: str = Field(default="")
+    PAYPAL_API_BASE_URL: str = Field(default="https://api-m.sandbox.paypal.com")
+    PAYPAL_WEBHOOK_ID: str = Field(default="")
+    PAYPAL_TIMEOUT_SECONDS: float = Field(default=10.0)
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
     CLOUDINARY_API_KEY: str | None = Field(default=None)
     CLOUDINARY_API_SECRET: str | None = Field(default=None)
@@ -332,6 +351,30 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return json.loads(v)
         return v
+
+    @property
+    def web_funnel_paypal_offers(self) -> dict[str, dict[str, Any]]:
+        """Return configured backend-owned web funnel offer snapshots."""
+        if not self.WEB_FUNNEL_PAYPAL_OFFERS_JSON:
+            return {}
+        parsed = json.loads(self.WEB_FUNNEL_PAYPAL_OFFERS_JSON)
+        if not isinstance(parsed, dict):
+            raise ValueError("WEB_FUNNEL_PAYPAL_OFFERS_JSON must be a JSON object")
+        for offer_id, offer in parsed.items():
+            if not isinstance(offer, dict):
+                raise ValueError(f"web funnel offer {offer_id} must be an object")
+            provider = str(offer.get("provider", "")).lower()
+            currency = str(offer.get("currency", "")).upper()
+            amount_minor = int(offer.get("amount_minor", 0) or 0)
+            if provider != "paypal":
+                raise ValueError(f"web funnel offer {offer_id} must use provider paypal")
+            if currency != "USD":
+                raise ValueError(f"web funnel offer {offer_id} must use USD")
+            if amount_minor <= 0:
+                raise ValueError(f"web funnel offer {offer_id} amount_minor must be positive")
+            if not offer.get("paypal_plan_id"):
+                raise ValueError(f"web funnel offer {offer_id} needs paypal_plan_id")
+        return parsed
 
     def get_commission(self, currency: str) -> float:
         """Get commission amount for a currency, fallback to default."""

@@ -2,7 +2,17 @@
 Subscription model for tracking user subscriptions.
 """
 
-from sqlalchemy import Column, String, DateTime, Boolean, Enum, ForeignKey, Index
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from src.domain.utils.timezone_utils import utc_now
@@ -12,9 +22,10 @@ from src.infra.database.models.base import BaseMixin
 
 class Subscription(Base, BaseMixin):
     """
-    Stores subscription records synced from RevenueCat.
+    Stores subscription records synced from billing providers.
 
-    RevenueCat is the source of truth - this table caches key data.
+    RevenueCat remains the native-purchase source of truth. Claimed web
+    checkouts create local provider-neutral rows after verified provider events.
     """
 
     __tablename__ = "subscriptions"
@@ -25,7 +36,16 @@ class Subscription(Base, BaseMixin):
     )
 
     # RevenueCat data
-    revenuecat_subscriber_id = Column(String(255), nullable=False, index=True)
+    revenuecat_subscriber_id = Column(String(255), nullable=True, index=True)
+    provider = Column(String(32), nullable=False, default="revenuecat")
+    provider_customer_id = Column(String(255), nullable=True)
+    provider_subscription_id = Column(String(255), nullable=True)
+    provider_transaction_id = Column(String(255), nullable=True)
+    source_checkout_id = Column(
+        String(36),
+        ForeignKey("web_funnel_checkouts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     product_id = Column(
         String(255), nullable=False
     )  # "premium_monthly" or "premium_yearly"
@@ -48,7 +68,6 @@ class Subscription(Base, BaseMixin):
     expires_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
 
-
     # Store metadata
     store_transaction_id = Column(String(255), nullable=True)
     is_sandbox = Column(Boolean, default=False, nullable=False)
@@ -61,6 +80,17 @@ class Subscription(Base, BaseMixin):
         Index("idx_user_id_status", "user_id", "status"),
         Index("idx_expires_at", "expires_at"),
         Index("idx_revenuecat_subscriber_id", "revenuecat_subscriber_id"),
+        Index("idx_subscriptions_provider_user_status", "provider", "user_id", "status"),
+        UniqueConstraint(
+            "provider",
+            "provider_subscription_id",
+            name="uq_subscriptions_provider_subscription",
+        ),
+        CheckConstraint(
+            "(provider = 'revenuecat' AND revenuecat_subscriber_id IS NOT NULL) OR "
+            "(provider <> 'revenuecat' AND provider_subscription_id IS NOT NULL)",
+            name="ck_subscriptions_provider_identifiers",
+        ),
     )
 
     def is_active(self) -> bool:

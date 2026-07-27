@@ -46,7 +46,7 @@ The current HTTP surface includes:
 - User and profile management: Firebase sync, onboarding completion, metrics, TDEE, language, timezone, and account deletion.
 - Discovery and planning: meal suggestions discover, recipes, and save.
 - Nutrition and activity tracking: nutrition bulk/presence, activities daily/bulk, hydration, movement, and the journey progress snapshot.
-- Support routes: foods, ingredients, notifications, feature flags, saved suggestions, cheat days, referrals, promo codes, unified code validation, monitoring, health, app download, and well-known links.
+- Support routes: foods, ingredients, notifications, feature flags, saved suggestions, cheat days, referrals, promo codes, unified code validation, monitoring, health, app download, well-known links, and web-funnel checkout/claim flows with PayPal webhooks.
 
 ---
 
@@ -85,6 +85,7 @@ The current HTTP surface includes:
 
 ## Recent Features (July 2026)
 
+- **Backend-Owned PayPal Web Funnel:** `/v1/web-funnel/checkouts`, `/v1/web-funnel/checkouts/{checkout_id}/paypal-confirmation`, `/v1/web-funnel/checkouts/{checkout_id}`, and `/v1/web-funnel/claims` now support the international PayPal checkout ledger. Checkout creation returns the backend-selected commercial snapshot only; claim tokens stay hidden until the checkout is `PAID_ACTIVE` / claimable, and PayPal sale webhooks correlate via `billing_agreement_id`.
 - **Food-Label Image Scan:** `/v1/meals/food-label/scan-by-url` now analyzes Cloudinary-hosted nutrition-label images directly, preferring an optional label crop and crop metadata. `FoodLabelImageAnalysisStrategy` reads multilingual nutrition panels into the strict `FoodLabelNutritionResponse` contract; failures do not persist meals.
 
 ## Recent Features (June 2026)

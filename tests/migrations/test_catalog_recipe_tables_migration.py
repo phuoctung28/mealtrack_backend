@@ -33,7 +33,7 @@ def test_catalog_schema_has_one_head_and_no_stored_calories() -> None:
 
     assert [
         revision.revision for revision in script_dir.get_revisions("heads")
-    ] == ["20260724000001"]
+    ] == [script_dir.get_current_head()]
     assert '"calories"' not in catalog_section
 
 

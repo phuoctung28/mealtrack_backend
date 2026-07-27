@@ -312,10 +312,30 @@ Privileged endpoints require Firebase auth and an email in `ADMIN_EMAILS`.
 
 Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER). Signature verified via constant-time HMAC; events mirrored to PostHog when `POSTHOG_API_KEY` is set.
 
+PayPal web funnel events are verified through PayPal before any checkout state transition. Browser approval is not an entitled state; it only binds a PayPal subscription reference to a pending checkout.
+
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/v1/webhooks/revenuecat` | RevenueCat subscription webhook |
+| POST | `/v1/webhooks/paypal` | PayPal subscription webhook for web funnel checkout |
 | GET | `/v1/webhooks/revenuecat/health` | Webhook health check |
+
+---
+
+## Web Funnel Checkout
+
+Public checkout creation is server-owned and configuration-gated. `VN` fails closed until a tracked MoMo adapter/source decision exists. Firebase auth is required only when claiming a verified paid checkout into an app user.
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/v1/web-funnel/checkouts` | Create or reuse a PayPal checkout; returns `checkoutId`, `status`, `provider`, `planId`, `customId`, `offerId`, `rewardId`, `currency`, `amountMinor`, `standardAmountMinor`, `renewalAmountMinor`, `renewalDescription`, `renewalInterval`, and `welcomeDiscountPercent` |
+| POST | `/v1/web-funnel/checkouts/{checkout_id}/paypal-confirmation` | Bind SDK `subscriptionId`; stays pending until a verified payment event can mark the checkout claimable |
+| GET | `/v1/web-funnel/checkouts/{checkout_id}` | Safe polling status; may include `claimToken` only when the checkout is claimable |
+| POST | `/v1/web-funnel/claims` | Firebase-authenticated claim of a verified paid checkout; consumes the claim token for the current app user |
+
+- `POST /v1/web-funnel/checkouts` does not return `claimToken`.
+- `GET /v1/web-funnel/checkouts/{checkout_id}` and confirmation responses expose `claimToken` only after the checkout becomes claimable.
+- `POST /v1/web-funnel/claims` requires an authenticated app user; RevenueCat native claim and entitlement flows remain unchanged.
 
 ---
 

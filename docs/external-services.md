@@ -538,3 +538,32 @@ Do NOT use PostHog for operational failure alerts — use Sentry metrics.
 ---
 
 See related: `system-architecture.md`, `database-guide.md`, `cqrs-guide.md`
+
+---
+
+## PayPal Web Funnel Checkout
+
+MealTrack owns the international web funnel checkout ledger. The browser renders the PayPal button with a backend-selected plan only; PayPal lifecycle webhooks decide paid access after signature verification and subscription re-fetch. Sale webhooks are correlated through `billing_agreement_id`, and verified early events may be stored until the confirmation flow can reconcile the checkout.
+
+### Required Config
+
+| Variable | Notes |
+|----------|-------|
+| `WEB_FUNNEL_CHECKOUT_ENABLED` | Enables non-VN checkout creation; default false |
+| `WEB_FUNNEL_SIGNING_SECRET` | HMAC secret for signed `customId` and claim-token minting |
+| `WEB_FUNNEL_CLAIM_TOKEN_TTL_MINUTES` | Claim-token lifetime |
+| `WEB_FUNNEL_PAYPAL_OFFERS_JSON` | JSON offer catalog; server owns reward, provider, currency, amount, interval, PayPal plan ID |
+| `PAYPAL_CLIENT_ID` | Merchant REST client ID |
+| `PAYPAL_CLIENT_SECRET` | Merchant REST secret; never expose to browser |
+| `PAYPAL_MERCHANT_ID` | Optional expected merchant ID checked against fetched subscription snapshots |
+| `PAYPAL_API_BASE_URL` | Sandbox or production PayPal API base |
+| `PAYPAL_WEBHOOK_ID` | PayPal dashboard webhook ID used for signature verification |
+| `PAYPAL_TIMEOUT_SECONDS` | HTTP timeout for PayPal API calls |
+
+### Safety Rules
+
+- `VN` does not fall back to PayPal/USD while MoMo source is absent.
+- `onApprove` calls confirmation only; it never marks paid or creates entitlement.
+- `POST /v1/webhooks/paypal` deduplicates provider event IDs, re-fetches subscription state, and stores verified early events until confirmation catches up.
+- Only verified active lifecycle events can mark a checkout `paid_active`.
+- Authenticated claim requires a signed claim token plus the current app user's Firebase identity; RevenueCat native behavior remains unchanged.

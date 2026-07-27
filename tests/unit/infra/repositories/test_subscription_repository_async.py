@@ -15,6 +15,9 @@ class _Scalars:
     def all(self):
         return self._rows
 
+    def first(self):
+        return self._rows[0] if self._rows else None
+
 
 class _Result:
     def __init__(self, rows):
@@ -67,3 +70,14 @@ async def test_find_expiring_soon_returns_active_future_rows():
     assert "subscriptions.status" in compiled
     assert "subscriptions.expires_at <= " in compiled
     assert "subscriptions.expires_at > " in compiled
+
+
+@pytest.mark.asyncio
+async def test_find_by_revenuecat_id_ignores_empty_identifier():
+    session = _AsyncSession([MagicMock(id="web-subscription")])
+    repo = AsyncSubscriptionRepository(session)
+
+    result = await repo.find_by_revenuecat_id(None)
+
+    assert result is None
+    assert session.statement is None
