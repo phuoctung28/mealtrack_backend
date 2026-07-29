@@ -66,6 +66,7 @@ The same importer and resolver are available behind the admin Firebase/local gat
 
 ```http
 POST /v1/admin/meal-catalog/resolve
+POST /v1/admin/meal-catalog/enrich
 POST /v1/admin/meal-catalog/import
 ```
 
@@ -76,6 +77,10 @@ Both endpoints accept a JSON body with the manifest plus the script options:
 
 `/resolve` always performs a non-mutating dry run and returns validation errors,
 unresolved ingredient candidates, near-duplicate reviews, and import counts.
+`/enrich` is the explicit mutating action for missing ingredient names: it caches
+an unverified FatSecret candidate for each name without creating catalog recipes.
+Those candidates must still be verified or mapped before `/import` can publish a
+recipe.
 `/import` first performs the same dry run; it writes only when validation and
 resolution succeed and `dry_run` is false. A successful write returns
 `applied: true`. The default resolver remains strict: unverified or ambiguous
@@ -174,6 +179,10 @@ Use it with:
 The importer only auto-resolves verified food references above the configured
 fuzzy threshold. Unverified or ambiguous candidates are written to the resolver
 report for review.
+
+For missing names, an admin can call `POST /v1/admin/meal-catalog/enrich` to
+cache a FatSecret candidate. The candidate remains unverified and cannot publish
+a catalog recipe until a reviewer verifies it and adds an approved resolver mapping.
 
 ## Production Corpus Gate
 

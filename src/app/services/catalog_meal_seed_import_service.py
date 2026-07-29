@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import unicodedata
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from difflib import SequenceMatcher
@@ -31,6 +32,8 @@ from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
     normalize_food_name,
 )
 from src.observability import distribution_metric, increment_metric
+
+CatalogIngredientCandidateEnricher = Callable[[str], Awaitable[bool]]
 
 
 @dataclass(frozen=True)
@@ -117,6 +120,15 @@ class CatalogSeedReviewRequired:
 
 
 @dataclass(frozen=True)
+class CatalogSeedCandidateEnrichmentSummary:
+    """Outcome of caching provider candidates for later catalog review."""
+
+    attempted: int = 0
+    enriched: int = 0
+    skipped_existing: int = 0
+
+
+@dataclass(frozen=True)
 class CatalogSeedImportSummary:
     """Import outcome for CLI reporting and tests."""
 
@@ -184,6 +196,7 @@ class CatalogMealSeedImporter:
         approved_mappings: dict[str, int] | None = None,
         auto_resolve_threshold: float | None = 0.92,
         resolve_all_best_effort: bool = False,
+        candidate_enricher: CatalogIngredientCandidateEnricher | None = None,
         converter: IngredientQuantityConversionService | None = None,
     ) -> None:
         self._catalog_repository = catalog_repository
@@ -195,6 +208,8 @@ class CatalogMealSeedImporter:
         }
         self._auto_resolve_threshold = auto_resolve_threshold
         self._resolve_all_best_effort = resolve_all_best_effort
+        self._candidate_enricher = candidate_enricher
+        self._enriched_names: set[str] = set()
         self._converter = converter or IngredientQuantityConversionService(
             allow_unverified=resolve_all_best_effort,
             allow_unapproved_sources=resolve_all_best_effort,
@@ -220,6 +235,7 @@ class CatalogMealSeedImporter:
             approved_mappings=approved_mappings,
             auto_resolve_threshold=auto_resolve_threshold,
             resolve_all_best_effort=resolve_all_best_effort,
+            candidate_enricher=self._candidate_enricher,
         )
 
     async def import_manifest(self, manifest: dict[str, Any]) -> CatalogSeedImportSummary:
@@ -477,6 +493,55 @@ class CatalogMealSeedImporter:
             "needs_review",
             tuple(candidates[:5]),
         )
+
+    async def enrich_missing_candidates(
+        self,
+        manifest: dict[str, Any],
+    ) -> CatalogSeedCandidateEnrichmentSummary:
+        """Persist one unverified provider candidate per missing ingredient name."""
+
+        names = {
+            normalize_food_name(str(ingredient["name"]).strip()): str(
+                ingredient["name"]
+            ).strip()
+            for recipe in manifest.get("recipes", [])
+            if isinstance(recipe, dict)
+            for ingredient in recipe.get("ingredients", [])
+            if isinstance(ingredient, dict)
+            and ingredient.get("food_reference_id") is None
+            and str(ingredient.get("name", "")).strip()
+        }
+        attempted = 0
+        enriched = 0
+        skipped_existing = 0
+        for normalized, name in names.items():
+            if await self._find_reference_candidates_by_normalized_name(normalized):
+                skipped_existing += 1
+                continue
+            attempted += 1
+            if await self._enrich_missing_candidate(name, normalized):
+                enriched += 1
+        return CatalogSeedCandidateEnrichmentSummary(
+            attempted=attempted,
+            enriched=enriched,
+            skipped_existing=skipped_existing,
+        )
+
+    async def _enrich_missing_candidate(self, name: str, normalized: str) -> bool:
+        """Cache one provider candidate for review without bypassing publication gates."""
+
+        if (
+            self._candidate_enricher is None
+            or normalized in self._enriched_names
+        ):
+            return False
+        self._enriched_names.add(normalized)
+        try:
+            enriched = await self._candidate_enricher(name)
+        except Exception:
+            return False
+        self._candidate_rows = None
+        return enriched
 
     async def _find_existing(
         self,

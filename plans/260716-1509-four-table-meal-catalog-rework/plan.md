@@ -6,7 +6,7 @@ priority: P1
 effort: "12-16d"
 branch: "codex/catalog-meal-recommendation-mvp"
 tags: [refactor, backend, database, api, critical]
-blockedBy: []
+blockedBy: [260729-1930-preparation-aware-catalog-resolution]
 blocks: [260715-1557-catalog-meal-recommendation-mvp]
 created: "2026-07-16T08:09:41.087Z"
 createdBy: "ck:plan"

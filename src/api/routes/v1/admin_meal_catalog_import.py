@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.base_dependencies import get_async_db, get_catalog_meal_seed_importer
 from src.api.dependencies.auth import require_admin_or_local
 from src.api.schemas.response.admin_meal_catalog_responses import (
+    AdminMealCatalogEnrichmentResponse,
     AdminMealCatalogImportRequest,
     AdminMealCatalogImportResponse,
     AdminMealCatalogValidationResponse,
@@ -38,6 +39,31 @@ async def resolve_admin_meal_catalog_ingredients(
         )
     summary = await _run_importer(importer, request, dry_run=True)
     return _response(validation, summary, applied=False)
+
+
+@router.post("/enrich", response_model=AdminMealCatalogEnrichmentResponse)
+async def enrich_admin_meal_catalog_candidates(
+    request: AdminMealCatalogImportRequest,
+    db: AsyncSession = Depends(get_async_db),
+    importer: CatalogMealSeedImporter = Depends(get_catalog_meal_seed_importer),
+    _admin: str = Depends(require_admin_or_local),
+) -> AdminMealCatalogEnrichmentResponse:
+    """Cache unverified FatSecret candidates without publishing catalog recipes."""
+
+    validation = _validate_manifest(request)
+    if validation.errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_validation_response(validation).model_dump(),
+        )
+    summary = await importer.enrich_missing_candidates(request.manifest)
+    await db.commit()
+    return AdminMealCatalogEnrichmentResponse(
+        validation=_validation_response(validation),
+        attempted=summary.attempted,
+        enriched=summary.enriched,
+        skipped_existing=summary.skipped_existing,
+    )
 
 
 @router.post("/import", response_model=AdminMealCatalogImportResponse)
@@ -124,12 +150,7 @@ def _empty_summary(validation, *, dry_run: bool):
 
 def _response(validation, summary, *, applied: bool) -> AdminMealCatalogImportResponse:
     report = summary.resolution_report()
-    validation_response = AdminMealCatalogValidationResponse(
-        manifest_digest=validation.manifest_digest,
-        recipe_count=validation.recipe_count,
-        errors=list(validation.errors),
-        coverage=validation.coverage,
-    )
+    validation_response = _validation_response(validation)
     return AdminMealCatalogImportResponse(
         validation=validation_response,
         manifest_digest=validation.manifest_digest,
@@ -142,4 +163,13 @@ def _response(validation, summary, *, applied: bool) -> AdminMealCatalogImportRe
         errors=list(summary.errors),
         issues=report["issues"],
         review_required=report["review_required"],
+    )
+
+
+def _validation_response(validation) -> AdminMealCatalogValidationResponse:
+    return AdminMealCatalogValidationResponse(
+        manifest_digest=validation.manifest_digest,
+        recipe_count=validation.recipe_count,
+        errors=list(validation.errors),
+        coverage=validation.coverage,
     )

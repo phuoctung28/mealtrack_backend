@@ -94,6 +94,13 @@ class AdminMealCatalogValidationResponse(BaseModel):
     coverage: dict[str, dict[str, int]]
 
 
+class AdminMealCatalogEnrichmentResponse(BaseModel):
+    validation: AdminMealCatalogValidationResponse
+    attempted: int
+    enriched: int
+    skipped_existing: int
+
+
 class AdminMealCatalogImportResponse(BaseModel):
     validation: AdminMealCatalogValidationResponse
     manifest_digest: str
