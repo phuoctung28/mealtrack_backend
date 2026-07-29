@@ -19,6 +19,11 @@
 - [ ] Approved 180-meal production corpus import/replay evidence is pending because the manifest and resolver map are not present locally.
 - [ ] Staging load, degraded-load, and rollback-drill evidence remain release gates.
 
+### July 2026: Catalog Recommendation Response Localization
+- [x] Catalog-backed recommendation responses now honor `Accept-Language` for the seven supported app languages.
+- [x] Localization translates presentation text only (meal name, cuisine, description, ingredient display name); IDs, units, ranking, state, and backend-derived nutrition remain canonical.
+- [x] Missing configuration or translation-provider failure returns the canonical English response without failing the recommendation request.
+
 ### July 2026: Meal Recommendation Performance Redesign
 - [x] `POST /v1/meal-recommendations/three-day` and `GET /v1/meal-recommendations/{plan_id}` now return compact selected-slot summaries instead of full hydrated plans.
 - [x] `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` returns one hydrated selected slot plus alternatives for drill-down.

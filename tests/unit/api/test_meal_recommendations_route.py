@@ -85,7 +85,19 @@ class _TaskManager:
         coro.close()
 
 
-def _request(timezone: str = "Asia/Ho_Chi_Minh") -> Request:
+class _Translator:
+    def __init__(self) -> None:
+        self.calls = []
+
+    async def translate_texts(self, texts, target_lang):
+        self.calls.append((texts, target_lang))
+        return [f"vi:{text}" for text in texts]
+
+
+def _request(
+    timezone: str = "Asia/Ho_Chi_Minh",
+    language: str = "en",
+) -> Request:
     return Request(
         {
             "type": "http",
@@ -93,6 +105,7 @@ def _request(timezone: str = "Asia/Ho_Chi_Minh") -> Request:
             "path": "/v1/meal-recommendations/three-day",
             "client": ("127.0.0.1", 12345),
             "headers": [(b"x-timezone", timezone.encode("utf-8"))],
+            "state": {"language": language},
         }
     )
 
@@ -196,6 +209,7 @@ async def test_create_three_day_recommendations_enqueues_analytics_when_task_man
 async def test_get_plan_returns_owner_scoped_compact_summary():
     response = await get_meal_recommendation_plan(
         plan_id="plan-1",
+        request=_request(),
         user_id="user-1",
         event_bus=_EventBus(),
         analytics_service=_Analytics(),
@@ -213,6 +227,7 @@ async def test_get_slot_detail_returns_one_hydrated_slot_with_alternatives():
     response = await get_meal_recommendation_slot_detail(
         plan_id="plan-1",
         slot_id="slot-1",
+        request=_request(),
         user_id="user-1",
         event_bus=_EventBus(),
         analytics_service=_Analytics(),
@@ -222,6 +237,36 @@ async def test_get_slot_detail_returns_one_hydrated_slot_with_alternatives():
     assert response.slot.id == "slot-1"
     assert response.slot.catalog_meal.ingredients[0].display_name == "Rice"
     assert response.slot.alternatives[0].catalog_meal.name == "Chicken Bowl"
+
+
+@pytest.mark.asyncio
+async def test_get_plan_translates_catalog_text_from_request_language():
+    translator = _Translator()
+
+    response = await get_meal_recommendation_plan(
+        plan_id="plan-1",
+        request=_request(language="vi"),
+        user_id="user-1",
+        event_bus=_EventBus(),
+        analytics_service=_Analytics(),
+        translation_service=translator,
+    )
+
+    assert response.slots[0].catalog_meal.name == "vi:Breakfast Rice"
+    assert response.slots[0].catalog_meal.cuisine == "vi:vietnamese"
+    assert response.slots[0].catalog_meal.calories == 380
+    assert translator.calls == [
+        (
+            [
+                "Breakfast Rice",
+                "vietnamese",
+                "Display copy",
+                "Rice",
+                "Chicken Bowl",
+            ],
+            "vi",
+        )
+    ]
 
 
 @pytest.mark.asyncio
