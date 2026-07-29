@@ -1,8 +1,8 @@
 # Backend Testing Standards
 
-**Last Updated:** July 5, 2026
+**Last Updated:** July 29, 2026
 **Coverage Target:** CI gate 65% for unit coverage; docs target 70%+ overall, 100% critical paths, 80%+ new features
-**Suite Size:** 312 Python files in `tests/`; latest collection reaches 1,600+ tests
+**Suite Size:** 350 Python files in `tests/`; `tests/unit` currently collects 2,013 tests
 
 ---
 
@@ -100,6 +100,9 @@ pytest --cov=src --cov-report=html  # With coverage report
 Default `pytest` uses `pytest.ini` addopts that ignore `tests/integration` and
 select `not integration`. CI runs `lint-imports` and then
 `pytest tests/unit --cov=src --cov-fail-under=65`.
+
+Broad unscoped `pytest` currently hits two duplicate-package import collisions.
+Use targeted paths or the unit command above until the collisions are resolved.
 
 PostgreSQL integration tests require `TEST_DATABASE_URL` with the
 `postgresql+asyncpg://` driver and refuse SQLite or missing URLs. The CI

@@ -81,16 +81,16 @@ Import into the configured database:
   --resolver-report plans/reports/meal-catalog-production-import-report.json
 ```
 
-The import is additive. Exact duplicates are skipped. A reused `recipe_key` with
-changed content fails so existing recommendation history is not rewritten.
-Near-duplicate meals are withheld for human review and reported under
-`review_required`; they are not auto-merged or silently accepted.
+The import is additive. Exact duplicate content hashes are skipped. A reused
+`recipe_key` with changed content fails so existing recommendation history is
+not rewritten. Near-duplicate meals are withheld for human review and reported
+under `review_required`; they are not auto-merged or silently accepted.
 
 The JSON report written by `--resolver-report` is deterministic and includes:
 
 | Field | Notes |
 | --- | --- |
-| `manifest_digest` | Stable SHA-256 digest of the exact manifest content. |
+| `manifest_digest` | Stable SHA-256 digest of canonicalized parsed JSON, independent of whitespace and key order. |
 | `recipe_count` | Number of recipes validated. |
 | `coverage` | Cuisine and meal-type counts used for production coverage gates. |
 | `inserted` | Rows inserted by this run. |
@@ -105,9 +105,9 @@ The current resolver is for **ingredient food-reference resolution**. It maps
 `ingredients[].name` to `food_reference.id` so backend can calculate nutrition
 from canonical food references.
 
-It does not yet do fuzzy duplicate detection for meal names such as `Com Tam`
-vs `Cơm Tấm Sườn`. Meal-level duplicate protection is currently exact:
-`recipe_key` and `content_hash`.
+It does not rely on loose meal-name matching alone. The importer computes a
+canonical JSON content hash from normalized recipe fields and uses the current
+duplicate gate below to decide when a candidate needs review.
 
 When `ingredients[].food_reference_id` is `null`, the importer tries:
 
@@ -145,7 +145,7 @@ Use it with:
 ```bash
 .venv/bin/python scripts/import_catalog_recipe_seeds.py \
   --manifest scripts/data/meal-recommendation-recipes.json \
-  --resolver-map scripts/data/meal-catalog-resolver-map.json \
+  --resolver-map scripts/data/meal-recommendation-resolver-map.json \
   --resolver-report plans/reports/meal-catalog-resolver-report.json \
   --dry-run
 ```
@@ -232,7 +232,7 @@ Then rerun dry-run with the resolver map:
   --manifest scripts/data/vn-user-common-meal-catalog.json \
   --partial \
   --dry-run \
-  --resolver-map scripts/data/meal-catalog-resolver-map.json \
+  --resolver-map scripts/data/meal-recommendation-resolver-map.json \
   --resolver-report plans/reports/vn-user-common-meal-catalog-resolver-report.json
 ```
 
@@ -242,7 +242,7 @@ When dry-run passes with `import=passed`, import into the configured database:
 .venv/bin/python scripts/import_catalog_recipe_seeds.py \
   --manifest scripts/data/vn-user-common-meal-catalog.json \
   --partial \
-  --resolver-map scripts/data/meal-catalog-resolver-map.json
+  --resolver-map scripts/data/meal-recommendation-resolver-map.json
 ```
 
 After import, generate missing catalog image URLs through Cloudflare Workers AI:
@@ -257,9 +257,11 @@ First test one prompt without calling Cloudflare:
 .venv/bin/python scripts/generate_catalog_meal_images.py --limit 1 --dry-run
 ```
 
-The tool reads `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and optional
-`CLOUDFLARE_WORKERS_AI_IMAGE_MODEL` from `.env`. It stores the returned
-Cloudflare `result.image` URL in `meal_catalog.image_url`.
+The tool reads `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, optional
+`CLOUDFLARE_WORKERS_AI_IMAGE_MODEL`, and the Cloudinary configuration from
+`.env`. URL responses can be persisted directly. Base64 responses are uploaded
+through `CloudinaryImageStore`, and the returned Cloudinary URL is stored in
+`meal_catalog.image_url`.
 
 ## Bootstrap Mode
 
@@ -285,11 +287,12 @@ Current duplicate handling is additive and history-safe:
 
 | Duplicate type | Behavior |
 | --- | --- |
-| Same `recipe_key` and same resolved content hash | Skip existing row. |
+| Same `recipe_key` and same canonical content hash | Skip existing row. |
 | Same `content_hash` with different `recipe_key` | Skip existing row. |
 | Same `recipe_key` but changed content | Fail import. |
-| Similar meal name only | Not detected yet. |
+| Same normalized name + cuisine and ingredient Jaccard >= 0.80 | Withhold for human review. |
 
-If product sends near-duplicate meal names, the current importer may allow them
-when `recipe_key` and content hash are different. Add a meal-name duplicate
-resolver before large production imports if this becomes noisy.
+If product sends near-duplicate meal names, the importer withholds them when
+the normalized name/cuisine pair and ingredient Jaccard reach the review
+threshold. Store the approved resolver artifact separately if the corpus is not
+committed to the repo.

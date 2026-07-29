@@ -1,6 +1,6 @@
 # Backend Database Guide
 
-**Last Updated:** June 27, 2026
+**Last Updated:** July 29, 2026
 **Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
 **Migrations:** Alembic via `migrations/versions/` and `migrations/run.py`
 **Tables:** 39 ORM model files across core, normalized tracking, referral, notification, and cache models
@@ -172,16 +172,20 @@ alembic revision --autogenerate -m "description"  # Create new
 alembic downgrade -1                              # Rollback one
 ```
 
-Migration files live under `migrations/versions/`. Non-production Docker startup
-runs `python migrations/run.py`; production Render deploys should run the same
-command as a pre-deploy step before promoting the web service. Use timestamp
-naming for new migrations and keep app runtime URLs separate from
+Migration files live under `migrations/versions/`. `alembic upgrade head` is the
+standard versioned upgrade path. `python migrations/run.py` is the guarded fresh
+bootstrap / recovery path: it upgrades empty databases from base to head and
+refuses to stamp existing unversioned application tables automatically. Use
+timestamp naming for new migrations and keep app runtime URLs separate from
 migration/admin URLs.
 
 **Recent migrations:**
 
 | Version | Changes |
 |---------|---------|
+| 20260727000001 | Add meal-recommendation candidate lifecycle states |
+| 20260726000001 | Relax meal recommendation anchor metadata |
+| 20260724000001 | Add meal recommendation skip state |
 | 20260723000001 | Add `pg_trgm`, unique normalized food-reference index, and trigram search index |
 | 20260716000001 | Add four-table meal catalog recommendation foundation |
 | 20260624000001 | Add journey_progress_seed_percent for existing-user journey progress seeding |
@@ -206,7 +210,7 @@ migration/admin URLs.
 
 **Temporary compatibility fields:** `user_profiles` keeps legacy JSON array columns during read fallback, `saved_suggestions.suggestion_data` remains a raw compatibility snapshot, `meal.instructions` remains a recipe-step compatibility snapshot, `food_reference.serving_sizes` and `food_reference.extra_nutrients` remain legacy response snapshots, `payout_requests.payment_details` remains raw sensitive payout detail pending a security/contract pass, and legacy hydration meal rows remain readable during rollout. `notifications.context` is an immutable render snapshot only; recipient truth lives in `user_fcm_tokens`. Do not add new source-of-truth JSON fields without a documented exception in `docs/standards/db-api.md`.
 
-**Production migration rule:** production schema creation is Alembic-only. `migrations/run.py` upgrades empty databases from base to head and refuses to stamp an existing unversioned schema automatically.
+**Production migration rule:** production schema creation is Alembic-only. `migrations/run.py` upgrades empty databases from base to head and refuses to stamp an existing unversioned schema automatically. Migration `001_initial_schema.py` is a real schema migration and should be reviewed like any later revision.
 
 ---
 

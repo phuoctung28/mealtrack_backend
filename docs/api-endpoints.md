@@ -1,11 +1,11 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** July 22, 2026
+**Last Updated:** July 29, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
-Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
-**Surface:** 31 route files, 29 router registrations, and 97 endpoint decorators.
+Dev mode: `X-Dev-User-Id` header (requires `ENVIRONMENT=development` and `ENABLE_DEV_AUTH_BYPASS=1`)
+**Surface:** 31 route files, 29 router registrations, 98 standard endpoint decorators, and 2 health `api_route` declarations serving GET+HEAD.
 
 ---
 
@@ -19,6 +19,8 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/health/db-connections` | DB connection stats |
 | GET | `/v1/health/notifications` | FCM health |
 | GET | `/v1/monitoring/cache/metrics` | Redis cache metrics |
+
+The two health routes are declared with `api_route` and answer both GET and HEAD.
 
 ## App & Universal Links
 
@@ -48,6 +50,8 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/meals/{meal_id}/value-insights` | Get value-insight cache status or trigger refresh |
 | DELETE | `/v1/meals/{meal_id}` | Delete meal (soft delete) |
 | PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients |
+| PUT | `/v1/meals/{meal_id}/photo` | Replace a meal photo |
+| DELETE | `/v1/meals/{meal_id}/photo` | Remove a meal photo |
 
 ### Meal Value Insights Contract
 
@@ -321,12 +325,18 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 
 ## Response Format
 
-```json
-// Success (2xx)
-{ "data": {...} }
+Successful responses generally return the route's declared payload directly;
+there is no universal `{ "data": ... }` wrapper. Handled application errors use
+the following shape:
 
-// Error (4xx, 5xx)
-{ "error": { "code": "MEAL_NOT_FOUND", "message": "Meal not found" } }
+```json
+{
+  "detail": {
+    "error_code": "MEAL_NOT_FOUND",
+    "message": "Meal not found",
+    "details": {}
+  }
+}
 ```
 
 ---

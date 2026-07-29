@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
-**Last Updated:** July 7, 2026
-**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, LangGraph, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
+**Last Updated:** July 29, 2026
+**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, USDA FoodData Central, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
@@ -12,7 +12,7 @@
 
 ### Authentication
 - Firebase Admin SDK for JWT verification
-- Dev bypass middleware enabled by `DEV_MODE=true` (`X-Dev-User-Id` header)
+- Dev bypass middleware enabled only when `ENVIRONMENT=development` and `ENABLE_DEV_AUTH_BYPASS=1` (`X-Dev-User-Id` header)
 - Maps Firebase UID to database UUID
 
 **Config:** `FIREBASE_CREDENTIALS=path/to/credentials.json`
@@ -54,6 +54,8 @@
 
 `AIModelManager` orchestrates providers through `AIProviderPort`. Each purpose has a fallback chain; models are tried in order until one succeeds. The circuit breaker opens after 5 failures within 60s and allows retry after 30s.
 
+Runtime provider registration currently instantiates OpenAI and Cloudflare Workers AI only. Gemini packages are present in dependencies, but they are not registered as a runtime provider.
+
 **Default model:** `gpt-5.4-mini-2026-03-17` for text and vision when `OPENAI_API_KEY` is configured.
 
 **Text chain when Cloudflare text routing is configured:**
@@ -67,12 +69,20 @@ gpt-5.4-mini-2026-03-17  →  @cf/google/gemma-4-26b-a4b-it
 ```
 
 **Catalog image generation:** `scripts/generate_catalog_meal_images.py` calls
-Cloudflare Workers AI `@cf/black-forest-labs/flux-2-klein-9b` after catalog import and writes the
-returned image URL to `meal_catalog.image_url`.
+Cloudflare Workers AI after catalog import. The code default is
+`@cf/black-forest-labs/flux-2-klein-9b`; an environment override may select a
+different supported model. URL responses are persisted directly. Base64 image
+responses are uploaded through `CloudinaryImageStore`, and the resulting
+Cloudinary URL is persisted to `meal_catalog.image_url`.
 
 **Text purposes routed through Cloudflare by default:**
 ```
 recipe, general, meal_names, discovery, parse_text, barcode
+```
+
+**Vision purposes routed through Cloudflare when enabled:**
+```
+meal_scan, ingredient_scan, food_label_scan
 ```
 
 Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Never log prompt content, food payloads, or raw AI output.
@@ -166,10 +176,10 @@ Config:
 | `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery,parse_text,barcode` | Text purposes that prefer CF first, with OpenAI fallback |
 | `CLOUDFLARE_WORKERS_AI_JSON_MODE` | `true` | Reserved; currently unused by LangChain adapter |
 | `CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS` | `60` | HTTP timeout per request |
-| `CLOUDFLARE_WORKERS_AI_IMAGE_MODEL` | `@cf/black-forest-labs/flux-2-klein-9b` | Model used by the catalog image generation script |
+| `CLOUDFLARE_WORKERS_AI_IMAGE_MODEL` | `@cf/black-forest-labs/flux-2-klein-9b` | Default catalog image generation model; override only when the env var is set |
 | `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision as image-analysis fallback after OpenAI |
 | `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
-| `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan` | Image purposes that include CF vision as fallback |
+| `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan,food_label_scan` | Image purposes that include CF vision as fallback |
 
 ### Production Rollout (Vision)
 
@@ -179,7 +189,7 @@ Set these env vars in Render (no redeployment needed, env var change restarts th
 CLOUDFLARE_WORKERS_AI_ENABLED=true
 CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true
 CLOUDFLARE_WORKERS_AI_VISION_MODEL=@cf/google/gemma-4-26b-a4b-it
-CLOUDFLARE_WORKERS_AI_VISION_PURPOSES=meal_scan,ingredient_scan
+CLOUDFLARE_WORKERS_AI_VISION_PURPOSES=meal_scan,ingredient_scan,food_label_scan
 ```
 
 Keep `OPENAI_API_KEY` configured — OpenAI remains primary for image scanning.
@@ -310,7 +320,7 @@ search traffic.
 | Daily/weekly nutrition read models | Conditional cache; short TTL plus write/event invalidation |
 | Auth UID mapping | Process-local TTL cache, not Redis |
 | Notification precompute and FCM token ownership | Do not cache; database is source of truth |
-| Meal suggestion sessions | Not cache; transient state. Prefer Postgres with `expires_at`, or treat Redis as required state store if kept |
+| Meal suggestion sessions | Required Redis-backed transient state in the current implementation; writes fail when the session store is unavailable |
 
 ---
 

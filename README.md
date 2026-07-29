@@ -13,19 +13,18 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 ## 🚀 Features
 
 - **AI-Powered Meal Analysis**: Vision-based food recognition with 6 meal strategies, food-label image analysis, and provider fallback routing.
-- **26 Endpoint Route Modules**: 88 endpoint decorators covering meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks, and support routes.
+- **Catalog-Backed Meal Recommendations**: Deterministic three-day plans built from the curated catalog, with durable slot summaries and swap/log/skip flows.
+- **API Surface**: 31 route files, 29 router registrations in `main.py`, and 98 standard `@router` verb handlers plus the two health `api_route` declarations that serve GET+HEAD.
 - **CQRS Architecture**: Commands, queries, events, and handlers wired through a PyMediator singleton event bus.
-- **Intelligent Planning**: AI-generated weekly plans with dietary preferences, cooking time constraints, and ingredient-based generation.
-- **Vector Search**: Pinecone semantic search with 1024-dim embeddings (llama-text-embed-v2).
-- **Real-time Chat**: WebSocket + REST endpoints with streaming AI responses via MessageOrchestrationService.
+- **Vector Cache**: Active meal-image-name vector cache uses `pgvector`; Pinecone is legacy documentation only and is not a runtime adapter.
 - **Multi-Language Support**: 7 languages (en, vi, es, fr, de, ja, zh) with translation service.
 - **Smart Notifications**: FCM push with timezone-aware scheduling and preferences.
 
 ## 🛠 Technology Stack
 
 - **Core**: FastAPI 0.136.3 (Python 3.13.2), SQLAlchemy 2.0 async runtime (`AsyncSession`, `AsyncUnitOfWork`).
-- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0, Redis 7.0 for selective optional caching; required state documented separately.
-- **AI**: OpenAI via LangChain/Responses API as the default text and vision provider, with optional Cloudflare Workers AI routing for configured text purposes and vision fallback; Pinecone Inference API for embeddings.
+- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0, Redis 7.0 for selective optional caching; required state is modeled separately.
+- **AI**: OpenAI via LangChain/Responses API as the default text and vision provider, with optional Cloudflare Workers AI routing for configured text purposes and vision fallback. Gemini packages remain in dependencies, but the runtime provider registry is OpenAI + Cloudflare.
 - **Infrastructure**: Firebase (JWT Auth + FCM), Cloudinary (image storage), RevenueCat (subscriptions).
 - **Event Bus**: PyMediator with singleton registry for CQRS.
 - **Testing**: pytest (unit-biased default config), ruff (linting), mypy (type checking).
@@ -42,10 +41,10 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 Follows a **4-Layer Clean Architecture** with **CQRS** and **Event-Driven Design**:
 
-1. **API Layer** (91 files, 11,323 LOC): 26 endpoint route modules, 88 endpoint decorators, schemas, middleware, dependencies, and API mappers.
-2. **Application Layer** (207 files, 11,333 LOC): CQRS command/query/event handlers and orchestration services.
-3. **Domain Layer** (174 files, 17,397 LOC): entities, services, ports, policies, and bounded contexts.
-4. **Infrastructure Layer** (154 files, 15,337 LOC): database models, repositories, external adapters, cache, observability, and event bus implementation.
+1. **API Layer** (97 files, 12,709 LOC): route modules, middleware, schemas, dependencies, and API mappers.
+2. **Application Layer** (244 files, 14,684 LOC): CQRS command/query/event handlers and orchestration services.
+3. **Domain Layer** (192 files, 19,522 LOC): entities, services, ports, policies, and bounded contexts.
+4. **Infrastructure Layer** (162 files, 17,762 LOC): database models, repositories, external adapters, cache, observability, and event bus implementation.
 
 ## 🚦 Getting Started
 
@@ -59,10 +58,16 @@ pip install -r requirements.txt
 # Setup environment
 cp .env.example .env # Configure variables
 
-# Run migrations and start server
-python -m alembic upgrade head
+# Local development flow
+./scripts/development/local.sh
+
+# Or run the app directly after the database is ready
 uvicorn src.api.main:app --reload
 ```
 
+Production uses `python migrations/run.py` as the pre-deploy command. The
+production container then starts through `docker-entrypoint.sh` without
+re-running migrations; non-production containers run migrations at startup.
+
 - **Swagger Docs**: http://localhost:8000/docs
-- **Tests**: `pytest` for the default non-integration suite; CI runs `pytest tests/unit --cov=src --cov-fail-under=65`
+- **Tests**: `pytest tests/unit --cov=src --cov-fail-under=65` for the default CI-aligned suite. Broad unscoped `pytest` currently hits two duplicate-package import collisions, so prefer targeted paths.

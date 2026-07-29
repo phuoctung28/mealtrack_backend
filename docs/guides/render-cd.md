@@ -41,13 +41,14 @@ Health check path: /health
 Use these deployment-related variables:
 
 ```text
-WEB_CONCURRENCY=1
+UVICORN_WORKERS=1
 MIGRATION_LOCK_TIMEOUT_MS=10000
 MIGRATION_STATEMENT_TIMEOUT_MS=240000
 ```
 
-`docker-entrypoint.sh` intentionally does not run migrations. Do not add migration
-commands back to container startup.
+`docker-entrypoint.sh` skips migrations when `ENV=production` because the
+pre-deploy step owns them. Non-production containers run `python
+migrations/run.py` before Uvicorn starts.
 
 ## Why
 

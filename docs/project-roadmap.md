@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.7
-**Last Updated:** July 5, 2026
-**Status:** Production-ready. 635 source files in `src/`, 56,132 LOC in `src/`, 312 Python test files, and 1,600+ collected tests. Default `pytest` is unit-biased because integration tests are ignored by config.
+**Last Updated:** July 29, 2026
+**Status:** Core backend runtime is production-oriented; catalog rollout still has explicit staging, corpus, load, and rollback evidence gates. The repository has 704 source files in `src/`, 65,423 LOC in `src/`, 350 Python test files, and 2,013 tests in `tests/unit`.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
@@ -162,7 +162,7 @@
 - [x] Scout-based codebase analysis (4 comprehensive reports: API, App, Domain, Infra layers).
 - [x] Updated all documentation with verified statistics (417 files, ~37K LOC).
 - [x] Accurate metrics: 29 commands, 23 queries, 10+ events, 40+ handlers, 50+ domain services.
-- [x] Added WebSocket chat details (ConnectionManager, 3 application services).
+- [x] Replaced obsolete chat/WebSocket planning claims with deterministic meal recommendation documentation.
 - [x] Documented EventBus singleton registry pattern.
 
 ### Phase 06: Session-Based Meal Suggestions (Jan 2026)
@@ -183,7 +183,7 @@
 
 ### Phase 05: Pinecone Inference Migration (Jan 2026)
 - [x] Recreated indexes with 1024-dim vectors (llama-text-embed-v2).
-- [x] Migrated to serverless Pinecone Inference API.
+- [x] Migrated to serverless Pinecone Inference API (historical; the active meal-image-name vector cache now uses pgvector).
 - [x] Updated unit/integration tests with 1024-dim mocks.
 - [x] Semantic ingredient search with 0.35 similarity threshold.
 
@@ -197,7 +197,7 @@
 - [x] Gemini 2.5 Flash Vision integration with 6 analysis strategies (Strategy Pattern).
 - [x] Multi-model Gemini for rate distribution (4 model types: meal names, recipe primary/secondary, general).
 - [x] CQRS architecture with PyMediator event bus (singleton registry pattern).
-- [x] Chat with streaming AI responses (WebSocket + REST, MessageOrchestrationService, AIResponseCoordinator).
+- [x] AI meal suggestions and deterministic catalog-backed meal recommendations.
 - [x] Firebase Auth & FCM with platform-specific configs.
 - [x] SQLAlchemy 2.0 async runtime with `AsyncUnitOfWork` transaction boundaries.
 - [x] RevenueCat subscription integration.
@@ -207,9 +207,9 @@
 
 ---
 
-## Current Priorities (Q2 2026)
+## Current Priorities (Q3 2026)
 1. **Performance**: Optimize suggestion generation (target <10s from ~45s) — in progress.
-2. **Security**: Restrict CORS in production (`allow_origins=["*"]` currently wide open), add PII redaction to request logging — open.
+2. **Security**: Restrict CORS in production via `ALLOWED_ORIGINS` allowlists, add PII redaction to request logging — open.
 3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (discover, generate) — open.
 4. **Testing**: Increase coverage for meal discovery and notification dedup logic — open.
 5. **Premium Gating**: Apply `require_premium` dependency to premium-only routes — open.
@@ -235,14 +235,12 @@
 
 ### High Priority
 - [ ] Plan contract migration to remove or secure legacy JSON compatibility fields after production observation window.
-- [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
 - [ ] Implement API versioning strategy beyond v1
 - [ ] Apply `require_premium` dependency to premium-only features
 - [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config
 
 ### Medium Priority
 - [ ] Add monitoring for AI provider quota and Cloudinary storage limits
-- [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes
 - [ ] Tune rate limiting thresholds for meal_suggestions endpoints based on usage patterns
 
 ### Low Priority

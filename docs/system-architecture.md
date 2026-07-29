@@ -1,9 +1,9 @@
 # Backend System Architecture Overview
 
-**Last Updated:** July 7, 2026
+**Last Updated:** July 29, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 635 Python files, 56,132 LOC in `src/`
+**Codebase:** 704 Python files, 65,423 LOC in `src/`
 
 ---
 
@@ -11,22 +11,22 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (91 files)                    │
+│                      API Layer (97 files)                    │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (207 files)                   │
+│              Application Layer (244 files)                   │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (174 files)                      │
+│                Domain Layer (192 files)                      │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
 ┌────────────────────────▼────────────────────────────────────┐
-│            Infrastructure Layer (154 files)                  │
+│            Infrastructure Layer (162 files)                  │
 │  DB │ Cache │ External APIs │ Event Bus │ Config             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -37,13 +37,13 @@
 
 | Layer | Files | LOC | Key Contents |
 |-------|-------|-----|-------------|
-| API | 91 | 11,323 | 28 route files, 26 endpoint route modules, 88 endpoint decorators, schemas, middleware, dependencies |
-| App | 207 | 11,333 | 50 command files, 52 query files, 14 event files, 86 handler files |
-| Domain | 174 | 17,397 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
-| Infra | 154 | 15,337 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
-| **Total** | **626** | **55,390** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
+| API | 97 | 12,709 | Routes, middleware, schemas, dependencies, and API mappers |
+| App | 244 | 14,684 | CQRS commands, queries, handlers, and orchestration services |
+| Domain | 192 | 19,522 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
+| Infra | 162 | 17,762 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
+| **Total** | **695** | **64,677** | Layer directories only; `src/` also has root/bootstrap/cron modules outside the four layers |
 
-**Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns.
+**Layer rule:** Domain has no outer-layer or external I/O dependencies. See `cqrs-guide.md` for handler patterns.
 
 ---
 
@@ -69,7 +69,7 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
 
 ### Meal Recommendation Ranking
-Catalog-backed meal recommendations use snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded top-30 diversity reranking for new plan generation, without changing endpoint paths.
+Catalog-backed meal recommendations use snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded top-30 diversity reranking for new plan generation, without changing endpoint paths. The current scoring weights use `ingredient_weight = 0.35 * confidence` and `diversity_weight = 0.10`, with calorie weight filling the remainder.
 
 The active catalog snapshot owns both immutable meal projections and snapshot-scoped ingredient IDF statistics. Persisted plans replay their stored candidates and scores instead of recalculating.
 
@@ -195,7 +195,6 @@ Nutree mobile ──→ MealTrack (validate/apply code)
 
 - Premium features not restricted on routes (`require_premium` dependency not applied)
 - No API versioning strategy beyond v1
-- `CloudinaryImageStore` instantiated directly in routes (not via DI)
 - Hardcoded constants (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) not in config
 - CORS is configured only when `ALLOWED_ORIGINS` is set; production origin values still need deployment review.
 - `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance will block (by design — use separate instances per handler, enforced by event bus handler cloning)

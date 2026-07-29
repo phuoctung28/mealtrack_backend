@@ -1,6 +1,8 @@
 # Meal Recommendation Mobile Handoff
 
-Status: backend is MVP-ready for mobile integration once the target environment has catalog data and the feature gate is enabled for test users.
+Status: backend is MVP-ready for mobile integration once the target environment
+has catalog data. The backend routes have no rollout gate; test-user enablement,
+if required, belongs to mobile remote configuration or deployment operations.
 
 ## Feature Summary
 
@@ -27,8 +29,9 @@ Core behavior:
    - Dinner: 37.5%
 3. Load active catalog meals.
 4. Score meals by:
-   - 82% calorie fit
-   - 18% recent ingredient affinity
+   - calorie fit at the remaining weight
+   - ingredient affinity at `0.35 * confidence`
+   - diversity reranking at `0.10`
 5. Pick unique selected meals for 9 slots.
 6. Store alternatives for each slot so user can swap.
 
@@ -42,6 +45,7 @@ On app open or recommendation screen entry:
 4. Let user:
    - view meal details
    - swap a slot
+   - skip a slot
    - log a recommended meal
 5. Fetch `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` when the user drills into a slot or needs alternatives.
 6. Merge swap/log responses back into the cached plan instead of reloading the full plan.
@@ -49,6 +53,8 @@ On app open or recommendation screen entry:
 ## API Contracts
 
 All endpoints require normal Firebase auth.
+
+FastAPI can still return `422` before handler execution when the request body or headers fail validation.
 
 ### Create Or Replay 3-Day Plan
 
@@ -66,6 +72,9 @@ Behavior:
 - Creates a new active 3-day plan if needed.
 - Replays the same plan for the same `Idempotency-Key`.
 - Supersedes prior active plan for the user when creating a new one.
+- `daily_calories` is the adjusted weekly-budget daily target, not raw/base TDEE.
+- The `allergy_evaluated` flag is backend-owned but is currently always false;
+  clients must not interpret it as completed allergy screening.
 
 ### Get Existing Plan
 
@@ -124,12 +133,29 @@ Behavior:
 - Marks the recommendation slot as logged.
 - Safe to retry with the same `request_id`.
 
+### Skip Slot
+
+```http
+POST /v1/meal-recommendations/{plan_id}/slots/{slot_id}/skip
+Authorization: Bearer <firebase-jwt>
+```
+
+```json
+{
+  "request_id": "mobile-stable-skip-request-id",
+  "expected_selection_version": 1
+}
+```
+
+The response uses the same changed-slot detail shape as swap and log. Reuse the
+same `request_id` when retrying the same user action.
+
 ## Response Shape
 
 The plan summary is compact:
 
 - plan metadata: `id`, `status`, `timezone`, `start_date`, `daily_calories`, `allergy_evaluated`
-- slot summary: `id`, `slot_date`, `day_index`, `meal_type`, `catalog_meal_id`, compact `catalog_meal`, `target_calories`, `position`, `selection_version`, `logged_meal_id`
+- slot summary: `id`, `slot_date`, `day_index`, `meal_type`, `catalog_meal_id`, compact `catalog_meal`, `target_calories`, `position`, `selection_version`, `logged_meal_id`, `shown_at`, `skipped_at`
 - omitted from plan summary: `score`, `alternatives`, and `catalog_meal.ingredients`
 
 Use `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` for the hydrated selected slot payload when the user needs details or alternatives.
@@ -138,8 +164,9 @@ Use `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` for the hydrated se
 
 Mobile should handle:
 
-- `404`: feature disabled for user or plan not found.
-- `400`: invalid idempotency key or request payload.
+- `404`: owner-scoped plan or slot not found.
+- `400`: invalid idempotency key or handler-level request conflict.
+- `422`: request validation failed before the route ran.
 - `409`: stale `selection_version`, duplicate/conflicting idempotency request, already logged slot.
 - `503`: user calorie target unavailable or insufficient catalog coverage.
 
@@ -151,7 +178,7 @@ Ready:
 - Catalog importer exists.
 - Catalog nutrition is computed from ingredients and `food_reference`.
 - Deterministic 3-day recommendation engine exists.
-- Create, get, slot-detail, swap, and log endpoints exist.
+- Create, get, slot-detail, swap, log, and skip endpoints exist.
 - Operation idempotency exists.
 - Recommendation read paths now use the compact/delta contract for mobile cache patching.
 - Candidate lifecycle state (`seen_at` and `retired_at`) is backend-owned; the
@@ -162,7 +189,7 @@ Ready:
 
 Environment prerequisites:
 
-- Full production catalog import is not complete; live dev DB currently has only the first imported sample set.
+- Production catalog import and replay evidence still need to be validated in the target deployment environment.
 - Recommendation endpoints are available without a backend rollout gate.
 
 ## Mobile Team Can Start Now
@@ -173,6 +200,6 @@ Mobile can start:
 - local state model for compact plan + hydrated slot detail state
 - API client methods
 - idempotency key generation
-- swap/log retry behavior
+- swap/log/skip retry behavior
 - loading/error/empty states
 - rendering selected meal cards from summary data and alternative cards from hydrated slot detail
