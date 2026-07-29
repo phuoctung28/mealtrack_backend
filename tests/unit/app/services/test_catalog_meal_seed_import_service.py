@@ -336,6 +336,18 @@ async def test_import_reports_unverified_exact_match():
 
 
 @pytest.mark.asyncio
+async def test_import_reports_pinned_unverified_reference_for_manifest_recovery():
+    importer = _Importer(refs_by_id={7: _reference(is_verified=False)})
+
+    summary = await importer.import_manifest(_manifest())
+
+    assert summary.inserted == 0
+    assert "food_reference_not_verified" in summary.errors[0]
+    assert summary.unverified_references[0].food_reference_id == 7
+    assert summary.resolution_report()["unverified_references"][0]["source"] == "catalog_seed"
+
+
+@pytest.mark.asyncio
 async def test_enrichment_caches_each_missing_name_once_without_importing_recipe():
     calls = []
 

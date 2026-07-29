@@ -162,6 +162,7 @@ def _response(validation, summary, *, applied: bool) -> AdminMealCatalogImportRe
         applied=applied,
         errors=list(summary.errors),
         issues=report["issues"],
+        unverified_references=report["unverified_references"],
         review_required=report["review_required"],
     )
 

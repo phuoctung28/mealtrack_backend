@@ -79,6 +79,16 @@ class AdminMealCatalogResolutionIssue(BaseModel):
     candidates: list[AdminMealCatalogResolutionCandidate]
 
 
+class AdminMealCatalogUnverifiedReference(BaseModel):
+    recipe_index: int
+    recipe_key: str
+    ingredient_index: int
+    ingredient_name: str
+    food_reference_id: int
+    food_reference_name: str
+    source: str
+
+
 class AdminMealCatalogReviewRequired(BaseModel):
     recipe_index: int
     recipe_key: str
@@ -112,4 +122,5 @@ class AdminMealCatalogImportResponse(BaseModel):
     applied: bool
     errors: list[str]
     issues: list[AdminMealCatalogResolutionIssue]
+    unverified_references: list[AdminMealCatalogUnverifiedReference]
     review_required: list[AdminMealCatalogReviewRequired]
