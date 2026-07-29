@@ -100,6 +100,7 @@ class _Importer(CatalogMealSeedImporter):
         approved_mappings=None,
         auto_resolve_threshold=0.92,
         resolve_all_best_effort=False,
+        candidate_enricher=None,
     ):
         self.session = _Session()
         super().__init__(
@@ -108,6 +109,7 @@ class _Importer(CatalogMealSeedImporter):
             approved_mappings=approved_mappings,
             auto_resolve_threshold=auto_resolve_threshold,
             resolve_all_best_effort=resolve_all_best_effort,
+            candidate_enricher=candidate_enricher,
         )
         self.refs_by_id = refs_by_id or {}
         self.refs_by_name = refs_by_name or {}
@@ -331,6 +333,47 @@ async def test_import_reports_unverified_exact_match():
     assert summary.inserted == 0
     assert "exact_match_not_verified" in summary.errors[0]
     assert summary.resolution_issues[0].candidates[0].is_verified is False
+
+
+@pytest.mark.asyncio
+async def test_enrichment_caches_each_missing_name_once_without_importing_recipe():
+    calls = []
+
+    async def enrich(name):
+        calls.append(name)
+        return True
+
+    manifest = _manifest(food_reference_id=None)
+    duplicate = _manifest(food_reference_id=None)["recipes"][0]
+    duplicate["recipe_key"] = "vn-rice-lunch"
+    manifest["recipes"].append(duplicate)
+    importer = _Importer(
+        candidate_enricher=enrich,
+    )
+
+    summary = await importer.enrich_missing_candidates(manifest)
+
+    assert calls == ["Rice"]
+    assert summary.attempted == 1
+    assert summary.enriched == 1
+    assert importer.session.added == []
+
+
+@pytest.mark.asyncio
+async def test_import_does_not_enrich_missing_candidates():
+    calls = []
+
+    async def enrich(name):
+        calls.append(name)
+        return True
+
+    importer = _Importer(candidate_enricher=enrich)
+
+    summary = await importer.import_manifest(_manifest(food_reference_id=None))
+
+    assert summary.inserted == 0
+    assert "needs_review" in summary.errors[0]
+    assert calls == []
 
 
 @pytest.mark.asyncio

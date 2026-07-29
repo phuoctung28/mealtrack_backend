@@ -181,9 +181,23 @@ def get_catalog_meal_seed_importer(
 ) -> CatalogMealSeedImporter:
     """Build the catalog seed importer with request-scoped repositories."""
 
+    food_reference_repository = AsyncFoodReferenceRepository(db)
+
+    async def enrich_missing_with_fatsecret(name: str) -> bool:
+        from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
+            IngredientNutritionResolver,
+        )
+
+        resolver = IngredientNutritionResolver(
+            fatsecret=get_fat_secret_service_instance(),
+            food_ref_repo=food_reference_repository,
+        )
+        return await resolver.resolve(name) is not None
+
     return CatalogMealSeedImporter(
         AsyncCatalogMealRepository(db),
-        AsyncFoodReferenceRepository(db),
+        food_reference_repository,
+        candidate_enricher=enrich_missing_with_fatsecret,
     )
 
 
