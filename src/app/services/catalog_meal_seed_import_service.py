@@ -129,6 +129,30 @@ class CatalogSeedCandidateEnrichmentSummary:
 
 
 @dataclass(frozen=True)
+class CatalogSeedUnverifiedReference:
+    """A pinned manifest reference blocked by the publication verification gate."""
+
+    recipe_index: int
+    recipe_key: str
+    ingredient_index: int
+    ingredient_name: str
+    food_reference_id: int
+    food_reference_name: str
+    source: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "recipe_index": self.recipe_index,
+            "recipe_key": self.recipe_key,
+            "ingredient_index": self.ingredient_index,
+            "ingredient_name": self.ingredient_name,
+            "food_reference_id": self.food_reference_id,
+            "food_reference_name": self.food_reference_name,
+            "source": self.source,
+        }
+
+
+@dataclass(frozen=True)
 class CatalogSeedImportSummary:
     """Import outcome for CLI reporting and tests."""
 
@@ -137,6 +161,9 @@ class CatalogSeedImportSummary:
     dry_run: bool = False
     errors: tuple[str, ...] = field(default_factory=tuple)
     resolution_issues: tuple[CatalogSeedResolutionIssue, ...] = field(
+        default_factory=tuple
+    )
+    unverified_references: tuple[CatalogSeedUnverifiedReference, ...] = field(
         default_factory=tuple
     )
     review_required: tuple[CatalogSeedReviewRequired, ...] = field(default_factory=tuple)
@@ -152,12 +179,27 @@ class CatalogSeedImportSummary:
             "dry_run": self.dry_run,
             "errors": list(self.errors),
             "issues": [issue.to_dict() for issue in self.resolution_issues],
+            "unverified_references": [
+                reference.to_dict() for reference in self.unverified_references
+            ],
             "review_required": [item.to_dict() for item in self.review_required],
         }
 
 
 class CatalogSeedImportError(ValueError):
     """Raised when a seed manifest cannot be imported safely."""
+
+
+class CatalogSeedUnverifiedReferenceError(CatalogSeedImportError):
+    """Raised when a manifest pins an unverified food reference."""
+
+    def __init__(self, issue: CatalogSeedUnverifiedReference) -> None:
+        self.issue = issue
+        super().__init__(
+            f"recipes[{issue.recipe_index}].ingredients[{issue.ingredient_index}] "
+            f"food_reference_not_verified: Food reference {issue.food_reference_id} "
+            "is not verified."
+        )
 
 
 class CatalogSeedResolutionError(CatalogSeedImportError):
@@ -243,6 +285,7 @@ class CatalogMealSeedImporter:
         skipped = 0
         errors: list[str] = []
         resolution_issues: list[CatalogSeedResolutionIssue] = []
+        unverified_references: list[CatalogSeedUnverifiedReference] = []
         review_required: list[CatalogSeedReviewRequired] = []
         prepared: list[_PreparedCatalogSeed] = []
         signatures = await self._catalog_repository.list_seed_signatures()
@@ -252,6 +295,10 @@ class CatalogMealSeedImporter:
             except CatalogSeedResolutionError as exc:
                 errors.append(str(exc))
                 resolution_issues.append(exc.issue)
+                continue
+            except CatalogSeedUnverifiedReferenceError as exc:
+                errors.append(str(exc))
+                unverified_references.append(exc.issue)
                 continue
             except CatalogSeedImportError as exc:
                 errors.append(str(exc))
@@ -272,6 +319,7 @@ class CatalogMealSeedImporter:
                 dry_run=self._dry_run,
                 errors=tuple(errors),
                 resolution_issues=tuple(resolution_issues),
+                unverified_references=tuple(unverified_references),
                 review_required=tuple(review_required),
             )
             _record_seed_import_metrics(summary, started)
@@ -408,6 +456,18 @@ class CatalogMealSeedImporter:
                     )
                 )
             except IngredientQuantityConversionError as exc:
+                if exc.code == "food_reference_not_verified":
+                    raise CatalogSeedUnverifiedReferenceError(
+                        CatalogSeedUnverifiedReference(
+                            recipe_index=recipe_index,
+                            recipe_key=str(recipe["recipe_key"]).strip(),
+                            ingredient_index=ingredient_index,
+                            ingredient_name=str(ingredient["name"]).strip(),
+                            food_reference_id=reference.id,
+                            food_reference_name=reference.name,
+                            source=reference.source,
+                        )
+                    ) from exc
                 raise CatalogSeedImportError(
                     f"recipes[{recipe_index}].ingredients[{ingredient_index}] "
                     f"{exc.code}: {exc}"

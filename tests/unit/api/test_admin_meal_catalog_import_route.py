@@ -9,6 +9,7 @@ from src.api.routes.v1 import admin_meal_catalog_import as route_mod
 from src.app.services.catalog_meal_seed_import_service import (
     CatalogSeedCandidateEnrichmentSummary,
     CatalogSeedImportSummary,
+    CatalogSeedUnverifiedReference,
 )
 
 
@@ -50,6 +51,33 @@ def test_import_catalog_manifest_previews_then_commits(monkeypatch):
     assert response.json()["inserted"] == 1
     assert calls == [True, False]
     db.commit.assert_awaited_once()
+
+
+def test_resolve_returns_structured_unverified_references(monkeypatch):
+    db = AsyncMock()
+
+    async def fake_run_importer(db_arg, request, *, dry_run):
+        return CatalogSeedImportSummary(
+            dry_run=dry_run,
+            errors=("food_reference_not_verified",),
+            unverified_references=(
+                CatalogSeedUnverifiedReference(
+                    recipe_index=0,
+                    recipe_key="pho-ga-001",
+                    ingredient_index=0,
+                    ingredient_name="Chicken breast",
+                    food_reference_id=1,
+                    food_reference_name="Chicken breast",
+                    source="seed",
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(route_mod, "_run_importer", fake_run_importer)
+    response = _client(db).post("/v1/admin/meal-catalog/resolve", json=_request())
+
+    assert response.status_code == 200
+    assert response.json()["unverified_references"][0]["food_reference_id"] == 1
 
 
 def test_import_catalog_manifest_returns_validation_report_without_db_work():
