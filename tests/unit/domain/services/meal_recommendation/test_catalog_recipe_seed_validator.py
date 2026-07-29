@@ -142,6 +142,31 @@ def test_manifest_allows_snack_meal_type():
     assert result.coverage["vietnamese"]["snack"] == 1
 
 
+def test_partial_manifest_allows_additional_cuisines_and_incomplete_coverage():
+    manifest = {
+        "release_key": "bootstrap-release",
+        "expected_recipe_count": 3,
+        "recipes": [
+            _recipe("jp-breakfast", "japanese", "breakfast"),
+            _recipe("western-lunch", "western", "lunch"),
+            _recipe("international-dinner", "international", "dinner"),
+        ],
+    }
+
+    result = validate_catalog_seed_manifest(
+        manifest,
+        expected_recipe_count=3,
+        expected_cuisine_counts=None,
+        min_per_cuisine_meal_type=5,
+        allowed_cuisines=None,
+        required_cuisines=(),
+    )
+
+    assert result.is_valid is True
+    assert result.coverage["western"]["lunch"] == 1
+    assert result.coverage["international"]["dinner"] == 1
+
+
 def test_manifest_rejects_invalid_food_reference_id_type():
     manifest = {
         "release_key": "test-release",

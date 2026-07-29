@@ -210,7 +210,9 @@ Recommended first pass for a research-team file:
 
 Use `--partial` when importing/testing fewer than the production default of 180
 recipes. It validates against the actual recipe count and skips the exact
-production cuisine split.
+production cuisine split, required cuisine coverage, and the production cuisine
+allowlist, so bootstrap manifests may contain labels such as `western` or
+`international`. Production imports remain strict.
 
 Review `plans/reports/vn-user-common-meal-catalog-resolver-report.json`.
 Each issue looks like:
