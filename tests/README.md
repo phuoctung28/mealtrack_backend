@@ -2,21 +2,20 @@
 
 This document outlines the testing approach for the MealTrack application.
 
+**Current scope:** 350 Python files in `tests/`; `tests/unit` currently collects 2,013 tests.
+
 ## Test Structure
 
 ```
 tests/
-├── conftest.py          # Global fixtures and configuration
-├── fixtures/            # Test data factories and builders
-│   └── factories.py     # Factory classes for test objects
-├── unit/                # Unit tests (fast, isolated)
-│   ├── test_meal_command_handlers.py
-│   └── test_user_command_handlers.py
-└── integration/         # Integration tests (with database)
-    ├── test_meal_query_handlers.py
-    ├── test_user_query_handlers.py
-    ├── test_event_driven_flow.py
-    └── postgres/       # Real PostgreSQL catalog/recommendation gates
+├── architecture/        # Repository-wide dependency and ownership checks
+├── fakes/               # Shared test doubles
+├── fixtures/            # Reusable test data and files
+├── integration/         # Explicit integration suites
+│   └── postgres/        # Real PostgreSQL catalog/recommendation gates
+├── migrations/          # Alembic and bootstrap tests
+├── performance/         # Performance checks and benchmarks
+└── unit/                # Default CI-aligned unit suite
 ```
 
 ## Test Categories
@@ -106,31 +105,29 @@ Benefits of stubs:
 
 ## Running Tests
 
-### Quick Commands
+### Canonical Commands
 ```bash
-# Quick health check
-python run_tests.py health
+# CI-aligned unit suite
+pytest tests/unit --cov=src --cov-fail-under=65
 
-# Run fast tests
-python run_tests.py fast
+# One focused file
+pytest tests/unit/api/test_meal_recommendations_route.py -q
 
-# Run unit tests
-python run_tests.py unit
+# Architecture contracts
+lint-imports
 
-# Run with coverage
-python run_tests.py coverage
-
-# Run all tests
-python run_tests.py all
+# Real PostgreSQL integration suite
+TEST_DATABASE_URL=postgresql+asyncpg://nutree:nutree@localhost:5432/nutree_test \
+  pytest tests/integration/postgres -o addopts="" -m integration -q
 ```
 
 ### Direct pytest Usage
 ```bash
 # Run specific test file
-pytest tests/unit/test_meal_command_handlers.py
+pytest tests/unit/api/test_meal_recommendations_route.py
 
 # Run specific test
-pytest tests/unit/test_meal_command_handlers.py::TestUploadMealImageCommandHandler::test_upload_meal_image_success
+pytest tests/unit/api/test_meal_recommendations_route.py -k create
 
 # Run with markers
 pytest -m unit
@@ -146,13 +143,15 @@ pytest --cov=src --cov-report=html
 
 ## CI/CD Integration
 
-GitHub Actions workflow (`.github/workflows/test.yml`):
+GitHub Actions workflow (`.github/workflows/ci.yml`):
 1. Sets up Python environment
 2. Installs dependencies
 3. Runs unit tests
 4. Runs integration tests
 5. Generates coverage reports
 6. Runs linting and security checks
+
+The full unscoped `pytest` collection currently hits two duplicate-package import collisions. Prefer `pytest tests/unit --cov=src --cov-fail-under=65` or a targeted integration path until that collection issue is resolved.
 
 ## Best Practices
 
@@ -189,11 +188,12 @@ GitHub Actions workflow (`.github/workflows/test.yml`):
        result = await event_bus.send(command)
    ```
 
-## Coverage Goals
+## Coverage Gates and Goals
 
-- Unit test coverage: > 80%
-- Integration test coverage: > 70%
-- Overall coverage: > 75%
+- Enforced CI unit gate: 65%
+- Documentation target: 70%+ overall
+- Critical-path target: 100%
+- New-feature target: 80%+
 
 ## Debugging Tests
 
