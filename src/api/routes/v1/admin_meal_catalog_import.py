@@ -15,6 +15,7 @@ from src.api.schemas.response.admin_meal_catalog_responses import (
 from src.app.services.catalog_meal_seed_import_service import CatalogMealSeedImporter
 from src.domain.services.meal_recommendation.catalog_recipe_seed_validator import (
     PRODUCTION_CUISINE_COUNTS,
+    REQUIRED_CUISINES,
     validate_catalog_seed_manifest,
 )
 
@@ -86,6 +87,8 @@ def _validate_manifest(request: AdminMealCatalogImportRequest):
             else PRODUCTION_CUISINE_COUNTS
         ),
         allow_declared_expected_count_mismatch=request.partial,
+        allowed_cuisines=None if request.partial else REQUIRED_CUISINES,
+        required_cuisines=() if request.partial else REQUIRED_CUISINES,
     )
 
 

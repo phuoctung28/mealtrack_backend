@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter, defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,8 +46,16 @@ def validate_catalog_seed_manifest(
     min_per_cuisine_meal_type: int = 5,
     expected_cuisine_counts: dict[str, int] | None = PRODUCTION_CUISINE_COUNTS,
     allow_declared_expected_count_mismatch: bool = False,
+    allowed_cuisines: Collection[str] | None = REQUIRED_CUISINES,
+    required_cuisines: Collection[str] | None = REQUIRED_CUISINES,
 ) -> CatalogSeedValidationResult:
-    """Validate catalog recipe seed manifest before any DB writes."""
+    """Validate catalog recipe seed manifest before any DB writes.
+
+    Production callers retain the strict cuisine contract. Partial imports may
+    pass ``None`` for ``allowed_cuisines`` and an empty collection for
+    ``required_cuisines`` because their source corpus can contain additional
+    cuisine labels and intentionally incomplete coverage.
+    """
 
     errors: list[str] = []
     recipes = manifest.get("recipes")
@@ -76,7 +85,15 @@ def validate_catalog_seed_manifest(
         if not isinstance(recipe, dict):
             errors.append(f"recipes[{index}] must be an object")
             continue
-        _validate_recipe(recipe, index, errors, keys, coverage, cuisine_counts)
+        _validate_recipe(
+            recipe,
+            index,
+            errors,
+            keys,
+            coverage,
+            cuisine_counts,
+            allowed_cuisines,
+        )
 
     for recipe_key, count in keys.items():
         if count > 1:
@@ -95,7 +112,7 @@ def validate_catalog_seed_manifest(
         cuisine: {meal_type: counts.get(meal_type, 0) for meal_type in ALLOWED_MEAL_TYPES}
         for cuisine, counts in coverage.items()
     }
-    for cuisine in REQUIRED_CUISINES:
+    for cuisine in required_cuisines or ():
         for meal_type in REQUIRED_COVERAGE_MEAL_TYPES:
             count = coverage[cuisine][meal_type]
             if count < min_per_cuisine_meal_type:
@@ -126,6 +143,7 @@ def _validate_recipe(
     keys: Counter[str],
     coverage: defaultdict[str, Counter[str]],
     cuisine_counts: Counter[str],
+    allowed_cuisines: Collection[str] | None,
 ) -> None:
     recipe_key = _string(recipe.get("recipe_key"))
     if recipe_key is None:
@@ -134,7 +152,9 @@ def _validate_recipe(
         keys[recipe_key] += 1
 
     cuisine = _string(recipe.get("cuisine"))
-    if cuisine not in REQUIRED_CUISINES:
+    if cuisine is None or (
+        allowed_cuisines is not None and cuisine not in allowed_cuisines
+    ):
         errors.append(f"recipes[{index}].cuisine is invalid: {cuisine}")
     else:
         cuisine_counts[cuisine] += 1
