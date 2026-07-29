@@ -8,6 +8,9 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.services.catalog_food_reference_review_service import (
+    CatalogFoodReferenceReviewService,
+)
 from src.app.services.catalog_meal_seed_import_service import CatalogMealSeedImporter
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
@@ -199,6 +202,14 @@ def get_catalog_meal_seed_importer(
         food_reference_repository,
         candidate_enricher=enrich_missing_with_fatsecret,
     )
+
+
+def get_catalog_food_reference_review_service(
+    db: AsyncSession = Depends(get_async_db),
+) -> CatalogFoodReferenceReviewService:
+    """Build the request-scoped service that records admin reference approvals."""
+
+    return CatalogFoodReferenceReviewService(AsyncFoodReferenceRepository(db))
 
 
 def get_catalog_image_generator() -> CloudflareWorkersImageGenerator:

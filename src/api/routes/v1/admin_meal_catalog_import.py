@@ -5,13 +5,22 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.base_dependencies import get_async_db, get_catalog_meal_seed_importer
+from src.api.base_dependencies import (
+    get_async_db,
+    get_catalog_food_reference_review_service,
+    get_catalog_meal_seed_importer,
+)
 from src.api.dependencies.auth import require_admin_or_local
 from src.api.schemas.response.admin_meal_catalog_responses import (
+    AdminMealCatalogApproveFoodReferenceRequest,
+    AdminMealCatalogApproveFoodReferenceResponse,
     AdminMealCatalogEnrichmentResponse,
     AdminMealCatalogImportRequest,
     AdminMealCatalogImportResponse,
     AdminMealCatalogValidationResponse,
+)
+from src.app.services.catalog_food_reference_review_service import (
+    CatalogFoodReferenceReviewService,
 )
 from src.app.services.catalog_meal_seed_import_service import CatalogMealSeedImporter
 from src.domain.services.meal_recommendation.catalog_recipe_seed_validator import (
@@ -21,6 +30,30 @@ from src.domain.services.meal_recommendation.catalog_recipe_seed_validator impor
 )
 
 router = APIRouter(prefix="/v1/admin/meal-catalog", tags=["Admin Meal Catalog"])
+
+
+@router.post(
+    "/approve-food-reference",
+    response_model=AdminMealCatalogApproveFoodReferenceResponse,
+)
+async def approve_admin_meal_catalog_food_reference(
+    request: AdminMealCatalogApproveFoodReferenceRequest,
+    db: AsyncSession = Depends(get_async_db),
+    reviewer: CatalogFoodReferenceReviewService = Depends(
+        get_catalog_food_reference_review_service
+    ),
+    _admin: str = Depends(require_admin_or_local),
+) -> AdminMealCatalogApproveFoodReferenceResponse:
+    """Record an admin's review before a food reference can publish catalog meals."""
+
+    approval = await reviewer.approve(request.food_reference_id)
+    if approval is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Food reference not found",
+        )
+    await db.commit()
+    return AdminMealCatalogApproveFoodReferenceResponse(**approval.__dict__)
 
 
 @router.post("/resolve", response_model=AdminMealCatalogImportResponse)

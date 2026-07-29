@@ -6,6 +6,9 @@ from fastapi.testclient import TestClient
 from src.api.base_dependencies import get_async_db
 from src.api.dependencies.auth import require_admin_or_local
 from src.api.routes.v1 import admin_meal_catalog_import as route_mod
+from src.app.services.catalog_food_reference_review_service import (
+    CatalogFoodReferenceApproval,
+)
 from src.app.services.catalog_meal_seed_import_service import (
     CatalogSeedCandidateEnrichmentSummary,
     CatalogSeedImportSummary,
@@ -30,6 +33,45 @@ def test_resolve_catalog_manifest_is_dry_run_and_does_not_commit(monkeypatch):
     assert response.json()["applied"] is False
     assert response.json()["dry_run"] is True
     assert calls == [True]
+    db.commit.assert_not_awaited()
+
+
+def test_approve_food_reference_commits_admin_review_decision():
+    db = AsyncMock()
+
+    class Reviewer:
+        async def approve(self, food_reference_id):
+            assert food_reference_id == 42
+            return CatalogFoodReferenceApproval(
+                food_reference_id=42,
+                name="Rice noodles, cooked",
+                source="fatsecret",
+                is_verified=True,
+            )
+
+    response = _client(db, reviewer=Reviewer()).post(
+        "/v1/admin/meal-catalog/approve-food-reference",
+        json={"food_reference_id": 42},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["is_verified"] is True
+    db.commit.assert_awaited_once()
+
+
+def test_approve_missing_food_reference_does_not_commit():
+    db = AsyncMock()
+
+    class Reviewer:
+        async def approve(self, food_reference_id):
+            return None
+
+    response = _client(db, reviewer=Reviewer()).post(
+        "/v1/admin/meal-catalog/approve-food-reference",
+        json={"food_reference_id": 404},
+    )
+
+    assert response.status_code == 404
     db.commit.assert_not_awaited()
 
 
@@ -126,11 +168,14 @@ def test_enrich_catalog_candidates_rejects_invalid_manifest_without_commit():
     db.commit.assert_not_awaited()
 
 
-def _client(db, importer=object):
+def _client(db, importer=object, reviewer=object):
     app = FastAPI()
     app.include_router(route_mod.router)
     app.dependency_overrides[get_async_db] = lambda: db
     app.dependency_overrides[route_mod.get_catalog_meal_seed_importer] = lambda: importer
+    app.dependency_overrides[route_mod.get_catalog_food_reference_review_service] = (
+        lambda: reviewer
+    )
     app.dependency_overrides[require_admin_or_local] = lambda: "admin@nutree.ai"
     return TestClient(app)
 
