@@ -124,6 +124,8 @@ The two health routes are declared with `api_route` and answer both GET and HEAD
 - `shown_at`, `skipped_at`, and `logged_at` are backend-owned outcome fields. Clients must not infer terminal state by recalculating recommendation logic.
 - Recommendation analytics are scheduled through `BackgroundTaskManager` when the dependency is available; the route falls back to inline capture when it is not.
 - New plan generation uses snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded diversity reranking. Existing persisted plans replay their stored candidates and scores. This does not change endpoint paths and does not touch `/v1/meal-suggestions`.
+- The existing `Accept-Language` header selects response language (`en`, `vi`, `es`, `fr`, `de`, `ja`, `zh`). For non-English requests, meal names, cuisine, descriptions, and ingredient display names are translated at response time; IDs, units, nutrition, scores, and recommendation state remain canonical.
+- Missing/unsupported language, an unset DeepL key, or translation-provider failure returns the successful canonical English response rather than failing the recommendation request.
 
 ---
 

@@ -9,11 +9,13 @@ from time import perf_counter
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from src.api.base_dependencies import (
+    get_deepl_text_translation_service,
     get_meal_recommendation_analytics_service,
 )
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.dependencies.task_manager import get_optional_task_manager
+from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.routes.v1.meal_recommendation_route_support import (
     LogRecommendedMealRequest,
@@ -41,6 +43,10 @@ from src.app.queries.meal_recommendation import (
     GetMealRecommendationSlotDetailQuery,
 )
 from src.app.queries.user import GetUserTimezoneQuery
+from src.app.services.catalog_meal_response_localizer import (
+    localize_meal_recommendation_plan,
+    localize_meal_recommendation_slot,
+)
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
 )
@@ -64,6 +70,7 @@ async def create_three_day_recommendations(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
+    translation_service=Depends(get_deepl_text_translation_service),
 ) -> MealRecommendationPlanSummaryResponse:
     """Create or replay a durable three-day catalog recommendation plan."""
 
@@ -116,7 +123,13 @@ async def create_three_day_recommendations(
                 status_code=exc.status_code,
                 detail=exc.public_detail,
             ) from exc
-        response = to_summary_response(plan)
+        response = to_summary_response(
+            await localize_meal_recommendation_plan(
+                plan,
+                language=get_request_language(request),
+                translation_service=translation_service,
+            )
+        )
         await capture_plan_events(
             analytics_service,
             user_id=user_id,
@@ -149,6 +162,7 @@ async def swap_meal_recommendation_slot(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
+    translation_service=Depends(get_deepl_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
@@ -167,7 +181,14 @@ async def swap_meal_recommendation_slot(
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    response = to_slot_detail_response(result.plan_id, result.slot)
+    response = to_slot_detail_response(
+        result.plan_id,
+        await localize_meal_recommendation_slot(
+            result.slot,
+            language=get_request_language(request),
+            translation_service=translation_service,
+        ),
+    )
     await _capture_mutation_slot_event(
         analytics_service=analytics_service,
         user_id=user_id,
@@ -198,6 +219,7 @@ async def log_recommended_meal(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
+    translation_service=Depends(get_deepl_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
@@ -213,7 +235,14 @@ async def log_recommended_meal(
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    response = to_slot_detail_response(result.plan_id, result.slot)
+    response = to_slot_detail_response(
+        result.plan_id,
+        await localize_meal_recommendation_slot(
+            result.slot,
+            language=get_request_language(request),
+            translation_service=translation_service,
+        ),
+    )
     await _capture_mutation_slot_event(
         analytics_service=analytics_service,
         user_id=user_id,
@@ -242,6 +271,7 @@ async def skip_meal_recommendation_slot(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
+    translation_service=Depends(get_deepl_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
@@ -257,7 +287,14 @@ async def skip_meal_recommendation_slot(
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    response = to_slot_detail_response(result.plan_id, result.slot)
+    response = to_slot_detail_response(
+        result.plan_id,
+        await localize_meal_recommendation_slot(
+            result.slot,
+            language=get_request_language(request),
+            translation_service=translation_service,
+        ),
+    )
     await _capture_mutation_slot_event(
         analytics_service=analytics_service,
         user_id=user_id,
@@ -273,12 +310,14 @@ async def skip_meal_recommendation_slot(
 @router.get("/{plan_id}", response_model=MealRecommendationPlanSummaryResponse)
 async def get_meal_recommendation_plan(
     plan_id: str,
+    request: Request,
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
+    translation_service=Depends(get_deepl_text_translation_service),
 ) -> MealRecommendationPlanSummaryResponse:
     """Read an owner-scoped durable recommendation plan."""
 
@@ -291,7 +330,13 @@ async def get_meal_recommendation_plan(
         metric_status = "http_404"
         record_operation_latency("read", started, metric_status)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    response = to_summary_response(plan)
+    response = to_summary_response(
+        await localize_meal_recommendation_plan(
+            plan,
+            language=get_request_language(request),
+            translation_service=translation_service,
+        )
+    )
     await capture_plan_events(
         analytics_service,
         user_id=user_id,
@@ -311,12 +356,14 @@ async def get_meal_recommendation_plan(
 async def get_meal_recommendation_slot_detail(
     plan_id: str,
     slot_id: str,
+    request: Request,
     user_id: str = Depends(get_current_user_id),
     event_bus=Depends(get_configured_event_bus),
     analytics_service: MealRecommendationAnalyticsService = Depends(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
+    translation_service=Depends(get_deepl_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     """Read one owner-scoped recommendation slot with alternatives."""
 
@@ -333,7 +380,14 @@ async def get_meal_recommendation_slot_detail(
         metric_status = "http_404"
         record_operation_latency("slot_detail", started, metric_status)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    response = to_slot_detail_response(plan_id, slot)
+    response = to_slot_detail_response(
+        plan_id,
+        await localize_meal_recommendation_slot(
+            slot,
+            language=get_request_language(request),
+            translation_service=translation_service,
+        ),
+    )
     await capture_slot_event(
         analytics_service,
         user_id=user_id,
