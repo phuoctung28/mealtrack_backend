@@ -249,6 +249,45 @@ async def test_upsert_by_normalized_name_verified_protection_skips_upsert():
 
 
 @pytest.mark.asyncio
+async def test_upsert_seed_uses_normalized_name_and_preserves_seed_metadata():
+    row = _food_row(name_normalized="com tam", name="Com tam")
+    session = _AsyncSession([_Result(), _Result(rows=[row])])
+    repo = AsyncFoodReferenceRepository(session)
+    statement = MagicMock()
+    statement.values.return_value = statement
+    statement.on_conflict_do_update.return_value = statement
+
+    with patch(
+        "src.infra.repositories.food_reference_repository_async.pg_insert",
+        return_value=statement,
+    ):
+        await repo.upsert_seed(
+            {
+                "name": "Com tam",
+                "name_normalized": "com tam",
+                "name_vi": "Cơm tấm",
+                "category": "Rice dishes",
+                "region": "VN",
+                "protein_100g": 5.0,
+                "carbs_100g": 30.0,
+                "fat_100g": 4.0,
+                "source": "nin_vn",
+                "is_verified": True,
+            }
+        )
+
+    values = statement.values.call_args.kwargs
+    assert values["name_normalized"] == "com tam"
+    assert values["name_vi"] == "Cơm tấm"
+    assert values["category"] == "Rice dishes"
+    assert values["is_verified"] is True
+    assert statement.on_conflict_do_update.call_args.kwargs["index_elements"] == [
+        "name_normalized"
+    ]
+    assert session.flush.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_upsert_by_barcode_uses_on_conflict_and_flushes_children():
     row = _food_row()
     row.barcode = "123"

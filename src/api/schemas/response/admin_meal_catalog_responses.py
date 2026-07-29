@@ -1,10 +1,25 @@
-"""Responses for admin meal catalog inspection."""
+"""Requests and responses for admin meal catalog operations."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class AdminMealCatalogImportRequest(BaseModel):
+    """Manifest and resolver options shared by import and preview endpoints."""
+
+    manifest: dict[str, Any]
+    dry_run: bool = False
+    partial: bool = False
+    skip_exact_cuisine_count: bool = False
+    expected_recipe_count: int = Field(default=180, ge=0)
+    min_per_cuisine_meal_type: int = Field(default=5, ge=0)
+    resolver_map: dict[str, int] = Field(default_factory=dict)
+    auto_resolve_threshold: float | None = Field(default=0.92, ge=0, le=1)
+    resolve_all_best_effort: bool = False
 
 
 class AdminMealCatalogIngredientResponse(BaseModel):
@@ -43,3 +58,51 @@ class AdminMealCatalogListResponse(BaseModel):
 class AdminMealCatalogGenerateImageResponse(BaseModel):
     item: AdminMealCatalogItemResponse
     image_url: str
+
+
+class AdminMealCatalogResolutionCandidate(BaseModel):
+    food_reference_id: int
+    name: str
+    name_normalized: str | None = None
+    source: str
+    is_verified: bool
+    score: float
+
+
+class AdminMealCatalogResolutionIssue(BaseModel):
+    recipe_index: int
+    recipe_key: str
+    ingredient_index: int
+    ingredient_name: str
+    normalized_name: str
+    reason: str
+    candidates: list[AdminMealCatalogResolutionCandidate]
+
+
+class AdminMealCatalogReviewRequired(BaseModel):
+    recipe_index: int
+    recipe_key: str
+    reason: str
+    matched_catalog_key: str
+    ingredient_jaccard: float
+
+
+class AdminMealCatalogValidationResponse(BaseModel):
+    manifest_digest: str
+    recipe_count: int
+    errors: list[str]
+    coverage: dict[str, dict[str, int]]
+
+
+class AdminMealCatalogImportResponse(BaseModel):
+    validation: AdminMealCatalogValidationResponse
+    manifest_digest: str
+    recipe_count: int
+    coverage: dict[str, dict[str, int]]
+    inserted: int
+    skipped_existing: int
+    dry_run: bool
+    applied: bool
+    errors: list[str]
+    issues: list[AdminMealCatalogResolutionIssue]
+    review_required: list[AdminMealCatalogReviewRequired]

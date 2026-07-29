@@ -60,6 +60,27 @@ fiber, sugar, calories, and any needed gram conversion from
 scored. These derived values are not stored in `meal_catalog` or
 `meal_catalog_ingredients`.
 
+## Admin API
+
+The same importer and resolver are available behind the admin Firebase/local gate:
+
+```http
+POST /v1/admin/meal-catalog/resolve
+POST /v1/admin/meal-catalog/import
+```
+
+Both endpoints accept a JSON body with the manifest plus the script options:
+`manifest`, `partial`, `skip_exact_cuisine_count`, `expected_recipe_count`,
+`min_per_cuisine_meal_type`, `resolver_map`, `auto_resolve_threshold`, and
+`resolve_all_best_effort`. The import endpoint also accepts `dry_run`.
+
+`/resolve` always performs a non-mutating dry run and returns validation errors,
+unresolved ingredient candidates, near-duplicate reviews, and import counts.
+`/import` first performs the same dry run; it writes only when validation and
+resolution succeed and `dry_run` is false. A successful write returns
+`applied: true`. The default resolver remains strict: unverified or ambiguous
+ingredient matches are reported for review rather than silently selected.
+
 ## Import Commands
 
 Validate and resolve only:

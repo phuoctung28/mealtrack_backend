@@ -117,7 +117,9 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.density,
             )
             .where(FoodReferenceModel.name_normalized == name_normalized)
-            .order_by(FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc())
+            .order_by(
+                FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc()
+            )
         )
         return [_catalog_seed_candidate_projection(row) for row in result.all()]
 
@@ -165,9 +167,7 @@ class AsyncFoodReferenceRepository:
             .where(FoodReferenceModel.region.in_([region, "global"]))
             .where(
                 or_(
-                    FoodReferenceModel.name_normalized.ilike(
-                        f"%{normalized_query}%"
-                    ),
+                    FoodReferenceModel.name_normalized.ilike(f"%{normalized_query}%"),
                     similarity_score >= 0.15,
                 )
             )
@@ -220,12 +220,59 @@ class AsyncFoodReferenceRepository:
         }
         if not values["is_verified"]:
             on_conflict_kwargs["where"] = FoodReferenceModel.is_verified.is_(False)
-        await self._session.execute(
-            stmt.on_conflict_do_update(**on_conflict_kwargs)
-        )
+        await self._session.execute(stmt.on_conflict_do_update(**on_conflict_kwargs))
         await self._session.flush()
 
         refreshed = await self._find_after_upsert(values)
+        if refreshed:
+            await self._sync_normalized_children(refreshed, data)
+
+    async def upsert_seed(self, data: dict[str, Any]) -> None:
+        """Upsert a canonical, non-barcoded seed without owning commit."""
+
+        name = str(data.get("name") or data.get("name_vi") or "").strip()
+        if not name:
+            raise ValueError("seed food requires a name")
+        name_normalized = str(
+            data.get("name_normalized") or normalize_food_name(name)
+        ).strip()
+        if not name_normalized:
+            raise ValueError("seed food requires a normalized name")
+
+        values = {
+            "name": name,
+            "name_normalized": name_normalized,
+            "name_vi": data.get("name_vi"),
+            "brand": data.get("brand"),
+            "category": _truncate_category(data.get("category")),
+            "region": data.get("region", "VN"),
+            "protein_100g": data.get("protein_100g"),
+            "carbs_100g": data.get("carbs_100g"),
+            "fat_100g": data.get("fat_100g"),
+            "fiber_100g": data.get("fiber_100g", 0),
+            "sugar_100g": data.get("sugar_100g", 0),
+            "serving_size": data.get("serving_size"),
+            "serving_sizes": data.get("serving_sizes") or data.get("allowed_units"),
+            "image_url": data.get("image_url"),
+            "source": data.get("source", "seed"),
+            "is_verified": data.get("is_verified", False),
+            "density": data.get("density", 1.0),
+            "extra_nutrients": data.get("extra_nutrients"),
+        }
+        update_fields = {
+            key: value for key, value in values.items() if key != "name_normalized"
+        }
+        stmt = pg_insert(FoodReferenceModel).values(**values)
+        on_conflict_kwargs: dict[str, Any] = {
+            "index_elements": ["name_normalized"],
+            "set_": update_fields,
+        }
+        if not values["is_verified"]:
+            on_conflict_kwargs["where"] = FoodReferenceModel.is_verified.is_(False)
+        await self._session.execute(stmt.on_conflict_do_update(**on_conflict_kwargs))
+        await self._session.flush()
+
+        refreshed = await self._find_model_by_normalized_name(name_normalized)
         if refreshed:
             await self._sync_normalized_children(refreshed, data)
 
@@ -334,7 +381,9 @@ class AsyncFoodReferenceRepository:
             )
         else:
             return None
-        result = await self._session.execute(stmt.options(*_FOOD_REFERENCE_LOAD_OPTIONS))
+        result = await self._session.execute(
+            stmt.options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
         return result.scalars().first()
 
     async def _sync_normalized_children(
@@ -365,6 +414,13 @@ def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjec
         density_g_ml=row.density,
         name_normalized=row.name_normalized,
     )
+
+
+def _truncate_category(value: Any) -> str | None:
+    if value is None:
+        return None
+    category = str(value).strip()
+    return category[:100] or None
 
 
 def _dedupe_search_projections(

@@ -203,6 +203,25 @@ class CatalogMealSeedImporter:
         )
         self._candidate_rows: list[_FoodReferenceSearchRow] | None = None
 
+    def with_options(
+        self,
+        *,
+        dry_run: bool,
+        approved_mappings: dict[str, int],
+        auto_resolve_threshold: float | None,
+        resolve_all_best_effort: bool,
+    ) -> CatalogMealSeedImporter:
+        """Create a request-specific importer using the same repository ports."""
+
+        return CatalogMealSeedImporter(
+            self._catalog_repository,
+            self._food_reference_repository,
+            dry_run=dry_run,
+            approved_mappings=approved_mappings,
+            auto_resolve_threshold=auto_resolve_threshold,
+            resolve_all_best_effort=resolve_all_best_effort,
+        )
+
     async def import_manifest(self, manifest: dict[str, Any]) -> CatalogSeedImportSummary:
         started = perf_counter()
         skipped = 0

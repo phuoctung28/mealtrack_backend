@@ -12,6 +12,8 @@
 ### July 2026: Meal Catalog Phase 0 Production Foundation
 - [x] Four-table catalog recommendation foundation uses `meal_catalog`, `meal_catalog_ingredients`, `meal_recommendations`, and `meal_recommendation_operations`.
 - [x] Catalog import is additive, content-hash protected, serialized, and withholds near duplicates for explicit review.
+- [x] Admin meal-catalog APIs expose the same strict resolver preview and two-pass import flow as the catalog seed script.
+- [x] Food scraper seed ingestion uses the async food-reference repository and preserves verified canonical rows.
 - [x] Recommendation create/read/slot detail/swap/log/skip are owner-scoped and idempotent where mutations require request IDs.
 - [x] Provider-backed food routes and feature-flag reads require Firebase JWT; mutation routes retain stronger admin protection where applicable.
 - [x] Food search is local-first through indexed `food_reference` and degrades through cache/provider/translation outages.
