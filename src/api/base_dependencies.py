@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.services.catalog_meal_seed_import_service import CatalogMealSeedImporter
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
 )
@@ -34,6 +35,12 @@ from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
 from src.infra.repositories.admin_meal_catalog_repository_async import (
     AsyncAdminMealCatalogRepository,
+)
+from src.infra.repositories.catalog_recipe_repository_async import (
+    AsyncCatalogMealRepository,
+)
+from src.infra.repositories.food_reference_repository_async import (
+    AsyncFoodReferenceRepository,
 )
 from src.infra.services.firebase_service import FirebaseService
 
@@ -167,6 +174,17 @@ def get_admin_meal_catalog_repository(
     """Return admin catalog repository bound to the request session."""
 
     return AsyncAdminMealCatalogRepository(db)
+
+
+def get_catalog_meal_seed_importer(
+    db: AsyncSession = Depends(get_async_db),
+) -> CatalogMealSeedImporter:
+    """Build the catalog seed importer with request-scoped repositories."""
+
+    return CatalogMealSeedImporter(
+        AsyncCatalogMealRepository(db),
+        AsyncFoodReferenceRepository(db),
+    )
 
 
 def get_catalog_image_generator() -> CloudflareWorkersImageGenerator:

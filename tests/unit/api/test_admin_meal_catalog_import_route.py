@@ -66,6 +66,7 @@ def _client(db):
     app = FastAPI()
     app.include_router(route_mod.router)
     app.dependency_overrides[get_async_db] = lambda: db
+    app.dependency_overrides[route_mod.get_catalog_meal_seed_importer] = object
     app.dependency_overrides[require_admin_or_local] = lambda: "admin@nutree.ai"
     return TestClient(app)
 

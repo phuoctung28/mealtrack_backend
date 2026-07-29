@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.base_dependencies import get_async_db
+from src.api.base_dependencies import get_async_db, get_catalog_meal_seed_importer
 from src.api.dependencies.auth import require_admin_or_local
 from src.api.schemas.response.admin_meal_catalog_responses import (
     AdminMealCatalogImportRequest,
@@ -17,12 +17,6 @@ from src.domain.services.meal_recommendation.catalog_recipe_seed_validator impor
     PRODUCTION_CUISINE_COUNTS,
     validate_catalog_seed_manifest,
 )
-from src.infra.repositories.catalog_recipe_repository_async import (
-    AsyncCatalogMealRepository,
-)
-from src.infra.repositories.food_reference_repository_async import (
-    AsyncFoodReferenceRepository,
-)
 
 router = APIRouter(prefix="/v1/admin/meal-catalog", tags=["Admin Meal Catalog"])
 
@@ -31,6 +25,7 @@ router = APIRouter(prefix="/v1/admin/meal-catalog", tags=["Admin Meal Catalog"])
 async def resolve_admin_meal_catalog_ingredients(
     request: AdminMealCatalogImportRequest,
     db: AsyncSession = Depends(get_async_db),
+    importer: CatalogMealSeedImporter = Depends(get_catalog_meal_seed_importer),
     _admin: str = Depends(require_admin_or_local),
 ) -> AdminMealCatalogImportResponse:
     """Validate and resolve a manifest without changing the catalog."""
@@ -40,7 +35,7 @@ async def resolve_admin_meal_catalog_ingredients(
         return _response(
             validation, _empty_summary(validation, dry_run=True), applied=False
         )
-    summary = await _run_importer(db, request, dry_run=True)
+    summary = await _run_importer(importer, request, dry_run=True)
     return _response(validation, summary, applied=False)
 
 
@@ -48,6 +43,7 @@ async def resolve_admin_meal_catalog_ingredients(
 async def import_admin_meal_catalog(
     request: AdminMealCatalogImportRequest,
     db: AsyncSession = Depends(get_async_db),
+    importer: CatalogMealSeedImporter = Depends(get_catalog_meal_seed_importer),
     _admin: str = Depends(require_admin_or_local),
 ) -> AdminMealCatalogImportResponse:
     """Import a validated manifest, or preview it when ``dry_run`` is true."""
@@ -63,11 +59,11 @@ async def import_admin_meal_catalog(
             ).model_dump(),
         )
 
-    preview = await _run_importer(db, request, dry_run=True)
+    preview = await _run_importer(importer, request, dry_run=True)
     if not preview.is_successful or request.dry_run:
         return _response(validation, preview, applied=False)
 
-    summary = await _run_importer(db, request, dry_run=False)
+    summary = await _run_importer(importer, request, dry_run=False)
     if not summary.is_successful:
         await db.rollback()
         return _response(validation, summary, applied=False)
@@ -94,22 +90,20 @@ def _validate_manifest(request: AdminMealCatalogImportRequest):
 
 
 async def _run_importer(
-    db: AsyncSession,
+    importer: CatalogMealSeedImporter,
     request: AdminMealCatalogImportRequest,
     *,
     dry_run: bool,
 ):
-    return await CatalogMealSeedImporter(
-        AsyncCatalogMealRepository(db),
-        AsyncFoodReferenceRepository(db),
+    auto_resolve_threshold = (
+        0.0
+        if request.resolve_all_best_effort and request.auto_resolve_threshold is None
+        else request.auto_resolve_threshold
+    )
+    return await importer.with_options(
         dry_run=dry_run,
         approved_mappings=request.resolver_map,
-        auto_resolve_threshold=(
-            0.0
-            if request.resolve_all_best_effort
-            and request.auto_resolve_threshold is None
-            else request.auto_resolve_threshold
-        ),
+        auto_resolve_threshold=auto_resolve_threshold,
         resolve_all_best_effort=request.resolve_all_best_effort,
     ).import_manifest(request.manifest)
 

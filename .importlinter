@@ -178,6 +178,8 @@ ignore_imports =
     src.api.base_dependencies -> src.infra.repositories.food_reference_repository
     src.api.base_dependencies -> src.infra.repositories.food_reference_uow_adapter
     src.api.base_dependencies -> src.infra.repositories.admin_meal_catalog_repository_async
+    src.api.base_dependencies -> src.infra.repositories.catalog_recipe_repository_async
+    src.api.base_dependencies -> src.infra.repositories.food_reference_repository_async
     src.api.base_dependencies -> src.infra.repositories.meal_repository
     src.api.base_dependencies -> src.infra.repositories.meal_suggestion_repository
     src.api.base_dependencies -> src.infra.repositories.meal_translation_repository
