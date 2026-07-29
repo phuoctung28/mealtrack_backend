@@ -123,6 +123,24 @@ class AsyncFoodReferenceRepository:
         )
         return [_catalog_seed_candidate_projection(row) for row in result.all()]
 
+    async def approve_for_catalog_seed(
+        self,
+        food_reference_id: int,
+    ) -> FoodReferenceNutritionProjection | None:
+        """Persist an administrator's review decision for catalog publication."""
+
+        result = await self._session.execute(
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.id == food_reference_id)
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+        model.is_verified = True
+        await self._session.flush()
+        return food_reference_model_to_nutrition_projection(model)
+
     async def get_by_fdc_id(self, fdc_id: int) -> dict[str, Any] | None:
         stmt = (
             select(FoodReferenceModel)
