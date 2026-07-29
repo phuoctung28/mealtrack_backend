@@ -30,12 +30,13 @@ def upgrade() -> None:
     # Backfill from notification_preferences.language where available
     op.execute(
         """
-        UPDATE users u
-        INNER JOIN notification_preferences np ON u.id = np.user_id
-        SET u.language_code = np.language
+        UPDATE users AS u
+        SET language_code = np.language
+        FROM notification_preferences AS np
         WHERE np.language IS NOT NULL
           AND np.language != 'en'
-          AND np.is_deleted = 0
+          AND np.is_deleted IS FALSE
+          AND u.id = np.user_id
         """
     )
 

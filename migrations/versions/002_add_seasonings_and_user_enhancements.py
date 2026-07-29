@@ -21,6 +21,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add seasonings column to planned_meal table and user table enhancements"""
+    provider_enum = sa.Enum('GOOGLE', 'APPLE', name='authproviderenum')
+    provider_enum.create(op.get_bind(), checkfirst=True)
     
     # Add seasonings column to planned_meals table
     op.add_column('planned_meals', sa.Column('seasonings', sa.JSON(), nullable=True))
@@ -31,7 +33,7 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('phone_number', sa.String(length=20), nullable=True))
     op.add_column('users', sa.Column('display_name', sa.String(length=100), nullable=True))
     op.add_column('users', sa.Column('photo_url', sa.Text(), nullable=True))
-    op.add_column('users', sa.Column('provider', sa.Enum('GOOGLE', 'APPLE', name='authproviderenum'), nullable=False, server_default='GOOGLE'))
+    op.add_column('users', sa.Column('provider', provider_enum, nullable=False, server_default='GOOGLE'))
     op.add_column('users', sa.Column('onboarding_completed', sa.Boolean(), nullable=False, server_default='0'))
     op.add_column('users', sa.Column('last_accessed', sa.DateTime(), nullable=False))
     logger.info("✅ Added user enhancement columns")
@@ -49,6 +51,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove seasonings column from planned_meal table and user table enhancements"""
+    provider_enum = sa.Enum('GOOGLE', 'APPLE', name='authproviderenum')
     
     # Remove unique constraint and indexes
     op.drop_constraint('uq_users_firebase_uid', 'users', type_='unique')
@@ -65,6 +68,7 @@ def downgrade() -> None:
     op.drop_column('users', 'display_name')
     op.drop_column('users', 'phone_number')
     op.drop_column('users', 'firebase_uid')
+    provider_enum.drop(op.get_bind(), checkfirst=True)
     logger.info("✅ Removed user enhancement columns")
     
     # Remove seasonings column from planned_meals table

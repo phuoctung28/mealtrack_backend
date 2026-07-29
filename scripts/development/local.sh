@@ -1,28 +1,61 @@
 #!/bin/bash
+set -Eeuo pipefail
 
 echo "Starting MealTrack locally (local PostgreSQL + Redis via Docker)..."
 
 # ── 1. Virtual environment ────────────────────────────────────────────────────
-if [ ! -d ".venv" ]; then
+HOST_PYTHON="${PYTHON_BIN:-}"
+if [ -z "$HOST_PYTHON" ]; then
+    for candidate in python3.13 python3 python; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            HOST_PYTHON="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$HOST_PYTHON" ] || ! command -v "$HOST_PYTHON" >/dev/null 2>&1; then
+    echo "ERROR: Python 3.13.x is required. Install it or run with PYTHON_BIN=/path/to/python3.13." >&2
+    exit 1
+fi
+
+HOST_PYTHON="$(command -v "$HOST_PYTHON")"
+VENV_PYTHON=".venv/bin/python"
+HOST_VERSION="$("$HOST_PYTHON" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')"
+
+if ! "$HOST_PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' >/dev/null 2>&1; then
+    echo "ERROR: Python 3.13.x is required. Found Python $HOST_VERSION at $HOST_PYTHON." >&2
+    echo "Set PYTHON_BIN=/path/to/python3.13 if your Python 3.13 binary has a custom name." >&2
+    exit 1
+fi
+
+echo "Using Python $HOST_VERSION from $HOST_PYTHON"
+
+if [ ! -x "$VENV_PYTHON" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv .venv
+    rm -rf .venv
+    "$HOST_PYTHON" -m venv .venv
+fi
+
+if ! "$VENV_PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' >/dev/null 2>&1; then
+    echo "Virtual environment is broken or not Python 3.13. Recreating..."
+    rm -rf .venv
+    "$HOST_PYTHON" -m venv .venv
 fi
 
 echo "Activating virtual environment..."
 source .venv/bin/activate
 
-## If the repo was moved/renamed, entrypoints inside .venv can have stale shebangs.
-## Recreate the venv if its Python interpreter is missing.
-if [ ! -x ".venv/bin/python" ] && [ ! -x ".venv/bin/python3" ]; then
-    echo "Virtual environment looks broken (missing python). Recreating..."
-    deactivate 2>/dev/null || true
-    rm -rf .venv
-    python3 -m venv .venv
-    source .venv/bin/activate
+if ! "$VENV_PYTHON" -m pip --version >/dev/null 2>&1; then
+    echo "pip missing from virtual environment. Bootstrapping pip..."
+    if ! "$VENV_PYTHON" -m ensurepip --upgrade; then
+        echo "ERROR: pip is missing and ensurepip is unavailable. Reinstall Python 3.13 with venv/ensurepip support or set PYTHON_BIN to a complete Python install." >&2
+        exit 1
+    fi
 fi
 
 echo "Installing dependencies (dev/test)..."
-python3 -m pip install -r requirements-test.txt -q
+"$VENV_PYTHON" -m pip install -r requirements-test.txt -q
 
 # ── 2. PostgreSQL (local Docker) ──────────────────────────────────────────────
 PG_CONTAINER="mealtrack_postgres"
@@ -59,15 +92,15 @@ fi
 
 # ── 4. Database initialisation ────────────────────────────────────────────────
 echo "Running database setup..."
-python3 scripts/init_postgres_db.py
+"$VENV_PYTHON" scripts/init_postgres_db.py
 
 # ── 5. Migrations ─────────────────────────────────────────────────────────────
 echo "Running Alembic migrations..."
-alembic upgrade head
+"$VENV_PYTHON" -m alembic upgrade head
 
 # ── 6. Start app ──────────────────────────────────────────────────────────────
 echo ""
 echo "Ready! Starting at http://localhost:8000"
 echo "Docs at http://localhost:8000/docs"
 echo ""
-python3 -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+"$VENV_PYTHON" -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload

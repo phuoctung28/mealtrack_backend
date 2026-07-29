@@ -31,7 +31,11 @@ from sqlalchemy import create_engine, inspect, text
 
 # Override DATABASE_URL before importing the engine so it picks up the direct
 # connection string (MIGRATION_DATABASE_URL) if provided.
-migration_url = os.getenv("MIGRATION_DATABASE_URL") or os.getenv("DATABASE_URL_DIRECT") or os.getenv("DATABASE_URL")
+migration_url = (
+    os.getenv("MIGRATION_DATABASE_URL")
+    or os.getenv("DATABASE_URL_DIRECT")
+    or os.getenv("DATABASE_URL")
+)
 if not migration_url:
     print("ERROR: Set MIGRATION_DATABASE_URL, DATABASE_URL_DIRECT, or DATABASE_URL.")
     sys.exit(1)
@@ -74,7 +78,49 @@ def get_current_alembic_revision() -> str | None:
         return None
 
     with engine.begin() as conn:
-        return conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar()
+        return conn.execute(
+            text("SELECT version_num FROM alembic_version LIMIT 1")
+        ).scalar()
+
+
+def validate_schema_matches_metadata(inspector_override=None, metadata=None) -> None:
+    """
+    Guard recovery stamping against stale partial schemas.
+
+    Stamping head is only safe when the database was already created from the
+    current SQLAlchemy metadata and the Alembic row was the only missing piece.
+    """
+    inspector = inspector_override or inspect(engine)
+    metadata = metadata or Base.metadata
+    existing_tables = set(inspector.get_table_names())
+    model_tables = sorted(metadata.tables)
+    missing_tables = [table for table in model_tables if table not in existing_tables]
+    missing_columns: list[str] = []
+
+    for table_name in model_tables:
+        if table_name not in existing_tables:
+            continue
+        existing_columns = {
+            column["name"] for column in inspector.get_columns(table_name)
+        }
+        for column in metadata.tables[table_name].columns:
+            if column.name not in existing_columns:
+                missing_columns.append(f"{table_name}.{column.name}")
+
+    if not missing_tables and not missing_columns:
+        return
+
+    details = []
+    if missing_tables:
+        details.append("missing tables: " + ", ".join(missing_tables[:12]))
+    if missing_columns:
+        details.append("missing columns: " + ", ".join(missing_columns[:12]))
+
+    raise RuntimeError(
+        "Refusing to stamp Alembic head because the existing database schema "
+        "does not match current SQLAlchemy metadata. Reset the local database "
+        "or migrate it from its real revision first; " + "; ".join(details)
+    )
 
 
 def stamp_alembic_head(cfg: Config) -> None:
@@ -89,15 +135,11 @@ def stamp_alembic_head(cfg: Config) -> None:
         raise RuntimeError("Unable to resolve Alembic head revision.")
 
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
+        conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS alembic_version (
                     version_num VARCHAR(32) NOT NULL PRIMARY KEY
                 )
-                """
-            )
-        )
+                """))
         conn.execute(text("DELETE FROM alembic_version"))
         conn.execute(
             text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
@@ -114,13 +156,16 @@ def main():
         if revision is None:
             print(
                 "Database has tables but no Alembic revision metadata; "
-                "stamping head to recover bootstrap state."
+                "validating schema before recovery stamp."
             )
+            validate_schema_matches_metadata()
             stamp_alembic_head(cfg)
             print("Done.")
             return
 
-        print("Database already initialised — running alembic upgrade head for any new migrations.")
+        print(
+            "Database already initialised — running alembic upgrade head for any new migrations."
+        )
         command.upgrade(cfg, "head")
         print("Done.")
         return
