@@ -235,6 +235,11 @@ concurrent requests.
 - Local food search uses `food_reference.name_normalized`, a unique normalized-name
   constraint, and a `pg_trgm` GIN index. Results are verified-first,
   region/global scoped, bounded to 50, and deduplicated by normalized name.
+- `scripts/import_food_seeds.py` imports non-barcoded scraper rows through the
+  async unit of work using that normalized-name key. NIN and VN FCT sources are
+  trusted ingredient references; manually verified rows remain protected. Run
+  `--dry-run` first. The validator reports by default; `--fix` is required to
+  rewrite source files.
 
 ---
 
