@@ -25,15 +25,36 @@ depends_on: Union[str, Sequence[str], None] = None
 def table_exists(table_name: str) -> bool:
     """Check if a table exists in the database."""
     conn = op.get_bind()
-    result = conn.execute(text(f"SHOW TABLES LIKE '{table_name}'")).fetchall()
-    return len(result) > 0
+    result = conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = :table_name
+            """
+        ),
+        {"table_name": table_name},
+    ).fetchone()
+    return result is not None
 
 
 def index_exists(table_name: str, index_name: str) -> bool:
     """Check if an index exists on a table."""
     conn = op.get_bind()
-    result = conn.execute(text(f"SHOW INDEX FROM {table_name} WHERE Key_name = '{index_name}'")).fetchall()
-    return len(result) > 0
+    result = conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = :table_name
+              AND indexname = :index_name
+            """
+        ),
+        {"table_name": table_name, "index_name": index_name},
+    ).fetchone()
+    return result is not None
 
 
 def upgrade() -> None:

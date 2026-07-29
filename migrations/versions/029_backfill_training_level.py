@@ -34,7 +34,7 @@ def upgrade() -> None:
         END
         WHERE training_level IS NULL
         AND training_days_per_week > 0
-        AND is_current = 1
+        AND is_current IS TRUE
     """)
 
 
@@ -44,5 +44,5 @@ def downgrade() -> None:
         UPDATE user_profiles
         SET training_level = NULL
         WHERE training_level IN ('beginner', 'intermediate', 'advanced')
-        AND is_current = 1
+        AND is_current IS TRUE
     """)
