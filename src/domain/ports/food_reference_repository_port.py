@@ -71,6 +71,12 @@ class FoodReferenceRepositoryPort(Protocol):
     ) -> list[FoodReferenceNutritionProjection]:
         """Return candidate projections by exact normalized name for seed imports."""
 
+    async def approve_for_catalog_seed(
+        self,
+        food_reference_id: int,
+    ) -> FoodReferenceNutritionProjection | None:
+        """Mark one admin-reviewed food reference as eligible for catalog publication."""
+
     async def search_local(
         self,
         query: str,

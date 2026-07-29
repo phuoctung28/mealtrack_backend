@@ -111,6 +111,19 @@ class AdminMealCatalogEnrichmentResponse(BaseModel):
     skipped_existing: int
 
 
+class AdminMealCatalogApproveFoodReferenceRequest(BaseModel):
+    """One food reference an administrator reviewed before catalog publication."""
+
+    food_reference_id: int = Field(gt=0)
+
+
+class AdminMealCatalogApproveFoodReferenceResponse(BaseModel):
+    food_reference_id: int
+    name: str
+    source: str
+    is_verified: bool
+
+
 class AdminMealCatalogImportResponse(BaseModel):
     validation: AdminMealCatalogValidationResponse
     manifest_digest: str
