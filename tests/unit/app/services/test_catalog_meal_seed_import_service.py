@@ -336,6 +336,31 @@ async def test_import_reports_unverified_exact_match():
 
 
 @pytest.mark.asyncio
+async def test_import_reports_every_unverified_exact_match_in_one_recipe():
+    manifest = _manifest(food_reference_id=None)
+    manifest["recipes"][0]["ingredients"].append(
+        {
+            "food_reference_id": None,
+            "name": "Egg",
+            "quantity": 1,
+            "unit": "each",
+        }
+    )
+    importer = _Importer(
+        refs_by_name={
+            "rice": [_reference(7, is_verified=False)],
+            "egg": [_reference(8, name="Egg", is_verified=False)],
+        }
+    )
+
+    summary = await importer.import_manifest(manifest)
+
+    assert summary.inserted == 0
+    assert [issue.normalized_name for issue in summary.resolution_issues] == ["rice", "egg"]
+    assert len(summary.errors) == 2
+
+
+@pytest.mark.asyncio
 async def test_import_reports_pinned_unverified_reference_for_manifest_recovery():
     importer = _Importer(refs_by_id={7: _reference(is_verified=False)})
 

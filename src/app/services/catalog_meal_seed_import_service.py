@@ -219,6 +219,14 @@ class CatalogSeedResolutionError(CatalogSeedImportError):
         )
 
 
+class CatalogSeedResolutionErrors(CatalogSeedImportError):
+    """All ingredient-resolution decisions required for one recipe."""
+
+    def __init__(self, issues: list[CatalogSeedResolutionIssue]) -> None:
+        self.issues = tuple(issues)
+        super().__init__("; ".join(str(CatalogSeedResolutionError(issue)) for issue in issues))
+
+
 @dataclass(frozen=True)
 class _PreparedCatalogSeed:
     recipe_index: int
@@ -292,6 +300,10 @@ class CatalogMealSeedImporter:
         for index, recipe in enumerate(manifest.get("recipes", [])):
             try:
                 prepared_seed = await self._prepare_recipe(recipe, index)
+            except CatalogSeedResolutionErrors as exc:
+                errors.extend(str(CatalogSeedResolutionError(issue)) for issue in exc.issues)
+                resolution_issues.extend(exc.issues)
+                continue
             except CatalogSeedResolutionError as exc:
                 errors.append(str(exc))
                 resolution_issues.append(exc.issue)
@@ -439,13 +451,18 @@ class CatalogMealSeedImporter:
         recipe_index: int,
     ) -> list[ResolvedIngredientQuantity]:
         resolved: list[ResolvedIngredientQuantity] = []
+        issues: list[CatalogSeedResolutionIssue] = []
         for ingredient_index, ingredient in enumerate(recipe.get("ingredients", [])):
-            reference = await self._resolve_food_reference(
-                ingredient,
-                recipe_key=str(recipe["recipe_key"]).strip(),
-                recipe_index=recipe_index,
-                ingredient_index=ingredient_index,
-            )
+            try:
+                reference = await self._resolve_food_reference(
+                    ingredient,
+                    recipe_key=str(recipe["recipe_key"]).strip(),
+                    recipe_index=recipe_index,
+                    ingredient_index=ingredient_index,
+                )
+            except CatalogSeedResolutionError as exc:
+                issues.append(exc.issue)
+                continue
             try:
                 resolved.append(
                     self._converter.resolve(
@@ -472,6 +489,8 @@ class CatalogMealSeedImporter:
                     f"recipes[{recipe_index}].ingredients[{ingredient_index}] "
                     f"{exc.code}: {exc}"
                 ) from exc
+        if issues:
+            raise CatalogSeedResolutionErrors(issues)
         return resolved
 
     async def _resolve_food_reference(
