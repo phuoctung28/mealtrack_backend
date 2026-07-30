@@ -19,6 +19,10 @@ MIGRATIONS = (
         "20260726000001_add_body_fat_visual_start_range.py",
         {"body_fat_visual_profiles": {"start_range_id"}},
     ),
+    (
+        "20260727000001_add_meal_recommendation_candidate_lifecycle.py",
+        {},
+    ),
 )
 
 

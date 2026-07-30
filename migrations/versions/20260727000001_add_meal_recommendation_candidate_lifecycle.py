@@ -10,6 +10,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table("meal_recommendations"):
+        return
+
     op.add_column(
         "meal_recommendations",
         sa.Column("seen_at", sa.DateTime(timezone=True), nullable=True),
