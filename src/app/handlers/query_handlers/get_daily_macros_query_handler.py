@@ -14,8 +14,10 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition.macros import Macros
+from src.domain.model.user import MacroPreset, MacroTargets
 from src.domain.ports.cache_port import CachePort
 from src.domain.services.meal_calorie_service import effective_meal_calories
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import (
     get_user_monday,
@@ -46,12 +48,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
             )
             user_tz = get_zone_info(user_tz_str)
             target_date = query.target_date or datetime.now(user_tz).date()
-
-            cached_result = await self._try_get_cached_result(
-                query.user_id, target_date
-            )
-            if cached_result is not None:
-                return cached_result
 
             meals = await uow.meals.find_by_date(
                 target_date,
@@ -165,6 +161,9 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
         target_calories = None
         target_macros = None
         bmr = 1800
+        target_revision = None
+        macro_preset = MacroPreset.STANDARD
+        is_custom = False
 
         try:
             from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
@@ -179,6 +178,9 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
             target_calories = tdee_result.get("target_calories")
             target_macros = tdee_result.get("macros", {})
             bmr = tdee_result.get("bmr", 1800)
+            target_revision = tdee_result.get("profile_target_revision")
+            macro_preset = MacroPreset(tdee_result.get("macro_preset", "standard"))
+            is_custom = bool(tdee_result.get("is_custom"))
 
             if target_calories is None:
                 logger.warning(f"TDEE data missing for user {query.user_id}.")
@@ -187,6 +189,12 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                 f"Could not fetch TDEE data for user {query.user_id}: {e}",
                 exc_info=True,
             )
+
+        cached_result = await self._try_get_cached_result(
+            query.user_id, target_date, target_revision
+        )
+        if cached_result is not None:
+            return cached_result
 
         food_calories = total_calories
         net_calories = food_calories - movement_kcal_burned
@@ -206,6 +214,9 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
 
         if target_calories is not None:
             result["target_calories"] = target_calories
+            result["profile_target_revision"] = target_revision
+            result["target_revision"] = target_revision
+            result["macro_preset"] = macro_preset.value
 
         if target_macros:
             result["target_macros"] = {
@@ -225,6 +236,9 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                 net_calories,
                 bmr,
                 user_tz_str,
+                macro_preset,
+                is_custom,
+                target_revision,
             )
             if weekly_context:
                 result["weekly_context"] = weekly_context
@@ -252,9 +266,15 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
         daily_consumed: float,
         bmr: float = 1800,
         user_timezone: str = "UTC",
+        macro_preset: MacroPreset = MacroPreset.STANDARD,
+        is_custom: bool = False,
+        target_revision: int | None = None,
     ) -> dict[str, Any] | None:
         """Get weekly budget context using the weekly-budget adjustment path."""
         if not weekly_budget:
+            return None
+        if target_revision is None or weekly_budget.target_revision != target_revision:
+            logger.warning("Refusing stale weekly target row for user %s", user_id)
             return None
         try:
             week_start = get_user_monday(target_date, user_id)
@@ -285,12 +305,23 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                     )
                 )
             adjusted = effective.adjusted
+            policy_targets = TdeeCalculationService.apply_adjusted_macro_policy(
+                adjusted.calories,
+                MacroTargets(
+                    calories=adjusted.calories,
+                    protein=adjusted.protein,
+                    carbs=adjusted.carbs,
+                    fat=adjusted.fat,
+                ),
+                macro_preset,
+                is_custom,
+            )
 
             return {
-                "adjusted_target_calories": adjusted.calories,
-                "adjusted_target_carbs": adjusted.carbs,
-                "adjusted_target_fat": adjusted.fat,
-                "daily_protein": adjusted.protein,
+                "adjusted_target_calories": policy_targets.calories,
+                "adjusted_target_carbs": policy_targets.carbs,
+                "adjusted_target_fat": policy_targets.fat,
+                "daily_protein": policy_targets.protein,
                 "bmr_floor_active": adjusted.bmr_floor_active,
                 "remaining_days": adjusted.remaining_days,
             }
@@ -298,12 +329,15 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
             logger.warning(f"Could not fetch weekly budget context: {e}")
             return None
 
-    async def _try_get_cached_result(self, user_id: str, target_date: date):
+    async def _try_get_cached_result(self, user_id: str, target_date: date, revision: int | None):
         if not self.cache_service:
             return None
         cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
         try:
-            return await self.cache_service.get_json(cache_key)
+            cached = await self.cache_service.get_json(cache_key)
+            if revision is not None and cached and cached.get("target_revision") == revision:
+                return cached
+            return None
         except Exception as exc:
             logger.warning("Failed to read daily macros cache for %s: %s", user_id, exc)
             return None

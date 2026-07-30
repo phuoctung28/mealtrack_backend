@@ -52,13 +52,13 @@ class TestCalculateDailyTdee:
         assert result == 2200.0
         mock_tdee_service.calculate_tdee.assert_called_once()
 
-    def test_falls_back_to_2000_on_error(self, mock_profile):
-        """Should return 2000 if TDEE calculation raises an exception."""
+    def test_propagates_authoritative_tdee_error(self, mock_profile):
+        """A complete profile must not receive a fabricated fallback target."""
         failing_service = Mock()
         failing_service.calculate_tdee.side_effect = Exception("TDEE error")
 
-        result = calculate_daily_tdee(failing_service, mock_profile)
-        assert result == 2000.0
+        with pytest.raises(Exception, match="TDEE error"):
+            calculate_daily_tdee(failing_service, mock_profile)
 
 
 class TestGetAdjustedDailyTarget:
@@ -75,6 +75,8 @@ class TestGetAdjustedDailyTarget:
         )
 
         mock_budget = Mock()
+        mock_profile.profile_target_revision = 1
+        mock_budget.target_revision = 1
         mock_adjusted = AdjustedDailyTargets(
             calories=2100.0, carbs=200, fat=70, protein=70,
             bmr_floor_active=False, remaining_days=5,
@@ -126,11 +128,18 @@ class TestGetAdjustedDailyTarget:
     async def test_falls_back_to_calculate_daily_tdee_on_error(self, mock_profile):
         """Should fall back to calculate_daily_tdee if adjusted target raises."""
         failing_service = Mock()
-        failing_service.calculate_tdee.side_effect = [Exception("TDEE error")]
+        failing_service.calculate_tdee.side_effect = [Exception("TDEE error"), mock_tdee_result()]
 
         result = await get_adjusted_daily_target(failing_service, "user123", mock_profile)
 
-        assert result == 2000.0
+        assert result == 2200.0
+        assert failing_service.calculate_tdee.call_count == 2
+
+
+def mock_tdee_result():
+    result = Mock()
+    result.macros.calories = 2200.0
+    return result
 
 
 class TestCacheKeyGeneration:

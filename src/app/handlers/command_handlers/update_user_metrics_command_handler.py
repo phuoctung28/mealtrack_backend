@@ -11,6 +11,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.common.enums import FitnessGoal, JobType, TrainingLevel
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
+from src.domain.services.training_policy import normalize_training_pair
 from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,18 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     f"User {command.user_id} not found. Profile required to update metrics."
                 )
 
+            target_inputs_before = (
+                profile.age,
+                profile.height_cm,
+                profile.weight_kg,
+                profile.gender,
+                profile.job_type,
+                profile.training_days_per_week,
+                profile.training_minutes_per_session,
+                profile.fitness_goal,
+                profile.training_level,
+            )
+
             # Update provided fields only
             if command.age is not None:
                 if command.age < 13 or command.age > 120:
@@ -99,26 +112,32 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 profile.job_type = command.job_type
 
             if command.training_days_per_week is not None:
-                if (
-                    command.training_days_per_week < 0
-                    or command.training_days_per_week > 7
-                ):
-                    raise ValidationException(
-                        "Training days per week must be between 0 and 7"
-                    )
-                profile.training_days_per_week = command.training_days_per_week
+                pass
 
-            if command.training_minutes_per_session is not None:
-                if (
-                    command.training_minutes_per_session < 15
-                    or command.training_minutes_per_session > 180
-                ):
-                    raise ValidationException(
-                        "Training minutes per session must be between 15 and 180"
-                    )
-                profile.training_minutes_per_session = (
-                    command.training_minutes_per_session
+            if (
+                command.training_days_per_week is not None
+                or command.training_minutes_per_session is not None
+            ):
+                effective_days = (
+                    command.training_days_per_week
+                    if command.training_days_per_week is not None
+                    else profile.training_days_per_week
                 )
+                effective_minutes = (
+                    0
+                    if command.training_days_per_week == 0
+                    else command.training_minutes_per_session
+                    if command.training_minutes_per_session is not None
+                    else profile.training_minutes_per_session
+                )
+                try:
+                    effective_days, effective_minutes = normalize_training_pair(
+                        effective_days, effective_minutes, allow_legacy=True
+                    )
+                except ValueError as exc:
+                    raise ValidationException(str(exc)) from exc
+                profile.training_days_per_week = effective_days
+                profile.training_minutes_per_session = effective_minutes
 
             if (
                 command.body_fat_percent is not None
@@ -215,6 +234,22 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             # Ensure this profile is marked as current
             profile.is_current = True
 
+            target_inputs_after = (
+                profile.age,
+                profile.height_cm,
+                profile.weight_kg,
+                profile.gender,
+                profile.job_type,
+                profile.training_days_per_week,
+                profile.training_minutes_per_session,
+                profile.fitness_goal,
+                profile.training_level,
+            )
+            if target_inputs_after != target_inputs_before:
+                profile.profile_target_revision = (
+                    profile.profile_target_revision or 1
+                ) + 1
+
             await uow.users.update_profile(profile)
 
         await self._invalidate_user_profile(command.user_id)
@@ -224,17 +259,18 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         if not self.cache_service:
             return
 
-        # Invalidate profile cache
-        profile_key, _ = CacheKeys.user_profile(user_id)
-        await self.cache_service.invalidate(profile_key)
-
-        # Invalidate TDEE cache
-        tdee_key, _ = CacheKeys.user_tdee(user_id)
-        await self.cache_service.invalidate(tdee_key)
-
-        # Invalidate user metrics cache
-        metrics_key, _ = CacheKeys.user_metrics(user_id)
-        await self.cache_service.invalidate(metrics_key)
+        # Cache invalidation follows a committed profile update, so it must
+        # never turn a successful mutation into an API failure. Readers fence
+        # target-bearing cache entries by profile_target_revision.
+        for cache_key in (
+            CacheKeys.user_profile(user_id)[0],
+            CacheKeys.user_tdee(user_id)[0],
+            CacheKeys.user_metrics(user_id)[0],
+        ):
+            try:
+                await self.cache_service.invalidate(cache_key)
+            except Exception as exc:
+                logger.warning("Failed to invalidate cache key %s: %s", cache_key, exc)
 
         # Invalidate ALL cached daily macros for this user (not just today)
         # TDEE changes affect targets for all dates

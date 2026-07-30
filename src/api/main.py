@@ -43,6 +43,7 @@ from src.api.dependencies.task_manager import (
 from src.api.exception_handlers import register_exception_handlers
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
+from src.api.middleware.preview_body_limit import PreviewBodyLimitMiddleware
 from src.api.middleware.rate_limit import limiter
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.app_download import router as app_download_router
@@ -279,6 +280,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Bound unauthenticated preview bodies before FastAPI buffers or decodes JSON.
+# Register this first so CORS and observability middleware still see its 413 response.
+app.add_middleware(PreviewBodyLimitMiddleware)
+
 allowed_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
 if allowed_origins:
     app.add_middleware(
@@ -295,11 +300,12 @@ app.add_middleware(RequestLoggerMiddleware)
 app.add_middleware(AcceptLanguageMiddleware)
 
 # Rate limiting
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from src.api.middleware.rate_limit import rate_limit_exceeded_handler
+
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Global exception boundary — one authoritative ERROR per unexpected failure
 register_exception_handlers(app)

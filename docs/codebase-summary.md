@@ -39,6 +39,14 @@ The current HTTP surface includes:
 - Meal logging and analysis: image upload, upload-token, scan-by-url, food-label scan-by-url, manual meals, parse-text, streak, weekly budget, and daily macros.
 - Meal recommendations: durable three-day catalog plans, compact summaries, slot detail hydration, and swap/log/skip mutations.
 - User and profile management: Firebase sync, onboarding completion, metrics, TDEE, language, timezone, and account deletion.
+
+Onboarding TDEE preview is versioned as `onboarding_preview_v2`; the backend
+owns activity/motivation calculation, Keto 5/20/75 policy, and macro-derived
+calories. No-training is `(0, 0)` with `(0, 15)` retained for legacy clients.
+Preview bodies are capped at 8 KiB before parsing and subject to IP quota;
+custom macro triples, reset, and target/cache revisions are fenced against
+stale writes. Body-fat projections are illustrative/source-guarded, and the
+related migration exists but is not applied or deployed.
 - Discovery and planning: meal suggestions discover, recipes, and save.
 - Nutrition and activity tracking: nutrition bulk/presence, activities daily/bulk, hydration, movement, and the journey progress snapshot.
 - Support routes: foods, ingredients, notifications, feature flags, saved suggestions, cheat days, referrals, promo codes, unified code validation, monitoring, health, app download, and well-known links.

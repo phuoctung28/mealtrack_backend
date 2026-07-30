@@ -6,6 +6,9 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.domain.ports.body_fat_visual_profile_repository_port import (
+        BodyFatVisualProfileRepositoryPort,
+    )
     from src.domain.ports.meal_repository_port import MealRepositoryPort
     from src.domain.ports.meal_suggestion_repository_port import (
         MealSuggestionRepositoryPort,
@@ -31,6 +34,7 @@ class AsyncUnitOfWorkPort(ABC):
     notifications: NotificationRepositoryPort
     saved_suggestions: SavedSuggestionRepositoryPort
     saved_suggestions_db: SavedSuggestionRepositoryPort
+    body_fat_visual_profiles: BodyFatVisualProfileRepositoryPort
 
     weekly_budgets: Any
     cheat_days: Any

@@ -5,25 +5,66 @@ Handles user profile management and TDEE calculations.
 
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import OnboardingCompleteRequest
+from src.api.schemas.request.body_fat_visual_requests import BodyFatVisualProfileRequest
 from src.api.schemas.request.custom_macros_request import UpdateCustomMacrosRequest
 from src.api.schemas.request.user_profile_update_requests import UpdateMetricsRequest
-from src.api.schemas.response import TdeeCalculationResponse, UserMetricsResponse
-from src.app.commands.user import SaveUserOnboardingCommand
+from src.api.schemas.response import (
+    BodyFatVisualProfileResponse,
+    TdeeCalculationResponse,
+    UserMetricsResponse,
+)
+from src.app.commands.user import (
+    SaveBodyFatVisualProfileCommand,
+    SaveUserOnboardingCommand,
+)
 from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.queries.tdee import GetUserTdeeQuery
-from src.app.queries.user import GetUserMetricsQuery
+from src.app.queries.user import GetBodyFatVisualProfileQuery, GetUserMetricsQuery
 from src.domain.model.user import Goal, MacroTargets, TdeeResponse
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
+
+
+@router.get("/body-fat-visual", response_model=BodyFatVisualProfileResponse)
+async def get_body_fat_visual_profile(
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """Get the latest visual body-fat selection and append-only history."""
+    profile = await event_bus.send(GetBodyFatVisualProfileQuery(user_id=user_id))
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Visual body-fat profile not found")
+    return profile
+
+
+@router.put("/body-fat-visual", response_model=BodyFatVisualProfileResponse)
+async def save_body_fat_visual_profile(
+    request: BodyFatVisualProfileRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """Append a visual estimate without changing measured body-fat or TDEE."""
+    await event_bus.send(
+        SaveBodyFatVisualProfileCommand(
+            user_id=user_id,
+            schema_version=request.schema_version,
+            range_catalog_version=request.range_catalog_version,
+            sex_at_selection=request.sex_at_selection,
+            start_range_id=request.start_range_id,
+            current_range_id=request.current_range_id,
+            target_range_id=request.target_range_id,
+        )
+    )
+    return await event_bus.send(GetBodyFatVisualProfileQuery(user_id=user_id))
 
 
 @router.post("/", response_model=None)

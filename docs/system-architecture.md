@@ -7,6 +7,19 @@
 
 ---
 
+## Onboarding calculation and result boundaries
+
+The unauthenticated TDEE preview is a bounded API boundary: request bodies are
+limited to 8 KiB before parsing and protected by an IP quota. Its versioned
+`onboarding_preview_v2` contract is authoritative for motivation/activity
+onboarding; canonical no-training is `(0, 0)`, while `(0, 15)` is a legacy
+compatibility shape. Keto applies 5/20/75 and calories are derived from the
+returned macro triple. Complete custom triples and target/cache revision fences
+prevent partial edits and stale responses. Body-fat projections are
+illustrative, source-guarded UI data rather than clinical measurements. The
+supporting migration exists but is not applied or deployed; external release,
+device, and purchase gates remain open.
+
 ## Architecture Diagram
 
 ```

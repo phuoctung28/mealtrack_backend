@@ -8,7 +8,14 @@ from typing import Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee.preview_tdee_query import PreviewTdeeQuery
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import JobType, Sex, TdeeRequest, UnitSystem
+from src.domain.model.user import (
+    JobType,
+    MacroPreset,
+    MacroTargets,
+    Sex,
+    TdeeRequest,
+    UnitSystem,
+)
 from src.domain.services.tdee_service import TdeeCalculationService
 
 logger = logging.getLogger(__name__)
@@ -20,6 +27,12 @@ JOB_TYPE_MULTIPLIERS = {
     "on_feet": 1.4,
     "physical": 1.6,
 }
+
+
+# Versioned policy identifier shared with onboarding clients.  A preview must
+# carry this value so clients can reject a result calculated under another policy.
+ONBOARDING_PREVIEW_CALCULATION_CONTRACT = "onboarding_preview_v2"
+
 
 @handles(PreviewTdeeQuery)
 class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, dict[str, Any]]):
@@ -56,24 +69,47 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, dict[str, Any]]):
             body_fat_pct=query.body_fat_percentage,
             unit_system=unit_system,
             training_level=training_level,
+            macro_preset=MacroPreset.KETO
+            if query.diet_type == "keto"
+            else MacroPreset.STANDARD,
         )
 
         # Calculate TDEE
         result = self.tdee_service.calculate_tdee(tdee_request)
+        macros = result.macros
+        custom_values = [
+            query.custom_protein_g,
+            query.custom_carbs_g,
+            query.custom_fat_g,
+        ]
+        if all(value is not None for value in custom_values):
+            protein, carbs, fat = (round(value, 1) for value in custom_values)
+            macros = MacroTargets(
+                protein=protein,
+                carbs=carbs,
+                fat=fat,
+                calories=round(protein * 4 + carbs * 4 + fat * 9, 1),
+            )
+        elif query.requested_calories is not None:
+            macros = self.tdee_service.scale_macros(macros, query.requested_calories)
 
         # Baseline excludes planned workouts; logged movement credits them.
         base = JOB_TYPE_MULTIPLIERS.get(job_type.value, 1.2)
 
         return {
+            "calculation_contract": ONBOARDING_PREVIEW_CALCULATION_CONTRACT,
             "bmr": result.bmr,
             "tdee": result.tdee,
             "goal": goal.value,
             "activity_multiplier": base,
             "formula_used": result.formula_used,
             "macros": {
-                "protein": round(result.macros.protein, 1),
-                "carbs": round(result.macros.carbs, 1),
-                "fat": round(result.macros.fat, 1),
-                "calories": round(result.macros.calories, 1),
+                "protein": macros.protein,
+                "carbs": macros.carbs,
+                "fat": macros.fat,
+                "calories": macros.calories,
             },
+            "macro_preset": result.macro_preset.value,
+            "is_custom": any(value is not None for value in custom_values)
+            or query.requested_calories is not None,
         }

@@ -44,9 +44,18 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
                     "Must set all three macros (protein, carbs, fat) or none to reset"
                 )
 
+            existing_values = (
+                profile.custom_protein_g,
+                profile.custom_carbs_g,
+                profile.custom_fat_g,
+            )
             profile.custom_protein_g = command.protein_g
             profile.custom_carbs_g = command.carbs_g
             profile.custom_fat_g = command.fat_g
+            if existing_values != tuple(values):
+                profile.profile_target_revision = (
+                    profile.profile_target_revision or 1
+                ) + 1
 
             action = "cleared" if non_null_count == 0 else "set"
             logger.info(f"Custom macros {action} for user {command.user_id}")

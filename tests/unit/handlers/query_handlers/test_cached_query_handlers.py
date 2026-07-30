@@ -21,7 +21,7 @@ class TestGetUserTdeeQueryHandlerCache:
             GetUserTdeeQueryHandler,
         )
 
-        cached_payload = {"user_id": "u1", "tdee": 2000.0, "bmr": 1700.0}
+        cached_payload = {"user_id": "u1", "tdee": 2000.0, "bmr": 1700.0, "profile_target_revision": 1}
         cache_service = MagicMock()
         cache_service.get_json = AsyncMock(return_value=cached_payload)
         cache_service.set_json = AsyncMock()
@@ -29,7 +29,8 @@ class TestGetUserTdeeQueryHandlerCache:
         handler = GetUserTdeeQueryHandler(cache_service=cache_service)
         query = GetUserTdeeQuery(user_id="u1")
 
-        result = await handler.handle(query)
+        with patch.object(handler, "_current_profile_revision", AsyncMock(return_value=1)):
+            result = await handler.handle(query)
 
         assert result == cached_payload
         cache_service.get_json.assert_awaited_once()
@@ -50,7 +51,10 @@ class TestGetUserTdeeQueryHandlerCache:
         handler = GetUserTdeeQueryHandler(cache_service=cache_service)
         query = GetUserTdeeQuery(user_id="u1")
 
-        with patch.object(handler, "_compute_tdee", AsyncMock(return_value=db_result)):
+        with (
+            patch.object(handler, "_current_profile_revision", AsyncMock(return_value=1)),
+            patch.object(handler, "_compute_tdee", AsyncMock(return_value=db_result)),
+        ):
             result = await handler.handle(query)
 
         assert result == db_result
@@ -59,6 +63,26 @@ class TestGetUserTdeeQueryHandlerCache:
         call_args = cache_service.set_json.call_args
         expected_key, _ = CacheKeys.user_tdee("u1")
         assert call_args[0][0] == expected_key
+
+    @pytest.mark.asyncio
+    async def test_recomputes_when_cached_target_revision_is_stale(self):
+        from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
+            GetUserTdeeQueryHandler,
+        )
+
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value={"profile_target_revision": 1})
+        cache_service.set_json = AsyncMock()
+        handler = GetUserTdeeQueryHandler(cache_service=cache_service)
+        fresh = {"profile_target_revision": 2, "target_calories": 2100.0}
+
+        with (
+            patch.object(handler, "_current_profile_revision", AsyncMock(return_value=2)),
+            patch.object(handler, "_compute_tdee", AsyncMock(return_value=fresh)),
+        ):
+            assert await handler.handle(GetUserTdeeQuery(user_id="u1")) == fresh
+
+        cache_service.set_json.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_works_without_cache_service(self):
@@ -71,7 +95,10 @@ class TestGetUserTdeeQueryHandlerCache:
         handler = GetUserTdeeQueryHandler()  # no cache_service
         query = GetUserTdeeQuery(user_id="u1")
 
-        with patch.object(handler, "_compute_tdee", AsyncMock(return_value=db_result)):
+        with (
+            patch.object(handler, "_current_profile_revision", AsyncMock(return_value=1)),
+            patch.object(handler, "_compute_tdee", AsyncMock(return_value=db_result)),
+        ):
             result = await handler.handle(query)
 
         assert result == db_result
@@ -91,7 +118,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         )
         from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 
-        cached_payload = {"week_start_date": "2024-01-01", "target_calories": 14000.0}
+        cached_payload = {"week_start_date": "2024-01-01", "target_calories": 14000.0, "profile_target_revision": 1}
         cache_service = MagicMock()
         cache_service.get_json = AsyncMock(return_value=cached_payload)
         cache_service.set_json = AsyncMock()
@@ -125,6 +152,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
                 "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
                 return_value=date(2024, 1, 1),
             ),
+            patch.object(handler, "_profile_target_revision", AsyncMock(return_value=1)),
         ):
             result = await handler.handle(query)
 
@@ -144,7 +172,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         )
         from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 
-        cached_payload = {"week_start_date": "2024-01-01", "target_calories": 14000.0}
+        cached_payload = {"week_start_date": "2024-01-01", "target_calories": 14000.0, "profile_target_revision": 1}
         cache_service = MagicMock()
         cache_service.get_json = AsyncMock(return_value=cached_payload)
         cache_service.set_json = AsyncMock()
@@ -177,6 +205,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
                 "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
                 return_value=date(2024, 1, 1),
             ),
+            patch.object(handler, "_profile_target_revision", AsyncMock(return_value=1)),
         ):
             result = await handler.handle(query)
 
@@ -213,6 +242,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
             remaining_protein=490.0,
             remaining_carbs=1400.0,
             remaining_fat=490.0,
+            target_revision=1,
         )
 
         mock_effective = MagicMock()
@@ -279,6 +309,13 @@ class TestGetWeeklyBudgetQueryHandlerCache:
                 "_sync_targets_if_stale",
                 AsyncMock(return_value=(mock_budget, 1800.0)),
             ),
+            patch.object(handler, "_profile_target_revision", AsyncMock(return_value=1)),
+            patch.object(
+                handler,
+                "_current_target_policy",
+                AsyncMock(return_value=("standard", False)),
+            ),
+            patch.object(handler, "_apply_target_policy", side_effect=lambda adjusted, _: adjusted),
             patch(
                 "src.app.handlers.query_handlers.get_weekly_budget_query_handler."
                 "WeeklyBudgetService.get_effective_adjusted_daily_async",
