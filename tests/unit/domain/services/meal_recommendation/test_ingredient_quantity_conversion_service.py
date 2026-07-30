@@ -83,10 +83,31 @@ def test_rejects_unverified_food_reference():
     assert exc.value.code == "food_reference_not_verified"
 
 
-def test_rejects_unapproved_source():
+def test_rejects_unapproved_source_until_an_admin_verifies_that_reference():
     with pytest.raises(IngredientQuantityConversionError) as exc:
         IngredientQuantityConversionService().resolve(
-            reference=_reference(source="ai_estimate"),
+            reference=_reference(source="ai_estimate", is_verified=False),
+            quantity=100,
+            unit="g",
+        )
+
+    assert exc.value.code == "food_reference_not_verified"
+
+
+def test_accepts_admin_verified_reference_from_an_unapproved_source():
+    result = IngredientQuantityConversionService().resolve(
+        reference=_reference(source="ai_estimate", is_verified=True),
+        quantity=100,
+        unit="g",
+    )
+
+    assert result.food_reference_id == 42
+
+
+def test_review_mode_still_rejects_an_unapproved_unverified_source():
+    with pytest.raises(IngredientQuantityConversionError) as exc:
+        IngredientQuantityConversionService(allow_unverified=True).resolve(
+            reference=_reference(source="ai_estimate", is_verified=False),
             quantity=100,
             unit="g",
         )
