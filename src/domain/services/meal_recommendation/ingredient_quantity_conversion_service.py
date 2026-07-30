@@ -158,6 +158,7 @@ class IngredientQuantityConversionService:
             )
         if (
             reference.source.lower() not in self._approved_sources
+            and not reference.is_verified
             and not self._allow_unapproved_sources
         ):
             raise IngredientQuantityConversionError(
@@ -184,9 +185,8 @@ class IngredientQuantityConversionService:
             )
         fiber = reference.fiber_100g or 0.0
         sugar = reference.sugar_100g or 0.0
-        if (
-            not self._allow_implausible_macros
-            and (fiber > carbs_100g or sugar > carbs_100g or fiber + sugar > carbs_100g)
+        if not self._allow_implausible_macros and (
+            fiber > carbs_100g or sugar > carbs_100g or fiber + sugar > carbs_100g
         ):
             raise IngredientQuantityConversionError(
                 "implausible_macro_snapshot",
@@ -270,9 +270,11 @@ class IngredientQuantityConversionService:
         weights = {
             (
                 round(serving.grams, 6) if serving.grams is not None else None,
-                round(serving.milliliters, 6)
-                if serving.milliliters is not None
-                else None,
+                (
+                    round(serving.milliliters, 6)
+                    if serving.milliliters is not None
+                    else None
+                ),
             )
             for serving in matches
         }
