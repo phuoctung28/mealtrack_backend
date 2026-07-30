@@ -11,6 +11,9 @@ from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.services.meal_recommendation.ingredient_affinity_service import (
+    IngredientHistoryBucket,
+)
 from src.domain.utils.timezone_utils import get_zone_info, utc_now
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.food_item_translation_model import (
@@ -114,16 +117,26 @@ class AsyncMealRepository(MealRepositoryPort):
                 meal.instructions
             )
 
-            # Update image URL if changed (parallel upload sets URL after initial save)
-            if meal.image and meal.image.url:
+            # Update image association/URL if changed.
+            if meal.image:
                 img_result = await self.session.execute(
                     select(MealImageORM).where(
                         MealImageORM.image_id == meal.image.image_id
                     )
                 )
                 existing_image = img_result.scalars().first()
-                if existing_image and existing_image.url != meal.image.url:
-                    existing_image.url = meal.image.url
+                if existing_image:
+                    if existing_image.url != meal.image.url:
+                        existing_image.url = meal.image.url
+                else:
+                    existing_image = meal_image_domain_to_orm(meal.image)
+                    self.session.add(existing_image)
+                    await self.session.flush()
+                existing_meal.image_id = str(meal.image.image_id)
+                existing_meal.image = existing_image
+            else:
+                existing_meal.image_id = None
+                existing_meal.image = None
 
             if meal.nutrition:
                 if not existing_meal.nutrition:
@@ -393,6 +406,62 @@ class AsyncMealRepository(MealRepositoryPort):
             .limit(limit)
         )
         return _map_domain_hydratable_meals(result.unique().scalars().all())
+
+    async def aggregate_linked_ingredient_history(
+        self,
+        *,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        reference_date: date,
+        user_timezone: str | None = None,
+    ) -> list[IngredientHistoryBucket]:
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        start_dt = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(UTC)
+        end_dt = (
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
+        ).astimezone(UTC)
+        occurred_at = func.coalesce(MealORM.ready_at, MealORM.created_at)
+        if user_timezone and user_timezone != "UTC":
+            local_date_expr = func.date(func.timezone(user_timezone, occurred_at))
+        else:
+            local_date_expr = func.date(occurred_at)
+        capped_quantity = func.least(FoodItemORM.quantity, 500.0)
+
+        result = await self.session.execute(
+            select(
+                FoodItemORM.food_reference_id,
+                local_date_expr,
+                func.coalesce(func.sum(capped_quantity), 0),
+            )
+            .select_from(MealORM)
+            .join(NutritionORM, NutritionORM.meal_id == MealORM.meal_id)
+            .join(FoodItemORM, FoodItemORM.nutrition_id == NutritionORM.id)
+            .where(
+                MealORM.user_id == user_id,
+                occurred_at >= start_dt,
+                occurred_at < end_dt,
+                FoodItemORM.food_reference_id.is_not(None),
+                FoodItemORM.is_deleted.is_(False),
+                _domain_hydratable_active_meal_filter(),
+            )
+            .group_by(FoodItemORM.food_reference_id, local_date_expr)
+        )
+        buckets: list[IngredientHistoryBucket] = []
+        for food_reference_id, local_date, capped_grams in result.all():
+            if isinstance(local_date, str):
+                local_date = date.fromisoformat(local_date)
+            buckets.append(
+                IngredientHistoryBucket(
+                    food_reference_id=int(food_reference_id),
+                    age_days=max((reference_date - local_date).days, 0),
+                    capped_grams=float(capped_grams or 0),
+                )
+            )
+        return buckets
 
     async def get_daily_meal_counts(
         self,

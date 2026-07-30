@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from .macros import Macros
 from .micros import Micros
@@ -18,7 +19,9 @@ class FoodItem:
     micros: Micros | None = None
     confidence: float = 1.0  # 0.0-1.0 confidence score from AI or lookup
     fdc_id: int | None = None  # USDA FDC ID if available
+    food_reference_id: int | None = None
     is_custom: bool = False  # Whether this is a custom ingredient
+    allowed_units: list[dict[str, Any]] | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -34,8 +37,8 @@ class FoodItem:
             raise ValueError(f"Confidence must be between 0 and 1: {self.confidence}")
         if not self.unit or not self.unit.strip():
             raise ValueError("Unit cannot be empty")
-        if len(self.unit) > 50:
-            raise ValueError(f"Unit too long (max 50 chars): {len(self.unit)}")
+        if len(self.unit) > 120:
+            raise ValueError(f"Unit too long (max 120 chars): {len(self.unit)}")
 
     @property
     def calories(self) -> float:
@@ -58,6 +61,10 @@ class FoodItem:
             result["micros"] = self.micros.to_dict()
         if self.fdc_id:
             result["fdc_id"] = self.fdc_id
+        if self.food_reference_id:
+            result["food_reference_id"] = self.food_reference_id
+        if self.allowed_units:
+            result["allowed_units"] = self.allowed_units
         return result
 
 

@@ -1,13 +1,13 @@
 """Add append-only visual body-fat profile selections.
 
-Revision ID: 20260716000001
+Revision ID: 20260730000001
 Revises: 20260702000001
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260716000001"
+revision = "20260730000001"
 down_revision = "20260702000001"
 branch_labels = None
 depends_on = None

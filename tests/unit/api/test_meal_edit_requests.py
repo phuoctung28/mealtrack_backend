@@ -42,6 +42,38 @@ class TestFoodItemChangeRequest:
         # Derived: 10*4 + 20*4 + 8*9 = 192
         assert request.custom_nutrition.calories_per_100g == 192.0
 
+    def test_valid_add_request_with_allowed_units(self):
+        """Test preserving food-specific unit options."""
+        request = FoodItemChangeRequest(
+            action="add",
+            name="Chicken Breast",
+            quantity=100.0,
+            unit="g",
+            allowed_units=[
+                {
+                    "unit": "g",
+                    "gram_weight": 100.0,
+                    "description": "100 g",
+                },
+                {
+                    "unit": "small breast (yield after cooking, bone removed)",
+                    "gram_weight": 84.0,
+                    "description": "1/2 small (yield after cooking, bone removed)",
+                },
+                {
+                    "unit": "cup, cooked, diced",
+                    "gram_weight": 135.0,
+                    "description": "1 cup cooked, diced",
+                },
+            ],
+        )
+
+        assert len(request.allowed_units) == 3
+        assert request.allowed_units[0].unit == "g"
+        assert request.allowed_units[0].description == "100 g"
+        assert request.allowed_units[1].unit.startswith("small breast")
+        assert request.allowed_units[2].unit == "cup, cooked, diced"
+
     def test_valid_update_request(self):
         """Test valid update request."""
         # Arrange & Act
@@ -132,7 +164,7 @@ class TestFoodItemChangeRequest:
                 action="add",
                 name="Test Food",
                 quantity=100.0,
-                unit="a" * 21,  # Over 20 character limit
+                unit="a" * 121,  # Over 120 character limit
             )
 
 

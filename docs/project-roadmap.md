@@ -1,19 +1,52 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.7
-**Last Updated:** July 5, 2026
-**Status:** Production-ready. 635 source files in `src/`, 56,132 LOC in `src/`, 312 Python test files, and 1,600+ collected tests. Default `pytest` is unit-biased because integration tests are ignored by config.
+**Last Updated:** July 29, 2026
+**Status:** Core backend runtime is production-oriented; catalog rollout still has explicit staging, corpus, load, and rollback evidence gates. The repository has 704 source files in `src/`, 65,423 LOC in `src/`, 350 Python test files, and 2,013 tests in `tests/unit`.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
 
+### July 2026: Meal Catalog Phase 0 Production Foundation
+- [x] Four-table catalog recommendation foundation uses `meal_catalog`, `meal_catalog_ingredients`, `meal_recommendations`, and `meal_recommendation_operations`.
+- [x] Catalog import is additive, content-hash protected, serialized, and withholds near duplicates for explicit review.
+- [x] Admin meal-catalog APIs expose the same strict resolver preview and two-pass import flow as the catalog seed script.
+- [x] Food scraper seed ingestion uses the async food-reference repository and preserves verified canonical rows.
+- [x] Recommendation create/read/slot detail/swap/log/skip are owner-scoped and idempotent where mutations require request IDs.
+- [x] Provider-backed food routes and feature-flag reads require Firebase JWT; mutation routes retain stronger admin protection where applicable.
+- [x] Food search is local-first through indexed `food_reference` and degrades through cache/provider/translation outages.
+- [x] PostgreSQL integration gates cover import dry-run, replay, invalid-manifest rollback, concurrent import serialization, near-duplicate withholding, catalog projection, and degraded local search.
+- [ ] Approved 180-meal production corpus import/replay evidence is pending because the manifest and resolver map are not present locally.
+- [ ] Staging load, degraded-load, and rollback-drill evidence remain release gates.
+
+### July 2026: Catalog Recommendation Response Localization
+- [x] Catalog-backed recommendation responses now honor `Accept-Language` for the seven supported app languages.
+- [x] Localization translates presentation text only (meal name, cuisine, description, ingredient display name); IDs, units, ranking, state, and backend-derived nutrition remain canonical.
+- [x] Missing configuration or translation-provider failure returns the canonical English response without failing the recommendation request.
+
+### July 2026: Meal Recommendation Performance Redesign
+- [x] `POST /v1/meal-recommendations/three-day` and `GET /v1/meal-recommendations/{plan_id}` now return compact selected-slot summaries instead of full hydrated plans.
+- [x] `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` returns one hydrated selected slot plus alternatives for drill-down.
+- [x] `swap` and `log` return changed-slot detail responses so clients can patch the cached plan in place.
+- [x] Recommendation analytics schedule through `BackgroundTaskManager` when available.
+- [x] Catalog meals use a process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback.
+- [x] Meal-history affinity now uses aggregate linked ingredient buckets, and logged recommended meals reuse the loaded selected catalog projection without fabricating an image.
+- [x] Meal recommendation ranking uses snapshot-scoped IDF, confidence-scaled ingredient similarity, and bounded top-30 diversity reranking for new plan generation.
+- [ ] Merge/deploy still requires staging p95 and representative quality evidence; local synthetic benchmark evidence is not a production gate by itself.
+
 ### July 2026: Food-Label Image Scan
 - [x] `/v1/meals/food-label/scan-by-url` analyzes Nutrition Facts label images directly from Cloudinary bytes.
 - [x] Optional `label_crop_image_url` and crop metadata let mobile send a nutrition-panel crop while retaining the original image record.
 - [x] `FoodLabelImageAnalysisStrategy` handles multilingual labels and returns the strict `FoodLabelNutritionResponse` contract.
 - [x] Failed label reads do not persist meals; successful scans persist READY `Meal(source="food_label")` rows and invalidate meal caches without hydration side effects.
+
+### July 2026: Catalog Meal Recommendation MVP - Phase 2
+- [x] Canonical `food_reference_id` now survives meal, suggestion, save, edit, and cache paths.
+- [x] Catalog ingredient quantities resolve strictly; unsafe or ambiguous conversions fail closed.
+- [x] Food-reference nutrition projections are typed, and save-fallback calories use the fiber-aware macro formula.
+- [x] Existing `/v1/meal-suggestions` AI flow remains additive and unchanged aside from canonical ID preservation and fallback calories.
 
 ### June 2026: Python 3.13 and Dependency Standardization
 - [x] Upgraded runtime, Docker, CI, and documented backend baseline to Python 3.13.
@@ -136,7 +169,7 @@
 - [x] Scout-based codebase analysis (4 comprehensive reports: API, App, Domain, Infra layers).
 - [x] Updated all documentation with verified statistics (417 files, ~37K LOC).
 - [x] Accurate metrics: 29 commands, 23 queries, 10+ events, 40+ handlers, 50+ domain services.
-- [x] Added WebSocket chat details (ConnectionManager, 3 application services).
+- [x] Replaced obsolete chat/WebSocket planning claims with deterministic meal recommendation documentation.
 - [x] Documented EventBus singleton registry pattern.
 
 ### Phase 06: Session-Based Meal Suggestions (Jan 2026)
@@ -157,7 +190,7 @@
 
 ### Phase 05: Pinecone Inference Migration (Jan 2026)
 - [x] Recreated indexes with 1024-dim vectors (llama-text-embed-v2).
-- [x] Migrated to serverless Pinecone Inference API.
+- [x] Migrated to serverless Pinecone Inference API (historical; the active meal-image-name vector cache now uses pgvector).
 - [x] Updated unit/integration tests with 1024-dim mocks.
 - [x] Semantic ingredient search with 0.35 similarity threshold.
 
@@ -171,7 +204,7 @@
 - [x] Gemini 2.5 Flash Vision integration with 6 analysis strategies (Strategy Pattern).
 - [x] Multi-model Gemini for rate distribution (4 model types: meal names, recipe primary/secondary, general).
 - [x] CQRS architecture with PyMediator event bus (singleton registry pattern).
-- [x] Chat with streaming AI responses (WebSocket + REST, MessageOrchestrationService, AIResponseCoordinator).
+- [x] AI meal suggestions and deterministic catalog-backed meal recommendations.
 - [x] Firebase Auth & FCM with platform-specific configs.
 - [x] SQLAlchemy 2.0 async runtime with `AsyncUnitOfWork` transaction boundaries.
 - [x] RevenueCat subscription integration.
@@ -181,9 +214,9 @@
 
 ---
 
-## Current Priorities (Q2 2026)
+## Current Priorities (Q3 2026)
 1. **Performance**: Optimize suggestion generation (target <10s from ~45s) — in progress.
-2. **Security**: Restrict CORS in production (`allow_origins=["*"]` currently wide open), add PII redaction to request logging — open.
+2. **Security**: Restrict CORS in production via `ALLOWED_ORIGINS` allowlists, add PII redaction to request logging — open.
 3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (discover, generate) — open.
 4. **Testing**: Increase coverage for meal discovery and notification dedup logic — open.
 5. **Premium Gating**: Apply `require_premium` dependency to premium-only routes — open.
@@ -209,14 +242,12 @@
 
 ### High Priority
 - [ ] Plan contract migration to remove or secure legacy JSON compatibility fields after production observation window.
-- [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
 - [ ] Implement API versioning strategy beyond v1
 - [ ] Apply `require_premium` dependency to premium-only features
 - [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config
 
 ### Medium Priority
 - [ ] Add monitoring for AI provider quota and Cloudinary storage limits
-- [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes
 - [ ] Tune rate limiting thresholds for meal_suggestions endpoints based on usage patterns
 
 ### Low Priority

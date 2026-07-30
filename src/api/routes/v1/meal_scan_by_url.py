@@ -7,13 +7,21 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Request, status
 from pydantic import BaseModel
 
+from src.api.base_dependencies import get_ai_model_manager, get_cache_service
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.dependencies.task_manager import get_optional_task_manager
 from src.api.exceptions import ValidationException, handle_exception
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.middleware.accept_language import get_request_language
 from src.api.schemas.response import DetailedMealResponse
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
+from src.app.services.meal_value_insight_scheduler import (
+    MealInsightTaskScheduler,
+    schedule_value_insight_generation,
+)
+from src.domain.ports.cache_port import CachePort
+from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 
 logger = logging.getLogger(__name__)
@@ -78,6 +86,9 @@ async def _scan_by_url(
     target_date: str | None,
     user_description: str | None,
     scan_mode: str,
+    cache_service: CachePort | None,
+    task_manager: MealInsightTaskScheduler | None,
+    ai_manager: MealInsightAIPort,
     label_crop_image_url: str | None = None,
     label_crop_image_id: str | None = None,
     crop_metadata: dict[str, Any] | None = None,
@@ -136,6 +147,17 @@ async def _scan_by_url(
         )
 
     response_image_url = meal.image.url if meal.image else None
+    if not getattr(meal, "_meal_value_insight_scheduled", False):
+        schedule_value_insight_generation(
+            task_manager,
+            meal,
+            language=language,
+            cache_service=cache_service,
+            ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=user_id,
+            source="api",
+        )
     return MealMapper.to_detailed_response(
         meal,
         response_image_url,
@@ -153,6 +175,9 @@ async def scan_meal_by_url(
     body: ScanByUrlRequest = Body(...),
     user_id: str = Depends(get_current_user_id),
     event_bus: Any = Depends(get_configured_event_bus),
+    cache_service: CachePort | None = Depends(get_cache_service),
+    task_manager: MealInsightTaskScheduler | None = Depends(get_optional_task_manager),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """Analyze a meal image already uploaded to Cloudinary via the safe bytes-download path."""
     try:
@@ -172,6 +197,9 @@ async def scan_meal_by_url(
             user_description=body.user_description,
             scan_mode="scanner",
             event_bus=event_bus,
+            cache_service=cache_service,
+            task_manager=task_manager,
+            ai_manager=ai_manager,
         )
 
     except ValidationException:
@@ -190,6 +218,9 @@ async def scan_food_label_by_url(
     body: FoodLabelScanByUrlRequest = Body(...),
     user_id: str = Depends(get_current_user_id),
     event_bus: Any = Depends(get_configured_event_bus),
+    cache_service: CachePort | None = Depends(get_cache_service),
+    task_manager: MealInsightTaskScheduler | None = Depends(get_optional_task_manager),
+    ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
 ):
     """Analyze a Cloudinary-hosted Nutrition Facts label."""
     try:
@@ -205,6 +236,9 @@ async def scan_food_label_by_url(
             label_crop_image_id=body.label_crop_image_id,
             crop_metadata=body.crop_metadata,
             event_bus=event_bus,
+            cache_service=cache_service,
+            task_manager=task_manager,
+            ai_manager=ai_manager,
         )
     except ValidationException:
         raise

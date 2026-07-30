@@ -1,14 +1,14 @@
 """Add start range to visual body-fat profile selections.
 
-Revision ID: 20260726000001
-Revises: 20260718000001
+Revision ID: 20260730000003
+Revises: 20260730000002
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260726000001"
-down_revision = "20260718000001"
+revision = "20260730000003"
+down_revision = "20260730000002"
 branch_labels = None
 depends_on = None
 

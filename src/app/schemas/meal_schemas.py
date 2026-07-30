@@ -4,7 +4,7 @@ Domain-agnostic - used by handlers, mapped to API DTOs at the presentation layer
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any
 
 
 @dataclass
@@ -17,16 +17,17 @@ class ParsedFoodItemDto:
     protein: float
     carbs: float
     fat: float
-    data_source: Optional[str] = None
-    fdc_id: Optional[int] = None
+    data_source: str | None = None
+    fdc_id: int | None = None
+    allowed_units: list[dict[str, Any]] | None = None
 
 
 @dataclass
 class ParseMealTextResponseDto:
     """DTO for parse meal text command response (app layer)."""
 
-    items: List[ParsedFoodItemDto]
+    items: list[ParsedFoodItemDto]
     total_protein: float
     total_carbs: float
     total_fat: float
-    emoji: Optional[str] = None
+    emoji: str | None = None

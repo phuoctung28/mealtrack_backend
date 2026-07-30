@@ -24,7 +24,7 @@ BASE_URL = "https://viendinhduong.vn"
 FOODS_API = f"{BASE_URL}/api/fe/foodNatunal/getPageFoodData"
 DISHES_API = f"{BASE_URL}/api/fe/tool/getPageFoodData"
 HEADERS = {"User-Agent": "NutreeAI/1.0 (food-database-enrichment)"}
-PAGE_SIZE = 15  # API ignores limit param, always returns 15
+PAGE_SIZE = 10_000  # The API honors pageSize; this covers the current catalog in one request.
 RATE_LIMIT = 1.0  # seconds between requests
 
 # Nutrient name mapping → our schema field names
@@ -146,7 +146,13 @@ def _fetch_paginated(api_url: str, parser, label: str) -> list[dict]:
     page = 1
 
     while True:
-        params = {"page": page, "limit": PAGE_SIZE, "foodGroupId": "", "energyType": 0, "lang": "en"}
+        params = {
+            "page": page,
+            "pageSize": PAGE_SIZE,
+            "foodGroupId": "",
+            "energyType": 0,
+            "lang": "en",
+        }
         try:
             r = requests.get(api_url, params=params, timeout=30, headers=HEADERS)
             r.raise_for_status()
@@ -168,7 +174,7 @@ def _fetch_paginated(api_url: str, parser, label: str) -> list[dict]:
         logger.info("%s: page %d/%s — %d items (total so far: %d)",
                     label, page, data.get("last_page", "?"), len(items), len(entries))
 
-        # Use actual per_page from response (API ignores our limit param)
+        # Respect the response page size if the API caps a requested pageSize.
         actual_page_size = data.get("per_page", PAGE_SIZE)
         if len(items) < actual_page_size:
             break

@@ -66,12 +66,14 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
             protein=command.protein,
             carbs=command.carbs,
             fat=command.fat,
+            fiber=command.fiber,
         )
         food_items = self._build_food_items(
             command.ingredients,
             total_protein=command.protein,
             total_carbs=command.carbs,
             total_fat=command.fat,
+            total_fiber=command.fiber,
         )
         nutrition = Nutrition(
             macros=macros,
@@ -133,6 +135,7 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
         total_protein: float,
         total_carbs: float,
         total_fat: float,
+        total_fiber: float = 0.0,
     ) -> list[FoodItem]:
         """
         Convert suggestion ingredients into FoodItem domain objects.
@@ -154,8 +157,10 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
                             protein=ingredient.protein,
                             carbs=ingredient.carbs,
                             fat=ingredient.fat,
+                            fiber=ingredient.fiber,
                         ),
                         confidence=1.0,
+                        food_reference_id=ingredient.food_reference_id,
                         is_custom=True,
                     )
                 )
@@ -167,7 +172,7 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
         # Distribute meal-level totals when all items have 0 calories (derived from macros)
         if (
             items
-            and total_protein + total_carbs + total_fat > 0
+            and total_protein + total_carbs + total_fat + total_fiber > 0
             and all(
                 item.macros.protein == 0
                 and item.macros.carbs == 0
@@ -176,7 +181,11 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
             )
         ):
             items = self._distribute_nutrition(
-                items, total_protein, total_carbs, total_fat
+                items,
+                total_protein,
+                total_carbs,
+                total_fat,
+                total_fiber,
             )
 
         return items
@@ -203,6 +212,7 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
         total_protein: float,
         total_carbs: float,
         total_fat: float,
+        total_fiber: float = 0.0,
     ) -> list[FoodItem]:
         """Distribute meal-level macro totals proportionally by estimated weight."""
         total_weight = sum(
@@ -224,8 +234,10 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
                         protein=round(total_protein * ratio, 1),
                         carbs=round(total_carbs * ratio, 1),
                         fat=round(total_fat * ratio, 1),
+                        fiber=round(total_fiber * ratio, 1),
                     ),
                     confidence=0.8,
+                    food_reference_id=item.food_reference_id,
                     is_custom=True,
                 )
             )

@@ -1,0 +1,85 @@
+{
+  "release_key": "sample-catalog-release",
+  "expected_recipe_count": 3,
+  "recipes": [
+    {
+      "recipe_key": "sample-vietnamese-breakfast",
+      "cuisine": "vietnamese",
+      "name": "Sample Vietnamese Breakfast",
+      "meal_types": ["breakfast"],
+      "rights": {
+        "status": "approved",
+        "approver": "content-review",
+        "agreement_identifier": "sample-rights-vn-001"
+      },
+      "sources": [{"source_type": "commissioned"}],
+      "ingredients": [
+        {
+          "food_reference_id": 1,
+          "name": "Rice",
+          "quantity": 100,
+          "unit": "g",
+          "resolved_grams": 100,
+          "protein_g": 2.7,
+          "carbs_g": 28,
+          "fat_g": 0.3,
+          "fiber_g": 0.4,
+          "sugar_g": 0.1
+        }
+      ]
+    },
+    {
+      "recipe_key": "sample-japanese-lunch",
+      "cuisine": "japanese",
+      "name": "Sample Japanese Lunch",
+      "meal_types": ["lunch"],
+      "rights": {
+        "status": "approved",
+        "approver": "content-review",
+        "agreement_identifier": "sample-rights-jp-001"
+      },
+      "sources": [{"source_type": "commissioned"}],
+      "ingredients": [
+        {
+          "food_reference_id": 2,
+          "name": "Tofu",
+          "quantity": 120,
+          "unit": "g",
+          "resolved_grams": 120,
+          "protein_g": 9.6,
+          "carbs_g": 2.2,
+          "fat_g": 5.8,
+          "fiber_g": 0.4,
+          "sugar_g": 0.8
+        }
+      ]
+    },
+    {
+      "recipe_key": "sample-korean-dinner",
+      "cuisine": "korean",
+      "name": "Sample Korean Dinner",
+      "meal_types": ["dinner"],
+      "rights": {
+        "status": "approved",
+        "approver": "content-review",
+        "agreement_identifier": "sample-rights-kr-001"
+      },
+      "sources": [{"source_type": "commissioned"}],
+      "ingredients": [
+        {
+          "food_reference_id": 3,
+          "name": "Egg",
+          "quantity": 50,
+          "unit": "g",
+          "resolved_grams": 50,
+          "protein_g": 6.3,
+          "carbs_g": 0.4,
+          "fat_g": 5,
+          "fiber_g": 0,
+          "sugar_g": 0.4
+        }
+      ]
+    }
+  ]
+}
+

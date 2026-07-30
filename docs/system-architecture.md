@@ -1,9 +1,9 @@
 # Backend System Architecture Overview
 
-**Last Updated:** July 5, 2026
+**Last Updated:** July 29, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 635 Python files, 56,132 LOC in `src/`
+**Codebase:** 704 Python files, 65,423 LOC in `src/`
 
 ---
 
@@ -24,22 +24,22 @@ device, and purchase gates remain open.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (91 files)                    │
+│                      API Layer (97 files)                    │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (207 files)                   │
+│              Application Layer (244 files)                   │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (174 files)                      │
+│                Domain Layer (192 files)                      │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
 ┌────────────────────────▼────────────────────────────────────┐
-│            Infrastructure Layer (154 files)                  │
+│            Infrastructure Layer (162 files)                  │
 │  DB │ Cache │ External APIs │ Event Bus │ Config             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -50,13 +50,13 @@ device, and purchase gates remain open.
 
 | Layer | Files | LOC | Key Contents |
 |-------|-------|-----|-------------|
-| API | 91 | 11,323 | 28 route files, 26 endpoint route modules, 88 endpoint decorators, schemas, middleware, dependencies |
-| App | 207 | 11,333 | 50 command files, 52 query files, 14 event files, 86 handler files |
-| Domain | 174 | 17,397 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
-| Infra | 154 | 15,337 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
-| **Total** | **626** | **55,390** | Layer directories only; `src/` also has bootstrap, cron, and observability modules |
+| API | 97 | 12,709 | Routes, middleware, schemas, dependencies, and API mappers |
+| App | 244 | 14,684 | CQRS commands, queries, handlers, and orchestration services |
+| Domain | 192 | 19,522 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
+| Infra | 162 | 17,762 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
+| **Total** | **695** | **64,677** | Layer directories only; `src/` also has root/bootstrap/cron modules outside the four layers |
 
-**Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns.
+**Layer rule:** Domain has no outer-layer or external I/O dependencies. See `cqrs-guide.md` for handler patterns.
 
 ---
 
@@ -80,6 +80,23 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 
 ### Repository Pattern
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
+
+### Meal Recommendation Ranking
+Catalog-backed meal recommendations use snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded top-30 diversity reranking for new plan generation, without changing endpoint paths. The current scoring weights use `ingredient_weight = 0.35 * confidence` and `diversity_weight = 0.10`, with calorie weight filling the remainder.
+
+The active catalog snapshot owns both immutable meal projections and snapshot-scoped ingredient IDF statistics. Persisted plans replay their stored candidates and scores instead of recalculating.
+
+Phase 0 persistence is four-table only: `meal_catalog`,
+`meal_catalog_ingredients`, `meal_recommendations`, and
+`meal_recommendation_operations`. The AI `/v1/meal-suggestions` flow remains a
+separate additive system and is not a fallback or replacement for these
+catalog-backed recommendations.
+
+### Local-First Food Search
+Manual food search reads Redis cache when available, then searches verified
+`food_reference` rows locally before provider fill. Cache, provider, and
+translation failures degrade to bounded local results when possible. Local
+result calories are always derived from stored macros using the backend formula.
 
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
@@ -119,15 +136,20 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 
 ---
 
-## Data Flow Example: Meal Analysis
+## Data Flow Example: Meal Image Analysis
 
-1. `POST /v1/meals/image/analyze` receives image
-2. Route creates `UploadMealImageImmediatelyCommand`
-3. `EventBus.send()` → `UploadMealImageImmediatelyHandler`
-4. Handler uploads to Cloudinary, creates Meal (PROCESSING), publishes `MealImageUploadedEvent`
-5. Handler returns Meal immediately to API (synchronous response to client)
-6. `EventBus.publish()` → `MealAnalysisEventHandler` (background)
-7. Background: calls `VisionAIService` through the provider stack, parses nutrition, updates Meal to READY
+1. `POST /v1/meals/image/analyze` receives image bytes.
+2. Route creates `UploadMealImageImmediatelyCommand`.
+3. `EventBus.send()` calls `UploadMealImageImmediatelyHandler`.
+4. Handler uploads to Cloudinary, runs `VisionAIService`, parses nutrition, and persists a READY `Meal(source="scanner")`.
+5. If `AI_MEAL_ANALYZE_GRAPH_ENABLED=true`, the handler enters `MealAnalyzeWorkflow`; the app-layer graph owns image acquisition, vision parsing, persistence, cache invalidation, and meal value insight scheduling.
+6. If `AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED=true`, optional reference validation may run after meal creation. Provider timeout or mismatch keeps the original meal result.
+7. Meal value insight scheduling is best-effort after persistence and cache invalidation. It stores only safe state fields such as `meal_value_insight_scheduled` and never blocks the READY meal response.
+8. Handler returns `DetailedMealResponse` synchronously.
+
+`POST /v1/meals/scan-by-url` follows the same synchronous workflow after
+downloading Cloudinary bytes. Graph nodes must not import provider SDKs,
+`sentry_sdk`, SQLAlchemy, API-layer services, or domain-internal vendor code.
 
 ## Data Flow Example: Food-Label Scan By URL
 
@@ -138,6 +160,15 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 5. Infrastructure validates provider output against `FoodLabelNutritionResponse`.
 6. `VisionResponseParser` maps validated label data into `Nutrition` and `food_label_metadata`.
 7. Handler persists a READY `Meal(source="food_label")`, invalidates meal caches, and does not create hydration side effects.
+
+## Data Flow Example: Meal Recommendation Plan
+
+1. `POST /v1/meal-recommendations/three-day` resolves timezone and daily calories, then builds or replays a durable recommendation plan.
+2. The plan-level response is compact: it includes only the selected slots. Slot ingredients, alternatives, and scores stay out of the summary payload.
+3. `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` hydrates one selected slot and its alternatives when the client needs drill-down data.
+4. `swap`, `log`, and `skip` return the changed-slot detail shape so the mobile client can patch its cached plan without reloading everything.
+5. Recommendation analytics are scheduled through `BackgroundTaskManager` when available. Catalog meals are read from the process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback. Meal-history affinity is projected from aggregate linked ingredient buckets instead of loading the full meal graph, and logging a recommended meal reuses the already loaded selected catalog projection without fabricating image data.
+6. Candidate rows retain `seen_at` and `retired_at`. Swap locks only the requested slot, consumes unseen active candidates, and when exhausted retires that slot's inactive pool before inserting five deterministic fresh alternatives. Replenishment never mutates another slot or changes the response contract; daily jobs remain out of scope.
 
 ---
 
@@ -177,7 +208,6 @@ Nutree mobile ──→ MealTrack (validate/apply code)
 
 - Premium features not restricted on routes (`require_premium` dependency not applied)
 - No API versioning strategy beyond v1
-- `CloudinaryImageStore` instantiated directly in routes (not via DI)
 - Hardcoded constants (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) not in config
 - CORS is configured only when `ALLOWED_ORIGINS` is set; production origin values still need deployment review.
 - `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance will block (by design — use separate instances per handler, enforced by event bus handler cloning)

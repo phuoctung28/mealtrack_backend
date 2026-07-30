@@ -4,7 +4,7 @@ Auto-extracted for better maintainability.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
@@ -12,8 +12,8 @@ from src.app.queries.user import GetUserProfileQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.user import Sex, TdeeRequest, UnitSystem
-from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.ports.cache_port import CachePort
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -21,18 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 @handles(GetUserProfileQuery)
-class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any]]):
+class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, dict[str, Any]]):
     """Handler for getting user profile with TDEE calculation."""
 
     def __init__(
         self,
         tdee_service: TdeeCalculationService = None,
-        cache_service: Optional[CachePort] = None,
+        cache_service: CachePort | None = None,
     ):
         self.tdee_service = tdee_service or TdeeCalculationService()
         self.cache_service = cache_service
 
-    async def handle(self, query: GetUserProfileQuery) -> Dict[str, Any]:
+    async def handle(self, query: GetUserProfileQuery) -> dict[str, Any]:
         """Get user profile with calculated TDEE. Reads/writes Redis cache."""
         cache_key, ttl = CacheKeys.user_profile(query.user_id)
 
@@ -48,7 +48,7 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
 
         return result
 
-    async def _fetch_from_db(self, query: GetUserProfileQuery) -> Dict[str, Any]:
+    async def _fetch_from_db(self, query: GetUserProfileQuery) -> dict[str, Any]:
         """Fetch profile from DB and compute TDEE."""
         from sqlalchemy import select
 
@@ -100,6 +100,9 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
                     "target_weight_kg": profile.target_weight_kg,
                     "meals_per_day": profile.meals_per_day,
                     "snacks_per_day": profile.snacks_per_day,
+                    "custom_protein_g": profile.custom_protein_g,
+                    "custom_carbs_g": profile.custom_carbs_g,
+                    "custom_fat_g": profile.custom_fat_g,
                     "dietary_preferences": profile.dietary_preferences or [],
                     "health_conditions": profile.health_conditions or [],
                     "allergies": profile.allergies or [],

@@ -1,0 +1,217 @@
+{
+  "generated_at": "2026-07-20T15:09:05.343803+00:00",
+  "parameters": {
+    "algorithms": [
+      "catalog_deterministic_v1",
+      "catalog_deterministic_v2"
+    ],
+    "catalog_sizes": [
+      180,
+      1000,
+      5000
+    ],
+    "samples": 50,
+    "warmups": 10
+  },
+  "results": [
+    {
+      "algorithm_version": "catalog_deterministic_v1",
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 180,
+      "generation": {
+        "max_ms": 2.7753,
+        "min_ms": 1.6494,
+        "p50_ms": 1.7942,
+        "p95_ms": 2.4952,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25452,
+        "max": 25452,
+        "min": 25452
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 0.8043,
+        "min_ms": 0.3518,
+        "p50_ms": 0.3973,
+        "p95_ms": 0.6454,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    },
+    {
+      "algorithm_version": "catalog_deterministic_v2",
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 180,
+      "generation": {
+        "max_ms": 10.4223,
+        "min_ms": 6.048,
+        "p50_ms": 7.3381,
+        "p95_ms": 9.7713,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25368,
+        "max": 25368,
+        "min": 25368
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 2.006,
+        "min_ms": 0.3765,
+        "p50_ms": 0.442,
+        "p95_ms": 0.9557,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    },
+    {
+      "algorithm_version": "catalog_deterministic_v1",
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 1000,
+      "generation": {
+        "max_ms": 61.7774,
+        "min_ms": 8.7786,
+        "p50_ms": 10.2137,
+        "p95_ms": 13.5137,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25314,
+        "max": 25314,
+        "min": 25314
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 0.8616,
+        "min_ms": 0.3719,
+        "p50_ms": 0.4334,
+        "p95_ms": 0.7804,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    },
+    {
+      "algorithm_version": "catalog_deterministic_v2",
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 1000,
+      "generation": {
+        "max_ms": 20.4975,
+        "min_ms": 13.5716,
+        "p50_ms": 15.4042,
+        "p95_ms": 17.417,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25260,
+        "max": 25260,
+        "min": 25260
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 0.7944,
+        "min_ms": 0.3695,
+        "p50_ms": 0.4315,
+        "p95_ms": 0.6178,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    },
+    {
+      "algorithm_version": "catalog_deterministic_v1",
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 5000,
+      "generation": {
+        "max_ms": 65.0108,
+        "min_ms": 49.7079,
+        "p50_ms": 53.5491,
+        "p95_ms": 59.6679,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25314,
+        "max": 25314,
+        "min": 25314
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 0.7595,
+        "min_ms": 0.4174,
+        "p50_ms": 0.4692,
+        "p95_ms": 0.6831,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    },
+    {
+      "algorithm_version": "catalog_deterministic_v2",
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 5000,
+      "generation": {
+        "max_ms": 71.0661,
+        "min_ms": 56.9985,
+        "p50_ms": 60.5146,
+        "p95_ms": 67.1577,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25260,
+        "max": 25260,
+        "min": 25260
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 0.8988,
+        "min_ms": 0.3822,
+        "p50_ms": 0.4694,
+        "p95_ms": 0.6912,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    }
+  ],
+  "runner": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "processor": "arm",
+    "python": "3.13.2"
+  },
+  "schema_version": "meal_recommendation_performance_baseline_v1"
+}

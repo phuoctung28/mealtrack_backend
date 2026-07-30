@@ -7,7 +7,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api.base_dependencies import get_cache_service
-from src.api.dependencies.auth import get_current_user_email, require_admin
+from src.api.dependencies.auth import (
+    get_current_user_email,
+    get_current_user_id,
+    require_admin,
+)
 from src.api.routes.v1.feature_flags import router
 from src.infra.database.config_async import get_async_db
 from src.infra.database.models.feature_flag import FeatureFlag
@@ -46,6 +50,7 @@ def app_no_cache():
     # Business-logic tests bypass the admin gate; the gate itself is covered by
     # the dedicated admin tests at the bottom of this file.
     application.dependency_overrides[require_admin] = lambda: "admin@test.local"
+    application.dependency_overrides[get_current_user_id] = lambda: "user-1"
     return application
 
 
@@ -214,6 +219,7 @@ def test_mutations_reject_non_admin(monkeypatch):
     application.include_router(router)
     application.dependency_overrides[get_cache_service] = lambda: None
     application.dependency_overrides[get_async_db] = lambda: _async_session_for_results([])
+    application.dependency_overrides[get_current_user_id] = lambda: "user-1"
     application.dependency_overrides[get_current_user_email] = (
         lambda: "stranger@example.com"
     )
@@ -241,6 +247,7 @@ def test_mutations_allow_configured_admin(monkeypatch):
     application = FastAPI()
     application.include_router(router)
     application.dependency_overrides[get_cache_service] = lambda: None
+    application.dependency_overrides[get_current_user_id] = lambda: "user-1"
     application.dependency_overrides[get_current_user_email] = lambda: "Admin@X.com"
 
     with patch(

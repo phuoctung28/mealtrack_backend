@@ -94,9 +94,37 @@ class OpenFoodFactsService:
             "protein_100g": self._safe_float(nutriments.get("proteins_100g")),
             "carbs_100g": self._safe_float(nutriments.get("carbohydrates_100g")),
             "fat_100g": self._safe_float(nutriments.get("fat_100g")),
+            "fiber_100g": self._safe_float(nutriments.get("fiber_100g")),
+            "sugar_100g": self._safe_float(nutriments.get("sugars_100g")),
             "serving_size": serving_size,
+            "allowed_units": self._allowed_units(serving_size),
             "image_url": image_url,
         }
+
+    def _allowed_units(self, serving_size: Optional[str]) -> list[dict[str, Any]]:
+        units = [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
+        grams = self._serving_grams(serving_size)
+        if grams:
+            units.append(
+                {
+                    "unit": "serving",
+                    "gram_weight": grams,
+                    "description": f"1 serving ({serving_size or f'{grams:g} g'})",
+                }
+            )
+        return units
+
+    def _serving_grams(self, serving_size: Optional[str]) -> Optional[float]:
+        if not serving_size:
+            return None
+        match = re.search(
+            r"(\d+(?:[.,]\d+)?)\s*(g|gram|grams|ml|milliliter)",
+            serving_size,
+            re.I,
+        )
+        if not match:
+            return None
+        return self._safe_float(match.group(1).replace(",", "."))
 
     def _safe_float(self, value: Any) -> Optional[float]:
         """Safely convert value to float."""

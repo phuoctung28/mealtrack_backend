@@ -94,7 +94,7 @@ def test_async_engine_defaults_to_direct_pool(monkeypatch):
     monkeypatch.setenv("APP_DATABASE_URL", "postgresql://user:pw@host/db")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL_DIRECT", raising=False)
-    monkeypatch.delenv("DB_CONNECTION_MODE", raising=False)
+    monkeypatch.setenv("DB_CONNECTION_MODE", "")
 
     import src.infra.database.config_async as cfg
 
@@ -130,7 +130,7 @@ def test_neon_pooler_url_auto_selects_null_pool(monkeypatch):
     )
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL_DIRECT", raising=False)
-    monkeypatch.delenv("DB_CONNECTION_MODE", raising=False)
+    monkeypatch.setenv("DB_CONNECTION_MODE", "")
 
     import src.infra.database.config_async as cfg
 
@@ -159,7 +159,7 @@ def test_connection_mode_exported(monkeypatch):
     monkeypatch.setenv("APP_DATABASE_URL", "postgresql://user:pw@host/db")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL_DIRECT", raising=False)
-    monkeypatch.delenv("DB_CONNECTION_MODE", raising=False)
+    monkeypatch.setenv("DB_CONNECTION_MODE", "")
 
     import src.infra.database.config_async as cfg
 

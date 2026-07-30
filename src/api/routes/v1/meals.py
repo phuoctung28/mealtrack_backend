@@ -7,6 +7,7 @@ import logging
 import time
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -35,6 +36,7 @@ from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.request.meal_requests import (
+    AttachMealPhotoRequest,
     CreateManualMealFromFoodsRequest,
     EditMealIngredientsRequest,
     ParseMealTextRequest,
@@ -45,7 +47,10 @@ from src.api.schemas.response import (
     MealValueInsightsStatusResponse,
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
-from src.api.schemas.response.meal_responses import ParseMealTextResponse
+from src.api.schemas.response.meal_responses import (
+    ParsedFoodItem,
+    ParseMealTextResponse,
+)
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
 from src.api.services.guest_parse_quota import (
     GuestParseQuotaService,
@@ -55,12 +60,14 @@ from src.api.services.guest_parse_quota import (
     validate_install_id,
 )
 from src.app.commands.meal import CustomNutritionData, EditMealCommand, FoodItemChange
+from src.app.commands.meal.attach_meal_photo_command import AttachMealPhotoCommand
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
     CustomNutrition,
     ManualMealItem,
 )
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.app.commands.meal.delete_meal_photo_command import DeleteMealPhotoCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
@@ -72,6 +79,11 @@ from src.app.queries.meal import (
     GetMealByIdQuery,
     GetStreakQuery,
 )
+from src.app.services.meal_value_insight_scheduler import (
+    get_meal_insight_user_context,
+    schedule_value_insight_generation,
+)
+from src.domain.model.nutrition.macros import Macros as MacrosModel
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.meal_value_insight_service import MealValueInsightService
@@ -108,6 +120,34 @@ def _parse_target_date(target_date: str | None):
             error_code="INVALID_DATE_FORMAT",
             details={"date": target_date},
         ) from e
+
+
+def _parsed_food_item_to_response(item) -> ParsedFoodItem:
+    return ParsedFoodItem(
+        name=item.name,
+        quantity=item.quantity,
+        unit=item.unit,
+        calories=MacrosModel(
+            protein=item.protein,
+            carbs=item.carbs,
+            fat=item.fat,
+            fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
+        ).total_calories,
+        protein=item.protein,
+        carbs=item.carbs,
+        fat=item.fat,
+        data_source=item.data_source,
+        fdc_id=item.fdc_id,
+        allowed_units=getattr(item, "allowed_units", None) or [],
+    )
+
+
+def _validate_uploaded_meal_photo_url(image_url: str, image_id: str) -> None:
+    parsed = urlparse(image_url)
+    if parsed.scheme != "https" or parsed.netloc != "res.cloudinary.com":
+        raise ValidationException("image_url must be a Cloudinary secure URL")
+    if image_id not in parsed.path:
+        raise ValidationException("image_id does not match image_url")
 
 
 async def _analyze_uploaded_image(
@@ -182,12 +222,14 @@ async def _analyze_uploaded_image(
     if meal.image:
         image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-    _schedule_value_insight_generation(
+    schedule_value_insight_generation(
         task_manager,
         meal,
         language=language,
         cache_service=cache_service,
         ai_manager=ai_manager,
+        event_bus=event_bus,
+        user_id=user_id,
     )
 
     return MealMapper.to_detailed_response(
@@ -294,6 +336,7 @@ async def create_manual_meal(
                     quantity=i.quantity,
                     unit=i.unit,
                     custom_nutrition=custom_nutrition,
+                    allowed_units=[unit.model_dump() for unit in i.allowed_units],
                 )
             )
 
@@ -326,12 +369,14 @@ async def create_manual_meal(
             user_id,
             _elapsed_ms,
         )
-        _schedule_value_insight_generation(
+        schedule_value_insight_generation(
             task_manager,
             meal,
             language=get_request_language(request),
             cache_service=cache_service,
             ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=user_id,
         )
 
         return ManualMealCreationResponse(
@@ -378,29 +423,7 @@ async def parse_meal_text(
         )
         app_response = await event_bus.send(command)
 
-        # Map app DTO to API response DTO
-        from src.api.schemas.response.meal_responses import ParsedFoodItem
-        from src.domain.model.nutrition.macros import Macros as MacrosModel
-
-        api_items = [
-            ParsedFoodItem(
-                name=item.name,
-                quantity=item.quantity,
-                unit=item.unit,
-                calories=MacrosModel(
-                    protein=item.protein,
-                    carbs=item.carbs,
-                    fat=item.fat,
-                    fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
-                ).total_calories,
-                protein=item.protein,
-                carbs=item.carbs,
-                fat=item.fat,
-                data_source=item.data_source,
-                fdc_id=item.fdc_id,
-            )
-            for item in app_response.items
-        ]
+        api_items = [_parsed_food_item_to_response(item) for item in app_response.items]
         total_calories = sum(i.calories for i in api_items)
 
         return ParseMealTextResponse(
@@ -478,28 +501,7 @@ async def parse_meal_text_guest_trial(
 
     await quota.mark_completed(id_hash)
 
-    from src.api.schemas.response.meal_responses import ParsedFoodItem
-    from src.domain.model.nutrition.macros import Macros as MacrosModel
-
-    api_items = [
-        ParsedFoodItem(
-            name=item.name,
-            quantity=item.quantity,
-            unit=item.unit,
-            calories=MacrosModel(
-                protein=item.protein,
-                carbs=item.carbs,
-                fat=item.fat,
-                fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
-            ).total_calories,
-            protein=item.protein,
-            carbs=item.carbs,
-            fat=item.fat,
-            data_source=item.data_source,
-            fdc_id=item.fdc_id,
-        )
-        for item in app_response.items
-    ]
+    api_items = [_parsed_food_item_to_response(item) for item in app_response.items]
     total_calories = sum(i.calories for i in api_items)
 
     return ParseMealTextResponse(
@@ -602,21 +604,25 @@ async def get_meal(
 
     # Get language from Accept-Language header via middleware
     language = get_request_language(request)
+    user_context = await get_meal_insight_user_context(event_bus, user_id)
     insight_service = MealValueInsightService()
     value_insights = await insight_service.get_cached_ai(
         dish_name=meal.dish_name,
         nutrition=meal.nutrition,
         ingredient_names_by_id={},
         language=language,
+        user_context=user_context,
         cache_service=cache_service,
     )
     if value_insights is None:
-        _schedule_value_insight_generation(
+        schedule_value_insight_generation(
             task_manager,
             meal,
             language=language,
             cache_service=cache_service,
             ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=user_id,
         )
 
     # Use mapper to convert to response with translation support
@@ -641,12 +647,14 @@ async def get_meal_value_insights(
     """Return current value-insight cache status for a meal."""
     meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
     language = get_request_language(request)
+    user_context = await get_meal_insight_user_context(event_bus, user_id)
     insight_service = MealValueInsightService()
     version = insight_service.version(
         dish_name=meal.dish_name,
         nutrition=meal.nutrition,
         ingredient_names_by_id={},
         language=language,
+        user_context=user_context,
     )
     if version is None or cache_service is None:
         return MealValueInsightsStatusResponse(
@@ -660,15 +668,18 @@ async def get_meal_value_insights(
         nutrition=meal.nutrition,
         ingredient_names_by_id={},
         language=language,
+        user_context=user_context,
         cache_service=cache_service,
     )
     if value_insights is None:
-        _schedule_value_insight_generation(
+        schedule_value_insight_generation(
             task_manager,
             meal,
             language=language,
             cache_service=cache_service,
             ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=user_id,
         )
         return MealValueInsightsStatusResponse(
             status="generating",
@@ -680,45 +691,6 @@ async def get_meal_value_insights(
         status="fresh",
         value_insights=MealMapper.to_value_insights_response(value_insights),
         version=version,
-    )
-
-
-async def _build_value_insights_for_meal(
-    meal,
-    *,
-    language: str,
-    cache_service: CachePort | None,
-    ai_manager: MealInsightAIPort,
-):
-    return await MealValueInsightService(
-        ai_manager=ai_manager,
-    ).build_ai(
-        dish_name=meal.dish_name,
-        nutrition=meal.nutrition,
-        ingredient_names_by_id={},
-        language=language,
-        cache_service=cache_service,
-    )
-
-
-def _schedule_value_insight_generation(
-    task_manager: BackgroundTaskManager | None,
-    meal,
-    *,
-    language: str,
-    cache_service: CachePort | None,
-    ai_manager: MealInsightAIPort,
-) -> None:
-    if cache_service is None or task_manager is None:
-        return
-    task_manager.spawn(
-        f"meal-value-insights:{meal.meal_id}",
-        _build_value_insights_for_meal(
-            meal,
-            language=language,
-            cache_service=cache_service,
-            ai_manager=ai_manager,
-        ),
     )
 
 
@@ -829,6 +801,9 @@ async def update_meal_ingredients(
                 quantity=change_request.quantity,
                 unit=change_request.unit,
                 custom_nutrition=custom_nutrition,
+                allowed_units=[
+                    unit.model_dump() for unit in change_request.allowed_units
+                ],
             )
         )
 
@@ -844,14 +819,55 @@ async def update_meal_ingredients(
     logger.info("Sending command to event bus: %s", command)
     result = await event_bus.send(command)
     meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
-    _schedule_value_insight_generation(
+    schedule_value_insight_generation(
         task_manager,
         meal,
         language=get_request_language(http_request),
         cache_service=cache_service,
         ai_manager=ai_manager,
+        event_bus=event_bus,
+        user_id=user_id,
     )
     return result
+
+
+@router.put("/{meal_id}/photo", response_model=None)
+async def attach_meal_photo(
+    meal_id: str,
+    payload: AttachMealPhotoRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Attach an already-uploaded meal photo to an existing meal.
+
+    Requires authentication - users can only modify their own meals.
+    """
+    _validate_uploaded_meal_photo_url(payload.image_url, payload.image_id)
+    command = AttachMealPhotoCommand(
+        meal_id=meal_id,
+        user_id=user_id,
+        image_id=payload.image_id,
+        image_url=payload.image_url,
+        image_format=payload.image_format,
+        size_bytes=payload.size_bytes,
+    )
+    return await event_bus.send(command)
+
+
+@router.delete("/{meal_id}/photo", response_model=None)
+async def delete_meal_photo(
+    meal_id: str,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Detach the saved meal photo from an existing meal.
+
+    Requires authentication - users can only modify their own meals.
+    """
+    command = DeleteMealPhotoCommand(meal_id=meal_id, user_id=user_id)
+    return await event_bus.send(command)
 
 
 @router.get("/weekly/budget", response_model=WeeklyBudgetResponse)

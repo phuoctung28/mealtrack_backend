@@ -5,17 +5,25 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+    FoodReferenceSearchProjection,
+)
+from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
+    normalize_food_name,
+)
 from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.repositories.food_reference_projection import (
     FOOD_REFERENCE_SEED_COLUMNS,
     build_food_reference_nutrient_rows,
     build_food_reference_serving_rows,
     food_reference_model_to_dict,
+    food_reference_model_to_nutrition_projection,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +62,85 @@ class AsyncFoodReferenceRepository:
         model = result.scalar_one_or_none()
         return food_reference_model_to_dict(model) if model else None
 
+    async def get_nutrition_projection(
+        self,
+        food_reference_id: int,
+    ) -> FoodReferenceNutritionProjection | None:
+        stmt = (
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.id == food_reference_id)
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return food_reference_model_to_nutrition_projection(model) if model else None
+
+    async def list_catalog_seed_candidates(
+        self,
+    ) -> list[FoodReferenceNutritionProjection]:
+        result = await self._session.execute(
+            select(
+                FoodReferenceModel.id,
+                FoodReferenceModel.name,
+                FoodReferenceModel.name_normalized,
+                FoodReferenceModel.source,
+                FoodReferenceModel.is_verified,
+                FoodReferenceModel.protein_100g,
+                FoodReferenceModel.carbs_100g,
+                FoodReferenceModel.fat_100g,
+                FoodReferenceModel.fiber_100g,
+                FoodReferenceModel.sugar_100g,
+                FoodReferenceModel.density,
+            ).order_by(
+                FoodReferenceModel.is_verified.desc(),
+                FoodReferenceModel.id.asc(),
+            )
+        )
+        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+
+    async def find_catalog_seed_candidates_by_normalized_name(
+        self,
+        name_normalized: str,
+    ) -> list[FoodReferenceNutritionProjection]:
+        result = await self._session.execute(
+            select(
+                FoodReferenceModel.id,
+                FoodReferenceModel.name,
+                FoodReferenceModel.name_normalized,
+                FoodReferenceModel.source,
+                FoodReferenceModel.is_verified,
+                FoodReferenceModel.protein_100g,
+                FoodReferenceModel.carbs_100g,
+                FoodReferenceModel.fat_100g,
+                FoodReferenceModel.fiber_100g,
+                FoodReferenceModel.sugar_100g,
+                FoodReferenceModel.density,
+            )
+            .where(FoodReferenceModel.name_normalized == name_normalized)
+            .order_by(
+                FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc()
+            )
+        )
+        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+
+    async def approve_for_catalog_seed(
+        self,
+        food_reference_id: int,
+    ) -> FoodReferenceNutritionProjection | None:
+        """Persist an administrator's review decision for catalog publication."""
+
+        result = await self._session.execute(
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.id == food_reference_id)
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+        model.is_verified = True
+        await self._session.flush()
+        return food_reference_model_to_nutrition_projection(model)
+
     async def get_by_fdc_id(self, fdc_id: int) -> dict[str, Any] | None:
         stmt = (
             select(FoodReferenceModel)
@@ -77,6 +164,42 @@ class AsyncFoodReferenceRepository:
         result = await self._session.execute(stmt)
         return [food_reference_model_to_dict(row) for row in result.scalars().all()]
 
+    async def search_local(
+        self,
+        query: str,
+        region: str,
+        limit: int,
+    ) -> list[FoodReferenceSearchProjection]:
+        normalized_query = normalize_food_name(query)
+        if not normalized_query:
+            return []
+
+        bounded_limit = min(max(limit, 1), 50)
+        similarity_score = func.similarity(
+            FoodReferenceModel.name_normalized,
+            normalized_query,
+        )
+        stmt = (
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.name_normalized.isnot(None))
+            .where(FoodReferenceModel.region.in_([region, "global"]))
+            .where(
+                or_(
+                    FoodReferenceModel.name_normalized.ilike(f"%{normalized_query}%"),
+                    similarity_score >= 0.15,
+                )
+            )
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+            .order_by(
+                FoodReferenceModel.is_verified.desc(),
+                similarity_score.desc(),
+                FoodReferenceModel.id.asc(),
+            )
+            .limit(bounded_limit * 3)
+        )
+        result = await self._session.execute(stmt)
+        return _dedupe_search_projections(result.scalars().all(), bounded_limit)
+
     async def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update a food reference by barcode without owning commit."""
         if data.get("barcode") and not data.get("is_verified", False):
@@ -95,7 +218,7 @@ class AsyncFoodReferenceRepository:
             "fiber_100g": data.get("fiber_100g", 0),
             "sugar_100g": data.get("sugar_100g", 0),
             "serving_size": data.get("serving_size"),
-            "serving_sizes": data.get("serving_sizes"),
+            "serving_sizes": data.get("serving_sizes") or data.get("allowed_units"),
             "image_url": data.get("image_url"),
             "source": data.get("source", "fatsecret"),
             "is_verified": data.get("is_verified", False),
@@ -115,12 +238,59 @@ class AsyncFoodReferenceRepository:
         }
         if not values["is_verified"]:
             on_conflict_kwargs["where"] = FoodReferenceModel.is_verified.is_(False)
-        await self._session.execute(
-            stmt.on_conflict_do_update(**on_conflict_kwargs)
-        )
+        await self._session.execute(stmt.on_conflict_do_update(**on_conflict_kwargs))
         await self._session.flush()
 
         refreshed = await self._find_after_upsert(values)
+        if refreshed:
+            await self._sync_normalized_children(refreshed, data)
+
+    async def upsert_seed(self, data: dict[str, Any]) -> None:
+        """Upsert a canonical, non-barcoded seed without owning commit."""
+
+        name = str(data.get("name") or data.get("name_vi") or "").strip()
+        if not name:
+            raise ValueError("seed food requires a name")
+        name_normalized = str(
+            data.get("name_normalized") or normalize_food_name(name)
+        ).strip()
+        if not name_normalized:
+            raise ValueError("seed food requires a normalized name")
+
+        values = {
+            "name": name,
+            "name_normalized": name_normalized,
+            "name_vi": data.get("name_vi"),
+            "brand": data.get("brand"),
+            "category": _truncate_category(data.get("category")),
+            "region": data.get("region", "VN"),
+            "protein_100g": data.get("protein_100g"),
+            "carbs_100g": data.get("carbs_100g"),
+            "fat_100g": data.get("fat_100g"),
+            "fiber_100g": data.get("fiber_100g", 0),
+            "sugar_100g": data.get("sugar_100g", 0),
+            "serving_size": data.get("serving_size"),
+            "serving_sizes": data.get("serving_sizes") or data.get("allowed_units"),
+            "image_url": data.get("image_url"),
+            "source": data.get("source", "seed"),
+            "is_verified": data.get("is_verified", False),
+            "density": data.get("density", 1.0),
+            "extra_nutrients": data.get("extra_nutrients"),
+        }
+        update_fields = {
+            key: value for key, value in values.items() if key != "name_normalized"
+        }
+        stmt = pg_insert(FoodReferenceModel).values(**values)
+        on_conflict_kwargs: dict[str, Any] = {
+            "index_elements": ["name_normalized"],
+            "set_": update_fields,
+        }
+        if not values["is_verified"]:
+            on_conflict_kwargs["where"] = FoodReferenceModel.is_verified.is_(False)
+        await self._session.execute(stmt.on_conflict_do_update(**on_conflict_kwargs))
+        await self._session.flush()
+
+        refreshed = await self._find_model_by_normalized_name(name_normalized)
         if refreshed:
             await self._sync_normalized_children(refreshed, data)
 
@@ -229,7 +399,9 @@ class AsyncFoodReferenceRepository:
             )
         else:
             return None
-        result = await self._session.execute(stmt.options(*_FOOD_REFERENCE_LOAD_OPTIONS))
+        result = await self._session.execute(
+            stmt.options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
         return result.scalars().first()
 
     async def _sync_normalized_children(
@@ -237,10 +409,66 @@ class AsyncFoodReferenceRepository:
         model: FoodReferenceModel,
         data: dict[str, Any],
     ) -> None:
-        serving_sizes = data.get("serving_sizes")
+        serving_sizes = data.get("serving_sizes") or data.get("allowed_units")
         extra_nutrients = data.get("extra_nutrients")
         if serving_sizes is not None:
             model.serving_size_rows = build_food_reference_serving_rows(serving_sizes)
         if extra_nutrients is not None:
             model.nutrient_rows = build_food_reference_nutrient_rows(extra_nutrients)
         await self._session.flush()
+
+
+def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjection:
+    return FoodReferenceNutritionProjection(
+        id=int(row.id),
+        name=str(row.name),
+        source=str(row.source),
+        is_verified=bool(row.is_verified),
+        protein_100g=row.protein_100g,
+        carbs_100g=row.carbs_100g,
+        fat_100g=row.fat_100g,
+        fiber_100g=row.fiber_100g or 0.0,
+        sugar_100g=row.sugar_100g or 0.0,
+        density_g_ml=row.density,
+        name_normalized=row.name_normalized,
+    )
+
+
+def _truncate_category(value: Any) -> str | None:
+    if value is None:
+        return None
+    category = str(value).strip()
+    return category[:100] or None
+
+
+def _dedupe_search_projections(
+    models: list[FoodReferenceModel],
+    limit: int,
+) -> list[FoodReferenceSearchProjection]:
+    seen: set[str] = set()
+    projections: list[FoodReferenceSearchProjection] = []
+    for model in models:
+        normalized_name = model.name_normalized or normalize_food_name(model.name)
+        if normalized_name in seen:
+            continue
+        seen.add(normalized_name)
+        projections.append(
+            FoodReferenceSearchProjection(
+                id=model.id,
+                name=model.name,
+                name_normalized=model.name_normalized,
+                brand=model.brand,
+                source=model.source,
+                is_verified=model.is_verified,
+                protein_100g=model.protein_100g,
+                carbs_100g=model.carbs_100g,
+                fat_100g=model.fat_100g,
+                fiber_100g=model.fiber_100g or 0.0,
+                sugar_100g=model.sugar_100g or 0.0,
+                serving_size=model.serving_size,
+                allowed_units=food_reference_model_to_dict(model)["allowed_units"],
+            )
+        )
+        if len(projections) >= limit:
+            break
+    return projections

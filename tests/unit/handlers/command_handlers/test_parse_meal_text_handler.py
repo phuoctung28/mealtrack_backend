@@ -57,6 +57,27 @@ class _HighCalorieFatSecretService:
         return [{"food_name": "Pho concentrate"}]
 
 
+class _AllowedUnitsFatSecretService:
+    async def search_foods(self, *args, **kwargs):
+        return [
+            {
+                "food_name": "Chicken Breast",
+                "allowed_units": [
+                    {
+                        "unit": "g",
+                        "gram_weight": 100.0,
+                        "description": "100 g",
+                    },
+                    {
+                        "unit": "cup, cooked, diced",
+                        "gram_weight": 135.0,
+                        "description": "1 cup cooked, diced",
+                    },
+                ],
+            }
+        ]
+
+
 @pytest.mark.asyncio
 async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
     meal_generation_service = _FakeMealGenerationService()
@@ -98,6 +119,61 @@ async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
     }
 
     assert CreateManualMealFromFoodsRequest.model_validate(payload)
+
+
+@pytest.mark.asyncio
+async def test_parse_text_preserves_fatsecret_allowed_units(monkeypatch):
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Chicken breast",
+                        "quantity": 100,
+                        "unit": "g",
+                        "english_unit": "g",
+                        "protein": 31,
+                        "carbs": 0,
+                        "fat": 3.6,
+                    }
+                ]
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "src.app.handlers.command_handlers.parse_meal_text_handler."
+        "parse_fatsecret_nutrition",
+        lambda _food: {"calories": 165, "protein": 31, "carbs": 0, "fat": 3.6},
+    )
+    monkeypatch.setattr(
+        "src.app.handlers.command_handlers.parse_meal_text_handler."
+        "scale_per_100g_nutrition",
+        lambda *args, **kwargs: {
+            "calories": 165,
+            "protein": 31,
+            "carbs": 0,
+            "fat": 3.6,
+        },
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_AllowedUnitsFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="100g chicken breast", user_id="user-1", language="en")
+    )
+    item = response.items[0]
+
+    assert item.data_source == "fatsecret"
+    assert item.allowed_units == [
+        {"unit": "g", "gram_weight": 100.0, "description": "100 g"},
+        {
+            "unit": "cup, cooked, diced",
+            "gram_weight": 135.0,
+            "description": "1 cup cooked, diced",
+        },
+    ]
 
 
 @pytest.mark.asyncio

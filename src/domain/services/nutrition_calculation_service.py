@@ -255,7 +255,7 @@ def _convert_with_allowed_units(
     for au in allowed_units:
         desc = au.get("description", "").lower()
         if translated in desc.split():
-            logger.info(f"Unit '{unit}' keyword-matched description '{desc}'")
+            logger.info("Unit keyword matched an allowed-unit description")
             return quantity * au.get("gram_weight", 1.0)
 
     # 4. Global UNIT_TO_GRAMS mapping
@@ -270,11 +270,7 @@ def _convert_with_allowed_units(
     for au in allowed_units:
         au_unit = au.get("unit", "").lower()
         if au_unit not in ("g", "100 g", "1 g"):
-            logger.warning(
-                f"Unit '{unit}' unknown — using default serving "
-                f"'{au.get('description', au_unit)}' ({au.get('gram_weight')}g) "
-                f"from allowed_units"
-            )
+            logger.warning("Unknown unit used the default allowed serving")
             return quantity * au.get("gram_weight", 1.0)
 
     # Last resort: treat as grams (only if no allowed_units have useful servings)
@@ -443,6 +439,7 @@ class NutritionCalculationService:
                     micros=None,
                     confidence=1.0,
                     fdc_id=getattr(item, "fdc_id", None),
+                    allowed_units=getattr(item, "allowed_units", None),
                 )
             )
 

@@ -3,12 +3,12 @@ fatsecret API HTTP client.
 Provides product lookup by barcode and food search using OAuth 2.0.
 """
 
-from typing import Dict, Any, Optional, List
 import asyncio
-import logging
-import time
 import base64
+import logging
 import re
+import time
+from typing import Any
 
 import httpx
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # fatsecret API endpoints
 FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token"
-FATSECRET_API_BASE = "https://platform.fatsecret.com/rest/v1"
+FATSECRET_API_BASE = "https://platform.fatsecret.com/rest/server.api"
 
 # Barcode validation pattern (8-14 digits)
 BARCODE_PATTERN = re.compile(r"^\d{8,14}$")
@@ -41,9 +41,9 @@ class FatSecretService:
     def __init__(self, client_id: str, client_secret: str):
         self.client_id = client_id
         self.client_secret = client_secret
-        self._access_token: Optional[str] = None
+        self._access_token: str | None = None
         self._token_expires_at: float = 0
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
@@ -57,7 +57,7 @@ class FatSecretService:
             await self._client.aclose()
             self._client = None
 
-    async def _get_access_token(self) -> Optional[str]:
+    async def _get_access_token(self) -> str | None:
         """Get OAuth 2.0 access token, refreshing if needed."""
         # Check if token is still valid (with 60s buffer)
         if self._access_token and time.time() < self._token_expires_at - 60:
@@ -97,17 +97,21 @@ class FatSecretService:
             return None
 
     async def _api_request(
-        self, method: str, endpoint: str, params: Optional[Dict] = None
-    ) -> Optional[Dict]:
+        self,
+        method: str,
+        endpoint: str = "",
+        params: dict | None = None,
+        base_url: str = FATSECRET_API_BASE,
+    ) -> dict | None:
         """Make authenticated API request."""
         token = await self._get_access_token()
         if not token:
             return None
 
-        url = f"{FATSECRET_API_BASE}/{endpoint}"
+        url = base_url if not endpoint else f"{base_url}/{endpoint}"
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
         }
 
         try:
@@ -115,7 +119,7 @@ class FatSecretService:
             if method.upper() == "GET":
                 response = await client.get(url, headers=headers, params=params)
             else:
-                response = await client.post(url, headers=headers, json=params)
+                response = await client.post(url, headers=headers, data=params)
 
             if response.status_code != 200:
                 logger.warning(
@@ -123,7 +127,14 @@ class FatSecretService:
                 )
                 return None
 
-            return response.json()
+            try:
+                return response.json()
+            except ValueError:
+                logger.warning(
+                    "fatsecret API returned non-JSON response: %s",
+                    response.text[:200],
+                )
+                return None
         except httpx.HTTPError as e:
             logger.warning(f"fatsecret request error: {e}")
             return None
@@ -133,7 +144,7 @@ class FatSecretService:
         barcode: str,
         region: str = "US",
         language: str = "en",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Fetch product by barcode from fatsecret."""
         # Validate barcode format
         if not BARCODE_PATTERN.match(barcode):
@@ -149,7 +160,7 @@ class FatSecretService:
                 "region": region,
                 "language": language,
             }
-            result = await self._api_request("GET", "", params)
+            result = await self._api_request("POST", params=params)
             if not result:
                 return None
 
@@ -159,13 +170,14 @@ class FatSecretService:
 
             # Get food details
             detail_params = {
-                "method": "food.get",
+                "method": "food.get.v5",
                 "food_id": food_id,
                 "format": "json",
                 "region": region,
                 "language": language,
+                "flag_default_serving": "true",
             }
-            food_details = await self._api_request("GET", "", detail_params)
+            food_details = await self._api_request("POST", params=detail_params)
             if not food_details:
                 return None
 
@@ -180,65 +192,32 @@ class FatSecretService:
         max_results: int = 10,
         region: str = "US",
         language: str = "en",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search foods by query string with nutrition data."""
         try:
-            params = {
-                "method": "foods.search",
-                "search_expression": query,
-                "max_results": max_results,
-                "page_number": 0,
-                "format": "json",
-                "region": region,
-                "language": language,
-            }
-            result = await self._api_request("GET", "", params)
-            if not result:
-                return []
-
-            # Handle both OAuth 1.0 and OAuth 2.0 response formats
-            foods = result.get("foods", {}).get("food", [])
-            if not foods:
-                # OAuth 2.0 format: {"foods_search": {"results": {"food": [...]}}}
-                foods = (
-                    result.get("foods_search", {}).get("results", {}).get("food", [])
-                )
-            if not foods:
-                # Log error details if present
-                error = result.get("error")
-                if error:
-                    logger.warning(f"fatsecret API error for '{query}': {error}")
-                else:
-                    logger.warning(
-                        f"fatsecret returned no foods for '{query}'. "
-                        f"Response keys: {list(result.keys())}"
-                    )
-                return []
-            if isinstance(foods, dict):
-                foods = [foods]
+            foods = await self.search_food_candidates(
+                query,
+                max_results=max_results,
+                region=region,
+                language=language,
+            )
 
             # Process each food, fetching detailed nutrition concurrently to
             # avoid N+1 sequential round trips (one food.get per search result).
-            async def _process(food: Dict) -> Dict:
+            async def _process(food: dict) -> dict:
                 food_id = food.get("food_id")
-                mapped = self._map_search_result(food)
+                mapped = dict(food)
 
                 # Fetch detailed nutrition if we have a food_id
                 if food_id:
                     try:
-                        detail_params = {
-                            "method": "food.get",
-                            "food_id": food_id,
-                            "format": "json",
-                            "region": region,
-                            "language": language,
-                        }
-                        details = await self._api_request("GET", "", detail_params)
+                        details = await self.get_food_details(
+                            food_id,
+                            region=region,
+                            language=language,
+                        )
                         if details:
-                            # Handle both response formats for food.get
-                            food_data = details.get("food", details)
-                            nutrition = self._extract_nutrition_from_details(food_data)
-                            mapped.update(nutrition)
+                            mapped.update(details)
                     except Exception:
                         pass  # Use basic mapped data if details fail
 
@@ -251,20 +230,94 @@ class FatSecretService:
             logger.warning(f"fatsecret search error for query '{query}': {e}")
             return []
 
-    def _extract_serving_units(self, food: Dict) -> List[Dict]:
+    async def search_food_candidates(
+        self,
+        query: str,
+        max_results: int = 10,
+        region: str = "US",
+        language: str = "en",
+    ) -> list[dict[str, Any]]:
+        """Search foods without fetching detail nutrition for every result."""
+        params = {
+            "method": "foods.search.v5",
+            "search_expression": query,
+            "max_results": max_results,
+            "page_number": 0,
+            "format": "json",
+            "region": region,
+            "language": language,
+            "flag_default_serving": "true",
+        }
+        result = await self._api_request("POST", params=params)
+        if not result:
+            return []
+
+        foods = self._extract_foods_search_results(result)
+        if not foods:
+            error = result.get("error")
+            if error:
+                logger.warning(f"fatsecret API error for '{query}': {error}")
+            else:
+                logger.warning(
+                    f"fatsecret returned no foods for '{query}'. "
+                    f"Response keys: {list(result.keys())}"
+                )
+            return []
+
+        return [self._map_search_result(food) for food in foods]
+
+    async def get_food_details(
+        self,
+        food_id: str,
+        region: str = "US",
+        language: str = "en",
+    ) -> dict[str, Any] | None:
+        """Fetch detailed nutrition for one selected fatsecret food candidate."""
+        detail_params = {
+            "method": "food.get.v5",
+            "food_id": food_id,
+            "format": "json",
+            "region": region,
+            "language": language,
+            "flag_default_serving": "true",
+        }
+        details = await self._api_request("POST", params=detail_params)
+        if not details:
+            return None
+
+        food_data = details.get("food", details)
+        mapped = self._map_search_result(food_data)
+        mapped.update(self._extract_nutrition_from_details(food_data))
+        return mapped
+
+    def _extract_foods_search_results(self, result: dict[str, Any]) -> list[dict]:
+        """Extract search result foods across fatsecret response shapes."""
+        foods = result.get("foods", {}).get("food", [])
+        if not foods:
+            foods = result.get("foods_search", {}).get("results", {}).get("food", [])
+        if isinstance(foods, dict):
+            foods = [foods]
+        return foods if isinstance(foods, list) else []
+
+    def _extract_serving_units(self, food: dict) -> list[dict]:
         """Extract all serving units from fatsecret food details."""
         servings = food.get("servings", {}).get("serving", [])
         if not servings:
-            return []
+            return self._default_allowed_units()
 
         if isinstance(servings, dict):
             servings = [servings]
 
         units = []
+        seen = set()
         for s in servings:
             unit = s.get("measurement_description")
             gram_weight = self._safe_float(s.get("metric_serving_amount"))
             if unit and gram_weight and gram_weight > 0:
+                unit_key = unit.lower().strip()
+                if unit_key in seen:
+                    continue
+                seen.add(unit_key)
                 units.append(
                     {
                         "unit": unit,
@@ -273,20 +326,25 @@ class FatSecretService:
                     }
                 )
 
-        # Always include "g" as base unit
-        if not any(u["unit"].lower() == "g" for u in units):
-            units.insert(0, {"unit": "g", "gram_weight": 1.0, "description": "1 g"})
+        return units or self._default_allowed_units()
 
-        return units
-
-    def _extract_nutrition_from_details(self, food: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract per-100g nutrition from fatsecret food details."""
+    def _select_per_100g_serving(self, food: dict[str, Any]) -> dict | None:
         servings = food.get("servings", {}).get("serving", [])
-        serving = None
-        if isinstance(servings, list) and servings:
-            serving = servings[0]
-        elif isinstance(servings, dict):
-            serving = servings
+        if isinstance(servings, dict):
+            servings = [servings]
+        if not isinstance(servings, list) or not servings:
+            return None
+
+        for serving in servings:
+            metric_amount = self._safe_float(serving.get("metric_serving_amount"))
+            measurement = str(serving.get("measurement_description") or "").lower()
+            if measurement == "g" and metric_amount == 100:
+                return serving
+        return servings[0] if isinstance(servings[0], dict) else None
+
+    def _extract_nutrition_from_details(self, food: dict[str, Any]) -> dict[str, Any]:
+        """Extract per-100g nutrition from fatsecret food details."""
+        serving = self._select_per_100g_serving(food)
 
         if not isinstance(serving, dict):
             return {"allowed_units": self._default_allowed_units()}
@@ -307,18 +365,13 @@ class FatSecretService:
             "allowed_units": self._extract_serving_units(food),
         }
 
-    def _default_allowed_units(self) -> List[Dict]:
+    def _default_allowed_units(self) -> list[dict]:
         """Return default allowed units when none are provided."""
-        return [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
+        return [{"unit": "g", "gram_weight": 100.0, "description": "100 g"}]
 
-    def _map_product(self, food: Dict[str, Any], barcode: str) -> Dict[str, Any]:
+    def _map_product(self, food: dict[str, Any], barcode: str) -> dict[str, Any]:
         """Map fatsecret response to clean dict."""
-        servings = food.get("servings", {}).get("serving", [])
-        serving = None
-        if isinstance(servings, list) and servings:
-            serving = servings[0]
-        elif isinstance(servings, dict):
-            serving = servings
+        serving = self._select_per_100g_serving(food)
         if not isinstance(serving, dict):
             return {
                 "name": food.get("food_name", ""),
@@ -351,7 +404,7 @@ class FatSecretService:
             "allowed_units": self._extract_serving_units(food),
         }
 
-    def _calc_per_100g(self, value: Any, metric_amount: float) -> Optional[float]:
+    def _calc_per_100g(self, value: Any, metric_amount: float) -> float | None:
         """Calculate nutrition value per 100g using metric_serving_amount."""
         if value is None:
             return None
@@ -362,7 +415,7 @@ class FatSecretService:
             return None
         return (raw_value / metric_amount) * 100
 
-    def _map_search_result(self, food: Dict[str, Any]) -> Dict[str, Any]:
+    def _map_search_result(self, food: dict[str, Any]) -> dict[str, Any]:
         """Map fatsecret search result to clean dict."""
         return {
             "description": food.get("food_name", ""),
@@ -375,7 +428,7 @@ class FatSecretService:
             "allowed_units": self._default_allowed_units(),  # Will be enriched with details
         }
 
-    def _safe_float(self, value: Any) -> Optional[float]:
+    def _safe_float(self, value: Any) -> float | None:
         """Safely convert value to float."""
         if value is None:
             return None
@@ -385,7 +438,7 @@ class FatSecretService:
             return None
 
 
-_fat_secret_service: Optional[FatSecretService] = None
+_fat_secret_service: FatSecretService | None = None
 
 
 def get_fat_secret_service() -> FatSecretService:

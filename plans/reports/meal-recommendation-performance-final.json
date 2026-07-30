@@ -1,0 +1,114 @@
+{
+  "generated_at": "2026-07-19T20:19:56.143464+00:00",
+  "parameters": {
+    "catalog_sizes": [
+      180,
+      1000,
+      5000
+    ],
+    "samples": 50,
+    "warmups": 10
+  },
+  "results": [
+    {
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 180,
+      "generation": {
+        "max_ms": 2.355,
+        "min_ms": 1.0341,
+        "p50_ms": 1.2606,
+        "p95_ms": 2.1725,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25452,
+        "max": 25452,
+        "min": 25452
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 1.1456,
+        "min_ms": 0.3512,
+        "p50_ms": 0.4757,
+        "p95_ms": 0.9533,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    },
+    {
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 1000,
+      "generation": {
+        "max_ms": 11.8505,
+        "min_ms": 5.1475,
+        "p50_ms": 6.4746,
+        "p95_ms": 9.0543,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25314,
+        "max": 25314,
+        "min": 25314
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 1.1166,
+        "min_ms": 0.3555,
+        "p50_ms": 0.4345,
+        "p95_ms": 0.9831,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    },
+    {
+      "alternatives": 45,
+      "catalog_refresh_count_current_contract": 60,
+      "catalog_size": 5000,
+      "generation": {
+        "max_ms": 70.4846,
+        "min_ms": 29.6947,
+        "p50_ms": 34.0357,
+        "p95_ms": 54.9771,
+        "samples": 50
+      },
+      "hydrated_candidate_rows_current_contract": 54,
+      "response_bytes": {
+        "last": 25314,
+        "max": 25314,
+        "min": 25314
+      },
+      "selected_slots": 9,
+      "serialization": {
+        "max_ms": 2.7181,
+        "min_ms": 0.4219,
+        "p50_ms": 0.5235,
+        "p95_ms": 1.5296,
+        "samples": 50
+      },
+      "sql_count_current_contract_notes": {
+        "create_fresh": "lock + idempotency + full catalog + history + supersede + post-save full batch reload",
+        "read": "full batch reload with catalog meal, ingredients, food_reference, serving sizes",
+        "synthetic_script_sql_count": 0
+      }
+    }
+  ],
+  "runner": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "processor": "arm",
+    "python": "3.13.2"
+  },
+  "schema_version": "meal_recommendation_performance_baseline_v1"
+}

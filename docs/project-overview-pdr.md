@@ -1,118 +1,93 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
 **Version:** 0.6.7
-**Last Updated:** July 5, 2026
-**Status:** Production-ready. 635 Python files in `src/`, 56,132 LOC in `src/`, 312 Python files in `tests/`, and 1,600+ collected tests. Latest verified changes: food-label image scan contract, OpenAI-first AI routing, journey progress seed, upload-token smoke coverage, and pydantic-settings/CI alignment.
+**Last Updated:** July 29, 2026
+**Status:** Current backend snapshot. `src/` contains 704 Python files and 65,423 LOC; `tests/` contains 350 Python files and the default unit suite collects 2,013 tests. The live API surface spans 31 route files, 29 router registrations, and 98 standard route verb handlers plus 2 health `api_route` declarations.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI-based service for meal tracking and nutritional analysis. It implements Clean Architecture with CQRS across 4 layers, while `src/` also includes bootstrap, cron, and observability modules outside the layer directories. The current API surface spans 28 route files, 26 endpoint-bearing route modules, and 88 endpoint decorators; the test suite is unit-biased by default and exceeds 1,600 collected tests.
+MealTrack Backend is a FastAPI service for meal tracking, nutrition analysis, hydration, movement, and deterministic meal recommendations. It uses 4-layer Clean Architecture with CQRS across API, application, domain, and infrastructure layers, while `src/` also contains root/bootstrap/cron modules outside those layer directories.
 
 ---
 
 ## 1. Project Vision & Goals
 
 ### Vision Statement
-Empower users to understand their nutrition through effortless, AI-driven tracking and personalized recommendations.
+Help users understand nutrition with accurate tracking, deterministic recommendations, and reliable AI-assisted meal analysis.
 
 ### Primary Goals
-1. **Accuracy**: >90% food recognition accuracy via the vision provider stack.
-2. **Efficiency**: Meal logging in < 30 seconds.
-3. **Personalization**: Goal-based (CUT, BULK, RECOMP) nutritional targets.
-4. **Performance**: API p95 < 500ms.
+1. **Accuracy**: validate AI meal analysis against backend contracts before persistence.
+2. **Efficiency**: keep meal logging and recommendation retrieval fast enough for mobile use.
+3. **Personalization**: use weekly-budget redistribution, user profile state, and historical affinity.
+4. **Operational Safety**: keep required state in durable stores and let optional integrations degrade cleanly.
 
 ---
 
 ## 2. Core Features
 
 ### 1. AI-Powered Meal Analysis
-- 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined.
-- Multi-food detection in single image with confidence scoring.
-- Nutrition Facts label analysis via `/v1/meals/food-label/scan-by-url`, optional label crop, crop metadata, and strict `FoodLabelNutritionResponse` validation.
-- OpenAI is the default provider; configured Cloudflare Workers AI can take routed text purposes first and vision purposes as fallback.
-- Returns results in <3 seconds through the meal state machine (PROCESSING → ANALYZING → READY/FAILED).
+- 6 analysis strategies cover image, portion, ingredient, weight, user-context, and combined flows.
+- Nutrition Facts label analysis uses `/v1/meals/food-label/scan-by-url` with optional crop metadata and strict `FoodLabelNutritionResponse` validation.
+- OpenAI is the default provider; configured Cloudflare Workers AI can route specific text purposes and vision fallback chains.
+- Gemini packages remain in dependencies, but the runtime provider registry is OpenAI + Cloudflare.
 
-### 2. RESTful API (88 endpoint decorators across 26 endpoint route modules)
-- **Meals**: image/analyze, upload-token, scan-by-url, food-label/scan-by-url, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
-- **User Profiles**: create, metrics (GET/POST), TDEE, custom-macros.
-- **Users**: sync, Firebase UID lookups, metrics, timezone, language, delete.
-- **Meal Suggestions**: discover (6 meals + images), recipes, save.
-- **Saved Suggestions**: list, save, delete.
-- **Foods**: USDA FDC search, details by FDC ID, barcode lookup (6-step cascade).
-- **Ingredients**: image-based recognition.
-- **TDEE**: preview calculation.
-- **Weight Entries**: list, log, delete, sync.
-- **Activities**: daily activities.
-- **Notifications**: FCM token management, deduplication (notification_sent_log), preferences.
-- **Referrals**: validate, apply, my-code, stats, payout.
-- **Cheat Days**: list, mark, delete.
-- **Feature Flags**: CRUD for feature toggles.
-- **Webhooks**: RevenueCat subscription sync.
-- **Monitoring**: cache metrics.
-- **Health**: health, db-pool, db-connections, notifications.
+### 2. RESTful API
+- Meals: image/analyze, upload-token, scan-by-url, food-label/scan-by-url, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, `/{id}` (GET/DELETE), ingredients (PUT).
+- Meal recommendations: three-day create/replay, compact summary reads, slot detail hydration, swap/log/skip mutations.
+- User Profiles: create, metrics (GET/POST), TDEE, custom macros.
+- Users: sync, Firebase UID lookups, metrics, timezone, language, delete.
+- Meal Suggestions: discover, recipes, save.
+- Foods: local-first search, details by FDC ID, barcode lookup.
+- Hydration: catalog, log, log/drink, daily, weekly, delete.
+- Movement: catalog, log, daily, update, delete.
+- Weight, nutrition, progress, referrals, promo codes, feature flags, webhooks, monitoring, health, app download, and well-known routes remain active.
 
-### 3. Session-Based Meal Suggestions & Discovery
-- Generates 3 personalized suggestions per session with Redis 4h TTL.
-- Portion multipliers (1-4x) and rejection feedback loop.
-- Multi-language support (7 languages: en, vi, es, fr, de, ja, zh) with fallback.
-- Language-aware prompt generation with injected instructions.
-- Meal discovery endpoint: 6 meals/batch with image search (Unsplash, Pexels) for visual browsing.
+### 3. Deterministic Meal Recommendations
+- The backend does not call an LLM at recommendation time.
+- It ranks curated catalog meals deterministically, stores durable plan state, and exposes compact summary and hydrated slot views.
+- `swap`, `log`, and `skip` are owner-scoped and idempotent when the request ID matches.
 
-### 4. Intelligent Meal Planning
-- AI-generated 7-day plans using available ingredients only.
-- Dietary restrictions (9 preferences: vegan, vegetarian, keto, paleo, etc.).
-- Cooking time constraints (weekday 30min, weekend 60min).
-- Min 3 days before meal repetition, max 2 same-cuisine per week.
+### 4. Session-Based Meal Suggestions
+- Meal suggestions remain separate from catalog-backed recommendations.
+- The suggestion flow is still session-based with Redis-backed TTL behavior and language-aware prompt generation.
+- This system is additive and does not replace the three-day catalog recommendation flow.
 
-### 5. Vector Search & Food Discovery
-- Pinecone Inference API with llama-text-embed-v2 (1024-dim embeddings).
-- Semantic ingredient search with 0.35 similarity threshold.
-- Nutrition scaling by portion with unit conversion (g, kg, oz, lb, ml, cup, etc.).
-- Aggregated nutrition calculation across multiple ingredients.
+### 5. Local-First Food Search
+- Search prefers Redis cache when available, then local `food_reference`, then provider fill.
+- Local results are returned first and calories are derived from macros on the backend.
+- The active meal-image-name vector cache uses `pgvector`; Pinecone is historical only.
 
-### 6. Nutrition Accuracy & Integrity (NEW)
-- **Fiber-Aware Calorie Formula**: `P×4 + (C-fiber)×4 + fiber×2 + F×9` instead of simple `P×4 + C×4 + F×9`.
-- **Density-Based Conversion**: 30+ food density constants (ml↔g) for accurate volume-to-mass conversion (honey 1.42, oil 0.92, milk 1.03).
-- **Macro Validation Service**: Post-generation validation of AI macros, corrects calories if >10% divergent from formula.
-- **Custom Macro Targets**: Users can override calculated macros with custom protein/carb/fat targets per profile.
-- **Food Reference Evolution**: Dual-lookup (barcode_products + food_reference) for backward compatibility during food data migration.
-
-### 7. Adjusted Daily Target & Weekly Budget
-- Weekly budget stored per user with remaining_days calculation (Mon=7, Sun=1).
-- Adjusted daily target redistributes weekly budget based on previous days' consumption.
-- Used by meal suggestions, meal plans, and nutrition tracking features.
-- BMR floor (85% of standard daily, raised from 80%) protects against dangerously low targets. Clinical minimums: 1200 kcal (female), 1500 kcal (male). Cutting deficit: 300 kcal (~0.3 kg/week).
+### 6. Hydration, Movement, and Weekly Budget
+- Hydration catalog, daily summary, weekly summary, and streak behavior are backed by the current handlers.
+- Weekly budget redistribution uses previous-day consumption and is the source of truth for adjusted daily targets.
+- Logged movement is included in weekly balance calculations without inflating baseline TDEE.
 
 ---
 
 ## 3. Technical Stack
-- **Framework**: FastAPI 0.136.3 (Python 3.13.2)
-- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0 async runtime and 39 ORM model files
-- **Cache**: Redis 7.0 for selective optional caching and AI-cost optimization; required state must be modeled separately
-- **Vector DB**: Pinecone Inference API (1024-dim, llama-text-embed-v2)
-- **AI Services**: OpenAI default routing with optional Cloudflare Workers AI fallbacks for configured text and vision purposes
 
-**AI Output Validation (2026-06)**: Structured meal image and text flows use canonical Pydantic contracts (`VisionNutritionResponse`, `MealTextNutritionResponse`) with one bounded retry. Invalid AI output (over-limit quantities, empty foods) is rejected at the contract boundary. The parser is a deterministic mapper, not a silent repair engine. Calories are always derived from backend macros, never from AI-reported kcal.
-- **Storage**: Cloudinary (image storage with folder organization)
-- **Image Search**: Unsplash + Pexels adapters (meal discovery)
-- **Auth**: Firebase JWT with development bypass middleware
-- **Event Bus**: PyMediator with singleton registry pattern
-- **Notifications**: Firebase Cloud Messaging (FCM) with platform-specific configs + deduplication
-- **Subscriptions**: RevenueCat webhook integration
-- **Monitoring**: Sentry SDK (error tracking, performance profiling)
+- **Framework**: FastAPI 0.136.3 on Python 3.13.2.
+- **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0 async runtime.
+- **Cache**: Redis 7.0 for selective optional caching and AI-cost optimization; required state is modeled separately.
+- **Vector Cache**: `pgvector` for the active meal-image-name vector cache.
+- **AI Services**: OpenAI default routing with optional Cloudflare Workers AI fallbacks for configured text and vision purposes.
+- **Auth**: Firebase JWT with development bypass guardrails.
+- **Event Bus**: PyMediator with singleton registry pattern.
+- **Notifications**: Firebase Cloud Messaging with platform-specific configs and deduplication.
+- **Subscriptions**: RevenueCat webhook integration.
 
 ---
 
 ## 4. Non-Functional Requirements
-- **Reliability**: 99.9% uptime with graceful degradation for external services.
-- **Test Coverage**: CI enforces unit coverage at 65% minimum; documentation targets remain 70%+ overall and 100% critical paths.
-- **Maintainability**: <200 LOC per file, 4-Layer Clean Architecture with strict separation.
-- **Security**: Firebase JWT verification, RevenueCat webhook auth, soft deletes, input sanitization.
-- **Performance**: Request-scoped DB sessions, Redis caching with TTL, eager loading for queries.
-- **Scalability**: Dynamic connection pool sizing and provider fallback routing for AI workloads.
-- **Observability**: Request ID tracking, slow request detection (>1s), structured error responses.
+
+- **Reliability**: external failures should degrade only when the dependency is optional.
+- **Test Coverage**: CI enforces 65% unit coverage; the repo keeps high-value paths covered and broad collection remains intentionally noisy until duplicate-package collisions are resolved.
+- **Maintainability**: keep files small enough to review, and split docs or code when a file grows past the guardrail.
+- **Security**: keep Firebase JWT verification, webhook auth, soft deletes, and input sanitization intact.
+- **Performance**: use request-scoped DB sessions, Redis caching where appropriate, and eager loading for queries.
+- **Observability**: keep structured error handling and slow-request detection in place.
 
 ---
 
@@ -120,16 +95,10 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.6.7 | Jul 5, 2026 | Updated docs for food-label image scan-by-url: optional label crop URL and crop metadata, direct nutrition-label image analysis, strict `FoodLabelNutritionResponse` validation, and refreshed codebase/API metrics. |
+| 0.6.7 | Jul 29, 2026 | Refreshed the project overview with current repo counts, current API surface, deterministic recommendation behavior, hydration semantics, and the pgvector-backed active vector cache. |
 | 0.6.6 | Jun 27, 2026 | Documentation refresh for current runtime versions, current codebase metrics, OpenAI-first AI routing, and updated test/CI defaults. |
 | 0.6.5 | Jun 13, 2026 | Added validation retry orchestration for structured AI nutrition output, with exactly one repair attempt for meal image scan and text parse flows, controlled `AIOutputValidationError` handling, preserved ingredient-recognition's unstructured contract, and kept calorie divergence checks anchored to backend-derived macro calories. |
 | 0.6.4 | Jun 13, 2026 | Added canonical AI nutrition contracts for image and text flows, rejected impossible over-limit food quantities at validation time, preserved current text-parse macro compatibility, and removed silent invalid-food filtering from the legacy parser. |
-| 0.6.2 | May 15, 2026 | Configurable referral commissions (`REFERRAL_COMMISSIONS` env var, per-currency JSON). Custom unit-to-grams fix in nutrition calculation. BMR floor raised to 85% of standard daily; cutting deficit 500→300 kcal; clinical minimums 1200F/1500M. Email Universal Links (apple-app-site-association, /app-download). AsyncUnitOfWork concurrency guard (asyncio.Lock). Variable-length referral codes (3–15 chars). |
-| 0.6.0 | Mar 14, 2026 | Nutrition accuracy (5-phase implementation): fiber-aware calories, food density conversion, macro validation, food reference evolution, meal decomposition. Custom macro targets per profile. Date of birth tracking. Adjusted daily target from weekly budget in suggestions. 3 new services, 3 new migrations (034-037), 28+ modified/new files. |
-| 0.5.0 | Feb 3, 2026 | Updated metrics across all layers: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC). Total: 430 files, ~38K LOC. Fixed metric inconsistencies from previous documentation. |
-| 0.4.9 | Jan 19, 2026 | Documentation refresh with updated dates. Verified CQRS patterns, domain services, and API endpoints against actual codebase. Weight-based macro calculation confirmed in TDEE service. |
-| 0.4.7 | Jan 16, 2026 | Documentation refresh with scout-verified statistics (408 files, ~37K LOC). |
-| 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
-| 0.4.5 | Jan 7, 2026 | Phase 05 Pinecone Migration (1024-dim). Documentation split for modularity. |
-| 0.4.4 | Jan 4, 2026 | Phase 03 Cleanup: Unified fitness goal enums to 3 canonical values. |
-| 0.4.0 | Jan 3, 2026 | Phase 06: Session-based suggestions with 4h TTL. |
+| 0.6.2 | May 15, 2026 | Configurable referral commissions, custom unit-to-grams fix, BMR floor update, email Universal Links, AsyncUnitOfWork concurrency guard, variable-length referral codes. |
+| 0.6.0 | Mar 14, 2026 | Nutrition accuracy rollout, custom macro targets, and adjusted daily target from weekly budget. |
+| 0.5.0 | Feb 3, 2026 | Updated metrics across all layers and fixed metric inconsistencies. |

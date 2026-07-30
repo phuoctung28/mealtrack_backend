@@ -1,4 +1,4 @@
-from locust import HttpUser, task, between
+from locust import HttpUser, between, task
 
 
 class MealtrackUser(HttpUser):
@@ -7,6 +7,10 @@ class MealtrackUser(HttpUser):
 
     Run example:
       locust --headless -u 50 -r 5 --run-time 60s --host https://<host>
+
+    Phase 0 catalog gate:
+      locust -f tests/performance/locust_meal_catalog.py --headless \
+        -u 50 -r 5 --run-time 10m --host https://<staging-host>
     """
 
     wait_time = between(0.1, 0.5)
@@ -42,4 +46,3 @@ class MealtrackUser(HttpUser):
     @task(3)
     def meals_streak(self):
         self.client.get("/v1/meals/streak")
-
