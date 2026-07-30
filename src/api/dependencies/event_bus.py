@@ -2,19 +2,29 @@
 Event bus dependency for FastAPI with proper type registrations.
 """
 
+import logging
+
 from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
 from src.app.commands.ingredient import RecognizeIngredientCommand
 
 # Import all commands
 from src.app.commands.meal import (
     AddCustomIngredientCommand,
+    AttachMealPhotoCommand,
     DeleteMealCommand,
+    DeleteMealPhotoCommand,
     EditMealCommand,
     ScanByUrlCommand,
     UploadMealImageImmediatelyCommand,
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
+from src.app.commands.meal_recommendation import (
+    CreateThreeDayMealRecommendationCommand,
+    LogRecommendedMealCommand,
+    SkipMealRecommendationSlotCommand,
+    SwapMealRecommendationSlotCommand,
+)
 from src.app.commands.meal_suggestion import (
     DiscoverMealsCommand,
     GenerateMealRecipesCommand,
@@ -59,10 +69,12 @@ from src.app.commands.weight import (
 # Saved suggestion handlers
 from src.app.handlers.command_handlers import (
     AddCustomIngredientCommandHandler,
+    AttachMealPhotoCommandHandler,
     CompleteOnboardingCommandHandler,
     CreateManualMealCommandHandler,
     DeleteFcmTokenCommandHandler,
     DeleteMealCommandHandler,
+    DeleteMealPhotoCommandHandler,
     DeleteMovementEntryCommandHandler,
     DeleteSavedSuggestionCommandHandler,
     DeleteUserCommandHandler,
@@ -97,6 +109,12 @@ from src.app.handlers.command_handlers.delete_weight_entry_command_handler impor
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
     MarkCheatDayCommandHandler,
 )
+from src.app.handlers.command_handlers.meal_recommendation import (
+    CreateThreeDayMealRecommendationCommandHandler,
+    LogRecommendedMealCommandHandler,
+    SkipMealRecommendationSlotCommandHandler,
+    SwapMealRecommendationSlotCommandHandler,
+)
 from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
     SyncWeightEntriesCommandHandler,
 )
@@ -125,6 +143,7 @@ from src.app.handlers.query_handlers import (
     GetUserOnboardingStatusQueryHandler,
     GetUserProfileQueryHandler,
     GetUserTdeeQueryHandler,
+    GetUserTimezoneQueryHandler,
     GetWeeklyBudgetQueryHandler,
     LookupBarcodeQueryHandler,
     PreviewTdeeQueryHandler,
@@ -135,6 +154,12 @@ from src.app.handlers.query_handlers.get_activities_presence_query_handler impor
 )
 from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
     GetCheatDaysQueryHandler,
+)
+from src.app.handlers.query_handlers.get_meal_recommendation_plan_query_handler import (
+    GetMealRecommendationPlanQueryHandler,
+)
+from src.app.handlers.query_handlers.get_meal_recommendation_slot_detail_query_handler import (
+    GetMealRecommendationSlotDetailQueryHandler,
 )
 from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
     GetNutritionBulkQueryHandler,
@@ -157,6 +182,10 @@ from src.app.queries.meal import (
     GetMealsByDateQuery,
     GetStreakQuery,
 )
+from src.app.queries.meal_recommendation import (
+    GetMealRecommendationPlanQuery,
+    GetMealRecommendationSlotDetailQuery,
+)
 from src.app.queries.movement import GetDailyMovementQuery, GetMovementCatalogQuery
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.nutrition import GetActivitiesPresenceQuery, GetNutritionBulkQuery
@@ -167,6 +196,7 @@ from src.app.queries.user import (
     GetBodyFatVisualProfileQuery,
     GetUserMetricsQuery,
     GetUserProfileQuery,
+    GetUserTimezoneQuery,
 )
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
@@ -175,11 +205,30 @@ from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
 from src.app.queries.weight import GetWeightEntriesQuery
+from src.app.services.catalog_meal_snapshot_service import CatalogMealSnapshotService
+from src.app.services.meal_recommendation_history_projector import (
+    MealRecommendationHistoryProjector,
+)
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceSearchProjection,
+)
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.event_bus import EventBus, PyMediatorEventBus
+
+logger = logging.getLogger(__name__)
 
 # Singleton event buses
 _food_search_event_bus: EventBus | None = None
 _configured_event_bus: EventBus | None = None
+
+
+async def _search_local_food_references(
+    query: str,
+    region: str,
+    limit: int,
+) -> list[FoodReferenceSearchProjection]:
+    async with AsyncUnitOfWork() as uow:
+        return await uow.food_references.search_local(query, region, limit)
 
 
 def get_food_search_event_bus() -> EventBus:
@@ -241,6 +290,7 @@ def get_food_search_event_bus() -> EventBus:
             food_mapping_service,
             fat_secret_service=fat_secret_service,
             translation_service=text_translation_service,
+            local_search=_search_local_food_references,
         ),
     )
     event_bus.register_handler(
@@ -287,6 +337,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Get singleton services (these are safe to reuse)
     from src.api.base_dependencies import (
+        get_ai_model_manager,
         get_cache_service,
         get_daily_context_precompute_service,
         get_deepl_meal_translation_service,
@@ -297,21 +348,39 @@ def get_configured_event_bus() -> EventBus:
         get_food_mapping_service,
         get_gpt_parser,
         get_image_store,
+        get_meal_analyze_graph_settings,
         get_suggestion_orchestration_service,
         get_vision_service,
     )
+    from src.api.dependencies.task_manager import get_optional_task_manager
 
     image_store = get_image_store()
     vision_service = get_vision_service()
     gpt_parser = get_gpt_parser()
+    try:
+        ai_manager = get_ai_model_manager()
+    except Exception as exc:
+        logger.info(
+            "meal_value_insights.ai_manager_unavailable_for_graph error=%s",
+            type(exc).__name__,
+        )
+        ai_manager = None
     food_cache_service = get_food_cache_service()
     food_data_service = get_food_data_service()
     food_mapping_service = get_food_mapping_service()
     fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
+    task_manager = get_optional_task_manager()
     suggestion_service = get_suggestion_orchestration_service()
 
     from src.app.services.cache_invalidation_service import CacheInvalidationService
+    from src.app.services.food_reference_validation_service import (
+        FoodReferenceValidationService,
+    )
+    from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+    from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
+        ThreeDayPlanOptimizer,
+    )
     from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Synchronous invalidation service — handlers await this before returning,
@@ -319,6 +388,28 @@ def get_configured_event_bus() -> EventBus:
     cache_invalidation_service = CacheInvalidationService(cache_service)
 
     event_bus = PyMediatorEventBus()
+    recommendation_snapshot = CatalogMealSnapshotService()
+    recommendation_history = MealRecommendationHistoryProjector()
+    graph_settings = get_meal_analyze_graph_settings()
+
+    async def find_food_references_by_normalized_names(
+        normalized_names: list[str],
+    ) -> dict:
+        async with AsyncUnitOfWork() as uow:
+            return await uow.food_references.find_batch_by_normalized_names(
+                normalized_names
+            )
+
+    food_reference_validation_service = FoodReferenceValidationService(
+        food_reference_batch_lookup=find_food_references_by_normalized_names,
+        nutrition_reference_provider=fat_secret_service,
+        timeout_seconds=graph_settings["external_provider_timeout_seconds"],
+    )
+    meal_analyze_workflow = MealAnalyzeWorkflow(
+        food_reference_validation_service=food_reference_validation_service,
+        fatsecret_validation_enabled=graph_settings["fatsecret_validation_enabled"],
+        graph_version=graph_settings["graph_version"],
+    )
 
     # Register meal command handlers
     # Handlers receive AsyncUnitOfWork (concrete) and event_bus at the composition root
@@ -338,6 +429,11 @@ def get_configured_event_bus() -> EventBus:
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
             cache_invalidation=cache_invalidation_service,
+            meal_value_insight_task_manager=task_manager,
+            meal_value_insight_cache=cache_service,
+            meal_value_insight_ai_manager=ai_manager,
+            meal_analyze_workflow=meal_analyze_workflow,
+            meal_analyze_graph_enabled=graph_settings["graph_enabled"],
         ),
     )
     event_bus.register_handler(
@@ -349,6 +445,11 @@ def get_configured_event_bus() -> EventBus:
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
             cache_invalidation=cache_invalidation_service,
+            meal_value_insight_task_manager=task_manager,
+            meal_value_insight_cache=cache_service,
+            meal_value_insight_ai_manager=ai_manager,
+            meal_analyze_workflow=meal_analyze_workflow,
+            meal_analyze_graph_enabled=graph_settings["graph_enabled"],
         ),
     )
 
@@ -364,6 +465,22 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
+            uow=AsyncUnitOfWork(),
+            cache_invalidation=cache_invalidation_service,
+        ),
+    )
+
+    event_bus.register_handler(
+        AttachMealPhotoCommand,
+        AttachMealPhotoCommandHandler(
+            uow=AsyncUnitOfWork(),
+            cache_invalidation=cache_invalidation_service,
+        ),
+    )
+
+    event_bus.register_handler(
+        DeleteMealPhotoCommand,
+        DeleteMealPhotoCommandHandler(
             uow=AsyncUnitOfWork(),
             cache_invalidation=cache_invalidation_service,
         ),
@@ -402,6 +519,8 @@ def get_configured_event_bus() -> EventBus:
             food_cache_service,
             food_mapping_service,
             fat_secret_service=fat_secret_service,
+            translation_service=text_translation_service,
+            local_search=_search_local_food_references,
         ),
     )
     event_bus.register_handler(
@@ -481,6 +600,40 @@ def get_configured_event_bus() -> EventBus:
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
 
+    event_bus.register_handler(
+        CreateThreeDayMealRecommendationCommand,
+        CreateThreeDayMealRecommendationCommandHandler(
+            uow=AsyncUnitOfWork(),
+            optimizer=ThreeDayPlanOptimizer(),
+            catalog_snapshot_service=recommendation_snapshot,
+        ),
+    )
+    event_bus.register_handler(
+        SwapMealRecommendationSlotCommand,
+        SwapMealRecommendationSlotCommandHandler(
+            uow=AsyncUnitOfWork(),
+            optimizer=ThreeDayPlanOptimizer(),
+            catalog_snapshot_service=recommendation_snapshot,
+            history_projector=recommendation_history,
+        ),
+    )
+    event_bus.register_handler(
+        LogRecommendedMealCommand,
+        LogRecommendedMealCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        SkipMealRecommendationSlotCommand,
+        SkipMealRecommendationSlotCommandHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        GetMealRecommendationPlanQuery,
+        GetMealRecommendationPlanQueryHandler(AsyncUnitOfWork),
+    )
+    event_bus.register_handler(
+        GetMealRecommendationSlotDetailQuery,
+        GetMealRecommendationSlotDetailQueryHandler(AsyncUnitOfWork),
+    )
+
     # Register meal suggestion handlers
     event_bus.register_handler(
         DiscoverMealsCommand,
@@ -543,6 +696,9 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetBodyFatVisualProfileQuery,
         GetBodyFatVisualProfileQueryHandler(uow=AsyncUnitOfWork()),
+    )
+    event_bus.register_handler(
+        GetUserTimezoneQuery, GetUserTimezoneQueryHandler(AsyncUnitOfWork)
     )
     event_bus.register_handler(
         GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler()

@@ -1,13 +1,29 @@
 import logging
 import os
+from collections.abc import Callable
+from importlib import import_module
 from typing import TYPE_CHECKING, Optional
+from uuid import UUID
 
+from fastapi import Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.app.services.catalog_food_reference_review_service import (
+    CatalogFoodReferenceReviewService,
+)
+from src.app.services.catalog_meal_seed_import_service import CatalogMealSeedImporter
+from src.app.services.meal_recommendation_analytics_service import (
+    MealRecommendationAnalyticsService,
+)
 from src.domain.parsers.vision_response_parser import VisionResponseParser
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.food_mapping_service import FoodMappingService
+from src.infra.adapters.cloudflare_workers_image_generator import (
+    CloudflareWorkersImageGenerator,
+)
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
@@ -20,6 +36,15 @@ from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
+from src.infra.repositories.admin_meal_catalog_repository_async import (
+    AsyncAdminMealCatalogRepository,
+)
+from src.infra.repositories.catalog_recipe_repository_async import (
+    AsyncCatalogMealRepository,
+)
+from src.infra.repositories.food_reference_repository_async import (
+    AsyncFoodReferenceRepository,
+)
 from src.infra.services.firebase_service import FirebaseService
 
 if TYPE_CHECKING:
@@ -146,6 +171,71 @@ def get_cache_monitor() -> CacheMonitor:
     return _cache_monitor
 
 
+def get_admin_meal_catalog_repository(
+    db: AsyncSession = Depends(get_async_db),
+) -> AsyncAdminMealCatalogRepository:
+    """Return admin catalog repository bound to the request session."""
+
+    return AsyncAdminMealCatalogRepository(db)
+
+
+def get_catalog_meal_seed_importer(
+    db: AsyncSession = Depends(get_async_db),
+) -> CatalogMealSeedImporter:
+    """Build the catalog seed importer with request-scoped repositories."""
+
+    food_reference_repository = AsyncFoodReferenceRepository(db)
+
+    async def enrich_missing_with_fatsecret(name: str) -> bool:
+        from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
+            IngredientNutritionResolver,
+        )
+
+        resolver = IngredientNutritionResolver(
+            fatsecret=get_fat_secret_service_instance(),
+            food_ref_repo=food_reference_repository,
+        )
+        return await resolver.resolve(name) is not None
+
+    return CatalogMealSeedImporter(
+        AsyncCatalogMealRepository(db),
+        food_reference_repository,
+        candidate_enricher=enrich_missing_with_fatsecret,
+    )
+
+
+def get_catalog_food_reference_review_service(
+    db: AsyncSession = Depends(get_async_db),
+) -> CatalogFoodReferenceReviewService:
+    """Build the request-scoped service that records admin reference approvals."""
+
+    return CatalogFoodReferenceReviewService(AsyncFoodReferenceRepository(db))
+
+
+def get_catalog_image_generator() -> CloudflareWorkersImageGenerator:
+    """Return catalog image generator configured with Cloudflare and Cloudinary."""
+
+    try:
+        return CloudflareWorkersImageGenerator(
+            account_id=settings.CLOUDFLARE_ACCOUNT_ID,
+            api_token=settings.CLOUDFLARE_API_TOKEN,
+            model=settings.CLOUDFLARE_WORKERS_AI_IMAGE_MODEL,
+            timeout=settings.CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS,
+            image_store=CloudinaryImageStore(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+
+def get_catalog_image_generator_factory() -> Callable[[], CloudflareWorkersImageGenerator]:
+    """Return a lazy generator factory so routes can finish cheap prechecks first."""
+
+    return get_catalog_image_generator
+
+
 # Food Mapping Service
 def get_food_mapping_service() -> FoodMappingServicePort:
     """
@@ -180,6 +270,32 @@ def get_fat_secret_service_instance():
     from src.infra.adapters.fat_secret_service import get_fat_secret_service
 
     return get_fat_secret_service()
+
+
+def get_meal_analyze_graph_settings():
+    """Return meal-analysis graph settings needed by API composition."""
+    from src.infra.config.settings import get_settings
+
+    current_settings = get_settings()
+    return {
+        "external_provider_timeout_seconds": (
+            current_settings.AI_MEAL_ANALYZE_EXTERNAL_PROVIDER_TIMEOUT_SECONDS
+        ),
+        "fatsecret_validation_enabled": (
+            current_settings.AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED
+        ),
+        "graph_enabled": current_settings.AI_MEAL_ANALYZE_GRAPH_ENABLED,
+        "graph_version": current_settings.AI_MEAL_ANALYZE_GRAPH_VERSION,
+    }
+
+
+def get_meal_recommendation_analytics_service() -> MealRecommendationAnalyticsService:
+    """Return privacy-safe recommendation analytics."""
+    posthog_module = import_module("src.infra.adapters.posthog_adapter")
+    return MealRecommendationAnalyticsService(
+        salt=settings.MEAL_RECOMMENDATIONS_ANALYTICS_SALT,
+        adapter=posthog_module.PostHogAdapter(),
+    )
 
 
 # Food Reference Repository (replaces barcode_product_repository)
@@ -302,7 +418,7 @@ def get_suggestion_orchestration_service():
 
     async def profile_provider(user_id: str):
         async with AsyncUnitOfWork() as uow:
-            return await uow.users.get_profile(user_id)
+            return await uow.users.get_profile(UUID(user_id))
 
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,

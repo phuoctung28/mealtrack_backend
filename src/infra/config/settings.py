@@ -253,6 +253,10 @@ class Settings(BaseSettings):
         default=60,
         description="HTTP timeout for Workers AI requests (thinking models need ≥60s)",
     )
+    CLOUDFLARE_WORKERS_AI_IMAGE_MODEL: str = Field(
+        default="@cf/black-forest-labs/flux-2-klein-9b",
+        description="Workers AI model for catalog meal image generation.",
+    )
     CLOUDFLARE_WORKERS_AI_VISION_ENABLED: bool = Field(
         default=True,
         description="Enable Cloudflare Workers AI for vision tasks",
@@ -270,6 +274,29 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(
         default=MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
     )
+    AI_MEAL_ANALYZE_GRAPH_ENABLED: bool = Field(
+        default=False,
+        description="Enable the LangGraph meal image analysis workflow.",
+    )
+    AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED: bool = Field(
+        default=False,
+        description="Enable optional FatSecret nutrition reference validation for meal analysis.",
+    )
+    AI_MEAL_ANALYZE_EXTERNAL_PROVIDER_TIMEOUT_SECONDS: float = Field(
+        default=5.0,
+        description="Timeout for optional external reference providers in meal analysis.",
+    )
+    AI_MEAL_ANALYZE_GRAPH_VERSION: str = Field(
+        default="v1",
+        description="Meal analysis graph version emitted in workflow state.",
+    )
+
+    # Catalog meal recommendations analytics
+    MEAL_RECOMMENDATIONS_ANALYTICS_SALT: str = Field(
+        default="",
+        description="HMAC salt for PostHog recommendation identities; empty disables analytics.",
+    )
+
     # Affiliate integration
     AFFILIATE_INTEGRATION_ENABLED: bool = Field(
         default=False,

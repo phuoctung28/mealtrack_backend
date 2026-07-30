@@ -25,6 +25,8 @@ SAFE_CONTEXT_KEYS = frozenset(
         "attempt_count",
         "status",
         "result",
+        "source",
+        "language",
         "phase",
         "provider",
         # AI observability — low-cardinality provider/model routing attributes
@@ -59,6 +61,8 @@ SAFE_TAG_KEYS = frozenset(
         "event_type",
         "status",
         "result",
+        "source",
+        "language",
         "provider",
         # AI observability — suitable as low-cardinality provider tags
         "ai_provider",

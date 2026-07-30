@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from tests.fixtures.factories.nutrition_factory import NutritionFactory
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -28,7 +29,6 @@ from src.domain.model.meal_suggestion.meal_suggestion import (
     RecipeStep,
 )
 from src.domain.model.meal_suggestion.suggestion_session import SuggestionSession
-from tests.fixtures.factories.nutrition_factory import NutritionFactory
 
 
 class _BusOk:
@@ -95,6 +95,10 @@ def test_save_meal_suggestion_ok(ms_client):
     class _BusSave:
         async def send(self, msg):
             if isinstance(msg, SaveMealSuggestionCommand):
+                assert msg.ingredients[0].food_reference_id == 987
+                assert msg.ingredients[0].fiber == 3
+                assert msg.fiber == 4
+                assert msg.calories == 157
                 return meal_id
             if isinstance(msg, GetMealByIdQuery):
                 return Meal(
@@ -120,7 +124,19 @@ def test_save_meal_suggestion_ok(ms_client):
         "protein": 10.0,
         "carbs": 20.0,
         "fat": 5.0,
-        "ingredients": [],
+        "fiber": 4.0,
+        "ingredients": [
+            {
+                "name": "Chicken breast",
+                "amount": 120,
+                "unit": "g",
+                "food_reference_id": 987,
+                "protein": 10,
+                "carbs": 0,
+                "fat": 2,
+                "fiber": 3,
+            }
+        ],
         "instructions": [],
         "meal_date": "2026-04-11",
     }

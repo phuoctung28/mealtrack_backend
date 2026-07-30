@@ -1,14 +1,14 @@
 """Add target revision fences to profiles and weekly budgets.
 
-Revision ID: 20260718000001
-Revises: 20260716000001
+Revision ID: 20260730000002
+Revises: 20260730000001
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260718000001"
-down_revision = "20260716000001"
+revision = "20260730000002"
+down_revision = "20260730000001"
 branch_labels = None
 depends_on = None
 

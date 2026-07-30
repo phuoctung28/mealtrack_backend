@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -18,6 +18,7 @@ from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
     clamp_nutrition_values,
     normalize_unit_for_manual_save,
+    scale_per_100g_nutrition,
 )
 
 
@@ -107,6 +108,51 @@ def test_normalize_unit_for_manual_save_falls_back_for_ai_free_text():
     assert normalize_unit_for_manual_save("one very full noodle bowl") == "serving"
 
 
+def test_allowed_unit_logs_do_not_expose_unit_or_description(caplog):
+    sensitive_unit = "private-unit"
+    sensitive_description = "confidential serving private-unit"
+    caplog.set_level("INFO", logger="src.domain.services.nutrition_calculation_service")
+
+    scaled = scale_per_100g_nutrition(
+        {"calories": 100.0},
+        quantity=1.0,
+        unit=sensitive_unit,
+        allowed_units=[
+            {
+                "unit": "portion",
+                "description": sensitive_description,
+                "gram_weight": 25.0,
+            }
+        ],
+    )
+
+    assert scaled["calories"] == 25.0
+    assert "Unit keyword matched an allowed-unit description" in caplog.text
+    assert sensitive_unit not in caplog.text
+    assert sensitive_description not in caplog.text
+
+    caplog.clear()
+    fallback_unit = "private-fallback-unit"
+    fallback_description = "confidential fallback serving"
+    scaled = scale_per_100g_nutrition(
+        {"calories": 100.0},
+        quantity=1.0,
+        unit=fallback_unit,
+        allowed_units=[
+            {
+                "unit": "portion",
+                "description": fallback_description,
+                "gram_weight": 25.0,
+            }
+        ],
+    )
+
+    assert scaled["calories"] == 25.0
+    assert "Unknown unit used the default allowed serving" in caplog.text
+    assert fallback_unit not in caplog.text
+    assert fallback_description not in caplog.text
+
+
 def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():
     clamped = clamp_nutrition_values(
         {
@@ -144,5 +190,5 @@ def _new_processing_meal() -> Meal:
             macros=Macros(protein=0.0, carbs=0.0, fat=0.0),
             food_items=[],
         ),
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )

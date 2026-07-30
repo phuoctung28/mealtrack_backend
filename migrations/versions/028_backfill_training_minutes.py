@@ -23,7 +23,7 @@ def upgrade() -> None:
         SET training_minutes_per_session = 30
         WHERE training_days_per_week > 0
         AND training_minutes_per_session = 0
-        AND is_current = 1
+        AND is_current IS TRUE
     """)
 
 

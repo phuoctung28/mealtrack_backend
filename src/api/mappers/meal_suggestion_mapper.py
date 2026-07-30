@@ -1,14 +1,13 @@
 """Mappers for meal suggestion domain to API responses."""
 
-from typing import List
 
 from src.api.schemas.response.meal_suggestion_responses import (
-    MealSuggestionResponse,
-    MacroEstimateResponse,
-    IngredientResponse,
-    RecipeStepResponse,
-    DiscoveryMealResponse,
     DiscoveryBatchResponse,
+    DiscoveryMealResponse,
+    IngredientResponse,
+    MacroEstimateResponse,
+    MealSuggestionResponse,
+    RecipeStepResponse,
 )
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 
@@ -32,6 +31,7 @@ def to_meal_suggestion_response(suggestion: MealSuggestion) -> MealSuggestionRes
                 name=ing.name,
                 amount=ing.amount,
                 unit=ing.unit,
+                food_reference_id=ing.food_reference_id,
             )
             for ing in suggestion.ingredients
         ],
@@ -81,7 +81,7 @@ def to_discovery_meal_response(
 
 def to_discovery_batch_response(
     session: SuggestionSession,
-    suggestions: List[MealSuggestion],
+    suggestions: list[MealSuggestion],
     meal_images: dict = None,
 ) -> DiscoveryBatchResponse:
     """Convert session + suggestions to discovery batch response."""

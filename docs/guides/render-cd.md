@@ -9,6 +9,11 @@ Render should run database migrations before starting the new web service:
 3. Start web service only if pre-deploy succeeds.
 4. Health check `/health`.
 
+For meal catalog releases, use
+[Meal Catalog Release Runbook](../runbooks/meal-catalog-release.md) after the
+Render pre-deploy migration succeeds. That runbook covers manifest digest,
+staging import/replay counts, smoke requests, load gates, and rollback order.
+
 ## Render Settings
 
 Production service:
@@ -36,13 +41,14 @@ Health check path: /health
 Use these deployment-related variables:
 
 ```text
-WEB_CONCURRENCY=1
+UVICORN_WORKERS=1
 MIGRATION_LOCK_TIMEOUT_MS=10000
 MIGRATION_STATEMENT_TIMEOUT_MS=240000
 ```
 
-`docker-entrypoint.sh` intentionally does not run migrations. Do not add migration
-commands back to container startup.
+`docker-entrypoint.sh` skips migrations when `ENV=production` because the
+pre-deploy step owns them. Non-production containers run `python
+migrations/run.py` before Uvicorn starts.
 
 ## Why
 
@@ -71,3 +77,9 @@ python migrations/run.py
 
 Do not downgrade production schema during an incident unless the migration is
 known to be destructive and data ownership has been reviewed.
+
+For catalog-specific incidents, use
+[Meal Catalog Incident Runbook](../runbooks/meal-catalog-incident.md). Prefer
+client entry-point disablement, previous GHCR SHA restore, or reviewed
+`is_active=false` catalog-row deactivation before considering a production
+schema downgrade.

@@ -41,6 +41,12 @@ from .meal.meal_instruction_step import MealInstructionStepORM
 # Translation models (meals + food items)
 from .meal.meal_translation_model import MealTranslationORM
 from .meal_image_cache import MealImageCacheModel
+from .meal_recommendation import (
+    MealCatalogIngredientORM,
+    MealCatalogORM,
+    MealRecommendationOperationORM,
+    MealRecommendationORM,
+)
 
 # Notification models
 from .notification import NotificationORM, NotificationPreferencesORM, UserFcmTokenORM
@@ -139,6 +145,11 @@ __all__ = [
     "BarcodeProductModel",  # backward-compatible alias
     "HydrationEntryORM",
     "MealImageCacheModel",
+    # Meal recommendation catalog
+    "MealCatalogORM",
+    "MealCatalogIngredientORM",
+    "MealRecommendationORM",
+    "MealRecommendationOperationORM",
     "PendingMealImageResolutionModel",
     # Referral system
     "ReferralCode",

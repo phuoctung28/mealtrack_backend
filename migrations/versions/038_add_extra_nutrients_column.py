@@ -21,7 +21,7 @@ def _has_column(table: str, column: str) -> bool:
     result = conn.execute(
         sa.text(
             "SELECT COUNT(*) FROM information_schema.columns "
-            "WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column"
+            "WHERE table_schema = 'public' AND table_name = :table AND column_name = :column"
         ),
         {"table": table, "column": column},
     )
@@ -32,8 +32,8 @@ def _has_index(table: str, index_name: str) -> bool:
     conn = op.get_bind()
     result = conn.execute(
         sa.text(
-            "SELECT COUNT(*) FROM information_schema.statistics "
-            "WHERE table_schema = DATABASE() AND table_name = :table AND index_name = :idx"
+            "SELECT COUNT(*) FROM pg_indexes "
+            "WHERE schemaname = 'public' AND tablename = :table AND indexname = :idx"
         ),
         {"table": table, "idx": index_name},
     )

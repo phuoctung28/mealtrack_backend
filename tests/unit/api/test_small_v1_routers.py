@@ -37,6 +37,7 @@ class _Bus:
 @pytest.fixture
 def foods_app():
     app = _make_app(foods_mod.router)
+    app.dependency_overrides[get_current_user_id] = lambda: "u1"
     return app
 
 

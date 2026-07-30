@@ -20,7 +20,7 @@ def _has_column(table: str, column: str) -> bool:
     result = conn.execute(
         sa.text(
             "SELECT COUNT(*) FROM information_schema.columns "
-            "WHERE table_schema = DATABASE() "
+            "WHERE table_schema = 'public' "
             "AND table_name = :table AND column_name = :column"
         ),
         {"table": table, "column": column},

@@ -21,14 +21,28 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def meal_type_column_exists(conn) -> bool:
+    return bool(
+        conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'meal'
+                  AND column_name = 'meal_type'
+                """
+            )
+        ).fetchone()
+    )
+
+
 def upgrade() -> None:
     """Add meal_type column if it doesn't exist"""
     conn = op.get_bind()
 
     # Check if column exists
-    result = conn.execute(text("SHOW COLUMNS FROM meal LIKE 'meal_type'")).fetchall()
-
-    if not result:
+    if not meal_type_column_exists(conn):
         logger.info("Adding missing meal_type column...")
         op.add_column('meal', sa.Column('meal_type', sa.String(length=20), nullable=True))
         op.create_index('idx_meal_type', 'meal', ['meal_type'])
@@ -41,9 +55,7 @@ def downgrade() -> None:
     """Remove meal_type column if it exists"""
     conn = op.get_bind()
 
-    result = conn.execute(text("SHOW COLUMNS FROM meal LIKE 'meal_type'")).fetchall()
-
-    if result:
+    if meal_type_column_exists(conn):
         op.drop_index('idx_meal_type', table_name='meal')
         op.drop_column('meal', 'meal_type')
         logger.info("Removed meal_type column and index")

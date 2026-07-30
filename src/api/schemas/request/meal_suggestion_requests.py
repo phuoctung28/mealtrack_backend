@@ -1,12 +1,12 @@
 """Request schemas for meal suggestion discovery, recipes, and saving."""
 
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class MealPortionTypeEnum(str, Enum):
+class MealPortionTypeEnum(StrEnum):
     """Simplified meal portion types."""
 
     SNACK = "snack"  # Fixed ~150-300 kcal
@@ -140,6 +140,11 @@ class SaveIngredientItem(BaseModel):
     calories: float = Field(
         default=0.0, ge=0, description="Calories for this ingredient (0 if unknown)"
     )
+    food_reference_id: int | None = Field(
+        None,
+        gt=0,
+        description="Canonical food reference ID when the ingredient was resolved",
+    )
     protein: float = Field(
         default=0.0, ge=0, description="Protein in grams (0 if unknown)"
     )
@@ -147,6 +152,7 @@ class SaveIngredientItem(BaseModel):
         default=0.0, ge=0, description="Carbohydrates in grams (0 if unknown)"
     )
     fat: float = Field(default=0.0, ge=0, description="Fat in grams (0 if unknown)")
+    fiber: float = Field(default=0.0, ge=0, description="Fiber in grams (0 if unknown)")
 
 
 class SaveMealSuggestionRequest(BaseModel):
@@ -169,6 +175,9 @@ class SaveMealSuggestionRequest(BaseModel):
         ..., ge=0, description="Carbohydrates in grams (already scaled)"
     )
     fat: float = Field(..., ge=0, description="Fat in grams (already scaled)")
+    fiber: float = Field(
+        default=0.0, ge=0, description="Fiber in grams (already scaled)"
+    )
     description: str | None = Field(None, description="Meal description")
     estimated_cook_time_minutes: int | None = Field(
         None, ge=0, description="Estimated cooking time in minutes"

@@ -36,6 +36,10 @@ class _Item:
     fiber = 0.0
     data_source = "ai_estimate"
     fdc_id = None
+    allowed_units = [
+        {"unit": "piece", "gram_weight": 50.0, "description": "1 piece"},
+        {"unit": "g", "gram_weight": 100.0, "description": "100 g"},
+    ]
 
 
 class _Resp:
@@ -125,6 +129,10 @@ def test_guest_parse_success(monkeypatch, client: TestClient):
     assert "emoji" in body
     assert len(body["items"]) == 1
     assert body["items"][0]["name"] == "egg"
+    assert body["items"][0]["allowed_units"] == [
+        {"unit": "piece", "gram_weight": 50.0, "description": "1 piece"},
+        {"unit": "g", "gram_weight": 100.0, "description": "100 g"},
+    ]
 
     quota_svc.reserve.assert_awaited_once_with("install-abc123")
     quota_svc.mark_completed.assert_awaited_once_with("abc123hash")
@@ -235,3 +243,7 @@ def test_authenticated_parse_text_unchanged(monkeypatch, client: TestClient):
     body = r.json()
     assert "items" in body
     assert len(body["items"]) == 1
+    assert body["items"][0]["allowed_units"] == [
+        {"unit": "piece", "gram_weight": 50.0, "description": "1 piece"},
+        {"unit": "g", "gram_weight": 100.0, "description": "100 g"},
+    ]

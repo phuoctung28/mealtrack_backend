@@ -10,13 +10,13 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.app.commands.meal.edit_meal_command import FoodItemChange, CustomNutritionData
+from src.app.commands.meal.edit_meal_command import CustomNutritionData, FoodItemChange
 from src.domain.model import FoodItem, Macros
 from src.domain.strategies.meal_edit_strategies import (
-    RemoveFoodItemStrategy,
-    UpdateFoodItemStrategy,
     AddFoodItemStrategy,
     FoodItemChangeStrategyFactory,
+    RemoveFoodItemStrategy,
+    UpdateFoodItemStrategy,
 )
 
 
@@ -145,6 +145,7 @@ class TestUpdateFoodItemStrategy:
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
                 confidence=0.9,
                 fdc_id=123,
+                food_reference_id=1001,
                 is_custom=False,
             )
         }
@@ -163,6 +164,7 @@ class TestUpdateFoodItemStrategy:
         assert updated_item.calories == pytest.approx(384.0)
         assert updated_item.macros.protein == 60.0  # Doubled
         assert updated_item.macros.fat == 16.0  # Doubled
+        assert updated_item.food_reference_id == 1001
 
     @pytest.mark.asyncio
     async def test_update_unit_with_nutrition_service_success(self):
@@ -189,6 +191,7 @@ class TestUpdateFoodItemStrategy:
                 unit="g",
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
                 fdc_id=123,
+                food_reference_id=1002,
                 is_custom=False,
             )
         }
@@ -206,11 +209,49 @@ class TestUpdateFoodItemStrategy:
         # calories derived: 35*4 + 0*4 + 10*9 = 230
         assert updated_item.calories == pytest.approx(230.0)
         assert updated_item.macros.protein == 35.0
+        assert updated_item.food_reference_id == 1002
 
         # Verify nutrition service was called
         mock_nutrition_service.get_nutrition_for_ingredient.assert_called_once_with(
             name="Chicken", quantity=150.0, unit="oz", fdc_id=123
         )
+
+    @pytest.mark.asyncio
+    async def test_update_custom_nutrition_preserves_food_reference_id(self):
+        """Custom nutrition updates preserve canonical food reference identity."""
+        mock_nutrition_service = Mock()
+        strategy = UpdateFoodItemStrategy(mock_nutrition_service)
+
+        food_items_dict = {
+            "item1": FoodItem(
+                id="item1",
+                name="Chicken",
+                quantity=100.0,
+                unit="g",
+                macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
+                fdc_id=123,
+                food_reference_id=1003,
+                is_custom=False,
+            )
+        }
+        change = FoodItemChange(
+            action="update",
+            id="item1",
+            quantity=120.0,
+            custom_nutrition=CustomNutritionData(
+                calories_per_100g=165.0,
+                protein_per_100g=31.0,
+                carbs_per_100g=0.0,
+                fat_per_100g=3.6,
+            ),
+        )
+
+        await strategy.apply(food_items_dict, change)
+
+        updated_item = food_items_dict["item1"]
+        assert updated_item.quantity == 120.0
+        assert updated_item.food_reference_id == 1003
+        assert updated_item.is_custom is True
 
     @pytest.mark.asyncio
     async def test_update_unit_nutrition_service_fails_uses_scaling(self):

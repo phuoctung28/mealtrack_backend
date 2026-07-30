@@ -6,11 +6,9 @@ Each strategy encapsulates the logic for add, update, or remove operations.
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from typing import Dict
 
 from src.domain.model.meal.food_item_change import FoodItemChange
-from src.domain.model.nutrition import FoodItem
-from src.domain.model.nutrition import Macros
+from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.services import NutritionCalculationService
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
@@ -36,7 +34,7 @@ class FoodItemChangeStrategy(ABC):
 
     @abstractmethod
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """
         Apply the change to the food items dictionary.
@@ -52,7 +50,7 @@ class RemoveFoodItemStrategy(FoodItemChangeStrategy):
     """Strategy for removing a food item."""
 
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """Remove food item from dictionary."""
         if not change.id:
@@ -67,7 +65,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
     """Strategy for updating an existing food item."""
 
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """Update existing food item with new quantity/unit or custom nutrition."""
         if not change.id or change.id not in food_items_dict:
@@ -100,7 +98,9 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                 micros=existing_item.micros,
                 confidence=0.8,
                 fdc_id=existing_item.fdc_id,
+                food_reference_id=existing_item.food_reference_id,
                 is_custom=True,
+                allowed_units=change.allowed_units or existing_item.allowed_units,
             )
             logger.info(
                 f"Updated food item with custom nutrition: {existing_item.name}"
@@ -133,7 +133,9 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     micros=existing_item.micros,
                     confidence=0.9,
                     fdc_id=existing_item.fdc_id,
+                    food_reference_id=existing_item.food_reference_id,
                     is_custom=existing_item.is_custom,
+                    allowed_units=change.allowed_units or existing_item.allowed_units,
                 )
                 logger.info(f"Updated food item with unit change: {existing_item.name}")
             else:
@@ -152,7 +154,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
 
     def _apply_simple_scaling(
         self,
-        food_items_dict: Dict[str, FoodItem],
+        food_items_dict: dict[str, FoodItem],
         change: FoodItemChange,
         existing_item: FoodItem,
         new_quantity: float,
@@ -191,7 +193,9 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             micros=existing_item.micros,
             confidence=existing_item.confidence,
             fdc_id=existing_item.fdc_id,
+            food_reference_id=existing_item.food_reference_id,
             is_custom=existing_item.is_custom,
+            allowed_units=change.allowed_units or existing_item.allowed_units,
         )
         logger.info(f"Updated food item with scaling: {existing_item.name}")
 
@@ -206,7 +210,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
         self.food_service = food_service
 
     async def apply(
-        self, food_items_dict: Dict[str, FoodItem], change: FoodItemChange
+        self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
         """Add new food item to dictionary."""
         new_item_id = str(uuid.uuid4())
@@ -223,6 +227,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 quantity,
                 unit,
                 change.custom_nutrition,
+                change.allowed_units,
             )
             food_items_dict[new_item_id] = food_item
             logger.info(f"Added custom food item: {change.name}")
@@ -248,6 +253,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                     confidence=0.9,
                     fdc_id=change.fdc_id,
                     is_custom=False,
+                    allowed_units=change.allowed_units,
                 )
                 logger.info(f"Added food item from nutrition service: {change.name}")
                 return
@@ -265,10 +271,17 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             confidence=0.3,
             fdc_id=change.fdc_id,
             is_custom=True,
+            allowed_units=change.allowed_units,
         )
 
     def _create_from_custom_nutrition(
-        self, item_id: str, name: str, quantity: float, unit: str, custom_nutrition
+        self,
+        item_id: str,
+        name: str,
+        quantity: float,
+        unit: str,
+        custom_nutrition,
+        allowed_units=None,
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
         quantity_grams = convert_quantity_to_grams(quantity, unit, name)
@@ -290,6 +303,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             confidence=0.8,
             fdc_id=None,
             is_custom=True,
+            allowed_units=allowed_units,
         )
 
 
@@ -299,7 +313,7 @@ class FoodItemChangeStrategyFactory:
     @staticmethod
     def create_strategies(
         nutrition_service: NutritionCalculationService, food_service=None
-    ) -> Dict[str, FoodItemChangeStrategy]:
+    ) -> dict[str, FoodItemChangeStrategy]:
         """Create all available strategies."""
         return {
             "add": AddFoodItemStrategy(nutrition_service, food_service),

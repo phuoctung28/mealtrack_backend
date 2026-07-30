@@ -41,15 +41,22 @@ class _AsyncSession:
         return self._results.pop(0)
 
 
-def _food_row(name_normalized="rice", verified=False):
+def _food_row(
+    name_normalized="rice",
+    verified=False,
+    *,
+    food_id=7,
+    name="Rice",
+    region="global",
+):
     row = MagicMock()
-    row.id = 7
+    row.id = food_id
     row.barcode = None
-    row.name = "Rice"
+    row.name = name
     row.name_vi = None
     row.brand = None
     row.category = None
-    row.region = "global"
+    row.region = region
     row.fdc_id = None
     row.protein_100g = 2.7
     row.carbs_100g = 28.0
@@ -123,6 +130,63 @@ async def test_find_by_normalized_name_uses_scalars_first():
 
 
 @pytest.mark.asyncio
+async def test_search_local_rejects_blank_query_before_db_access():
+    session = _AsyncSession([])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.search_local("   ", "US", 10)
+
+    assert result == []
+    assert session.statement is None
+
+
+@pytest.mark.asyncio
+async def test_search_local_uses_similarity_region_filter_and_bounded_limit():
+    row = _food_row(verified=True)
+    session = _AsyncSession([_Result(rows=[row])])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.search_local("rice", "VN", 500)
+
+    statement = str(session.statement)
+    assert result[0].id == 7
+    assert result[0].is_verified is True
+    assert "similarity" in statement
+    assert "food_reference.region IN" in statement
+    assert ":param_1" in statement
+
+
+@pytest.mark.asyncio
+async def test_search_local_deduplicates_by_normalized_name_after_ordering():
+    verified = _food_row(verified=True, food_id=7, name="Rice")
+    duplicate = _food_row(verified=False, food_id=8, name="Rice generic")
+    other = _food_row("rice noodles", verified=False, food_id=9, name="Rice noodles")
+    session = _AsyncSession([_Result(rows=[verified, duplicate, other])])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.search_local("rice", "US", 10)
+
+    assert [item.id for item in result] == [7, 9]
+
+
+@pytest.mark.asyncio
+async def test_get_nutrition_projection_returns_typed_food_reference_projection():
+    row = _food_row(verified=True)
+    row.source = "catalog_seed"
+    session = _AsyncSession([_Result(one=row)])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.get_nutrition_projection(7)
+
+    assert result is not None
+    assert result.id == 7
+    assert result.source == "catalog_seed"
+    assert result.is_verified is True
+    assert result.protein_100g == pytest.approx(2.7)
+    assert "food_reference.id" in str(session.statement)
+
+
+@pytest.mark.asyncio
 async def test_upsert_by_normalized_name_preserves_verified_row_without_flush():
     row = _food_row(verified=True)
     session = _AsyncSession([_Result(rows=[row])])
@@ -182,6 +246,45 @@ async def test_upsert_by_normalized_name_verified_protection_skips_upsert():
     session.flush.assert_not_awaited()
     assert result is not None
     assert result["protein_100g"] == pytest.approx(2.7)
+
+
+@pytest.mark.asyncio
+async def test_upsert_seed_uses_normalized_name_and_preserves_seed_metadata():
+    row = _food_row(name_normalized="com tam", name="Com tam")
+    session = _AsyncSession([_Result(), _Result(rows=[row])])
+    repo = AsyncFoodReferenceRepository(session)
+    statement = MagicMock()
+    statement.values.return_value = statement
+    statement.on_conflict_do_update.return_value = statement
+
+    with patch(
+        "src.infra.repositories.food_reference_repository_async.pg_insert",
+        return_value=statement,
+    ):
+        await repo.upsert_seed(
+            {
+                "name": "Com tam",
+                "name_normalized": "com tam",
+                "name_vi": "Cơm tấm",
+                "category": "Rice dishes",
+                "region": "VN",
+                "protein_100g": 5.0,
+                "carbs_100g": 30.0,
+                "fat_100g": 4.0,
+                "source": "nin_vn",
+                "is_verified": True,
+            }
+        )
+
+    values = statement.values.call_args.kwargs
+    assert values["name_normalized"] == "com tam"
+    assert values["name_vi"] == "Cơm tấm"
+    assert values["category"] == "Rice dishes"
+    assert values["is_verified"] is True
+    assert statement.on_conflict_do_update.call_args.kwargs["index_elements"] == [
+        "name_normalized"
+    ]
+    assert session.flush.await_count == 2
 
 
 @pytest.mark.asyncio

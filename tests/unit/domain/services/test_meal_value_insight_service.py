@@ -5,6 +5,8 @@ import pytest
 from starlette.requests import Request
 
 from src.api.routes.v1.meals import get_meal_value_insights
+from src.app.queries.meal import GetMealByIdQuery
+from src.app.queries.user import GetUserProfileQuery
 from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 from src.domain.services.meal_value_insight_contract import (
     MealValueInsights,
@@ -85,6 +87,19 @@ class FakeEventBus:
         return self.meal
 
 
+class FakeProfileAwareEventBus:
+    def __init__(self, meal, profile_result):
+        self.meal = meal
+        self.profile_result = profile_result
+
+    async def send(self, query):
+        if isinstance(query, GetMealByIdQuery):
+            return self.meal
+        if isinstance(query, GetUserProfileQuery):
+            return self.profile_result
+        raise AssertionError(f"Unexpected query: {query!r}")
+
+
 def _request(language: str = "en") -> Request:
     return Request(
         {
@@ -133,6 +148,7 @@ async def test_non_english_generates_requested_language_without_deepl():
     assert result.ingredient_insights[0].ingredient_name == "Trứng"
     assert result.ingredient_insights[0].highlights == ["phục hồi"]
     ai_manager.generate.assert_awaited_once()
+    assert ai_manager.generate.await_args.kwargs["max_tokens"] == 1200
     prompt = ai_manager.generate.await_args.kwargs["prompt"]
     assert '"language": "vi"' in prompt
     assert len(cache.values) == 1
@@ -199,6 +215,39 @@ def test_summary_groups_repeated_ingredients_for_overview():
 
 
 @pytest.mark.asyncio
+async def test_build_ai_prompt_includes_profile_context_rules_and_payload():
+    ai_manager = AsyncMock()
+    ai_manager.generate.return_value = {
+        "meal_bullets": [
+            {
+                "text": "This meal supports fullness.",
+                "category": "benefit",
+                "highlights": ["fullness"],
+            }
+        ],
+        "ingredient_insights": [],
+    }
+
+    await MealValueInsightService(ai_manager=ai_manager).build_ai(
+        dish_name="Chicken rice",
+        nutrition=_nutrition(),
+        language="en",
+        user_context={
+            "fitness_goal": "lose_weight",
+            "allergies": ["peanut"],
+            "targets": {"target_calories": 1900},
+        },
+        cache_service=FakeCache(),
+    )
+
+    prompt = ai_manager.generate.await_args.kwargs["prompt"]
+    assert "Use user_context when present" in prompt
+    assert '"fitness_goal": "lose_weight"' in prompt
+    assert '"allergies": ["peanut"]' in prompt
+    assert '"target_calories": 1900' in prompt
+
+
+@pytest.mark.asyncio
 async def test_value_insights_endpoint_returns_fresh_cached_payload():
     meal = SimpleNamespace(
         meal_id="meal-1",
@@ -240,6 +289,54 @@ async def test_value_insights_endpoint_returns_fresh_cached_payload():
         "Egg adds protein for fullness and fat for satiety."
     )
     assert response.value_insights.meal_bullets[0].highlights == ["fullness"]
+
+
+@pytest.mark.asyncio
+async def test_value_insights_endpoint_uses_profile_context_for_cache_version():
+    meal = SimpleNamespace(
+        meal_id="meal-1",
+        dish_name="Egg bowl",
+        nutrition=_nutrition(),
+    )
+    profile_result = {
+        "profile": {
+            "fitness_goal": "lose_weight",
+            "allergies": ["peanut"],
+        },
+        "tdee": {"target_calories": 1900},
+    }
+    service = MealValueInsightService()
+    profile_key = service.version(
+        dish_name=meal.dish_name,
+        nutrition=meal.nutrition,
+        language="en",
+        user_context={
+            "fitness_goal": "lose_weight",
+            "allergies": ["peanut"],
+            "targets": {"target_calories": 1900},
+        },
+    )
+    meal_only_key = service.version(
+        dish_name=meal.dish_name,
+        nutrition=meal.nutrition,
+        language="en",
+    )
+    cache = FakeCache()
+    task_manager = AsyncMock()
+
+    response = await get_meal_value_insights(
+        request=_request(),
+        meal_id=meal.meal_id,
+        user_id="user-1",
+        event_bus=FakeProfileAwareEventBus(meal, profile_result),
+        cache_service=cache,
+        task_manager=task_manager,
+        ai_manager=AsyncMock(),
+    )
+
+    assert response.status == "generating"
+    assert response.version == profile_key
+    assert response.version != meal_only_key
 
 
 @pytest.mark.asyncio

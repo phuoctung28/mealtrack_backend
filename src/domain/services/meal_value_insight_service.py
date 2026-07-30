@@ -73,7 +73,7 @@ class MealValueInsightService:
                 prompt=self._prompt(summary),
                 system_message=self._system_message(),
                 response_type="json",
-                max_tokens=450,
+                max_tokens=1200,
             )
             insights = parse_ai_result(result)
             logger.info(
@@ -319,6 +319,9 @@ class MealValueInsightService:
             "- meal_bullets: max 2 items, each text <=120 characters.\n"
             "- ingredient_insights: max 2 key ingredients, one line each, text <=120 characters.\n"
             "- Text should mention relevant nutrients or macros when they explain the body effect.\n"
+            "- Use user_context when present to tailor practical guidance to fitness_goal, dietary_preferences, allergies, health_conditions, custom_macros, and targets.\n"
+            "- Never recommend foods that conflict with allergies or dietary_preferences in user_context.\n"
+            "- If user_context is missing or incomplete, do not mention that it is missing.\n"
             "- Ingredient insights must call out what macro is high or low for that ingredient, then connect it to the body effect.\n"
             "- Use ingredient_overview to notice repeated ingredients or large portions; surface those as caution when they skew the meal.\n"
             "- Use risk_flags first. If risk_flags includes repeated_* or large_* for an ingredient, that ingredient insight must be caution.\n"

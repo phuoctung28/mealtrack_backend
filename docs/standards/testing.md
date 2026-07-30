@@ -9,7 +9,8 @@
 - **Unit**: Mock all dependencies, test one logic unit (`tests/unit/`).
 - **Integration**: Test API endpoints or infrastructure with real/mocked external services (`tests/integration/`).
 
-## Pinecone Testing
-- Pinecone unit tests MUST mock the Inference API.
-- Vectors in mocks MUST be 1024-dimensional.
-- Integration tests should skip automatically if `PINECONE_API_KEY` is missing.
+## Vector Cache Testing
+- Test active nearest-neighbor behavior against the PostgreSQL `pgvector`
+  adapter or a narrow port fake.
+- Keep Pinecone references only in historical migration tests; Pinecone is not
+  registered in the current runtime.

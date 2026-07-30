@@ -1,9 +1,12 @@
 """Import food seed JSON into food_reference. Use --fetch to download from APIs first."""
+
 import argparse
+import asyncio
 import json
 import logging
 import subprocess
 import sys
+import tempfile
 import unicodedata
 from pathlib import Path
 
@@ -13,6 +16,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
+    normalize_food_name,
+)
+from src.infra.database.uow_async import AsyncUnitOfWork
+
 SOURCE_PRIORITY: dict[str, int] = {
     "nin_vn": 1,
     "vn_fct_pdf": 2,
@@ -21,6 +29,7 @@ SOURCE_PRIORITY: dict[str, int] = {
 }
 _DEFAULT_PRIORITY = 99
 _SCRAPERS_DIR = Path(__file__).resolve().parent / "scrapers"
+_TRUSTED_SEED_SOURCES = frozenset({"nin_vn", "vn_fct_pdf"})
 
 
 def _normalize_name(text: str) -> str:
@@ -30,7 +39,7 @@ def _normalize_name(text: str) -> str:
 
 def _load_json_file(path: Path) -> list[dict]:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, list):
             logger.warning("Skipping %s — expected JSON array", path.name)
@@ -83,7 +92,9 @@ def _dedup_entries(all_entries: list[dict], source_filter: str | None) -> list[d
         if existing is None:
             by_name[key] = entry
         else:
-            existing_pri = SOURCE_PRIORITY.get(existing.get("source", ""), _DEFAULT_PRIORITY)
+            existing_pri = SOURCE_PRIORITY.get(
+                existing.get("source", ""), _DEFAULT_PRIORITY
+            )
             new_pri = SOURCE_PRIORITY.get(source, _DEFAULT_PRIORITY)
             if new_pri < existing_pri:
                 by_name[key] = entry
@@ -97,11 +108,26 @@ def _fetch_data(data_dir: Path) -> None:
     python = sys.executable
 
     fetchers = [
-        ("NIN VN", [python, str(_SCRAPERS_DIR / "fetch_nin_vn.py"),
-                    "--output-foods", str(data_dir / "nin_vn_foods.json"),
-                    "--output-dishes", str(data_dir / "nin_vn_dishes.json")]),
-        ("OpenFoodFacts VN", [python, str(_SCRAPERS_DIR / "fetch_off_vn.py"),
-                              "--output", str(data_dir / "off_vn_products.json")]),
+        (
+            "NIN VN",
+            [
+                python,
+                str(_SCRAPERS_DIR / "fetch_nin_vn.py"),
+                "--output-foods",
+                str(data_dir / "nin_vn_foods.json"),
+                "--output-dishes",
+                str(data_dir / "nin_vn_dishes.json"),
+            ],
+        ),
+        (
+            "OpenFoodFacts VN",
+            [
+                python,
+                str(_SCRAPERS_DIR / "fetch_off_vn.py"),
+                "--output",
+                str(data_dir / "off_vn_products.json"),
+            ],
+        ),
     ]
     for label, cmd in fetchers:
         logger.info("Fetching %s ...", label)
@@ -112,7 +138,25 @@ def _fetch_data(data_dir: Path) -> None:
             logger.info("Fetched %s successfully", label)
 
 
-def _run_import(data_dir: Path, dry_run: bool, source_filter: str | None) -> None:
+def _fetch_nin_dishes(data_dir: Path) -> bool:
+    """Fetch only the NIN prepared-dishes catalog into an isolated directory."""
+    output_path = data_dir / "nin_vn_dishes.json"
+    command = [
+        sys.executable,
+        str(_SCRAPERS_DIR / "fetch_nin_vn.py"),
+        "--dishes-only",
+        "--output-dishes",
+        str(output_path),
+    ]
+    logger.info("Fetching NIN VN dishes ...")
+    result = subprocess.run(command, text=True)
+    if result.returncode != 0:
+        logger.error("Failed to fetch NIN VN dishes (exit code %d)", result.returncode)
+        return False
+    return output_path.exists()
+
+
+async def _run_import(data_dir: Path, dry_run: bool, source_filter: str | None) -> None:
     json_files = sorted(data_dir.glob("*.json"))
     if not json_files:
         logger.warning("No JSON files found in %s", data_dir)
@@ -133,55 +177,137 @@ def _run_import(data_dir: Path, dry_run: bool, source_filter: str | None) -> Non
     if dry_run:
         logger.info("Dry-run mode — validating only, no DB writes")
 
-    repo = None
-    if not dry_run:
-        from src.infra.repositories.food_reference_repository import FoodReferenceRepository
-        repo = FoodReferenceRepository()
+    if dry_run:
+        for entry in deduped:
+            if _is_invalid(entry):
+                counts["invalid"] += 1
+            else:
+                counts["inserted"] += 1
+        _print_report(counts, dry_run)
+        return
 
-    total = len(deduped)
-    for i, entry in enumerate(deduped, 1):
-        warnings = _validate_entry(entry)
-        if warnings:
-            critical = [w for w in warnings if "negative" in w or "exceeds" in w]
-            if critical:
+    async with AsyncUnitOfWork() as uow:
+        total = len(deduped)
+        for i, entry in enumerate(deduped, 1):
+            if _is_invalid(entry):
                 counts["invalid"] += 1
                 continue
+            result = await _upsert_entry(uow.food_references, entry)
+            counts[result] += 1
 
-        if dry_run:
-            counts["inserted"] += 1
-            continue
-
-        result = repo.upsert_seed(entry)  # type: ignore[union-attr]
-        counts[result] += 1
-        if result == "skipped":
-            logger.warning("  SKIPPED: %s (source=%s)",
-                           entry.get("name_vi", entry.get("name", "?")), entry.get("source"))
-
-        # Progress every 100 entries
-        if i % 100 == 0 or i == total:
-            done = sum(counts.values())
-            logger.info("Progress: %d/%d (%d inserted, %d updated, %d skipped)",
-                        done, total, counts["inserted"], counts["updated"], counts["skipped"])
+            if i % 100 == 0 or i == total:
+                done = sum(counts.values())
+                logger.info(
+                    "Progress: %d/%d (%d inserted, %d updated, %d skipped)",
+                    done,
+                    total,
+                    counts["inserted"],
+                    counts["updated"],
+                    counts["skipped"],
+                )
 
     _print_report(counts, dry_run)
 
 
+def _is_invalid(entry: dict) -> bool:
+    warnings = _validate_entry(entry)
+    return not _entry_name(entry) or any(
+        "negative" in warning or "exceeds" in warning for warning in warnings
+    )
+
+
+async def _upsert_entry(repository, entry: dict) -> str:
+    if entry.get("barcode"):
+        existing = await repository.get_by_barcode(entry["barcode"])
+        await repository.upsert(_prepared_entry(entry))
+        return "updated" if existing is not None else "inserted"
+
+    prepared = _prepared_entry(entry)
+    existing = await repository.find_by_normalized_name(prepared["name_normalized"])
+    if existing is not None and _existing_wins(existing, prepared):
+        return "skipped"
+    await repository.upsert_seed(prepared)
+    return "updated" if existing is not None else "inserted"
+
+
+def _prepared_entry(entry: dict) -> dict:
+    prepared = dict(entry)
+    prepared["name"] = _entry_name(entry)
+    prepared["name_normalized"] = normalize_food_name(prepared["name"])
+    prepared["is_verified"] = entry.get("source") in _TRUSTED_SEED_SOURCES
+    return prepared
+
+
+def _existing_wins(existing: dict, incoming: dict) -> bool:
+    existing_source = existing.get("source")
+    incoming_source = incoming.get("source")
+    existing_priority = _source_priority(existing_source)
+    incoming_priority = _source_priority(incoming_source)
+    if existing.get("is_verified"):
+        if existing_source not in _TRUSTED_SEED_SOURCES:
+            return True
+        return existing_priority <= incoming_priority
+    return existing_priority < incoming_priority
+
+
+def _source_priority(source: str | None) -> int:
+    return SOURCE_PRIORITY.get(source or "", _DEFAULT_PRIORITY)
+
+
+def _entry_name(entry: dict) -> str:
+    return str(entry.get("name") or entry.get("name_vi") or "").strip()
+
+
 def _print_report(counts: dict[str, int], dry_run: bool) -> None:
     mode = " (dry-run)" if dry_run else ""
-    print(f"\nImport report{mode}: {sum(counts.values())} total — "
-          f"{counts['inserted']} inserted, {counts['updated']} updated, "
-          f"{counts['skipped']} skipped, {counts['invalid']} invalid")
+    print(
+        f"\nImport report{mode}: {sum(counts.values())} total — "
+        f"{counts['inserted']} inserted, {counts['updated']} updated, "
+        f"{counts['skipped']} skipped, {counts['invalid']} invalid"
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fetch and import VN food seeds.")
-    parser.add_argument("--fetch", action="store_true", help="Fetch from APIs before importing")
-    parser.add_argument("--no-validate", action="store_true", help="Skip data validation/cleaning")
-    parser.add_argument("--data-dir", default=str(Path(__file__).resolve().parent / "data"),
-                        help="JSON files directory (default: scripts/data/)")
-    parser.add_argument("--dry-run", action="store_true", help="Validate only, no DB writes")
-    parser.add_argument("--source", default=None, help="Filter by source (e.g. 'nin_vn')")
+    parser.add_argument(
+        "--fetch", action="store_true", help="Fetch from APIs before importing"
+    )
+    parser.add_argument(
+        "--fetch-nin-dishes",
+        action="store_true",
+        help="Fetch and import only the NIN prepared-dishes catalog",
+    )
+    parser.add_argument(
+        "--no-validate", action="store_true", help="Skip validation report"
+    )
+    parser.add_argument(
+        "--fix", action="store_true", help="Explicitly rewrite invalid seed files"
+    )
+    parser.add_argument(
+        "--data-dir",
+        default=str(Path(__file__).resolve().parent / "data"),
+        help="JSON files directory (default: scripts/data/)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Validate only, no DB writes"
+    )
+    parser.add_argument(
+        "--source", default=None, help="Filter by source (e.g. 'nin_vn')"
+    )
     args = parser.parse_args()
+
+    if args.fetch_nin_dishes:
+        with tempfile.TemporaryDirectory(prefix="nutree-nin-dishes-") as temp_dir:
+            if not _fetch_nin_dishes(Path(temp_dir)):
+                sys.exit(1)
+            asyncio.run(
+                _run_import(
+                    data_dir=Path(temp_dir),
+                    dry_run=args.dry_run,
+                    source_filter="nin_vn",
+                )
+            )
+        return
 
     data_dir = Path(args.data_dir)
 
@@ -189,15 +315,26 @@ def main() -> None:
         _fetch_data(data_dir)
 
     if not args.no_validate and data_dir.exists():
-        logger.info("Validating and cleaning seed data...")
-        subprocess.run([sys.executable, str(_SCRAPERS_DIR / "validate_seeds.py"),
-                        "--data-dir", str(data_dir), "--fix"], text=True)
+        logger.info("Validating seed data...")
+        command = [
+            sys.executable,
+            str(_SCRAPERS_DIR / "validate_seeds.py"),
+            "--data-dir",
+            str(data_dir),
+        ]
+        if args.fix:
+            command.append("--fix")
+        subprocess.run(command, text=True, check=False)
 
     if not data_dir.exists():
-        logger.error("data-dir does not exist: %s — use --fetch to download data first", data_dir)
+        logger.error(
+            "data-dir does not exist: %s — use --fetch to download data first", data_dir
+        )
         sys.exit(1)
 
-    _run_import(data_dir=data_dir, dry_run=args.dry_run, source_filter=args.source)
+    asyncio.run(
+        _run_import(data_dir=data_dir, dry_run=args.dry_run, source_filter=args.source)
+    )
 
 
 if __name__ == "__main__":

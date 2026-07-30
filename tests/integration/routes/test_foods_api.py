@@ -11,18 +11,12 @@ from src.api.main import app
 
 
 @pytest.fixture
-def client(test_session):
+def client():
     """Create a test client with mocked dependencies."""
-    from src.api.base_dependencies import get_db
+    from src.api.dependencies.auth import get_current_user_id
 
-    def override_get_db():
-        try:
-            yield test_session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    client = TestClient(app)
+    app.dependency_overrides[get_current_user_id] = lambda: "user-1"
+    client = TestClient(app, raise_server_exceptions=False)
     yield client
     app.dependency_overrides.clear()
 
@@ -97,13 +91,8 @@ class TestFoodsAPI:
 
             assert response.status_code == 500
             detail = response.json()["detail"]
-            # Handle both string and dict detail formats
-            if isinstance(detail, dict):
-                assert "Search failed" in detail.get(
-                    "message", ""
-                ) or "Search failed" in str(detail)
-            else:
-                assert "Search failed" in str(detail)
+            assert detail["error_code"] == "INTERNAL_ERROR"
+            assert detail["message"] == "An unexpected error occurred"
 
     def test_get_food_details_success(self, client):
         """Test successful food details retrieval."""
@@ -140,9 +129,5 @@ class TestFoodsAPI:
 
             assert response.status_code == 500
             detail = response.json()["detail"]
-            if isinstance(detail, dict):
-                assert "Details failed" in detail.get(
-                    "message", ""
-                ) or "Details failed" in str(detail)
-            else:
-                assert "Details failed" in str(detail)
+            assert detail["error_code"] == "INTERNAL_ERROR"
+            assert detail["message"] == "An unexpected error occurred"

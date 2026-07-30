@@ -1,6 +1,6 @@
 # Backend Troubleshooting Guide
 
-**Last Updated:** June 27, 2026
+**Last Updated:** July 29, 2026
 
 ---
 
@@ -67,7 +67,7 @@ ls -la $FIREBASE_CREDENTIALS
 1. Verify Firebase credentials file path and content
 2. Check Firebase project ID matches environment
 3. Verify token is valid and not expired
-4. In dev: use `DEV_MODE=true` to enable `X-Dev-User-Id` header bypass
+4. In dev: set `ENVIRONMENT=development` and `ENABLE_DEV_AUTH_BYPASS=1` to enable `X-Dev-User-Id` header bypass
 
 ---
 

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.base_dependencies import get_cache_service
-from src.api.dependencies.auth import require_admin
+from src.api.dependencies.auth import get_current_user_id, require_admin
 from src.api.schemas.request.feature_flag_requests import (
     CreateFeatureFlagRequest,
     UpdateFeatureFlagRequest,
@@ -19,12 +19,12 @@ from src.api.schemas.response.feature_flag_responses import (
     FeatureFlagUpdatedResponse,
     IndividualFeatureFlagResponse,
 )
-from src.infra.services.feature_flag_service import FeatureFlagService
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.config_async import get_async_db
 from src.infra.database.models.feature_flag import FeatureFlag
+from src.infra.services.feature_flag_service import FeatureFlagService
 
 router = APIRouter(prefix="/v1/feature-flags", tags=["Feature Flags"])
 
@@ -33,6 +33,7 @@ router = APIRouter(prefix="/v1/feature-flags", tags=["Feature Flags"])
 async def get_feature_flags(
     db: AsyncSession = Depends(get_async_db),
     cache_service: CacheService | None = Depends(get_cache_service),
+    _user_id: str = Depends(get_current_user_id),
 ):
     """
     Get all feature flags from the database.
@@ -62,6 +63,7 @@ async def get_individual_feature_flag(
     feature_name: str,
     db: AsyncSession = Depends(get_async_db),
     cache_service: CacheService | None = Depends(get_cache_service),
+    _user_id: str = Depends(get_current_user_id),
 ):
     """
     Get a specific feature flag from the database.

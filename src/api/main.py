@@ -48,6 +48,8 @@ from src.api.middleware.rate_limit import limiter
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
+from src.api.routes.v1.admin_meal_catalog import router as admin_meal_catalog_router
+from src.api.routes.v1.admin_meal_catalog_import import router as admin_meal_catalog_import_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
@@ -56,6 +58,7 @@ from src.api.routes.v1.health import root_router as root_health_router
 from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.ingredients import router as ingredients_router
+from src.api.routes.v1.meal_recommendations import router as meal_recommendations_router
 from src.api.routes.v1.meal_scan_by_url import router as meal_scan_by_url_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
@@ -313,11 +316,14 @@ add_dev_auth_bypass(app)
 # Include all routers
 app.include_router(root_health_router)
 app.include_router(health_router)
+app.include_router(admin_meal_catalog_router)
+app.include_router(admin_meal_catalog_import_router)
 app.include_router(meals_router)
 app.include_router(meal_scan_by_url_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
 app.include_router(meal_suggestions_router)
+app.include_router(meal_recommendations_router)
 app.include_router(user_profiles_router)
 app.include_router(users_router)
 app.include_router(foods_router)

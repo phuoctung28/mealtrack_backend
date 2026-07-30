@@ -8,7 +8,6 @@ Create Date: 2026-01-05 10:10:00.000000
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,6 +27,8 @@ def upgrade() -> None:
     - meal_plans.fitness_goal: Convert to ENUM with cut/bulk/recomp
     - Migrate existing data: maintenance→recomp, cutting→cut, bulking→bulk
     """
+    fitness_goal_enum = sa.Enum('cut', 'bulk', 'recomp', name='fitnessgoalenum')
+    fitness_goal_enum.create(op.get_bind(), checkfirst=True)
 
     # Step 1: Update existing data in user_profiles
     logger.info("Migrating existing fitness_goal values in user_profiles...")
@@ -84,13 +85,13 @@ def upgrade() -> None:
     # Step 4: Convert meal_plans.fitness_goal to ENUM type
     logger.info("Converting meal_plans.fitness_goal to ENUM type...")
 
-    # MySQL: ALTER TABLE meal_plans MODIFY fitness_goal ENUM('cut', 'bulk', 'recomp')
     op.alter_column(
         'meal_plans',
         'fitness_goal',
         existing_type=sa.String(length=20),
-        type_=mysql.ENUM('cut', 'bulk', 'recomp', name='fitnessgoalenum'),
-        existing_nullable=True
+        type_=fitness_goal_enum,
+        existing_nullable=True,
+        postgresql_using='fitness_goal::fitnessgoalenum',
     )
 
     logger.info("✅ Successfully updated fitness_goal columns to cut/bulk/recomp")
@@ -104,16 +105,19 @@ def downgrade() -> None:
     - meal_plans.fitness_goal: Revert to String type
     - Revert data: recomp→maintenance, cut→cutting, bulk→bulking
     """
+    fitness_goal_enum = sa.Enum('cut', 'bulk', 'recomp', name='fitnessgoalenum')
 
     # Step 1: Revert meal_plans.fitness_goal to String type
     logger.info("Reverting meal_plans.fitness_goal to String type...")
     op.alter_column(
         'meal_plans',
         'fitness_goal',
-        existing_type=mysql.ENUM('cut', 'bulk', 'recomp', name='fitnessgoalenum'),
+        existing_type=fitness_goal_enum,
         type_=sa.String(length=20),
-        existing_nullable=True
+        existing_nullable=True,
+        postgresql_using='fitness_goal::text',
     )
+    fitness_goal_enum.drop(op.get_bind(), checkfirst=True)
 
     # Step 2: Revert data in meal_plans
     logger.info("Reverting fitness_goal values in meal_plans...")

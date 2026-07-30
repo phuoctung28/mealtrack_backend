@@ -15,7 +15,7 @@ import inspect
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -40,7 +40,7 @@ T2_TIMEOUT = 2.0  # fatsecret timeout
 T3_TIMEOUT = 3.0  # AI estimate timeout
 
 # Volume conversions: unit → millilitres
-_VOLUME_TO_ML: Dict[str, float] = {"cup": 240.0, "tbsp": 15.0, "tsp": 5.0}
+_VOLUME_TO_ML: dict[str, float] = {"cup": 240.0, "tbsp": 15.0, "tsp": 5.0}
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ class IngredientMacros:
     fiber: float
     sugar: float
     source_tier: str  # "T1_food_reference" | "T2_fatsecret" | "T3_ai_estimate"
-    food_reference_id: Optional[int] = field(default=None)
+    food_reference_id: int | None = field(default=None)
 
 
 @dataclass
@@ -74,7 +74,7 @@ class MealMacros:
     fat: float
     fiber: float
     sugar: float
-    ingredients: List[IngredientMacros]
+    ingredients: list[IngredientMacros]
     t1_count: int  # resolved via food_reference
     t2_count: int  # resolved via fatsecret
     t3_count: int  # resolved via AI fallback
@@ -120,7 +120,7 @@ class NutritionLookupService:
     # ------------------------------------------------------------------
 
     async def calculate_meal_macros(
-        self, ingredients: List[Dict[str, Any]]
+        self, ingredients: list[dict[str, Any]]
     ) -> MealMacros:
         """Calculate deterministic macros for a list of ingredients.
 
@@ -141,7 +141,7 @@ class NutritionLookupService:
         ]
 
         # Tier 0 (Redis): check every key concurrently.
-        results: List[Optional[IngredientMacros]] = list(
+        results: list[IngredientMacros | None] = list(
             await asyncio.gather(
                 *(
                     self._check_redis_cache(normalized, name, quantity_g)
@@ -159,7 +159,7 @@ class NutritionLookupService:
             )
             if cached is None
         ]
-        t1_map: Dict[str, Dict[str, Any]] = {}
+        t1_map: dict[str, dict[str, Any]] = {}
         if miss_normalized:
             t1_map = await self._find_batch_by_normalized_names(miss_normalized)
 
@@ -189,7 +189,7 @@ class NutritionLookupService:
 
     async def _check_redis_cache(
         self, normalized: str, name: str, quantity_g: float
-    ) -> Optional[IngredientMacros]:
+    ) -> IngredientMacros | None:
         """Tier 0: return cached macros from Redis, or None on miss/disabled/error.
 
         Increments the redis_hits metric on a hit; misses are counted by the
@@ -214,7 +214,7 @@ class NutritionLookupService:
         name: str,
         normalized: str,
         quantity_g: float,
-        t1_ref: Optional[Dict[str, Any]],
+        t1_ref: dict[str, Any] | None,
     ) -> IngredientMacros:
         """Resolve a Redis-missed ingredient: T1 (caller-supplied ref) → T2 → T3.
 
@@ -238,7 +238,7 @@ class NutritionLookupService:
             per100 = await asyncio.wait_for(
                 self._resolver.resolve(name), timeout=T2_TIMEOUT
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("T2 fatsecret timeout for %s", name)
             per100 = None
         if per100 is not None:
@@ -255,7 +255,7 @@ class NutritionLookupService:
             )
             await self._cache_result(cache_key, result)
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("T3 AI timeout for %s", name)
             return IngredientMacros(
                 name=name,
@@ -307,7 +307,7 @@ class NutritionLookupService:
     # ------------------------------------------------------------------
 
     def _build_from_cached(
-        self, data: Dict[str, Any], name: str, quantity_g: float
+        self, data: dict[str, Any], name: str, quantity_g: float
     ) -> IngredientMacros:
         """Build IngredientMacros from cached per-100g data."""
         factor = quantity_g / 100.0
@@ -327,6 +327,7 @@ class NutritionLookupService:
             fiber=round(fiber, 1),
             sugar=round(sugar, 1),
             source_tier=data.get("source_tier", "cached"),
+            food_reference_id=data.get("food_reference_id"),
         )
 
     async def _cache_result(self, key: str, result: IngredientMacros) -> None:
@@ -343,6 +344,8 @@ class NutritionLookupService:
                 "sugar": round(result.sugar * factor, 2),
                 "source_tier": result.source_tier,
             }
+            if result.food_reference_id is not None:
+                data["food_reference_id"] = result.food_reference_id
             await self._redis.set(key, json.dumps(data), ttl=NUTRITION_CACHE_TTL)
         except Exception as exc:
             logger.warning("Redis set failed for %s: %s", key, exc)
@@ -353,7 +356,7 @@ class NutritionLookupService:
 
     def _calculate_from_ref(
         self,
-        ref: Dict[str, Any],
+        ref: dict[str, Any],
         name: str,
         quantity_g: float,
         tier: str,
@@ -486,7 +489,7 @@ class NutritionLookupService:
         meal_macros: MealMacros,
         target_calories: int,
         reject_out_of_range: bool = True,
-    ) -> Optional[MealMacros]:
+    ) -> MealMacros | None:
         """Scale ingredient quantities so total calories ≈ target_calories.
 
         Returns scaled MealMacros, or None if scale factor is outside 0.7–1.4
@@ -544,7 +547,7 @@ class NutritionLookupService:
     # Aggregation
     # ------------------------------------------------------------------
 
-    def _aggregate(self, ingredients: List[IngredientMacros]) -> MealMacros:
+    def _aggregate(self, ingredients: list[IngredientMacros]) -> MealMacros:
         """Sum ingredient macros and count tier hits."""
         total_protein = sum(i.protein for i in ingredients)
         total_carbs = sum(i.carbs for i in ingredients)

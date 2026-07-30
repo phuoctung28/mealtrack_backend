@@ -45,6 +45,7 @@ Meal scan must not create `hydration_entries`.
   with lower confidence.
 - Drinks should be represented as normal `foods` entries.
 - `beverage_metadata` should remain `null` in meal scan output.
+- Non-null `beverage_metadata` fails validation and should not be persisted.
 - True non-food images return `is_food=false` and are mapped to the existing
   not-food API error.
 

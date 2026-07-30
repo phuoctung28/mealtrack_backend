@@ -2,6 +2,8 @@
 
 Database migrations using Alembic with timestamp-based naming.
 
+**Current head:** `20260727000001`
+
 ## Quick Start
 
 ```bash
@@ -60,4 +62,5 @@ python migrations/run.py
 
 - Always review generated migrations before applying
 - Run `test` command locally before deploying
-- The baseline migration (001) is empty because tables already existed
+- The baseline migration (`001_initial_schema.py`) is a real schema revision
+- `python migrations/run.py` upgrades empty databases from base to head and refuses to stamp an existing unversioned schema automatically

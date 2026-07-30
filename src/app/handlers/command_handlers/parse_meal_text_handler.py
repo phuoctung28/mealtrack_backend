@@ -126,6 +126,7 @@ class ParseMealTextHandler(
                 fat=item.get("fat", 0),
                 data_source=item.get("data_source"),
                 fdc_id=item.get("fdc_id"),
+                allowed_units=item.get("allowed_units") or [],
             )
             for item in enhanced_items
         ]

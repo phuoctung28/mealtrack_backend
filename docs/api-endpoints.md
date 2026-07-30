@@ -1,11 +1,11 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** July 5, 2026
+**Last Updated:** July 29, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
-Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
-**Surface:** 28 route files, 27 router registrations, 26 endpoint-bearing route modules, and 88 endpoint decorators.
+Dev mode: `X-Dev-User-Id` header (requires `ENVIRONMENT=development` and `ENABLE_DEV_AUTH_BYPASS=1`)
+**Surface:** 31 route files, 29 router registrations, 98 standard endpoint decorators, and 2 health `api_route` declarations serving GET+HEAD.
 
 ---
 
@@ -19,6 +19,8 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/health/db-connections` | DB connection stats |
 | GET | `/v1/health/notifications` | FCM health |
 | GET | `/v1/monitoring/cache/metrics` | Redis cache metrics |
+
+The two health routes are declared with `api_route` and answer both GET and HEAD.
 
 ## App & Universal Links
 
@@ -45,8 +47,18 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | GET | `/v1/meals/weekly/budget` | Weekly calorie budget |
 | GET | `/v1/meals/daily/macros` | Today's aggregated macros |
 | GET | `/v1/meals/{meal_id}` | Get meal details |
+| GET | `/v1/meals/{meal_id}/value-insights` | Get value-insight cache status or trigger refresh |
 | DELETE | `/v1/meals/{meal_id}` | Delete meal (soft delete) |
 | PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients |
+| PUT | `/v1/meals/{meal_id}/photo` | Replace a meal photo |
+| DELETE | `/v1/meals/{meal_id}/photo` | Remove a meal photo |
+
+### Meal Value Insights Contract
+
+- Graph-enabled image scans schedule profile-aware meal value insights after READY meal persistence and meal cache invalidation.
+- `GET /v1/meals/{meal_id}/value-insights` is a compatibility/status/refresh endpoint. Existing response statuses are unchanged.
+- Graph-disabled scan routes still schedule insights from the API route after the command handler returns.
+- Scheduling is best-effort background work and never changes the READY meal response contract.
 
 ### Food Label Image Contract
 
@@ -93,6 +105,28 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 | POST | `/v1/meal-suggestions/recipes` | Generate recipe batch |
 | POST | `/v1/meal-suggestions/save` | Save a meal suggestion |
 
+## Meal Recommendations
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/v1/meal-recommendations/three-day` | Create or replay a 3-day catalog plan; returns compact selected-slot summaries only |
+| GET | `/v1/meal-recommendations/{plan_id}` | Read the owner-scoped compact plan summary |
+| GET | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}` | Read one hydrated selected slot with alternatives |
+| POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/swap` | Swap a slot and return the changed-slot detail response |
+| POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/log` | Log the selected recommendation and return the changed-slot detail response |
+| POST | `/v1/meal-recommendations/{plan_id}/slots/{slot_id}/skip` | Skip the selected recommendation and return the changed-slot detail response |
+
+### Meal Recommendation Contract
+
+- `create` and `get` return the compact summary contract: selected slots only, with no slot-level ingredients, alternatives, or scores in the plan payload.
+- Slot detail hydrates exactly one selected slot plus its alternatives. Mutation responses reuse the same changed-slot shape so clients can patch cached plans in place.
+- `swap`, `log`, and `skip` are owner-scoped, idempotent by request ID, and reject already terminal selected slots.
+- `shown_at`, `skipped_at`, and `logged_at` are backend-owned outcome fields. Clients must not infer terminal state by recalculating recommendation logic.
+- Recommendation analytics are scheduled through `BackgroundTaskManager` when the dependency is available; the route falls back to inline capture when it is not.
+- New plan generation uses snapshot-scoped ingredient IDF, confidence-scaled ingredient similarity, and bounded diversity reranking. Existing persisted plans replay their stored candidates and scores. This does not change endpoint paths and does not touch `/v1/meal-suggestions`.
+- The existing `Accept-Language` header selects response language (`en`, `vi`, `es`, `fr`, `de`, `ja`, `zh`). For non-English requests, meal names, cuisine, descriptions, and ingredient display names are translated at response time; IDs, units, nutrition, scores, and recommendation state remain canonical.
+- Missing/unsupported language, an unset DeepL key, or translation-provider failure returns the successful canonical English response rather than failing the recommendation request.
+
 ---
 
 ## Saved Suggestions
@@ -109,11 +143,22 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| GET | `/v1/foods/search` | Search USDA foods |
-| GET | `/v1/foods/{fdc_id}/details` | Get food details by FDC ID |
+| GET | `/v1/foods/search` | Authenticated local-first food search with provider fill |
+| GET | `/v1/foods/autocomplete` | Authenticated local-first autocomplete |
+| GET | `/v1/foods/{fdc_id}/details` | Authenticated provider food details by FDC ID |
 | GET | `/v1/foods/barcode/{barcode}` | Barcode lookup (cache -> FatSecret -> OpenFoodFacts -> USDA FDC -> estimates) |
 | POST | `/v1/ingredients/recognize` | Recognize ingredients from image |
 | GET | `/v1/ingredients/health` | Ingredient recognition health |
+
+### Food Search Contract
+
+- Food search routes require Firebase JWT in production and are rate limited.
+- Search order is Redis cache, local `food_reference`, then provider fill for remaining limit.
+- Local results are returned before provider results, deduped by normalized name, and include `food_reference_id`.
+- Redis cache failures are treated as misses for optional food-search caching.
+- Provider or translation outages return bounded local results when available.
+- Calories in local results are derived from macros with the backend formula:
+  `P*4 + max(C-fiber, 0)*4 + fiber*2 + F*9`.
 
 ### Barcode Lookup Contract
 
@@ -260,6 +305,17 @@ Codes are 3–15 characters. Commission rates set via `REFERRAL_COMMISSIONS` env
 
 ---
 
+## Admin Meal Catalog
+
+Privileged endpoints require Firebase auth and an email in `ADMIN_EMAILS`.
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/v1/admin/meal-catalog` | List catalog meals with pagination, search, cuisine, meal type, image, and active filters |
+| POST | `/v1/admin/meal-catalog/{catalog_id}/generate-image` | Generate and persist an image URL for a catalog meal that is missing one |
+
+---
+
 ## Codes
 
 | Method | Endpoint | Purpose |
@@ -281,12 +337,18 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 
 ## Response Format
 
-```json
-// Success (2xx)
-{ "data": {...} }
+Successful responses generally return the route's declared payload directly;
+there is no universal `{ "data": ... }` wrapper. Handled application errors use
+the following shape:
 
-// Error (4xx, 5xx)
-{ "error": { "code": "MEAL_NOT_FOUND", "message": "Meal not found" } }
+```json
+{
+  "detail": {
+    "error_code": "MEAL_NOT_FOUND",
+    "message": "Meal not found",
+    "details": {}
+  }
+}
 ```
 
 ---
