@@ -183,15 +183,6 @@ class IngredientQuantityConversionService:
                 "incomplete_macro_snapshot",
                 f"Food reference {reference.id} has invalid fiber or sugar.",
             )
-        fiber = reference.fiber_100g or 0.0
-        sugar = reference.sugar_100g or 0.0
-        if not self._allow_implausible_macros and (
-            fiber > carbs_100g or sugar > carbs_100g or fiber + sugar > carbs_100g
-        ):
-            raise IngredientQuantityConversionError(
-                "implausible_macro_snapshot",
-                f"Food reference {reference.id} fiber or sugar exceeds carbs.",
-            )
         macro_mass = protein_100g + carbs_100g + fat_100g
         if macro_mass > 110.0 and not self._allow_implausible_macros:
             raise IngredientQuantityConversionError(
