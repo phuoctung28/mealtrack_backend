@@ -25,7 +25,7 @@ from src.infra.database.models.user.user import User
 
 
 @pytest.fixture
-def api_client(test_session) -> Generator[TestClient, None, None]:
+def api_client(test_session) -> Generator[TestClient]:
     """
     FastAPI TestClient with SQLite session and mocked 3rd party services.
 
@@ -142,9 +142,7 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     # === Mock Image Store (Cloudinary - 3rd party) ===
     from uuid import uuid4
 
-    from src.domain.ports.image_store_port import ImageStorePort
-
-    class MockImageStore(ImageStorePort):
+    class MockImageStore:
         """Mock image store that implements ImageStorePort."""
 
         def save(

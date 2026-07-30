@@ -2,16 +2,17 @@
 
 from .activity import Activity as UserActivity
 from .core_user import UserDomainModel, UserProfileDomainModel
-from .onboarding import OnboardingSection, OnboardingResponse
+from .onboarding import OnboardingResponse, OnboardingSection
 from .tdee import (
-    TdeeResponse,
-    JobType,
-    TdeeRequest,
-    Sex,
     Goal,
-    UnitSystem,
+    JobType,
+    MacroPreset,
     MacroTargets,
+    Sex,
+    TdeeRequest,
+    TdeeResponse,
     TrainingLevel,
+    UnitSystem,
 )
 from .user_macros import UserMacros
 
@@ -22,6 +23,7 @@ __all__ = [
     "UserActivity",
     "JobType",
     "TrainingLevel",
+    "MacroPreset",
     "OnboardingSection",
     "OnboardingResponse",
     "TDEE",

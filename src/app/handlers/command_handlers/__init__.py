@@ -37,6 +37,9 @@ from .recognize_ingredient_command_handler import RecognizeIngredientCommandHand
 
 # Notification handlers
 from .register_fcm_token_command_handler import RegisterFcmTokenCommandHandler
+from .save_body_fat_visual_profile_command_handler import (
+    SaveBodyFatVisualProfileCommandHandler,
+)
 
 # User handlers (newly extracted)
 from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandler
@@ -70,6 +73,7 @@ __all__ = [
     "DeleteMealCommandHandler",
     # User handlers
     "SaveUserOnboardingCommandHandler",
+    "SaveBodyFatVisualProfileCommandHandler",
     "SyncUserCommandHandler",
     "UpdateUserLastAccessedCommandHandler",
     "CompleteOnboardingCommandHandler",

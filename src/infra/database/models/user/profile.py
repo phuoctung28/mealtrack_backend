@@ -68,6 +68,8 @@ class UserProfile(Base, BaseMixin):
     goal_started_at = Column(DateTime(timezone=True), nullable=True, default=None)
     journey_progress_seed_percent = Column(Float, nullable=False, default=0.0)
     daily_water_goal_ml = Column(Integer, nullable=True, default=None)
+    # Monotonic fence for cached and weekly target materializations.
+    profile_target_revision = Column(Integer, nullable=False, default=1)
 
     @property
     def has_custom_macros(self) -> bool:

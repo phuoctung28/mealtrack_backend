@@ -19,6 +19,7 @@ def weekly_budget_orm_to_domain(orm: WeeklyMacroBudgetORM) -> WeeklyMacroBudget:
         consumed_fat=orm.consumed_fat,
         created_at=orm.created_at,
         updated_at=orm.updated_at,
+        target_revision=orm.target_revision,
     )
 
 
@@ -37,4 +38,5 @@ def weekly_budget_domain_to_orm(domain: WeeklyMacroBudget) -> WeeklyMacroBudgetO
         consumed_fat=domain.consumed_fat,
         created_at=domain.created_at,
         updated_at=domain.updated_at,
+        target_revision=domain.target_revision,
     )

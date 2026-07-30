@@ -17,6 +17,9 @@ from src.infra.repositories.affiliate_event_outbox_repository import (
 from src.infra.repositories.catalog_recipe_repository_async import (
     AsyncCatalogMealRepository,
 )
+from src.infra.repositories.body_fat_visual_profile_repository_async import (
+    AsyncBodyFatVisualProfileRepository,
+)
 from src.infra.repositories.cheat_day_repository_async import AsyncCheatDayRepository
 from src.infra.repositories.food_reference_repository_async import (
     AsyncFoodReferenceRepository,
@@ -112,6 +115,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.meals = AsyncMealRepository(session)
         self.meal_recommendation_plans = AsyncMealRecommendationPlanRepository(session)
         self.meal_suggestions = UnavailableMealSuggestionSessionStore()
+        self.body_fat_visual_profiles = AsyncBodyFatVisualProfileRepository(session)
         self.hydration_entries = AsyncHydrationRepository(session)
         self.users = AsyncUserRepository(session)
         self.weekly_budgets = AsyncWeeklyBudgetRepository(session)

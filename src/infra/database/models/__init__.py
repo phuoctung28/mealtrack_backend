@@ -61,6 +61,7 @@ from .saved_suggestion import SavedSuggestionModel
 from .saved_suggestion_item import SavedSuggestionItemModel
 from .saved_suggestion_step import SavedSuggestionStepModel
 from .subscription import Subscription
+from .user.body_fat_visual_profile import BodyFatVisualProfile
 from .user.profile import UserProfile
 from .user.profile_preference import UserProfilePreference
 
@@ -110,6 +111,7 @@ __all__ = [
     # User models
     "User",
     "UserProfile",
+    "BodyFatVisualProfile",
     "UserProfilePreference",
     "Subscription",
     # Nutrition models

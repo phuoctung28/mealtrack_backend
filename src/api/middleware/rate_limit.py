@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import json
 
+from fastapi.responses import JSONResponse
 from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 
@@ -33,3 +35,17 @@ def get_user_id_or_ip(request):
 
 
 limiter = Limiter(key_func=get_user_id_or_ip)
+
+
+async def rate_limit_exceeded_handler(request, exc: RateLimitExceeded):
+    """Stable public 429 envelope for clients that need deterministic backoff."""
+    response = JSONResponse(
+        status_code=429,
+        content={"error": "rate_limit_exceeded", "code": "preview_rate_limited"},
+    )
+    retry_after = getattr(exc, "retry_after", None)
+    if retry_after is not None:
+        response.headers["Retry-After"] = str(retry_after)
+    else:
+        response.headers["Retry-After"] = "60"
+    return response

@@ -47,6 +47,7 @@ from src.app.commands.saved_suggestion import (
 from src.app.commands.user import (
     CompleteOnboardingCommand,
     DeleteUserCommand,
+    SaveBodyFatVisualProfileCommand,
     SaveUserOnboardingCommand,
     UpdateCustomMacrosCommand,
     UpdateLanguageCommand,
@@ -84,6 +85,7 @@ from src.app.handlers.command_handlers import (
     ParseMealTextHandler,
     RecognizeIngredientCommandHandler,
     RegisterFcmTokenCommandHandler,
+    SaveBodyFatVisualProfileCommandHandler,
     SaveMealSuggestionCommandHandler,
     SaveSuggestionCommandHandler,
     SaveUserOnboardingCommandHandler,
@@ -122,6 +124,7 @@ from src.app.handlers.command_handlers.unmark_cheat_day_command_handler import (
 
 # Import all query handlers from module
 from src.app.handlers.query_handlers import (
+    GetBodyFatVisualProfileQueryHandler,
     GetBulkActivitiesQueryHandler,
     GetDailyActivitiesQueryHandler,
     GetDailyBreakdownQueryHandler,
@@ -190,6 +193,7 @@ from src.app.queries.progress import GetJourneyProgressQuery
 from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.app.queries.tdee import GetUserTdeeQuery, PreviewTdeeQuery
 from src.app.queries.user import (
+    GetBodyFatVisualProfileQuery,
     GetUserMetricsQuery,
     GetUserProfileQuery,
     GetUserTimezoneQuery,
@@ -651,6 +655,10 @@ def get_configured_event_bus() -> EventBus:
         SaveUserOnboardingCommand,
         SaveUserOnboardingCommandHandler(cache_service=cache_service),
     )
+    event_bus.register_handler(
+        SaveBodyFatVisualProfileCommand,
+        SaveBodyFatVisualProfileCommandHandler(uow=AsyncUnitOfWork()),
+    )
     event_bus.register_handler(SyncUserCommand, SyncUserCommandHandler())
     event_bus.register_handler(
         UpdateUserLastAccessedCommand, UpdateUserLastAccessedCommandHandler()
@@ -684,6 +692,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetUserProfileQuery,
         GetUserProfileQueryHandler(cache_service=cache_service),
+    )
+    event_bus.register_handler(
+        GetBodyFatVisualProfileQuery,
+        GetBodyFatVisualProfileQueryHandler(uow=AsyncUnitOfWork()),
     )
     event_bus.register_handler(
         GetUserTimezoneQuery, GetUserTimezoneQueryHandler(AsyncUnitOfWork)

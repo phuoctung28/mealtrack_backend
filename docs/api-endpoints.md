@@ -210,6 +210,16 @@ The two health routes are declared with `api_route` and answer both GET and HEAD
 |--------|----------|---------|
 | POST | `/v1/tdee/preview` | Preview TDEE calculation without saving |
 
+Preview responses carry the versioned `calculation_contract`
+`onboarding_preview_v2`. Canonical no-training is `training_days_per_week=0`
+and `training_minutes_per_session=0`; `(0, 15)` is legacy compatibility only.
+The unauthenticated endpoint rejects bodies over 8 KiB before JSON parsing and
+applies an IP-based quota. Keto uses 5/20/75 and calories are derived from the
+final macros. Custom targets require a complete triple; reset and target/cache
+revision fences keep stale responses from replacing newer targets. Body-fat
+projection data is illustrative and source-guarded. Its migration exists but
+has not been applied or deployed.
+
 ---
 
 ## Weight Entries

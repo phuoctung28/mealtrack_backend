@@ -185,6 +185,7 @@ class UserProfileMapper:
                 profile_entity.journey_progress_seed_percent or 0.0
             ),
             daily_water_goal_ml=profile_entity.daily_water_goal_ml,
+            profile_target_revision=profile_entity.profile_target_revision,
             created_at=profile_entity.created_at,
             updated_at=profile_entity.updated_at,
         )
@@ -224,6 +225,7 @@ class UserProfileMapper:
             goal_started_at=profile_domain.goal_started_at,
             journey_progress_seed_percent=profile_domain.journey_progress_seed_percent,
             daily_water_goal_ml=profile_domain.daily_water_goal_ml,
+            profile_target_revision=profile_domain.profile_target_revision,
         )
         profile.preference_entries = build_profile_preference_entries(profile_domain)
         return profile

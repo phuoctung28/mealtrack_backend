@@ -3,7 +3,6 @@ Query to preview TDEE calculation without authentication.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 from src.app.events.base import Query
 
@@ -20,6 +19,11 @@ class PreviewTdeeQuery(Query):
     training_days_per_week: int
     training_minutes_per_session: int
     goal: str
-    body_fat_percentage: Optional[float] = None
+    body_fat_percentage: float | None = None
     unit_system: str = "metric"
-    training_level: Optional[str] = None
+    training_level: str | None = None
+    diet_type: str = "classic"
+    custom_protein_g: float | None = None
+    custom_carbs_g: float | None = None
+    custom_fat_g: float | None = None
+    requested_calories: float | None = None
