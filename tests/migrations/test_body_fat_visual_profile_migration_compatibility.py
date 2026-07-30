@@ -23,6 +23,10 @@ MIGRATIONS = (
         "20260727000001_add_meal_recommendation_candidate_lifecycle.py",
         {},
     ),
+    (
+        "20260730102158384558_ensure_food_item_allowed_units.py",
+        {"food_item": {"allowed_units"}},
+    ),
 )
 
 
@@ -68,3 +72,26 @@ def test_upgrade_skips_ddl_when_legacy_body_fat_schema_exists(
     module.upgrade()
 
     assert operations.calls == []
+
+
+def test_allowed_units_repair_adds_missing_legacy_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    filename = "20260730102158384558_ensure_food_item_allowed_units.py"
+    path = Path("migrations/versions") / filename
+    spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    operations = _Operations()
+    monkeypatch.setattr(module, "op", operations)
+    monkeypatch.setattr(
+        module.sa,
+        "inspect",
+        lambda _bind: _Inspector({"food_item": {"id"}}),
+    )
+
+    module.upgrade()
+
+    assert operations.calls == ["add_column"]
