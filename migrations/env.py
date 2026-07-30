@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import UTC, datetime
 from logging.config import fileConfig
 from pathlib import Path
 
@@ -7,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from alembic import context
-from alembic.script import ScriptDirectory
 from migrations.utils import MIGRATION_URL, migration_engine
 from sqlalchemy import text
 
@@ -54,15 +54,11 @@ def _apply_migration_timeouts(connection) -> None:
     connection.commit()
 
 
-def _next_sequential_rev_id(context, revision, directives):
-    """Auto-assign sequential numeric revision IDs (048, 049, ...)."""
+def _timestamp_rev_id(context, revision, directives):
+    """Assign a UTC timestamp revision ID to avoid cross-branch collisions."""
     if not directives:
         return
-    script = directives[0]
-    head = ScriptDirectory.from_config(config).get_current_head()
-    next_id = str(int(head) + 1).zfill(3) if head and head.isdigit() else None
-    if next_id:
-        script.rev_id = next_id
+    directives[0].rev_id = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
 
 
 def run_migrations_offline() -> None:
@@ -83,7 +79,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        process_revision_directives=_next_sequential_rev_id,
+        process_revision_directives=_timestamp_rev_id,
     )
 
     with context.begin_transaction():
@@ -105,7 +101,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            process_revision_directives=_next_sequential_rev_id,
+            process_revision_directives=_timestamp_rev_id,
         )
 
         with context.begin_transaction():

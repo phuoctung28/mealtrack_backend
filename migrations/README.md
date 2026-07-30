@@ -35,9 +35,11 @@ Database migrations using Alembic with timestamp-based naming.
 
 ## Migration File Naming
 
-New migrations use timestamp format: `YYYYMMDDHHMMSS_slug.py`
+New migrations use a UTC timestamp through microseconds for both the revision ID
+and filename: `YYYYMMDDHHMMSSffffff_slug.py`. This prevents separate branches
+from generating the same date-based revision ID.
 
-Example: `20260502143022_add_user_preferences.py`
+Example: `20260502143022123456_add_user_preferences.py`
 
 Existing migrations (001-058) remain unchanged.
 
