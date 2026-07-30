@@ -14,6 +14,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    columns = {
+        column["name"] for column in inspector.get_columns("body_fat_visual_profiles")
+    }
+    if "start_range_id" in columns:
+        return
+
     op.add_column(
         "body_fat_visual_profiles",
         sa.Column("start_range_id", sa.String(length=20), nullable=True),

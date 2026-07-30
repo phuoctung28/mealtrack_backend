@@ -14,6 +14,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    if inspector.has_table("body_fat_visual_profiles"):
+        return
+
     op.create_table(
         "body_fat_visual_profiles",
         sa.Column("id", sa.String(length=36), nullable=False),
