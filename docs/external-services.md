@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
-**Last Updated:** July 29, 2026
-**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, USDA FoodData Central, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
+**Last Updated:** July 31, 2026
+**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, Paddle, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, USDA FoodData Central, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
@@ -29,6 +29,18 @@
 - Cron push entrypoint (`src/cron/push.py`) owns all push scheduling: precompute notification rows, schedule trial-expiry rows, claim due rows, batch-send, mark sent, clean expired rows
 - Cron dispatch helper (`CronNotificationDispatchService`) uses database row claiming (`pending` → `processing`) plus stale-processing recovery instead of a background loop or leader lock
 - APNs diagnostics surfaced at `/v1/health/notifications` via `apns_diagnostics()` to verify `interruption-level` placement
+
+---
+
+## Paddle Web Subscriptions
+
+**Purpose:** Fulfill web checkout subscriptions and provide Paddle-hosted self-service billing.
+
+- `POST /v1/webhooks/paddle` verifies the unparsed request bytes using the Paddle Python SDK and `PADDLE_WEBHOOK_SIGNING_SECRET` before decoding the payload.
+- Verified customer and subscription events upsert existing provider-specific user and subscription records by Paddle ID; a transaction received before its subscription returns non-2xx so Paddle retries it.
+- The access helper grants paid access only for `active` or `trialing` Paddle subscriptions. Scheduled changes are retained for visibility and do not revoke access before the actual status changes.
+- `GET /v1/billing/paddle/customer-portal` requires Firebase authentication, resolves the Paddle customer server-side, and redirects to a temporary Paddle-hosted portal session.
+- `PADDLE_ENVIRONMENT` is required explicitly (`production` for live; `sandbox` for sandbox). `PADDLE_API_KEY` is server-only and distinct from the notification signing secret.
 
 ---
 

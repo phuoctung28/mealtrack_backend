@@ -9,6 +9,13 @@
 
 ## Completed Phases
 
+### July 2026: Paddle Web Subscription Fulfillment
+- [x] Added verified, idempotent Paddle webhook handling for customer, subscription, and completed-transaction lifecycle events.
+- [x] Extended existing user and subscription records with provider-specific Paddle identifiers, preserving RevenueCat records alongside Paddle state.
+- [x] Paddle paid access grants only for `active` and `trialing` subscriptions; scheduled cancellation or pause is retained as state rather than revoking access early.
+- [x] Added authenticated Paddle customer-portal redirects that resolve the Paddle customer from the server-side user link.
+- [ ] Live rollout remains gated on the existing pending migration chain, the permanent notification destination, its signing secret, and deployed environment configuration.
+
 ### July 2026: Meal Catalog Phase 0 Production Foundation
 - [x] Four-table catalog recommendation foundation uses `meal_catalog`, `meal_catalog_ingredients`, `meal_recommendations`, and `meal_recommendation_operations`.
 - [x] Catalog import is additive, content-hash protected, serialized, and withholds near duplicates for explicit review.

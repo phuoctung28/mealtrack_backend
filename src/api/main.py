@@ -50,6 +50,7 @@ from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.admin_meal_catalog import router as admin_meal_catalog_router
 from src.api.routes.v1.admin_meal_catalog_import import router as admin_meal_catalog_import_router
+from src.api.routes.v1.billing import router as billing_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
@@ -65,6 +66,7 @@ from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.movement import router as movement_router
 from src.api.routes.v1.notifications import router as notifications_router
+from src.api.routes.v1.paddle_webhooks import router as paddle_webhooks_router
 from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.progress import router as progress_router
 from src.api.routes.v1.promo_codes import router as promo_codes_router
@@ -329,6 +331,8 @@ app.include_router(users_router)
 app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
+app.include_router(paddle_webhooks_router)
+app.include_router(billing_router)
 app.include_router(notifications_router)
 app.include_router(hydration_router)
 app.include_router(ingredients_router)
