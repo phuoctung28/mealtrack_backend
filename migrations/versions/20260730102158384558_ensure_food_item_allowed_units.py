@@ -24,10 +24,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    inspector = sa.inspect(op.get_bind())
-    if not inspector.has_table("food_item"):
-        return
-
-    columns = {column["name"] for column in inspector.get_columns("food_item")}
-    if "allowed_units" in columns:
-        op.drop_column("food_item", "allowed_units")
+    """Preserve a column that may have existed before this forward repair."""
