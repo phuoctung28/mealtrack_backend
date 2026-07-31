@@ -66,7 +66,7 @@ def test_repair_creates_missing_catalog_branch_from_an_empty_catalog_schema(
     assert operations.calls.count("add_column") == 4
     assert operations.calls.count("create_check_constraint") == 3
     assert operations.calls.count("drop_constraint") == 2
-    assert operations.calls.count("execute") == 3
+    assert operations.calls.count("execute") == 4
 
 
 def test_repair_leaves_complete_catalog_schema_unchanged(
@@ -87,7 +87,27 @@ def test_repair_leaves_complete_catalog_schema_unchanged(
 
     module.upgrade()
 
-    assert operations.calls == ["execute", "execute"]
+    assert operations.calls == ["execute", "execute", "execute"]
+
+
+def test_repair_restores_normalized_name_uniqueness_for_seed_upserts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_migration()
+    operations = _Operations()
+
+    monkeypatch.setattr(module, "op", operations)
+    monkeypatch.setattr(
+        module.sa,
+        "inspect",
+        lambda _bind: _Inspector({"food_reference": {"id", "name_normalized"}}),
+    )
+
+    module._ensure_food_reference_search_index(
+        module.sa.inspect(operations.get_bind())
+    )
+
+    assert operations.calls == ["execute", "execute", "execute"]
 
 
 def test_repair_fails_closed_for_a_partial_catalog_schema(

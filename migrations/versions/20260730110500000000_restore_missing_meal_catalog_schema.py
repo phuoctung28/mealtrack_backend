@@ -112,6 +112,10 @@ def _ensure_food_reference_search_index(inspector: sa.Inspector) -> None:
     if "name_normalized" not in columns:
         raise RuntimeError("food_reference.name_normalized is required for catalog search")
 
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_food_reference_name_normalized "
+        "ON food_reference (name_normalized)"
+    )
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_food_reference_name_normalized_trgm "

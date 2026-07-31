@@ -95,3 +95,26 @@ def test_allowed_units_repair_adds_missing_legacy_column(
     module.upgrade()
 
     assert operations.calls == ["add_column"]
+
+
+def test_allowed_units_repair_downgrade_preserves_existing_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    filename = "20260730102158384558_ensure_food_item_allowed_units.py"
+    path = Path("migrations/versions") / filename
+    spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    operations = _Operations()
+    monkeypatch.setattr(module, "op", operations)
+    monkeypatch.setattr(
+        module.sa,
+        "inspect",
+        lambda _bind: _Inspector({"food_item": {"id", "allowed_units"}}),
+    )
+
+    module.downgrade()
+
+    assert operations.calls == []
