@@ -175,13 +175,17 @@ class TestSaveImage:
                 # Should return the UUID when secure_url is missing
                 assert result == "12345678-1234-5678-1234-567812345678"
 
-    def test_save_upload_error(self, cloudinary_store, sample_image_bytes):
+    def test_save_upload_error(self, cloudinary_store, sample_image_bytes, caplog):
         """Test save handles upload errors."""
         with patch("cloudinary.uploader.upload") as mock_upload:
-            mock_upload.side_effect = Exception("Upload failed")
+            mock_upload.side_effect = Exception("Upload failed secret-detail")
 
-            with pytest.raises(Exception, match="Upload failed"):
-                cloudinary_store.save(sample_image_bytes, "image/jpeg")
+            with pytest.raises(Exception, match="Upload failed secret-detail"):
+                with caplog.at_level("ERROR"):
+                    cloudinary_store.save(sample_image_bytes, "image/jpeg")
+
+        assert "Cloudinary upload failed error_type=Exception" in caplog.text
+        assert "secret-detail" not in caplog.text
 
     def test_save_generates_unique_ids(self, cloudinary_store, sample_image_bytes):
         """Test that save generates unique IDs for different uploads."""

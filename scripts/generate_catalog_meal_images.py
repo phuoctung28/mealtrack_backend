@@ -79,47 +79,79 @@ async def _run(args) -> dict[str, int]:
             catalog_keys=tuple(args.catalog_key),
             include_existing=args.include_existing,
         )
-        selected = len(meals)
-        for meal in meals:
-            prompt = build_catalog_meal_image_prompt(meal)
-            print(f"meal={meal.catalog_key} name={meal.name}")
-            print(f"prompt={prompt}")
-            if args.dry_run:
-                continue
-            try:
-                if generator is None:
-                    raise RuntimeError("Cloudflare image generator is not initialized")
-                image_url = await generator.generate_url(
-                    prompt,
-                    quality=args.quality,
-                    size=args.size,
-                    output_format=args.output_format,
-                )
-            except Exception as exc:  # noqa: BLE001
-                failed += 1
-                print(
-                    f"image_generation_failed catalog_key={meal.catalog_key}: {exc}",
-                    file=sys.stderr,
-                )
-                continue
-            persisted = await _set_image_url(
-                uow.session,
+    selected = len(meals)
+
+    for meal in meals:
+        prompt = build_catalog_meal_image_prompt(meal)
+        print(f"meal={meal.catalog_key} name={meal.name}")
+        if args.dry_run:
+            continue
+        try:
+            if generator is None:
+                raise RuntimeError("Cloudflare image generator is not initialized")
+            image_url = await generator.generate_url(
+                prompt,
+                quality=args.quality,
+                size=args.size,
+                output_format=args.output_format,
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(
+                f"image_generation_failed catalog_key={meal.catalog_key} "
+                f"error={_error_code(exc)}",
+                file=sys.stderr,
+            )
+            continue
+        try:
+            persisted = await _persist_image_url(
                 str(meal.id),
                 image_url,
                 include_existing=args.include_existing,
             )
-            if persisted:
-                await uow.commit()
-                updated += 1
-                print(f"image_url={image_url}")
-            else:
-                await uow.rollback()
-                skipped += 1
-                print(
-                    f"image_generation_skipped catalog_key={meal.catalog_key}: image_url already set",
-                    file=sys.stderr,
-                )
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(
+                f"image_persistence_failed catalog_key={meal.catalog_key} "
+                f"error={_error_code(exc)}",
+                file=sys.stderr,
+            )
+            continue
+        if persisted:
+            updated += 1
+            print(f"image_generation_updated catalog_key={meal.catalog_key}")
+        else:
+            skipped += 1
+            print(
+                f"image_generation_skipped catalog_key={meal.catalog_key}: image_url already set",
+                file=sys.stderr,
+            )
     return {"selected": selected, "updated": updated, "skipped": skipped, "failed": failed}
+
+
+async def _persist_image_url(
+    catalog_id: str,
+    image_url: str,
+    *,
+    include_existing: bool,
+) -> bool:
+    """Persist one generated URL without keeping a DB transaction open during I/O."""
+    async with AsyncUnitOfWork() as uow:
+        if uow.session is None:
+            raise RuntimeError("AsyncUnitOfWork did not initialize a database session")
+        return await _set_image_url(
+            uow.session,
+            catalog_id,
+            image_url,
+            include_existing=include_existing,
+        )
+
+
+def _error_code(exc: Exception) -> str:
+    """Return an actionable error category without exposing provider details."""
+    if "invalid signature" in str(exc).lower():
+        return "cloudinary_signature_invalid"
+    return type(exc).__name__
 
 
 async def _load_target_meals(
