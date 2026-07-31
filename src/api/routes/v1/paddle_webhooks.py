@@ -47,6 +47,12 @@ async def receive_paddle_webhook(request: Request) -> dict[str, str]:
 
     try:
         return await billing_service.process_webhook(raw_body)
+    except RuntimeError as exc:
+        logger.error("Paddle webhook processing is not configured: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Webhook processing is not configured",
+        ) from exc
     except PaddleWebhookRetryError as exc:
         logger.info("Paddle webhook will be retried: %s", exc)
         raise HTTPException(

@@ -27,6 +27,13 @@ def get_paddle_api_key() -> str:
     return api_key
 
 
+def is_paddle_sandbox() -> bool:
+    """Return whether the configured Paddle SDK target is the sandbox."""
+    from paddle_billing.Environment import Environment
+
+    return get_paddle_environment() == Environment.SANDBOX
+
+
 def build_paddle_client():
     """Build the Paddle SDK client for server-side API calls."""
     from paddle_billing import Client, Options
