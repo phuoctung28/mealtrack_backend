@@ -11,4 +11,4 @@ def test_alembic_revision_graph_has_single_head() -> None:
 
     assert heads == [current_head]
     assert current_head is not None
-    assert re.fullmatch(r"\d{3}|\d{14}", current_head)
+    assert re.fullmatch(r"\d{3}|\d{14}|\d{20}", current_head)

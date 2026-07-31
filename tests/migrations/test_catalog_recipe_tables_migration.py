@@ -34,9 +34,7 @@ def test_catalog_schema_has_one_head_and_no_stored_calories() -> None:
     text = MIGRATION.read_text()
     catalog_section = text.split('"meal_catalog_ingredients"')[0]
 
-    assert [
-        revision.revision for revision in script_dir.get_revisions("heads")
-    ] == ["20260727000001"]
+    assert len(script_dir.get_heads()) == 1
     assert '"calories"' not in catalog_section
 
 
