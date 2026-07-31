@@ -16,6 +16,7 @@ from src.domain.exceptions.paddle_billing_exceptions import PaddleWebhookRetryEr
 from src.domain.utils.timezone_utils import ensure_utc, utc_now
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
+from src.infra.services.paddle_client import is_paddle_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ async def _handle_subscription(session: AsyncSession, data: dict[str, object]) -
             scheduled_change.get("effective_at") or scheduled_change.get("resume_at")
         ),
         store_transaction_id=None,
-        is_sandbox=False,
+        is_sandbox=is_paddle_sandbox(),
         created_at=created_at,
         updated_at=updated_at,
     )
@@ -174,6 +175,7 @@ async def _handle_subscription(session: AsyncSession, data: dict[str, object]) -
                     Subscription.user_id, statement.excluded.user_id
                 ),
                 "provider_customer_id": customer_id,
+                "is_sandbox": statement.excluded.is_sandbox,
                 "status": status,
                 "price_id": price_id,
                 "product_id": product_id,
