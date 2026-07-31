@@ -6,12 +6,13 @@ Uses RevenueCat as source of truth, with local cache for performance.
 
 import logging
 import os
-from typing import Optional
 
-from fastapi import Request, HTTPException, status
+from fastapi import HTTPException, Request, status
 
-from src.domain.ports.subscription_service_port import SubscriptionServicePort
 from src.api.base_dependencies import get_subscription_service
+from src.app.services.paddle_billing_service import PaddleBillingService
+from src.bootstrap.paddle_billing import get_paddle_billing_service
+from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 def _get_subscription_service() -> SubscriptionServicePort:
     """Helper to get subscription service - can be overridden in tests."""
     return get_subscription_service()
+
+
+def _get_paddle_billing_service() -> PaddleBillingService:
+    return get_paddle_billing_service()
 
 
 async def require_subscription(request: Request):
@@ -44,6 +49,10 @@ async def require_subscription(request: Request):
     # Quick check: Local database cache
     if user.has_active_subscription():
         logger.debug(f"User {user.id} has cached subscription")
+        return
+
+    if await _user_has_paddle_access(str(user.id)):
+        logger.debug("User %s has active Paddle subscription", user.id)
         return
 
     # No local subscription - verify with RevenueCat (source of truth)
@@ -120,6 +129,23 @@ async def get_subscription_status(request: Request) -> dict:
             "source": "cache",
         }
 
+    paddle_subscription = await _get_active_paddle_subscription(str(user.id))
+    if paddle_subscription:
+        return {
+            "has_subscription": True,
+            "subscription": {
+                "product_id": paddle_subscription.product_id,
+                "expires_at": (
+                    paddle_subscription.expires_at.isoformat()
+                    if paddle_subscription.expires_at
+                    else None
+                ),
+                "price_id": paddle_subscription.price_id,
+                "status": paddle_subscription.status,
+            },
+            "source": "paddle_webhook",
+        }
+
     # Check RevenueCat if configured
     revenuecat_secret_key = os.getenv("REVENUECAT_SECRET_API_KEY", "")
     if revenuecat_secret_key:
@@ -134,3 +160,21 @@ async def get_subscription_status(request: Request) -> dict:
             }
 
     return {"has_subscription": False, "subscription": None, "source": "none"}
+
+
+async def _user_has_paddle_access(user_id: str) -> bool:
+    """Use the verified Paddle mirror without making an external API call."""
+    try:
+        return await _get_paddle_billing_service().user_has_access(user_id)
+    except Exception:
+        logger.exception("Paddle entitlement lookup failed for user %s", user_id)
+        return False
+
+
+async def _get_active_paddle_subscription(user_id: str):
+    """Read the active Paddle record for the non-blocking status dependency."""
+    try:
+        return await _get_paddle_billing_service().get_active_subscription(user_id)
+    except Exception:
+        logger.exception("Paddle subscription lookup failed for user %s", user_id)
+        return None

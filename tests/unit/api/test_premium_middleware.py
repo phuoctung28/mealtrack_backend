@@ -9,14 +9,28 @@ import pytest
 from fastapi import HTTPException, Request
 
 from src.api.middleware.premium_check import (
-    require_subscription,
     get_subscription_status,
+    require_subscription,
 )
 
 
 @pytest.mark.asyncio
 class TestSubscriptionMiddleware:
     """Test suite for subscription middleware."""
+
+    @pytest.fixture(autouse=True)
+    def no_paddle_subscription(self):
+        with (
+            patch(
+                "src.api.middleware.premium_check._user_has_paddle_access",
+                new=AsyncMock(return_value=False),
+            ),
+            patch(
+                "src.api.middleware.premium_check._get_active_paddle_subscription",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            yield
 
     @pytest.fixture
     def mock_request(self):
@@ -94,6 +108,19 @@ class TestSubscriptionMiddleware:
                 mock_service.has_active_subscription.assert_called_once_with(
                     app_user_id="firebase_uid_456"
                 )
+
+    async def test_require_subscription_allows_verified_paddle_access(
+        self, mock_request, mock_user_without_subscription
+    ):
+        mock_request.state.user = mock_user_without_subscription
+
+        with patch(
+            "src.api.middleware.premium_check._user_has_paddle_access",
+            new=AsyncMock(return_value=True),
+        ):
+            result = await require_subscription(mock_request)
+
+        assert result is None
 
     async def test_require_subscription_denies_without_any_subscription(
         self, mock_request, mock_user_without_subscription

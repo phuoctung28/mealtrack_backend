@@ -63,3 +63,4 @@ resend==2.30.1
 
 # Template rendering
 jinja2==3.1.6
+paddle-python-sdk==1.15.0
