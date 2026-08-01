@@ -24,6 +24,12 @@ def upgrade() -> None:
         sa.Column("onboarding_payload", sa.JSON(), nullable=True),
         sa.Column("plan_snapshot", sa.JSON(), nullable=True),
         sa.Column("state", sa.String(length=32), nullable=False),
+        sa.Column(
+            "access_sync_status",
+            sa.String(length=16),
+            nullable=False,
+            server_default="pending",
+        ),
         sa.Column("revenuecat_app_user_id", sa.String(length=64), nullable=False, unique=True),
         sa.Column("revenuecat_transaction_id", sa.String(length=255), nullable=True, unique=True),
         sa.Column("revenuecat_store", sa.String(length=32), nullable=True),
