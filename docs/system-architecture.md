@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** July 31, 2026
+**Last Updated:** July 29, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 704 Python files, 65,423 LOC in `src/`
@@ -61,18 +61,6 @@ device, and purchase gates remain open.
 ---
 
 ## Key Architectural Patterns
-
-### Verified Subscription Fulfillment
-
-Paddle checkout is not an entitlement signal. The API accepts Paddle notifications at
-`/v1/webhooks/paddle`, verifies the exact raw body before decoding it, and upserts the
-provider-specific customer link or subscription in the same database transaction. Paddle
-state uses provider-specific fields on the existing user and subscription records, so
-RevenueCat state remains intact. Premium access is determined server-side from verified
-Paddle subscription status: `active` and `trialing` grant access; a scheduled change
-does not revoke access until Paddle reports an actual non-granting status.
-The API calls an application service through a domain port; its Paddle SDK and database
-adapter is assembled only in `src/bootstrap/paddle_billing.py`.
 
 ### Dependency Inversion
 Domain defines port interfaces; infrastructure implements them. Handlers depend on abstractions.

@@ -21,7 +21,6 @@ class User(Base, BaseMixin):
 
     # Basic Information
     email = Column(String(255), unique=True, nullable=False)
-    paddle_customer_id = Column(String(64), unique=True, nullable=True)
     username = Column(String(100), unique=True, nullable=False)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
