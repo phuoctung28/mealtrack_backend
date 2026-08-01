@@ -49,7 +49,9 @@ from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.admin_meal_catalog import router as admin_meal_catalog_router
-from src.api.routes.v1.admin_meal_catalog_import import router as admin_meal_catalog_import_router
+from src.api.routes.v1.admin_meal_catalog_import import (
+    router as admin_meal_catalog_import_router,
+)
 from src.api.routes.v1.billing import router as billing_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.codes import router as codes_router
@@ -66,8 +68,8 @@ from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.movement import router as movement_router
 from src.api.routes.v1.notifications import router as notifications_router
-from src.api.routes.v1.paddle_webhooks import router as paddle_webhooks_router
 from src.api.routes.v1.nutrition import router as nutrition_router
+from src.api.routes.v1.paddle_webhooks import router as paddle_webhooks_router
 from src.api.routes.v1.progress import router as progress_router
 from src.api.routes.v1.promo_codes import router as promo_codes_router
 from src.api.routes.v1.referrals import router as referrals_router
@@ -75,6 +77,7 @@ from src.api.routes.v1.saved_suggestions import router as saved_suggestions_rout
 from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
+from src.api.routes.v1.web_funnel import router as web_funnel_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.api.routes.well_known import router as well_known_router
@@ -293,6 +296,7 @@ if allowed_origins:
         allow_origins=allowed_origins,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Lead-Access-Key"],
     )
 
 # Request/Response logging
@@ -332,6 +336,7 @@ app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
 app.include_router(paddle_webhooks_router)
+app.include_router(web_funnel_router)
 app.include_router(billing_router)
 app.include_router(notifications_router)
 app.include_router(hydration_router)
