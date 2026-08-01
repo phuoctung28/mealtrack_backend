@@ -106,7 +106,15 @@ async def revenuecat_webhook(
                 logger.info("RevenueCat transfer ignored: target user not found")
                 return {"status": "ignored", "reason": "user_not_found"}
             await handle_transfer(uow, event)
-            await sync_transfer_target_subscription(uow, user, event)
+            await sync_redeemed_target_subscription(uow, user, event)
+            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
+            return {"status": "success"}
+
+        if event_type == "PURCHASE_REDEEMED":
+            if not user:
+                logger.info("RevenueCat purchase redemption target user not found")
+                raise HTTPException(status_code=404, detail="User not found")
+            await sync_redeemed_target_subscription(uow, user, event)
             increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
             return {"status": "success"}
 
@@ -154,6 +162,7 @@ def _candidate_revenuecat_ids(event: dict) -> list[str]:
         event.get("app_user_id"),
         event.get("original_app_user_id"),
         *(event.get("aliases") or []),
+        *(event.get("redeemed_by") or []),
         *(event.get("transferred_to") or []),
         *(event.get("transferred_from") or []),
     ]
@@ -251,13 +260,14 @@ async def handle_transfer(uow, event):
     )
 
 
-async def sync_transfer_target_subscription(uow, user: User, event: dict) -> None:
-    """Refresh the target Firebase user's cache after an anonymous-to-known transfer."""
+async def sync_redeemed_target_subscription(uow, user: User, event: dict) -> None:
+    """Refresh the target Firebase user's cache after a RevenueCat redemption."""
     current = await _get_subscription_service().get_subscription_info(user.firebase_uid)
     if not current:
-        logger.info("RevenueCat transfer has no active target entitlement")
+        logger.info("RevenueCat redemption has no active target entitlement")
         return
 
+    await _lock_subscription_cache(uow, user.firebase_uid)
     subscription = await get_subscription_by_revenuecat_id(uow, user.firebase_uid)
     if subscription is None:
         subscription = Subscription(
@@ -281,6 +291,14 @@ async def sync_transfer_target_subscription(uow, user: User, event: dict) -> Non
     subscription.status = "active"
     subscription.expires_at = _parse_revenuecat_expiry(current.get("expires_date"))
     subscription.updated_at = utc_now()
+
+
+async def _lock_subscription_cache(uow, firebase_uid: str) -> None:
+    """Serialize cache creation for duplicate webhook deliveries of one user."""
+    await uow.session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:firebase_uid))"),
+        {"firebase_uid": firebase_uid},
+    )
 
 
 def _parse_revenuecat_expiry(value: object) -> datetime | None:
@@ -623,6 +641,7 @@ def parse_platform(store: str) -> str:
     store_map = {
         "APP_STORE": "ios",
         "PLAY_STORE": "android",
+        "PADDLE": "web",
         "STRIPE": "web",
         "MAC_APP_STORE": "ios",
     }
