@@ -36,7 +36,6 @@ from .user_requests import (
     UserSyncRequest,
     UserUpdateLastAccessedRequest,
 )
-from .web_funnel_requests import CompleteWebFunnelClaimRequest, CreateWebFunnelLeadRequest
 
 __all__ = [
     # Meal
@@ -63,6 +62,4 @@ __all__ = [
     "AuthProviderEnum",
     # Ingredient recognition
     "IngredientRecognitionRequest",
-    "CreateWebFunnelLeadRequest",
-    "CompleteWebFunnelClaimRequest",
 ]

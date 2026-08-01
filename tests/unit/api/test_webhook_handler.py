@@ -196,6 +196,35 @@ class TestWebhookHandler:
 
                 assert result == {"status": "ignored", "reason": "user_not_found"}
 
+    async def test_webhook_anonymous_purchase_is_acknowledged(self, mock_request):
+        """Anonymous checkout events must not retry before Firebase redemption."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "INITIAL_PURCHASE",
+                "app_user_id": "$RCAnonymousID:checkout",
+            }
+        }
+
+        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
+            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(
+                    return_value=None
+                )
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+                mock_uow_class.return_value = mock_uow
+
+                result = await revenuecat_webhook(
+                    mock_request, authorization="test_secret"
+                )
+
+        assert result == {"status": "ignored", "reason": "user_not_found"}
+
     async def test_find_user_for_revenuecat_event_matches_uuid_string_user_id(self):
         """UUID-shaped RevenueCat IDs must be compared against string User.id values."""
         user_id = "1d599ac9-1f3f-4697-b11f-92e30584bb2b"
@@ -215,8 +244,8 @@ class TestWebhookHandler:
         id_lookup = mock_uow.session.execute.await_args_list[1].args[0]
         assert id_lookup.compile().params["id_1"] == user_id
 
-    async def test_webhook_transfer_without_user_acknowledged(self, mock_request):
-        """Test RevenueCat TRANSFER webhooks do not require app_user_id lookup."""
+    async def test_webhook_transfer_without_target_user_is_acknowledged(self, mock_request):
+        """Anonymous transfers ACK when no Firebase target exists yet."""
         mock_request.json.return_value = {
             "event": {
                 "type": "TRANSFER",
@@ -232,11 +261,68 @@ class TestWebhookHandler:
                 mock_uow.__aexit__ = AsyncMock(return_value=False)
                 mock_uow.subscriptions = MagicMock()
                 mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
                 mock_uow_class.return_value = mock_uow
 
                 result = await revenuecat_webhook(mock_request, authorization="test_secret")
 
-                assert result == {"status": "success"}
+                assert result == {"status": "ignored", "reason": "user_not_found"}
+
+    async def test_webhook_transfer_syncs_target_user_from_revenuecat(
+        self, mock_request
+    ):
+        """A transfer to a Firebase UID creates its RevenueCat-backed cache row."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "TRANSFER",
+                "transferred_from": ["$RCAnonymousID:checkout"],
+                "transferred_to": ["firebase_uid_123"],
+                "store": "STRIPE",
+                "environment": "PRODUCTION",
+            }
+        }
+        target_user = MagicMock(id="user_123", firebase_uid="firebase_uid_123")
+        mock_service = MagicMock()
+        mock_service.get_subscription_info = AsyncMock(
+            return_value={
+                "product_id": "premium_monthly",
+                "expires_date": datetime(2026, 8, 31),
+                "store": "STRIPE",
+            }
+        )
+
+        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
+            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(
+                    side_effect=[None, None, None]
+                )
+                no_user = MagicMock()
+                no_user.scalars.return_value.first.return_value = None
+                found_user = MagicMock()
+                found_user.scalars.return_value.first.return_value = target_user
+                mock_uow.session.execute = AsyncMock(side_effect=[no_user, found_user])
+                mock_uow_class.return_value = mock_uow
+
+                with patch(
+                    "src.api.routes.v1.webhooks._get_subscription_service",
+                    return_value=mock_service,
+                ):
+                    result = await revenuecat_webhook(
+                        mock_request, authorization="test_secret"
+                    )
+
+        assert result == {"status": "success"}
+        mock_service.get_subscription_info.assert_awaited_once_with("firebase_uid_123")
+        subscription = mock_uow.session.add.call_args.args[0]
+        assert subscription.user_id == "user_123"
+        assert subscription.revenuecat_subscriber_id == "firebase_uid_123"
+        assert subscription.product_id == "premium_monthly"
 
     async def test_webhook_invalid_json(self, mock_request):
         """Test webhook with invalid JSON."""

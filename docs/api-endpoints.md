@@ -1,6 +1,6 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** July 31, 2026
+**Last Updated:** July 29, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
@@ -326,23 +326,12 @@ Privileged endpoints require Firebase auth and an email in `ADMIN_EMAILS`.
 
 ## Webhooks
 
-Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER). Signature verified via constant-time HMAC; events mirrored to PostHog when `POSTHOG_API_KEY` is set. Paddle deliveries use a distinct SDK-verified raw-body endpoint and are idempotent by event ID.
+Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER). Signature verified via constant-time HMAC; events mirrored to PostHog when `POSTHOG_API_KEY` is set.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/v1/webhooks/revenuecat` | RevenueCat subscription webhook |
 | GET | `/v1/webhooks/revenuecat/health` | Webhook health check |
-| POST | `/v1/webhooks/paddle` | Verified Paddle customer, subscription, and transaction webhook |
-
----
-
-## Billing
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/v1/billing/paddle/customer-portal` | Authenticated redirect to a temporary Paddle-hosted billing portal session |
-
----
 
 ## Response Format
 

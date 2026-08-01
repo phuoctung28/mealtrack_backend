@@ -75,12 +75,6 @@ from .user_responses import (
     UserSyncResponse,
     UserUpdateResponse,
 )
-from .web_funnel_responses import (
-    WebFunnelClaimRecoveryResponse,
-    WebFunnelClaimResultResponse,
-    WebFunnelLeadCreatedResponse,
-    WebFunnelLeadStatusResponse,
-)
 
 __all__ = [
     # Meal
@@ -128,9 +122,4 @@ __all__ = [
     # Ingredient recognition
     "IngredientRecognitionResponse",
     "IngredientCategoryEnum",
-    # Web funnel
-    "WebFunnelLeadCreatedResponse",
-    "WebFunnelLeadStatusResponse",
-    "WebFunnelClaimResultResponse",
-    "WebFunnelClaimRecoveryResponse",
 ]

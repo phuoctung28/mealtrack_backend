@@ -54,7 +54,7 @@ class AsyncSubscriptionRepository(SubscriptionRepositoryPort):
             select(Subscription).where(
                 and_(
                     Subscription.user_id == user_id,
-                    Subscription.status.in_(("active", "trialing")),
+                    Subscription.status == "active",
                 )
             )
         )

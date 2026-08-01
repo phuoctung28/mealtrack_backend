@@ -42,7 +42,6 @@ dependencies = [
     "sentry-sdk[fastapi]==2.62.0",
     "resend==2.30.1",
     "jinja2==3.1.6",
-    "paddle-python-sdk==1.15.0",
     "langchain-openai>=1.3.0,<2.0.0",
     "langgraph==1.2.8",
 ]
