@@ -159,16 +159,16 @@ class TestWebhookHandler:
                         return_value=subscription_service,
                     ),
                     patch(
-                        "src.api.routes.v1.webhooks.dispatch_web_funnel_outbox",
-                        new_callable=AsyncMock,
-                    ) as dispatch,
+                        "src.api.routes.v1.webhooks.get_web_funnel_outbox_dispatcher",
+                        return_value=AsyncMock(),
+                    ) as get_dispatcher,
                 ):
                     result = await revenuecat_webhook(mock_request, authorization="test_secret")
 
         assert result == {"status": "success"}
         subscription_service.get_subscriber_info.assert_awaited_once_with(lead_id)
         assert reconcile.await_args.args[2] == subscriber
-        dispatch.assert_awaited_once_with(lead_id=lead_id)
+        get_dispatcher.return_value.assert_awaited_once_with(lead_id=lead_id)
 
     async def test_webhook_user_not_found_redacts_provider_ids(
         self, mock_request, webhook_event, caplog

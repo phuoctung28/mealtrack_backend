@@ -15,6 +15,7 @@ from sqlalchemy import select, text
 
 from src.api.base_dependencies import get_subscription_service
 from src.app.services.web_funnel_claim_payment import reconcile_revenuecat_event
+from src.bootstrap.web_funnel_claim_dispatcher import get_web_funnel_outbox_dispatcher
 from src.domain.ports.subscription_service_port import SubscriptionServicePort
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
@@ -24,9 +25,6 @@ from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
-from src.infra.services.web_funnel_outbox_dispatch_service import (
-    dispatch_web_funnel_outbox,
-)
 from src.observability import increment_metric
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
@@ -112,7 +110,7 @@ async def revenuecat_webhook(
                 if await reconcile_revenuecat_event(
                     web_funnel_uow.session, event, subscriber
                 ):
-                    await dispatch_web_funnel_outbox(lead_id=lead_id)
+                    await get_web_funnel_outbox_dispatcher()(lead_id=lead_id)
                     return {"status": "success"}
 
     logger.info(
