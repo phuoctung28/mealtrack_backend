@@ -60,7 +60,12 @@ async def exchange_claim(
             identity, claim.reservation_id, claim.generation
         )
     except FirebaseIdentityConflict:
-        await db.rollback()
+        # The reservation has already committed to serialize concurrent exchanges.
+        # A provider conflict is terminal under the no-provider-linking policy, so
+        # persist an explicit outcome instead of attempting to roll back that commit.
+        claim.revoked_at = utcnow()
+        lead.status = "conflict"
+        await db.commit()
         raise claim_conflict() from None
     except Exception:
         # The proof-bound reservation remains retryable until it expires.

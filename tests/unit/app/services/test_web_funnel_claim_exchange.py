@@ -3,11 +3,15 @@
 from datetime import timedelta
 
 import pytest
+from fastapi import HTTPException
 
 from src.app.services.web_funnel_claim_common import hash_secret, utcnow
 from src.app.services.web_funnel_claim_exchange import exchange_claim
 from src.infra.database.models.web_funnel_claim import WebFunnelClaim, WebFunnelLead
-from src.infra.services.web_funnel_firebase_identity import FirebaseIdentity
+from src.infra.services.web_funnel_firebase_identity import (
+    FirebaseIdentity,
+    FirebaseIdentityConflict,
+)
 
 
 class FakeExchangeSession:
@@ -39,6 +43,11 @@ class FakeFirebase:
         return "firebase-custom-token"
 
 
+class ConflictFirebase:
+    async def resolve(self, _lead_id, _email):
+        raise FirebaseIdentityConflict()
+
+
 @pytest.mark.asyncio
 async def test_exchange_reserves_claim_and_persists_hashes_not_returned_secrets():
     magic, retry = "m" * 48, "r" * 48
@@ -64,3 +73,19 @@ async def test_exchange_retry_retains_provisional_cleanup_ownership():
     await exchange_claim(session, magic, retry, firebase)
     assert claim.provisional_reservation_uid == "wf-uid"
     assert lead.status == "claim_reserved"
+
+
+@pytest.mark.asyncio
+async def test_exchange_persists_terminal_conflict_after_reservation_commit():
+    magic, retry = "m" * 48, "r" * 48
+    lead = WebFunnelLead(id="lead-1", email="buyer@example.com", access_key_hash="key", request_id="request", snapshot_version="v1", snapshot={}, snapshot_hash="snapshot", status="email_queued", revision=1, access_sync_status="pending")
+    claim = WebFunnelClaim(id="claim-1", lead_id="lead-1", generation=1, magic_token_hash=hash_secret(magic), expires_at=utcnow() + timedelta(hours=1))
+    session = FakeExchangeSession(claim, lead)
+
+    with pytest.raises(HTTPException) as exc:
+        await exchange_claim(session, magic, retry, ConflictFirebase())
+
+    assert exc.value.status_code == 409
+    assert session.commits == 2
+    assert lead.status == "conflict"
+    assert claim.revoked_at is not None
