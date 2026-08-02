@@ -15,6 +15,7 @@ from sqlalchemy import select, text
 
 from src.api.base_dependencies import get_subscription_service
 from src.app.services.web_funnel_claim_payment import reconcile_revenuecat_event
+from src.bootstrap.web_funnel_claim_dispatcher import get_web_funnel_outbox_dispatcher
 from src.domain.ports.subscription_service_port import SubscriptionServicePort
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
@@ -98,15 +99,18 @@ async def revenuecat_webhook(
     app_user_id = event.get("app_user_id")
     if isinstance(app_user_id, str):
         try:
-            uuid.UUID(app_user_id)
+            lead_id = str(uuid.UUID(app_user_id))
         except ValueError:
             pass
         else:
             async with AsyncUnitOfWork() as web_funnel_uow:
-                # Commit the provider wake-up before any authoritative subscriber
-                # fetch. The outbox retries provider outages without asking the
-                # buyer to repay and leaves every native event path untouched.
-                if await reconcile_revenuecat_event(web_funnel_uow.session, event, None):
+                subscriber = await _get_subscription_service().get_subscriber_info(
+                    lead_id
+                )
+                if await reconcile_revenuecat_event(
+                    web_funnel_uow.session, event, subscriber
+                ):
+                    await get_web_funnel_outbox_dispatcher()(lead_id=lead_id)
                     return {"status": "success"}
 
     logger.info(
