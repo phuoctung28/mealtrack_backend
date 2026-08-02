@@ -30,6 +30,13 @@ def _exact_lead_id(event: dict) -> str | None:
         return None
 
 
+def _matches_revenuecat_environment(environment: object) -> bool:
+    """Fail closed unless this webhook belongs to the configured environment."""
+    return isinstance(environment, str) and bool(
+        settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
+    ) and environment == settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
+
+
 async def reconcile_revenuecat_event(db: AsyncSession, event: dict, subscriber: dict | None) -> bool:
     """Handle web leads only; caller continues the native webhook path unchanged."""
     event_id = event.get("id")
@@ -44,46 +51,22 @@ async def reconcile_revenuecat_event(db: AsyncSession, event: dict, subscriber: 
         return True
     inbox = WebFunnelProviderEvent(id=str(uuid.uuid4()), provider_event_id=event_id, event_type=str(event.get("type", "unknown")), lead_id=lead_id, payload={"environment": event.get("environment"), "product_id": event.get("product_id")}, created_at=utcnow())
     db.add(inbox)
+    if not _matches_revenuecat_environment(event.get("environment")):
+        await db.commit()
+        return True
     if subscriber is None:
         db.add(WebFunnelOutbox(idempotency_key=f"revenuecat-reconcile:{event_id}", job_type="revenuecat_reconcile", payload={"provider_event_id": event_id, "lead_id": lead_id}, status="pending", attempts=0, next_attempt_at=utcnow()))
         await db.commit()
         return True
-    allowed_products = {value.strip() for value in settings.WEB_FUNNEL_REVENUECAT_PRODUCT_IDS.split(",") if value.strip()}
-    environment_ok = bool(settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT) and event.get("environment") == settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-    product_ok = bool(allowed_products) and event.get("product_id") in allowed_products
     if event.get("type") == "REFUND" or not is_active_standard(subscriber):
         lead.status, lead.access_sync_status = "refunded", "refunded"
         for claim in (await db.scalars(select(WebFunnelClaim).where(WebFunnelClaim.lead_id == lead.id, WebFunnelClaim.consumed_at.is_(None)).with_for_update())).all():
             claim.revoked_at = utcnow()
-    elif environment_ok and product_ok and lead.status not in {"claimed", "refunded"}:
+    elif lead.status not in {"claimed", "refunded"}:
         lead.status, lead.payment_verified_at = "payment_verified", utcnow()
         generation = await next_claim_generation(db, lead.id)
         db.add(WebFunnelOutbox(idempotency_key=f"claim-email:{lead.id}:{generation}", job_type="claim_email", payload={"lead_id": lead.id, "generation": generation}, status="pending", attempts=0, next_attempt_at=utcnow()))
         lead.status = "email_queued"
-    await db.commit()
-    return True
-
-
-async def process_revenuecat_association(
-    db: AsyncSession, outbox: WebFunnelOutbox, subscription_service: object
-) -> bool:
-    """Transfer only the claimed lead customer, then refetch target standard access."""
-    lead = await db.get(WebFunnelLead, outbox.payload["lead_id"], with_for_update=True)
-    uid = str(outbox.payload["uid"])
-    if not lead or lead.claimed_uid != uid or not settings.WEB_FUNNEL_REVENUECAT_PROJECT_ID or not settings.WEB_FUNNEL_REVENUECAT_APP_ID:
-        return False
-    transfer = getattr(subscription_service, "transfer_web_customer", None)
-    if transfer is None or not await transfer(lead.id, uid, settings.WEB_FUNNEL_REVENUECAT_PROJECT_ID, settings.WEB_FUNNEL_REVENUECAT_APP_ID):
-        outbox.attempts += 1
-        outbox.next_attempt_at = utcnow() + timedelta(minutes=min(60, 2 ** int(outbox.attempts)))
-        await db.commit()
-        return False
-    subscriber = await subscription_service.get_subscriber_info(uid)
-    if is_active_standard(subscriber):
-        lead.access_sync_status, outbox.status, outbox.completed_at = "active", "completed", utcnow()
-    else:
-        lead.access_sync_status, outbox.attempts = "pending", outbox.attempts + 1
-        outbox.next_attempt_at = utcnow() + timedelta(minutes=min(60, 2 ** int(outbox.attempts)))
     await db.commit()
     return True
 
@@ -107,6 +90,10 @@ async def process_revenuecat_reconcile(
         outbox.status, outbox.completed_at = "completed", utcnow()
         await db.commit()
         return True
+    if not _matches_revenuecat_environment(event.payload.get("environment")):
+        outbox.status, outbox.completed_at = "completed", utcnow()
+        await db.commit()
+        return True
     if event.event_type == "REFUND":
         await _revoke_unconsumed_claims(db, lead)
         lead.status, lead.access_sync_status = "refunded", "refunded"
@@ -127,17 +114,6 @@ async def process_revenuecat_reconcile(
         outbox.next_attempt_at = utcnow() + timedelta(minutes=min(60, 2 ** int(outbox.attempts)))
         await db.commit()
         return False
-    allowed_products = {
-        value.strip()
-        for value in settings.WEB_FUNNEL_REVENUECAT_PRODUCT_IDS.split(",")
-        if value.strip()
-    }
-    if not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT or not allowed_products:
-        return False
-    if not event or event.payload.get("environment") != settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT or event.payload.get("product_id") not in allowed_products:
-        outbox.status, outbox.completed_at = "completed", utcnow()
-        await db.commit()
-        return True
     generation = await next_claim_generation(db, lead.id)
     db.add(WebFunnelOutbox(idempotency_key=f"claim-email:{lead.id}:{generation}", job_type="claim_email", payload={"lead_id": lead.id, "generation": generation}, status="pending", attempts=0, next_attempt_at=utcnow()))
     lead.status, lead.payment_verified_at, event.processed_at, outbox.status, outbox.completed_at = "email_queued", utcnow(), utcnow(), "completed", utcnow()
