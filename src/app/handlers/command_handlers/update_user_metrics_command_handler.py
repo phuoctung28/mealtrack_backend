@@ -111,9 +111,6 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     )
                 profile.job_type = command.job_type
 
-            if command.training_days_per_week is not None:
-                pass
-
             if (
                 command.training_days_per_week is not None
                 or command.training_minutes_per_session is not None
@@ -126,9 +123,11 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 effective_minutes = (
                     0
                     if command.training_days_per_week == 0
-                    else command.training_minutes_per_session
-                    if command.training_minutes_per_session is not None
-                    else profile.training_minutes_per_session
+                    else (
+                        command.training_minutes_per_session
+                        if command.training_minutes_per_session is not None
+                        else profile.training_minutes_per_session
+                    )
                 )
                 try:
                     effective_days, effective_minutes = normalize_training_pair(
