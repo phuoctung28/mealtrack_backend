@@ -7,6 +7,7 @@ from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee.preview_tdee_query import PreviewTdeeQuery
+from src.domain.constants import NutritionConstants
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.user import (
     JobType,
@@ -69,29 +70,14 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, dict[str, Any]]):
             body_fat_pct=query.body_fat_percentage,
             unit_system=unit_system,
             training_level=training_level,
-            macro_preset=MacroPreset.KETO
-            if query.diet_type == "keto"
-            else MacroPreset.STANDARD,
+            macro_preset=(
+                MacroPreset.KETO if query.diet_type == "keto" else MacroPreset.STANDARD
+            ),
         )
 
         # Calculate TDEE
         result = self.tdee_service.calculate_tdee(tdee_request)
-        macros = result.macros
-        custom_values = [
-            query.custom_protein_g,
-            query.custom_carbs_g,
-            query.custom_fat_g,
-        ]
-        if all(value is not None for value in custom_values):
-            protein, carbs, fat = (round(value, 1) for value in custom_values)
-            macros = MacroTargets(
-                protein=protein,
-                carbs=carbs,
-                fat=fat,
-                calories=round(protein * 4 + carbs * 4 + fat * 9, 1),
-            )
-        elif query.requested_calories is not None:
-            macros = self.tdee_service.scale_macros(macros, query.requested_calories)
+        macros = self._preview_macros(query, result.macros)
 
         # Baseline excludes planned workouts; logged movement credits them.
         base = JOB_TYPE_MULTIPLIERS.get(job_type.value, 1.2)
@@ -103,13 +89,58 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, dict[str, Any]]):
             "goal": goal.value,
             "activity_multiplier": base,
             "formula_used": result.formula_used,
+            "is_custom": self._has_custom_macros(query),
+            "macro_preset": result.macro_preset.value,
+            "target_revision": 0,
             "macros": {
                 "protein": macros.protein,
                 "carbs": macros.carbs,
                 "fat": macros.fat,
                 "calories": macros.calories,
             },
-            "macro_preset": result.macro_preset.value,
-            "is_custom": any(value is not None for value in custom_values)
-            or query.requested_calories is not None,
         }
+
+    @staticmethod
+    def _has_custom_macros(query: PreviewTdeeQuery) -> bool:
+        return (
+            query.custom_protein_g is not None
+            and query.custom_carbs_g is not None
+            and query.custom_fat_g is not None
+        )
+
+    def _preview_macros(
+        self, query: PreviewTdeeQuery, calculated: MacroTargets
+    ) -> MacroTargets:
+        if self._has_custom_macros(query):
+            return self._macro_targets(
+                query.custom_protein_g,
+                query.custom_carbs_g,
+                query.custom_fat_g,
+            )
+
+        if query.requested_calories is not None:
+            scale = query.requested_calories / calculated.calories
+            return self._macro_targets(
+                calculated.protein * scale,
+                calculated.carbs * scale,
+                calculated.fat * scale,
+            )
+
+        return self._macro_targets(calculated.protein, calculated.carbs, calculated.fat)
+
+    @staticmethod
+    def _macro_targets(protein: float, carbs: float, fat: float) -> MacroTargets:
+        rounded_protein = round(protein, 1)
+        rounded_carbs = round(carbs, 1)
+        rounded_fat = round(fat, 1)
+        calories = (
+            rounded_protein * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
+            + rounded_carbs * NutritionConstants.CALORIES_PER_GRAM_CARBS
+            + rounded_fat * NutritionConstants.CALORIES_PER_GRAM_FAT
+        )
+        return MacroTargets(
+            calories=round(calories, 1),
+            protein=rounded_protein,
+            carbs=rounded_carbs,
+            fat=rounded_fat,
+        )
