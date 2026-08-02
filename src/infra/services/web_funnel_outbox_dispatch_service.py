@@ -25,12 +25,27 @@ def claim_link(lead_id: str, token: str) -> str:
     )
 
 
-async def dispatch_web_funnel_outbox(batch_size: int = 25) -> int:
+async def dispatch_web_funnel_outbox(
+    batch_size: int = 25, *, lead_id: str | None = None
+) -> int:
     """Process due claim work; only email delivery observes the email flag."""
     if AsyncSessionLocal is None:
         return 0
     async with AsyncSessionLocal() as session:
-        rows = (await session.scalars(select(WebFunnelOutbox).where(WebFunnelOutbox.status == "pending", WebFunnelOutbox.next_attempt_at <= utcnow()).order_by(WebFunnelOutbox.next_attempt_at).limit(batch_size).with_for_update(skip_locked=True))).all()
+        statement = select(WebFunnelOutbox).where(
+            WebFunnelOutbox.status == "pending",
+            WebFunnelOutbox.next_attempt_at <= utcnow(),
+        )
+        if lead_id:
+            statement = statement.where(
+                WebFunnelOutbox.idempotency_key.like(f"%:{lead_id}%")
+            )
+        statement = (
+            statement.order_by(WebFunnelOutbox.next_attempt_at)
+            .limit(batch_size)
+            .with_for_update(skip_locked=True)
+        )
+        rows = (await session.scalars(statement)).all()
         adapter = ResendEmailAdapter()
         completed = 0
         for row in rows:

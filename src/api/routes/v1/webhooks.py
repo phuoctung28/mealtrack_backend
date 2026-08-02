@@ -24,6 +24,9 @@ from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
+from src.infra.services.web_funnel_outbox_dispatch_service import (
+    dispatch_web_funnel_outbox,
+)
 from src.observability import increment_metric
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
@@ -98,15 +101,18 @@ async def revenuecat_webhook(
     app_user_id = event.get("app_user_id")
     if isinstance(app_user_id, str):
         try:
-            uuid.UUID(app_user_id)
+            lead_id = str(uuid.UUID(app_user_id))
         except ValueError:
             pass
         else:
             async with AsyncUnitOfWork() as web_funnel_uow:
-                # Commit the provider wake-up before any authoritative subscriber
-                # fetch. The outbox retries provider outages without asking the
-                # buyer to repay and leaves every native event path untouched.
-                if await reconcile_revenuecat_event(web_funnel_uow.session, event, None):
+                subscriber = await _get_subscription_service().get_subscriber_info(
+                    lead_id
+                )
+                if await reconcile_revenuecat_event(
+                    web_funnel_uow.session, event, subscriber
+                ):
+                    await dispatch_web_funnel_outbox(lead_id=lead_id)
                     return {"status": "success"}
 
     logger.info(
