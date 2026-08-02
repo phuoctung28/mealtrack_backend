@@ -9,6 +9,9 @@ from typing import Any
 
 from src.app.commands.user.sync_user_command import SyncUserCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.exceptions.firebase_identity_exceptions import (
+    FirebaseIdentityConflictError,
+)
 from src.domain.model.auth.auth_provider import AuthProvider
 from src.domain.model.notification import NotificationPreferences
 from src.domain.model.user import UserDomainModel
@@ -39,15 +42,14 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
                     command.firebase_uid
                 )
 
-                # Fallback: check by email if UID not found (handles provider switch / UID change)
+                # An email is not proof that a new Firebase UID owns an existing
+                # account.  Never rebind the account during an ordinary sync.
                 if not existing_user and command.email:
-                    existing_user = await uow.users.find_by_email(command.email)
-                    if existing_user:
-                        logger.warning(
-                            f"Email {command.email} found with different UID. "
-                            f"Updating from {existing_user.firebase_uid} to {command.firebase_uid}"
+                    email_owner = await uow.users.find_by_email(command.email)
+                    if email_owner:
+                        raise FirebaseIdentityConflictError(
+                            "Firebase UID does not own the existing account"
                         )
-                        existing_user.firebase_uid = command.firebase_uid
 
                 created = False
                 updated = False
@@ -158,7 +160,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
                     ),
                 }
 
-            except Exception as e:
+            except Exception:
                 await uow.rollback()
                 raise
 
@@ -226,7 +228,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
 
         return updated
 
-    def _generate_username(self, email: str, display_name: str = None) -> str:
+    def _generate_username(self, email: str, display_name: str | None = None) -> str:
         """Generate a username from email or display name."""
         if display_name:
             username = re.sub(r"[^a-zA-Z0-9]", "", display_name.lower())
@@ -240,7 +242,10 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
         return username[:20]
 
     def _extract_names(
-        self, display_name: str = None, first_name: str = None, last_name: str = None
+        self,
+        display_name: str | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
     ):
         """Extract first and last names from display name or provided names."""
         if first_name and last_name:

@@ -333,6 +333,30 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 | POST | `/v1/webhooks/revenuecat` | RevenueCat subscription webhook |
 | GET | `/v1/webhooks/revenuecat/health` | Webhook health check |
 
+---
+
+## Paid Web Claim (dark launch)
+
+All endpoints in this group are disabled by default. Lead capture requires
+`WEB_FUNNEL_LEADS_ENABLED`; email, exchange, and completion each have their own
+`WEB_FUNNEL_EMAIL_ENABLED`, `WEB_FUNNEL_EXCHANGE_ENABLED`, and
+`WEB_FUNNEL_COMPLETE_ENABLED` gate. Do not enable them until the compatible
+mobile release and provider staging checklist have passed.
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/v1/web-funnel/leads` | Trusted BFF creates an access-key-bound onboarding lead. |
+| GET | `/v1/web-funnel/leads/{lead_id}/status` | Returns only the safe, possession-bound lead projection. |
+| POST | `/v1/web-funnel/leads/{lead_id}/reset` | Revokes an unpaid draft for its access-key holder. |
+| POST | `/v1/web-funnel/leads/{lead_id}/resend` | Revokes an old unconsumed link and queues one new generation. |
+| POST | `/v1/web-funnel/claims/exchange` | Exchanges an opaque magic credential for a Firebase custom token and short-lived exchange token. |
+| POST | `/v1/web-funnel/claims/complete` | Completes the reservation-bound claim atomically with a fresh Firebase bearer. |
+| GET | `/v1/web-funnel/claims/recovery` | Returns the authenticated UID's completed result or safe pending state. |
+
+The RevenueCat webhook records exact lead UUID correlations in a durable inbox;
+the worker fetches authoritative `standard` entitlement state before fulfillment.
+Raw magic, exchange, and retry credentials are never stored or logged.
+
 ## Response Format
 
 Successful responses generally return the route's declared payload directly;

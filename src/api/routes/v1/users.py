@@ -42,6 +42,9 @@ from src.app.queries.user.get_user_by_firebase_uid_query import (
 from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
+from src.domain.exceptions.firebase_identity_exceptions import (
+    FirebaseIdentityConflictError,
+)
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -114,7 +117,14 @@ async def sync_user_from_firebase(
     )
 
     # Send command
-    result = await event_bus.send(command)
+    try:
+        result = await event_bus.send(command)
+    except FirebaseIdentityConflictError as exc:
+        logger.warning("User sync rejected because Firebase identity conflicts")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Account identity could not be verified",
+        ) from exc
 
     # Map result to response
     user_data = result["user"]
