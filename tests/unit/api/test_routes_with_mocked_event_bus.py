@@ -161,6 +161,61 @@ def test_user_profiles_get_tdee(monkeypatch, client: TestClient):
     assert r.json()["tdee"] == 2400.0
 
 
+def test_tdee_preview_returns_onboarding_contract(monkeypatch, client: TestClient):
+    import src.api.main as main
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.app.queries.tdee import PreviewTdeeQuery
+
+    sent = []
+
+    async def send(msg):
+        sent.append(msg)
+        return {
+            "bmr": 1657.5,
+            "tdee": 1989.0,
+            "goal": "recomp",
+            "activity_multiplier": 1.2,
+            "formula_used": "Mifflin-St Jeor",
+            "is_custom": False,
+            "macro_preset": "standard",
+            "calculation_contract": "onboarding_preview_v2",
+            "target_revision": 0,
+            "macros": {
+                "calories": 1989.0,
+                "protein": 140.0,
+                "carbs": 215.5,
+                "fat": 63.0,
+            },
+        }
+
+    main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(send)
+
+    r = client.post(
+        "/v1/tdee/preview",
+        json={
+            "age": 22,
+            "sex": "male",
+            "height": 170.0,
+            "weight": 70.0,
+            "job_type": "desk",
+            "training_days_per_week": 4,
+            "training_minutes_per_session": 52,
+            "training_level": "intermediate",
+            "goal": "recomp",
+            "diet_type": "classic",
+            "unit_system": "metric",
+        },
+    )
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["macro_preset"] == "standard"
+    assert body["calculation_contract"] == "onboarding_preview_v2"
+    assert body["target_revision"] == 0
+    assert isinstance(sent[0], PreviewTdeeQuery)
+    assert sent[0].diet_type == "classic"
+
+
 def test_user_profiles_update_metrics_accepts_my_plan_payload(
     monkeypatch, client: TestClient
 ):

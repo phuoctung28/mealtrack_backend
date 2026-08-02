@@ -59,6 +59,7 @@ from .onboarding_responses import (
 
 # TDEE responses
 from .tdee_responses import (
+    TDEE_PREVIEW_CALCULATION_CONTRACT,
     BatchTdeeCalculationResponse,
     MacroTargetsResponse,
     TdeeCalculationResponse,
@@ -99,6 +100,7 @@ __all__ = [
     "TdeeHistoryResponse",
     "TdeeErrorResponse",
     "MacroTargetsResponse",
+    "TDEE_PREVIEW_CALCULATION_CONTRACT",
     # Meal suggestion
     "MealSuggestionItem",
     "MealSuggestionMacrosSchema",

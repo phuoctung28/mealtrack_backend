@@ -8,7 +8,11 @@ from slowapi.util import get_remote_address
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.middleware.rate_limit import limiter
 from src.api.schemas.request import TdeeCalculationRequest
-from src.api.schemas.response import MacroTargetsResponse, TdeeCalculationResponse
+from src.api.schemas.response import (
+    TDEE_PREVIEW_CALCULATION_CONTRACT,
+    MacroTargetsResponse,
+    TdeeCalculationResponse,
+)
 from src.app.queries.tdee import PreviewTdeeQuery
 from src.infra.event_bus import EventBus
 
@@ -30,8 +34,6 @@ async def preview_tdee(
 
     No authentication required.
     """
-    event_bus = get_configured_event_bus()
-
     query = PreviewTdeeQuery(
         age=payload.age,
         sex=payload.sex.value,
@@ -56,7 +58,6 @@ async def preview_tdee(
     result = await event_bus.send(query)
 
     return TdeeCalculationResponse(
-        calculation_contract=result["calculation_contract"],
         bmr=result["bmr"],
         tdee=result["tdee"],
         macros=MacroTargetsResponse(
@@ -68,6 +69,10 @@ async def preview_tdee(
         goal=payload.goal,
         activity_multiplier=result["activity_multiplier"],
         formula_used=result["formula_used"],
-        is_custom=result["is_custom"],
-        macro_preset=result["macro_preset"],
+        is_custom=result.get("is_custom", False),
+        macro_preset=result.get("macro_preset", "standard"),
+        calculation_contract=result.get(
+            "calculation_contract", TDEE_PREVIEW_CALCULATION_CONTRACT
+        ),
+        target_revision=result.get("target_revision", 0),
     )

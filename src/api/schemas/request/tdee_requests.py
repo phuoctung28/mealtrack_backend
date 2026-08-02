@@ -149,6 +149,7 @@ class TdeeCalculationRequest(BaseModel):
                 "training_minutes_per_session": 60,
                 "goal": "recomp",
                 "unit_system": "metric",
+                "diet_type": "classic",
             }
         }
 
