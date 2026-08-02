@@ -25,7 +25,7 @@ def claim_link(lead_id: str, token: str) -> str:
 
 
 async def dispatch_web_funnel_outbox(batch_size: int = 25) -> int:
-    """Process due claim work; only email delivery observes the email flag."""
+    """Process due claim work when the required email link base URL is configured."""
     if AsyncSessionLocal is None:
         return 0
     async with AsyncSessionLocal() as session:
@@ -33,7 +33,7 @@ async def dispatch_web_funnel_outbox(batch_size: int = 25) -> int:
         adapter = ResendEmailAdapter()
         completed = 0
         for row in rows:
-            if row.job_type == "claim_email" and settings.WEB_FUNNEL_EMAIL_ENABLED and settings.WEB_FUNNEL_CLAIM_LINK_BASE_URL:
+            if row.job_type == "claim_email" and settings.WEB_FUNNEL_CLAIM_LINK_BASE_URL:
                 async def send(email: str, token: str, lead_id: str) -> bool:
                     url = claim_link(lead_id, token)
                     result = await adapter.send_email(email, "Open Nutree", f'<p><a href="{url}">Open Nutree</a></p>', tags=["web-claim"])
