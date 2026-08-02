@@ -1,4 +1,4 @@
-"""Dark-launched, possession-bound pre-checkout lead endpoints."""
+"""Possession-bound pre-checkout lead and claim endpoints."""
 
 import hashlib
 import json
@@ -55,16 +55,6 @@ def _projection(lead: WebFunnelLead) -> dict[str, str | int | None]:
     return projection
 
 
-def _require_leads_enabled() -> None:
-    if not settings.WEB_FUNNEL_LEADS_ENABLED:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-
-def _require_flag(enabled: bool) -> None:
-    if not enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-
 def _require_bff_request(origin: str | None, credential: str | None) -> None:
     """Require server-held BFF proof; Origin only narrows browser-origin use."""
     if not settings.WEB_FUNNEL_BFF_SHARED_SECRET or not credential or not compare_digest(
@@ -103,7 +93,6 @@ async def create_lead(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Create/replay a lead without exposing raw email or a browser capability."""
-    _require_leads_enabled()
     _require_bff_request(origin, bff_credential)
     access_key_hash = _require_access_key(access_key)
     if not request_id or len(request_id) > 128:
@@ -154,7 +143,6 @@ async def reset_lead(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Revoke the browser capability's unpaid draft without revealing ownership."""
-    _require_leads_enabled()
     lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
     if not lead or not compare_digest(lead.access_key_hash, _require_access_key(access_key)):
         raise claim_not_found()
@@ -174,7 +162,6 @@ async def get_lead_status(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Return only a possession-bound, safe lead status projection."""
-    _require_leads_enabled()
     access_key_hash = _require_access_key(access_key)
     lead = await db.get(WebFunnelLead, lead_id)
     if not lead or not compare_digest(lead.access_key_hash, access_key_hash):
@@ -191,8 +178,6 @@ async def resend_claim(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Queue a fresh link generation; old unconsumed credentials are revoked."""
-    _require_leads_enabled()
-    _require_flag(settings.WEB_FUNNEL_EMAIL_ENABLED)
     lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
     if not lead or not compare_digest(lead.access_key_hash, _require_access_key(access_key)):
         raise claim_not_found()
@@ -229,7 +214,6 @@ async def exchange(
     response: Response,
     db: AsyncSession = Depends(get_async_db),
 ):
-    _require_flag(settings.WEB_FUNNEL_EXCHANGE_ENABLED)
     response.headers["Cache-Control"] = "no-store"
     return await exchange_claim(db, payload.magic_token, payload.client_retry_secret)
 
@@ -243,7 +227,6 @@ async def complete(
     token: dict = Depends(verify_firebase_token_revocation_checked),
     db: AsyncSession = Depends(get_async_db),
 ):
-    _require_flag(settings.WEB_FUNNEL_COMPLETE_ENABLED)
     response.headers["Cache-Control"] = "no-store"
     _require_fresh_token(token)
     return await complete_claim(db, token.get("uid", ""), token.get("email"), payload.exchange_token)
@@ -257,7 +240,6 @@ async def recovery(
     token: dict = Depends(verify_firebase_token_revocation_checked),
     db: AsyncSession = Depends(get_async_db),
 ):
-    _require_flag(settings.WEB_FUNNEL_COMPLETE_ENABLED)
     response.headers["Cache-Control"] = "no-store"
     _require_fresh_token(token)
     reservation_id = token.get("wf_reservation")
