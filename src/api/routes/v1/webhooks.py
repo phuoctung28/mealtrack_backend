@@ -14,6 +14,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
 
 from src.api.base_dependencies import get_subscription_service
+from src.app.services.web_funnel_claim_payment import reconcile_revenuecat_event
 from src.domain.ports.subscription_service_port import SubscriptionServicePort
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
@@ -90,6 +91,23 @@ async def revenuecat_webhook(
     # Extract event data
     event = payload.get("event", {})
     event_type = event.get("type")
+
+    # A paid web lead is deliberately recognized only by an exact backend UUID.
+    # It is reconciled from fetched provider state before the native path, which
+    # continues untouched for every non-lead event.
+    app_user_id = event.get("app_user_id")
+    if isinstance(app_user_id, str):
+        try:
+            uuid.UUID(app_user_id)
+        except ValueError:
+            pass
+        else:
+            async with AsyncUnitOfWork() as web_funnel_uow:
+                # Commit the provider wake-up before any authoritative subscriber
+                # fetch. The outbox retries provider outages without asking the
+                # buyer to repay and leaves every native event path untouched.
+                if await reconcile_revenuecat_event(web_funnel_uow.session, event, None):
+                    return {"status": "success"}
 
     logger.info(
         "RevenueCat webhook received: event_type=%s environment=%s",

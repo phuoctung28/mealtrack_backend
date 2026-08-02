@@ -128,3 +128,24 @@ class RevenueCatAdapter(SubscriptionServicePort):
                     continue
 
         return None
+
+    async def transfer_web_customer(
+        self, source_customer_id: str, target_customer_id: str, project_id: str, app_id: str
+    ) -> bool:
+        """Use the server-only v2 transfer API; callers refetch entitlement after it."""
+        if not self.api_key or not project_id or not app_id:
+            return False
+        url = f"https://api.revenuecat.com/v2/projects/{project_id}/customers/{source_customer_id}/actions/transfer"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url,
+                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    json={"target_customer_id": target_customer_id, "app_ids": [app_id]},
+                    timeout=10.0,
+                )
+                response.raise_for_status()
+            return True
+        except httpx.HTTPError as exc:
+            logger.warning("RevenueCat web customer transfer failed: %s", type(exc).__name__)
+            return False
