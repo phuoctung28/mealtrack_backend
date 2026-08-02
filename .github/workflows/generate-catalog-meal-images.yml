@@ -74,6 +74,7 @@ jobs:
             test -n "$CLOUDINARY_CLOUD_NAME" || (echo "CLOUDINARY_CLOUD_NAME secret is required" && exit 1)
             test -n "$CLOUDINARY_API_KEY" || (echo "CLOUDINARY_API_KEY secret is required" && exit 1)
             test -n "$CLOUDINARY_API_SECRET" || (echo "CLOUDINARY_API_SECRET secret is required" && exit 1)
+            echo "Cloudinary signature failures require CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET to be replaced as one matching production account set."
           fi
 
       - name: Generate image URLs

@@ -109,8 +109,8 @@ class CloudinaryImageStore(ImageStorePort):
                 )
                 return image_id
 
-        except Exception as e:
-            logger.error(f"Error uploading to Cloudinary: {str(e)}")
+        except Exception as exc:
+            logger.error("Cloudinary upload failed error_type=%s", type(exc).__name__)
             raise
 
     def load(self, image_id: str) -> bytes | None:
