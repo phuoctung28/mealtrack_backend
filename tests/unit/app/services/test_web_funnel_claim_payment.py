@@ -5,11 +5,17 @@ from datetime import timedelta
 import pytest
 
 from src.app.services.web_funnel_claim_common import utcnow
+from src.app.services import web_funnel_claim_payment as payment
 from src.app.services.web_funnel_claim_payment import (
     process_claim_email,
     process_revenuecat_reconcile,
     reconcile_revenuecat_event,
 )
+
+
+@pytest.fixture(autouse=True)
+def configured_revenuecat_environment(monkeypatch):
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION")
 from src.infra.database.models.web_funnel_claim import (
     WebFunnelLead,
     WebFunnelOutbox,
@@ -60,6 +66,16 @@ async def test_authoritative_standard_enqueues_one_claim_email():
     assert session.lead.status == "email_queued"
     assert "claim_email" in {getattr(row, "job_type", None) for row in session.added}
     assert session.committed
+
+
+@pytest.mark.asyncio
+async def test_wrong_environment_records_event_without_queuing_claim_email():
+    session = FakePaymentSession(_lead())
+    active = {"subscriber": {"entitlements": {"standard": {"expires_date": None}}}}
+
+    assert await reconcile_revenuecat_event(session, {"id": "event-sandbox", "type": "INITIAL_PURCHASE", "app_user_id": session.lead.id, "environment": "SANDBOX"}, active)
+    assert session.lead.status == "draft"
+    assert "claim_email" not in {getattr(row, "job_type", None) for row in session.added}
 
 
 class FakeReconcileSession(FakePaymentSession):

@@ -13,6 +13,7 @@ from src.app.services.web_funnel_claim_common import (
     new_secret,
     utcnow,
 )
+from src.infra.config.settings import settings
 from src.infra.database.models.web_funnel_claim import (
     WebFunnelClaim,
     WebFunnelLead,
@@ -29,6 +30,13 @@ def _exact_lead_id(event: dict) -> str | None:
         return None
 
 
+def _matches_revenuecat_environment(environment: object) -> bool:
+    """Fail closed unless this webhook belongs to the configured environment."""
+    return isinstance(environment, str) and bool(
+        settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
+    ) and environment == settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
+
+
 async def reconcile_revenuecat_event(db: AsyncSession, event: dict, subscriber: dict | None) -> bool:
     """Handle web leads only; caller continues the native webhook path unchanged."""
     event_id = event.get("id")
@@ -43,6 +51,9 @@ async def reconcile_revenuecat_event(db: AsyncSession, event: dict, subscriber: 
         return True
     inbox = WebFunnelProviderEvent(id=str(uuid.uuid4()), provider_event_id=event_id, event_type=str(event.get("type", "unknown")), lead_id=lead_id, payload={"environment": event.get("environment"), "product_id": event.get("product_id")}, created_at=utcnow())
     db.add(inbox)
+    if not _matches_revenuecat_environment(event.get("environment")):
+        await db.commit()
+        return True
     if subscriber is None:
         db.add(WebFunnelOutbox(idempotency_key=f"revenuecat-reconcile:{event_id}", job_type="revenuecat_reconcile", payload={"provider_event_id": event_id, "lead_id": lead_id}, status="pending", attempts=0, next_attempt_at=utcnow()))
         await db.commit()
@@ -76,6 +87,10 @@ async def process_revenuecat_reconcile(
         )
     )
     if not event:
+        outbox.status, outbox.completed_at = "completed", utcnow()
+        await db.commit()
+        return True
+    if not _matches_revenuecat_environment(event.payload.get("environment")):
         outbox.status, outbox.completed_at = "completed", utcnow()
         await db.commit()
         return True
