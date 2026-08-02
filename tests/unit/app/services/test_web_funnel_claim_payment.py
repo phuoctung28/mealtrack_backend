@@ -4,23 +4,25 @@ from datetime import timedelta
 
 import pytest
 
-from src.app.services.web_funnel_claim_common import utcnow
 from src.app.services import web_funnel_claim_payment as payment
+from src.app.services.web_funnel_claim_common import utcnow
 from src.app.services.web_funnel_claim_payment import (
     process_claim_email,
     process_revenuecat_reconcile,
     reconcile_revenuecat_event,
 )
-
-
-@pytest.fixture(autouse=True)
-def configured_revenuecat_environment(monkeypatch):
-    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION")
 from src.infra.database.models.web_funnel_claim import (
     WebFunnelLead,
     WebFunnelOutbox,
     WebFunnelProviderEvent,
 )
+
+
+@pytest.fixture(autouse=True)
+def configured_revenuecat_environment(monkeypatch):
+    monkeypatch.setattr(
+        payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION"
+    )
 
 
 class FakePaymentSession:
@@ -78,6 +80,28 @@ async def test_wrong_environment_records_event_without_queuing_claim_email():
     assert "claim_email" not in {getattr(row, "job_type", None) for row in session.added}
 
 
+@pytest.mark.asyncio
+async def test_missing_environment_configuration_records_event_without_queuing_claim_email(
+    monkeypatch,
+):
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "")
+    session = FakePaymentSession(_lead())
+    active = {"subscriber": {"entitlements": {"standard": {"expires_date": None}}}}
+
+    assert await reconcile_revenuecat_event(
+        session,
+        {
+            "id": "event-unconfigured",
+            "type": "INITIAL_PURCHASE",
+            "app_user_id": session.lead.id,
+            "environment": "PRODUCTION",
+        },
+        active,
+    )
+    assert session.lead.status == "draft"
+    assert "claim_email" not in {getattr(row, "job_type", None) for row in session.added}
+
+
 class FakeReconcileSession(FakePaymentSession):
     def __init__(self, lead, event):
         super().__init__(lead)
@@ -118,6 +142,36 @@ async def test_deferred_reconcile_uses_provider_event_id_and_queues_email():
     assert outbox.status == "completed"
     assert lead.status == "email_queued"
     assert any(row.job_type == "claim_email" for row in session.added)
+
+
+@pytest.mark.asyncio
+async def test_deferred_reconcile_ignores_a_mismatched_environment_without_fetching():
+    lead = _lead()
+    event = WebFunnelProviderEvent(
+        id="inbox-sandbox",
+        provider_event_id="provider-sandbox",
+        event_type="INITIAL_PURCHASE",
+        lead_id=lead.id,
+        payload={"environment": "SANDBOX"},
+    )
+    outbox = WebFunnelOutbox(
+        id="outbox-sandbox",
+        idempotency_key="revenuecat-reconcile:provider-sandbox",
+        job_type="revenuecat_reconcile",
+        payload={"provider_event_id": "provider-sandbox", "lead_id": lead.id},
+        status="pending",
+        attempts=0,
+        next_attempt_at=utcnow(),
+    )
+
+    class MustNotFetch:
+        async def get_subscriber_info(self, _app_user_id):
+            raise AssertionError("mismatched events must not fetch subscriber data")
+
+    session = FakeReconcileSession(lead, event)
+    assert await process_revenuecat_reconcile(session, outbox, MustNotFetch())
+    assert lead.status == "draft"
+    assert outbox.status == "completed"
 
 
 @pytest.mark.asyncio
