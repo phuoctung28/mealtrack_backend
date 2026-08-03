@@ -63,7 +63,7 @@ async def finalize_redemption(
     db: AsyncSession,
     *,
     uid: str,
-    email: str,
+    email: str | None,
     original_app_user_id: str,
     idempotency_key: str,
     environment: str,
@@ -80,13 +80,9 @@ async def finalize_redemption(
     )
     if not binding:
         raise claim_not_found()
-    # Redemptions correlated before this rollout have no opaque preflight token.
-    # They retain the prior finalization path; all newly issued tokens require
-    # the Firebase UID bound by preflight before the link can be finalized.
-    if binding.preflight_token_hash and binding.preflight_uid != uid:
+    if binding.redeemer_uid and binding.redeemer_uid != uid:
         raise claim_not_found()
-    if binding.redeemer_uid != uid:
-        raise claim_not_found()
+    binding.redeemer_uid = uid
     key_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()
     if binding.finalized_uid:
         if binding.finalized_uid != uid or binding.finalization_key_hash != key_hash:
@@ -98,7 +94,7 @@ async def finalize_redemption(
     lead = await db.get(WebFunnelLead, binding.lead_id, with_for_update=True)
     if not lead or lead.status in {"refunded", "revoked", "conflict"}:
         raise claim_not_found()
-    if email.lower() != lead.email.lower():
+    if email is not None and email.lower() != lead.email.lower():
         raise claim_conflict()
     user = await db.scalar(
         select(User).where(User.firebase_uid == uid).with_for_update()

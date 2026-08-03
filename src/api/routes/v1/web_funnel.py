@@ -336,7 +336,7 @@ async def finalize_revenuecat_redemption(
     token: dict = Depends(verify_firebase_token_revocation_checked),
     db: AsyncSession = Depends(get_async_db),
 ):
-    """Finalize one redemption from a fresh, verified Firebase identity only."""
+    """Finalize one provider-verified redemption from a fresh Firebase identity."""
     if not settings.WEB_FUNNEL_REDEMPTION_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     if not payload.confirm_apply_purchase:
@@ -347,15 +347,14 @@ async def finalize_revenuecat_redemption(
     _require_fresh_token(token)
     uid, email = token.get("uid"), token.get("email")
     provider = (token.get("firebase") or {}).get("sign_in_provider")
-    if (
-        not isinstance(uid, str)
-        or not isinstance(email, str)
-        or not token.get("email_verified")
-        or provider == "anonymous"
+    if not isinstance(uid, str):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Valid Firebase identity required")
+    if provider != "anonymous" and (
+        not isinstance(email, str) or not token.get("email_verified")
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required")
+    if provider == "anonymous":
+        email = None
     if not idempotency_key or not 16 <= len(idempotency_key) <= 255:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid idempotency key"
