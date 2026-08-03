@@ -13,7 +13,10 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
 
-from src.api.base_dependencies import get_subscription_service
+from src.api.base_dependencies import (
+    get_subscription_service,
+    get_web_funnel_redemption_service,
+)
 from src.app.services.web_funnel_claim_payment import reconcile_revenuecat_event
 from src.bootstrap.web_funnel_claim_dispatcher import get_web_funnel_outbox_dispatcher
 from src.domain.ports.subscription_service_port import SubscriptionServicePort
@@ -61,6 +64,13 @@ def _get_subscription_service() -> SubscriptionServicePort:
     return get_subscription_service()
 
 
+async def _record_web_funnel_redemption(uow, event: dict) -> bool:
+    """Store the provider-authenticated redeemer before any native user lookup."""
+    return await get_web_funnel_redemption_service().record_webhook_redemption(
+        uow.session, event
+    )
+
+
 @router.post("/revenuecat")
 async def revenuecat_webhook(
     request: Request, authorization: str | None = Header(None)
@@ -92,6 +102,10 @@ async def revenuecat_webhook(
     # Extract event data
     event = payload.get("event", {})
     event_type = event.get("type")
+
+    async with AsyncUnitOfWork() as redemption_uow:
+        if await _record_web_funnel_redemption(redemption_uow, event):
+            return {"status": "success"}
 
     # A paid web lead is deliberately recognized only by an exact backend UUID.
     # It is reconciled from fetched provider state before the native path, which
@@ -129,7 +143,10 @@ async def revenuecat_webhook(
                 return {"status": "ignored", "reason": "user_not_found"}
             await handle_transfer(uow, event)
             await sync_redeemed_target_subscription(uow, user, event)
-            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
+            increment_metric(
+                "webhook.revenuecat.processed",
+                attributes={"event_type": event_type, "status": "success"},
+            )
             return {"status": "success"}
 
         if event_type == "PURCHASE_REDEEMED":
@@ -137,7 +154,10 @@ async def revenuecat_webhook(
                 logger.info("RevenueCat purchase redemption target user not found")
                 raise HTTPException(status_code=404, detail="User not found")
             await sync_redeemed_target_subscription(uow, user, event)
-            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
+            increment_metric(
+                "webhook.revenuecat.processed",
+                attributes={"event_type": event_type, "status": "success"},
+            )
             return {"status": "success"}
 
         if not user:
@@ -148,7 +168,9 @@ async def revenuecat_webhook(
                 event.get("environment"),
                 len(_candidate_revenuecat_ids(event)),
             )
-            if event_type in NON_RETRYABLE_USERLESS_EVENTS or _is_anonymous_event(event):
+            if event_type in NON_RETRYABLE_USERLESS_EVENTS or _is_anonymous_event(
+                event
+            ):
                 return {"status": "ignored", "reason": "user_not_found"}
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -174,7 +196,10 @@ async def revenuecat_webhook(
         elif event_type == "REFUND":
             await handle_refund(uow, user, event)
 
-    increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type or "unknown", "status": "success"})
+    increment_metric(
+        "webhook.revenuecat.processed",
+        attributes={"event_type": event_type or "unknown", "status": "success"},
+    )
     return {"status": "success"}
 
 
@@ -296,7 +321,9 @@ async def sync_redeemed_target_subscription(uow, user: User, event: dict) -> Non
             id=str(uuid.uuid4()),
             user_id=user.id,
             revenuecat_subscriber_id=user.firebase_uid,
-            product_id=current.get("product_id") or event.get("product_id") or "unknown",
+            product_id=current.get("product_id")
+            or event.get("product_id")
+            or "unknown",
             platform=parse_platform(current.get("store") or event.get("store")),
             status="active",
             purchased_at=parse_timestamp(event.get("purchased_at_ms")) or utc_now(),
@@ -349,7 +376,6 @@ def _preferred_transfer_target(transferred_to: list[str]) -> str | None:
     )
 
 
-
 async def handle_purchase(uow, user, event):
     """Handle initial purchase."""
     logger.info(f"Creating subscription for user {user.id}")
@@ -387,8 +413,11 @@ async def handle_purchase(uow, user, event):
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
             "period_type": event.get("period_type"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
-            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
+            "occurred_at": (
+                parse_timestamp(event.get("purchased_at_ms")) or utc_now()
+            ).isoformat(),
         },
         event_id=event.get("id"),
     )
@@ -418,8 +447,11 @@ async def handle_renewal(uow, user, event):
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
             "period_type": event.get("period_type"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
-            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
+            "occurred_at": (
+                parse_timestamp(event.get("purchased_at_ms")) or utc_now()
+            ).isoformat(),
         },
         event_id=event.get("id"),
     )
@@ -464,7 +496,8 @@ async def handle_cancellation(uow, user, event):
         {
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
             "occurred_at": utc_now().isoformat(),
         },
         event_id=event.get("id"),
@@ -495,7 +528,8 @@ async def handle_expiration(uow, user, event):
         {
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
             "occurred_at": utc_now().isoformat(),
         },
         event_id=event.get("id"),
@@ -546,7 +580,8 @@ async def handle_refund(uow, user, event):
         {
             "mealtrack_user_id": str(user.id),
             "product_id": event.get("product_id"),
-            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "subscription_id": event.get("transaction_id")
+            or event.get("original_transaction_id"),
             "occurred_at": utc_now().isoformat(),
         },
         event_id=event.get("id"),

@@ -94,6 +94,7 @@ from .web_funnel_claim import (
     WebFunnelLead,
     WebFunnelOutbox,
     WebFunnelProviderEvent,
+    WebFunnelRedemption,
 )
 
 # Weight tracking
@@ -179,4 +180,5 @@ __all__ = [
     "WebFunnelClaim",
     "WebFunnelOutbox",
     "WebFunnelProviderEvent",
+    "WebFunnelRedemption",
 ]

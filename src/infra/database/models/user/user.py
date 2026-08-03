@@ -18,7 +18,7 @@ class User(Base, BaseMixin):
 
     # Firebase Integration
     firebase_uid = Column(String(128), unique=True, nullable=False, index=True)
-    revenuecat_customer_id = Column(String(36), unique=True, nullable=True)
+    revenuecat_customer_id = Column(String(255), unique=True, nullable=True)
 
     # Basic Information
     email = Column(String(255), unique=True, nullable=False)
