@@ -240,8 +240,7 @@ async def correlate_revenuecat_customer(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     if (
         not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-        or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
-        or not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
+        or not settings.REVENUECAT_SECRET_API_KEY
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
@@ -267,20 +266,19 @@ async def correlate_revenuecat_customer(
         if (
             existing.original_app_user_id != payload.app_user_id
             or existing.environment != settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-            or existing.project != settings.WEB_FUNNEL_REVENUECAT_PROJECT
         ):
             raise claim_conflict()
     else:
         existing = WebFunnelRedemption(
-                lead_id=lead.id,
-                provider="revenuecat",
-                environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
-                project=settings.WEB_FUNNEL_REVENUECAT_PROJECT,
-                original_app_user_id=payload.app_user_id,
-                verified_app_user_id=payload.app_user_id,
-                entitlement_id="standard",
-                product_id=verification.product_id or "",
-                verified_at=utcnow(),
+            lead_id=lead.id,
+            provider="revenuecat",
+            environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
+            project="default",
+            original_app_user_id=payload.app_user_id,
+            verified_app_user_id=payload.app_user_id,
+            entitlement_id="standard",
+            product_id=verification.product_id or "",
+            verified_at=utcnow(),
         )
         db.add(existing)
     lead.payment_verified_at = utcnow()
@@ -288,8 +286,10 @@ async def correlate_revenuecat_customer(
         lead.status = "payment_verified"
     try:
         await db.flush()
-        preflight_token = await get_web_funnel_redemption_service().issue_preflight_token(
-            db, existing
+        preflight_token = (
+            await get_web_funnel_redemption_service().issue_preflight_token(
+                db, existing
+            )
         )
     except IntegrityError:
         await db.rollback()
@@ -317,7 +317,9 @@ async def preflight_revenuecat_redemption(
         or not token.get("email_verified")
         or provider == "anonymous"
     ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required"
+        )
     eligible = await get_web_funnel_redemption_service().preflight(
         db, uid=uid, email=email, token=payload.preflight_token
     )
@@ -361,9 +363,8 @@ async def finalize_revenuecat_redemption(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid idempotency key"
         )
     if (
-        not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
+        not settings.REVENUECAT_SECRET_API_KEY
         or not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-        or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     subscriber = await _get_web_funnel_subscription_service().get_subscriber_info(uid)
@@ -385,7 +386,6 @@ async def finalize_revenuecat_redemption(
         original_app_user_id=original_app_user_id,
         idempotency_key=idempotency_key,
         environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
-        project=settings.WEB_FUNNEL_REVENUECAT_PROJECT,
     )
 
 

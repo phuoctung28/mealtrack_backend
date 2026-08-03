@@ -7,7 +7,10 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from src.api.routes.v1 import web_funnel
-from src.infra.database.models.web_funnel_claim import WebFunnelLead
+from src.infra.database.models.web_funnel_claim import (
+    WebFunnelLead,
+    WebFunnelRedemption,
+)
 
 
 class FakeSession:
@@ -109,14 +112,14 @@ def _payload():
     )
 
 
-def _request() -> Request:
+def _request(client_host: str = "127.0.0.1") -> Request:
     return Request(
         {
             "type": "http",
             "method": "POST",
             "path": "/",
             "headers": [],
-            "client": ("127.0.0.1", 1),
+            "client": (client_host, 1),
         }
     )
 
@@ -246,10 +249,7 @@ def _configure_redemption(monkeypatch):
     monkeypatch.setattr(
         web_funnel.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "sandbox"
     )
-    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_REVENUECAT_PROJECT", "nutree")
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_REVENUECAT_SECRET_API_KEY", "secret"
-    )
+    monkeypatch.setattr(web_funnel.settings, "REVENUECAT_SECRET_API_KEY", "secret")
 
 
 class VerifiedSubscriberService:
@@ -310,7 +310,6 @@ async def test_redemption_finalization_uses_provider_derived_customer_and_fresh_
         "original_app_user_id": "$RCAnonymousID:customer",
         "idempotency_key": "x" * 16,
         "environment": "sandbox",
-        "project": "nutree",
     }
 
 
@@ -366,7 +365,46 @@ async def test_correlation_binds_verified_anonymous_web_customer(monkeypatch):
     assert binding.original_app_user_id == "$RCAnonymousID:customer"
     assert binding.verified_app_user_id == "$RCAnonymousID:customer"
     assert binding.entitlement_id == "standard"
-    assert binding.project == "nutree"
+    assert binding.project == "default"
+
+
+@pytest.mark.asyncio
+async def test_correlation_accepts_existing_binding_with_legacy_project_label(
+    monkeypatch,
+):
+    _configure_redemption(monkeypatch)
+    monkeypatch.setattr(
+        web_funnel,
+        "_get_web_funnel_subscription_service",
+        lambda: VerifiedSubscriberService(),
+    )
+    existing = WebFunnelRedemption(
+        lead_id="lead-1",
+        provider="revenuecat",
+        environment="sandbox",
+        project="nutree",
+        original_app_user_id="$RCAnonymousID:customer",
+        verified_app_user_id="$RCAnonymousID:customer",
+        entitlement_id="standard",
+        product_id="web_monthly",
+        verified_at=web_funnel.utcnow(),
+    )
+    session = CorrelationSession(_lead(), existing=existing)
+
+    response = await web_funnel.correlate_revenuecat_customer(
+        _request("127.0.0.2"),
+        "lead-1",
+        web_funnel.WebFunnelRevenueCatCorrelationRequest(
+            app_user_id="$RCAnonymousID:customer"
+        ),
+        "a" * 32,
+        "https://web.example",
+        "bff-secret",
+        session,
+    )
+
+    assert response["status"] == "payment_verified"
+    assert not session.added
 
 
 @pytest.mark.asyncio
