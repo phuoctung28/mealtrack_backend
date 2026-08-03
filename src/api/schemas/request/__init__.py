@@ -36,12 +36,6 @@ from .user_requests import (
     UserSyncRequest,
     UserUpdateLastAccessedRequest,
 )
-from .web_funnel_claim_requests import (
-    WebFunnelClaimCompleteRequest,
-    WebFunnelClaimExchangeRequest,
-    WebFunnelLeadCreateRequest,
-    WebFunnelOnboardingSnapshot,
-)
 
 __all__ = [
     # Meal
@@ -60,10 +54,6 @@ __all__ = [
     "UnitSystemEnum",
     # Onboarding
     "OnboardingCompleteRequest",
-    "WebFunnelLeadCreateRequest",
-    "WebFunnelClaimExchangeRequest",
-    "WebFunnelClaimCompleteRequest",
-    "WebFunnelOnboardingSnapshot",
     # User
     "UserSyncRequest",
     "UserUpdateLastAccessedRequest",

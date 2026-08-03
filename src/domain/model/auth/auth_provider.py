@@ -10,7 +10,6 @@ class AuthProvider(str, Enum):
 
     GOOGLE = "google"
     APPLE = "apple"
-    EMAIL_LINK = "email_link"
 
     @classmethod
     def from_string(cls, value: str) -> "AuthProvider":

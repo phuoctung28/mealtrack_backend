@@ -28,7 +28,6 @@ class TestWebhookHelpers:
         """Test platform parsing from store name."""
         assert parse_platform("APP_STORE") == "ios"
         assert parse_platform("PLAY_STORE") == "android"
-        assert parse_platform("PADDLE") == "web"
         assert parse_platform("STRIPE") == "web"
         assert parse_platform("MAC_APP_STORE") == "ios"
         assert parse_platform(None) == "ios"
@@ -125,50 +124,6 @@ class TestWebhookHandler:
                 assert result == {"status": "success"}
                 # commit/rollback are owned by the AsyncUnitOfWork context manager, not called explicitly
                 mock_uow.commit.assert_not_awaited()
-
-    async def test_web_lead_webhook_reconciles_authoritative_subscriber_immediately(
-        self, mock_request
-    ):
-        lead_id = "11111111-1111-1111-1111-111111111111"
-        mock_request.json.return_value = {
-            "event": {
-                "id": "provider-1",
-                "type": "INITIAL_PURCHASE",
-                "app_user_id": lead_id.upper(),
-            }
-        }
-        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
-            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as uow_class:
-                uow = MagicMock()
-                uow.__aenter__ = AsyncMock(return_value=uow)
-                uow.__aexit__ = AsyncMock(return_value=False)
-                uow_class.return_value = uow
-                subscription_service = MagicMock()
-                subscriber = {"subscriber": {"entitlements": {"standard": {}}}}
-                subscription_service.get_subscriber_info = AsyncMock(
-                    return_value=subscriber
-                )
-                with (
-                    patch(
-                        "src.api.routes.v1.webhooks.reconcile_revenuecat_event",
-                        new_callable=AsyncMock,
-                        return_value=True,
-                    ) as reconcile,
-                    patch(
-                        "src.api.routes.v1.webhooks._get_subscription_service",
-                        return_value=subscription_service,
-                    ),
-                    patch(
-                        "src.api.routes.v1.webhooks.get_web_funnel_outbox_dispatcher",
-                        return_value=AsyncMock(),
-                    ) as get_dispatcher,
-                ):
-                    result = await revenuecat_webhook(mock_request, authorization="test_secret")
-
-        assert result == {"status": "success"}
-        subscription_service.get_subscriber_info.assert_awaited_once_with(lead_id)
-        assert reconcile.await_args.args[2] == subscriber
-        get_dispatcher.return_value.assert_awaited_once_with(lead_id=lead_id)
 
     async def test_webhook_user_not_found_redacts_provider_ids(
         self, mock_request, webhook_event, caplog
@@ -371,61 +326,6 @@ class TestWebhookHandler:
         assert subscription.user_id == "user_123"
         assert subscription.revenuecat_subscriber_id == "firebase_uid_123"
         assert subscription.product_id == "premium_monthly"
-
-    async def test_webhook_purchase_redemption_syncs_redeemer_cache(
-        self, mock_request
-    ):
-        """A Paddle redemption refreshes the Firebase user's RevenueCat cache."""
-        mock_request.json.return_value = {
-            "event": {
-                "type": "PURCHASE_REDEEMED",
-                "redeemed_by": ["firebase_uid_123"],
-                "store": "PADDLE",
-                "environment": "PRODUCTION",
-            }
-        }
-        target_user = MagicMock(id="user_123", firebase_uid="firebase_uid_123")
-        mock_service = MagicMock()
-        mock_service.get_subscription_info = AsyncMock(
-            return_value={
-                "product_id": "premium_monthly",
-                "expires_date": datetime(2026, 8, 31),
-                "store": "PADDLE",
-            }
-        )
-
-        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
-            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as mock_uow_class:
-                mock_uow = MagicMock()
-                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
-                mock_uow.__aexit__ = AsyncMock(return_value=False)
-                mock_uow.subscriptions = MagicMock()
-                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(
-                    return_value=None
-                )
-                found_user = MagicMock()
-                found_user.scalars.return_value.first.return_value = target_user
-                mock_uow.session.execute = AsyncMock(return_value=found_user)
-                mock_uow_class.return_value = mock_uow
-
-                with patch(
-                    "src.api.routes.v1.webhooks._get_subscription_service",
-                    return_value=mock_service,
-                ), patch(
-                    "src.api.routes.v1.webhooks._lock_subscription_cache",
-                    new_callable=AsyncMock,
-                ) as lock_cache:
-                    result = await revenuecat_webhook(
-                        mock_request, authorization="test_secret"
-                    )
-
-        assert result == {"status": "success"}
-        mock_service.get_subscription_info.assert_awaited_once_with("firebase_uid_123")
-        lock_cache.assert_awaited_once_with(mock_uow, "firebase_uid_123")
-        subscription = mock_uow.session.add.call_args.args[0]
-        assert subscription.user_id == "user_123"
-        assert subscription.revenuecat_subscriber_id == "firebase_uid_123"
-        assert subscription.platform == "web"
 
     async def test_webhook_invalid_json(self, mock_request):
         """Test webhook with invalid JSON."""

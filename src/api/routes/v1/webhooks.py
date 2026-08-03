@@ -14,8 +14,6 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
 
 from src.api.base_dependencies import get_subscription_service
-from src.app.services.web_funnel_claim_payment import reconcile_revenuecat_event
-from src.bootstrap.web_funnel_claim_dispatcher import get_web_funnel_outbox_dispatcher
 from src.domain.ports.subscription_service_port import SubscriptionServicePort
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
@@ -93,26 +91,6 @@ async def revenuecat_webhook(
     event = payload.get("event", {})
     event_type = event.get("type")
 
-    # A paid web lead is deliberately recognized only by an exact backend UUID.
-    # It is reconciled from fetched provider state before the native path, which
-    # continues untouched for every non-lead event.
-    app_user_id = event.get("app_user_id")
-    if isinstance(app_user_id, str):
-        try:
-            lead_id = str(uuid.UUID(app_user_id))
-        except ValueError:
-            pass
-        else:
-            async with AsyncUnitOfWork() as web_funnel_uow:
-                subscriber = await _get_subscription_service().get_subscriber_info(
-                    lead_id
-                )
-                if await reconcile_revenuecat_event(
-                    web_funnel_uow.session, event, subscriber
-                ):
-                    await get_web_funnel_outbox_dispatcher()(lead_id=lead_id)
-                    return {"status": "success"}
-
     logger.info(
         "RevenueCat webhook received: event_type=%s environment=%s",
         event_type,
@@ -128,14 +106,6 @@ async def revenuecat_webhook(
                 logger.info("RevenueCat transfer ignored: target user not found")
                 return {"status": "ignored", "reason": "user_not_found"}
             await handle_transfer(uow, event)
-            await sync_redeemed_target_subscription(uow, user, event)
-            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
-            return {"status": "success"}
-
-        if event_type == "PURCHASE_REDEEMED":
-            if not user:
-                logger.info("RevenueCat purchase redemption target user not found")
-                raise HTTPException(status_code=404, detail="User not found")
             await sync_redeemed_target_subscription(uow, user, event)
             increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
             return {"status": "success"}
@@ -184,7 +154,6 @@ def _candidate_revenuecat_ids(event: dict) -> list[str]:
         event.get("app_user_id"),
         event.get("original_app_user_id"),
         *(event.get("aliases") or []),
-        *(event.get("redeemed_by") or []),
         *(event.get("transferred_to") or []),
         *(event.get("transferred_from") or []),
     ]
@@ -663,7 +632,6 @@ def parse_platform(store: str) -> str:
     store_map = {
         "APP_STORE": "ios",
         "PLAY_STORE": "android",
-        "PADDLE": "web",
         "STRIPE": "web",
         "MAC_APP_STORE": "ios",
     }
