@@ -247,9 +247,7 @@ def _configure_redemption(monkeypatch):
         web_funnel.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "sandbox"
     )
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_REVENUECAT_PROJECT", "nutree")
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_REVENUECAT_SECRET_API_KEY", "secret"
-    )
+    monkeypatch.setattr(web_funnel.settings, "REVENUECAT_SECRET_API_KEY", "secret")
     monkeypatch.setattr(
         web_funnel.settings, "WEB_FUNNEL_REVENUECAT_PRODUCT_IDS", "web_monthly"
     )

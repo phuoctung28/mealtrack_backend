@@ -120,6 +120,11 @@ def _allowed_revenuecat_products() -> set[str]:
     }
 
 
+def _web_funnel_project() -> str:
+    """Use the optional label only to partition records in a shared database."""
+    return settings.WEB_FUNNEL_REVENUECAT_PROJECT or "default"
+
+
 def _get_web_funnel_subscription_service():
     """Resolve RevenueCat through the API composition boundary."""
     return get_subscription_service()
@@ -249,8 +254,7 @@ async def correlate_revenuecat_customer(
     allowed_products = _allowed_revenuecat_products()
     if (
         not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-        or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
-        or not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
+        or not settings.REVENUECAT_SECRET_API_KEY
         or not allowed_products
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -278,7 +282,7 @@ async def correlate_revenuecat_customer(
         if (
             existing.original_app_user_id != payload.app_user_id
             or existing.environment != settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-            or existing.project != settings.WEB_FUNNEL_REVENUECAT_PROJECT
+            or existing.project != _web_funnel_project()
         ):
             raise claim_conflict()
     else:
@@ -286,7 +290,7 @@ async def correlate_revenuecat_customer(
                 lead_id=lead.id,
                 provider="revenuecat",
                 environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
-                project=settings.WEB_FUNNEL_REVENUECAT_PROJECT,
+                project=_web_funnel_project(),
                 original_app_user_id=payload.app_user_id,
                 verified_app_user_id=payload.app_user_id,
                 entitlement_id="standard",
@@ -373,9 +377,8 @@ async def finalize_revenuecat_redemption(
         )
     allowed_products = _allowed_revenuecat_products()
     if (
-        not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
+        not settings.REVENUECAT_SECRET_API_KEY
         or not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-        or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
         or not allowed_products
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -399,7 +402,7 @@ async def finalize_revenuecat_redemption(
         original_app_user_id=original_app_user_id,
         idempotency_key=idempotency_key,
         environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
-        project=settings.WEB_FUNNEL_REVENUECAT_PROJECT,
+        project=_web_funnel_project(),
     )
 
 
