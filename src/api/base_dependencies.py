@@ -582,3 +582,12 @@ def get_subscription_service() -> "SubscriptionServicePort":
         _subscription_service = RevenueCatAdapter(api_key=api_key)
 
     return _subscription_service
+
+
+def get_web_funnel_redemption_service():
+    """Build the infrastructure redemption service at the composition boundary."""
+    from src.bootstrap.web_funnel_redemption import (
+        get_web_funnel_redemption_service as factory,
+    )
+
+    return factory()

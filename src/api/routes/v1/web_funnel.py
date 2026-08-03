@@ -9,6 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.base_dependencies import (
+    get_subscription_service,
+    get_web_funnel_redemption_service,
+)
 from src.api.dependencies.auth import verify_firebase_token_revocation_checked
 from src.api.middleware.rate_limit import limiter
 from src.api.schemas.request.web_funnel_claim_requests import (
@@ -27,13 +31,11 @@ from src.app.services.web_funnel_claim_common import (
 from src.app.services.web_funnel_claim_completion import complete_claim, recover_claim
 from src.app.services.web_funnel_claim_exchange import exchange_claim
 from src.app.services.web_funnel_claim_payment import next_claim_generation
-from src.app.services.web_funnel_redemption_completion import finalize_redemption
 from src.app.services.web_funnel_redemption_verification import (
     RevenueCatVerificationState,
     verify_bound_web_customer,
     verify_redeemed_customer,
 )
-from src.infra.adapters.revenuecat_adapter import RevenueCatAdapter
 from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
 from src.infra.database.models.web_funnel_claim import (
@@ -113,9 +115,9 @@ def _allowed_revenuecat_products() -> set[str]:
     }
 
 
-def _get_web_funnel_subscription_service() -> RevenueCatAdapter:
-    """Use the private key dedicated to the configured web RevenueCat project."""
-    return RevenueCatAdapter(api_key=settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY)
+def _get_web_funnel_subscription_service():
+    """Resolve RevenueCat through the API composition boundary."""
+    return get_subscription_service()
 
 
 def _subscriber_original_app_user_id(subscriber: dict | None) -> str | None:
@@ -354,7 +356,7 @@ async def finalize_revenuecat_redemption(
     ):
         raise claim_not_found()
     response.headers["Cache-Control"] = "no-store"
-    return await finalize_redemption(
+    return await get_web_funnel_redemption_service().finalize(
         db,
         uid=uid,
         email=email,

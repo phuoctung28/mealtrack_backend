@@ -279,11 +279,14 @@ async def test_redemption_finalization_uses_provider_derived_customer_and_fresh_
     )
     captured = {}
 
-    async def finalize(_db, **kwargs):
-        captured.update(kwargs)
-        return {"version": "redemption_result_v1", "access_status": "active"}
+    class RedemptionService:
+        async def finalize(self, _db, **kwargs):
+            captured.update(kwargs)
+            return {"version": "redemption_result_v1", "access_status": "active"}
 
-    monkeypatch.setattr(web_funnel, "finalize_redemption", finalize)
+    monkeypatch.setattr(
+        web_funnel, "get_web_funnel_redemption_service", lambda: RedemptionService()
+    )
     token = {
         "uid": "firebase-uid",
         "email": "buyer@example.com",

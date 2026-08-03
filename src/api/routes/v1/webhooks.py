@@ -13,7 +13,10 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
 
-from src.api.base_dependencies import get_subscription_service
+from src.api.base_dependencies import (
+    get_subscription_service,
+    get_web_funnel_redemption_service,
+)
 from src.app.services.web_funnel_claim_payment import reconcile_revenuecat_event
 from src.bootstrap.web_funnel_claim_dispatcher import get_web_funnel_outbox_dispatcher
 from src.domain.ports.subscription_service_port import SubscriptionServicePort
@@ -23,7 +26,6 @@ from src.infra.adapters.posthog_adapter import PostHogAdapter
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
-from src.infra.database.models.web_funnel_claim import WebFunnelRedemption
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
 from src.observability import increment_metric
@@ -62,39 +64,11 @@ def _get_subscription_service() -> SubscriptionServicePort:
     return get_subscription_service()
 
 
-def _redemption_values(event: dict, name: str) -> set[str]:
-    value = event.get(name)
-    if isinstance(value, str):
-        return {value}
-    if isinstance(value, list):
-        return {item for item in value if isinstance(item, str)}
-    return set()
-
-
 async def _record_web_funnel_redemption(uow, event: dict) -> bool:
     """Store the provider-authenticated redeemer before any native user lookup."""
-    if event.get("type") != "PURCHASE_REDEEMED":
-        return False
-    originals = _redemption_values(event, "redeemed_from")
-    original_app_user_id = event.get("original_app_user_id")
-    if isinstance(original_app_user_id, str):
-        originals.add(original_app_user_id)
-    redeemers = _redemption_values(event, "redeemed_by")
-    if not originals or len(redeemers) != 1:
-        return False
-    binding = await uow.session.scalar(
-        select(WebFunnelRedemption)
-        .where(WebFunnelRedemption.original_app_user_id.in_(originals))
-        .with_for_update()
+    return await get_web_funnel_redemption_service().record_webhook_redemption(
+        uow.session, event
     )
-    if not binding:
-        return False
-    redeemer_uid = next(iter(redeemers))
-    if binding.redeemer_uid and binding.redeemer_uid != redeemer_uid:
-        raise HTTPException(status_code=409, detail="Redemption already bound")
-    binding.redeemer_uid = redeemer_uid
-    binding.redemption_confirmed_at = utc_now()
-    return True
 
 
 @router.post("/revenuecat")
