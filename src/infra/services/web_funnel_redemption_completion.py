@@ -76,7 +76,7 @@ async def finalize_redemption(
         )
         .with_for_update()
     )
-    if not binding:
+    if not binding or binding.preflight_uid != uid:
         raise claim_not_found()
     if binding.redeemer_uid != uid:
         raise claim_not_found()

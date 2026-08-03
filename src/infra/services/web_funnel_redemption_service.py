@@ -1,10 +1,17 @@
 """Infrastructure persistence for web-funnel redemptions."""
 
+import hashlib
+import secrets
+from datetime import timedelta
+
 from fastapi import HTTPException
 from sqlalchemy import select
 
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.models.web_funnel_claim import WebFunnelRedemption
+from src.infra.database.models.web_funnel_claim import (
+    WebFunnelLead,
+    WebFunnelRedemption,
+)
 from src.infra.services.web_funnel_redemption_completion import finalize_redemption
 
 
@@ -13,6 +20,36 @@ class WebFunnelRedemptionService:
 
     async def finalize(self, *args, **kwargs):
         return await finalize_redemption(*args, **kwargs)
+
+    async def issue_preflight_token(self, db, binding: WebFunnelRedemption) -> str:
+        """Rotate the opaque proof delivered beside the short-lived redemption URL."""
+        token = secrets.token_urlsafe(32)
+        binding.preflight_token_hash = hashlib.sha256(token.encode()).hexdigest()
+        binding.preflight_token_expires_at = utc_now() + timedelta(minutes=60)
+        await db.commit()
+        return token
+
+    async def preflight(self, db, *, uid: str, email: str, token: str) -> bool:
+        """Bind a matching verified Firebase identity without disclosing checkout email."""
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        binding = await db.scalar(
+            select(WebFunnelRedemption)
+            .where(WebFunnelRedemption.preflight_token_hash == token_hash)
+            .with_for_update()
+        )
+        if not binding or not binding.preflight_token_expires_at:
+            return False
+        if binding.preflight_token_expires_at < utc_now():
+            return False
+        lead = await db.get(WebFunnelLead, binding.lead_id, with_for_update=True)
+        if not lead or lead.email.lower() != email.lower():
+            return False
+        if binding.preflight_uid and binding.preflight_uid != uid:
+            return False
+        binding.preflight_uid = uid
+        binding.preflight_at = utc_now()
+        await db.commit()
+        return True
 
     async def record_webhook_redemption(self, db, event: dict) -> bool:
         if event.get("type") != "PURCHASE_REDEEMED":
