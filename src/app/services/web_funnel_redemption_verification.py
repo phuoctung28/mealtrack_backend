@@ -24,7 +24,7 @@ def _verify(
     subscriber: dict | None,
     *,
     original_app_user_id: str,
-    allowed_product_ids: set[str],
+    allowed_product_ids: set[str] | None = None,
 ) -> RevenueCatVerification:
     customer = (subscriber or {}).get("subscriber")
     if (
@@ -38,8 +38,8 @@ def _verify(
     )
     if (
         not isinstance(product_id, str)
-        or product_id not in allowed_product_ids
         or not is_active_standard(subscriber)
+        or (allowed_product_ids is not None and product_id not in allowed_product_ids)
     ):
         return RevenueCatVerification(RevenueCatVerificationState.NOT_ENTITLED)
     return RevenueCatVerification(RevenueCatVerificationState.VERIFIED, product_id)
@@ -49,7 +49,7 @@ def verify_bound_web_customer(
     subscriber: dict | None,
     *,
     original_app_user_id: str,
-    allowed_product_ids: set[str],
+    allowed_product_ids: set[str] | None = None,
 ) -> RevenueCatVerification:
     """Verify the browser hint names the authoritative anonymous customer."""
     return _verify(
@@ -63,7 +63,7 @@ def verify_redeemed_customer(
     subscriber: dict | None,
     *,
     original_app_user_id: str,
-    allowed_product_ids: set[str],
+    allowed_product_ids: set[str] | None = None,
 ) -> RevenueCatVerification:
     """Verify a Firebase UID resolves to the previously bound web customer."""
     return _verify(
