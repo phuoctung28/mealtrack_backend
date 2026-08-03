@@ -4,7 +4,6 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from starlette.requests import Request
-from starlette.responses import Response
 
 from src.api.routes.v1 import web_funnel
 from src.infra.database.models.web_funnel_claim import WebFunnelLead
@@ -58,19 +57,6 @@ class ConcurrentCreateSession(CreateSession):
         return self.winner if self.scalar_calls > 1 else None
 
 
-class CorrelationSession(FakeSession):
-    def __init__(self, lead: WebFunnelLead, existing=None):
-        super().__init__(lead)
-        self.existing = existing
-        self.added: list[object] = []
-
-    async def scalar(self, _statement):
-        return self.existing
-
-    def add(self, item):
-        self.added.append(item)
-
-
 def _lead() -> WebFunnelLead:
     return WebFunnelLead(
         id="lead-1",
@@ -87,64 +73,30 @@ def _lead() -> WebFunnelLead:
 
 
 def _payload():
-    return web_funnel.WebFunnelLeadCreateRequest.model_validate(
-        {
-            "email": "buyer@example.com",
-            "payload": {
-                "birth_year": 1995,
-                "birth_month": 4,
-                "birth_day": 20,
-                "gender": "female",
-                "height": 168,
-                "weight": 62,
-                "job_type": "desk",
-                "training_days_per_week": 3,
-                "training_minutes_per_session": 45,
-                "goal": "recomp",
-            },
-        }
-    )
+    return web_funnel.WebFunnelLeadCreateRequest.model_validate({"email": "buyer@example.com", "payload": {"birth_year": 1995, "birth_month": 4, "birth_day": 20, "gender": "female", "height": 168, "weight": 62, "job_type": "desk", "training_days_per_week": 3, "training_minutes_per_session": 45, "goal": "recomp"}})
 
 
 def _request() -> Request:
-    return Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "path": "/",
-            "headers": [],
-            "client": ("127.0.0.1", 1),
-        }
-    )
+    return Request({"type": "http", "method": "POST", "path": "/", "headers": [], "client": ("127.0.0.1", 1)})
 
 
 @pytest.mark.asyncio
 async def test_status_is_possession_bound_and_never_returns_email_or_snapshot():
-    response = await web_funnel.get_lead_status(
-        _request(), "lead-1", "a" * 32, FakeSession(_lead())
-    )
-    assert response == {
-        "lead_id": "lead-1",
-        "masked_email": "b***@example.com",
-        "status": "draft",
-    }
+    response = await web_funnel.get_lead_status(_request(), "lead-1", "a" * 32, FakeSession(_lead()))
+    assert response == {"lead_id": "lead-1", "masked_email": "b***@example.com", "status": "draft"}
 
 
 @pytest.mark.asyncio
 async def test_status_hides_wrong_capability_as_not_found():
     with pytest.raises(HTTPException) as error:
-        await web_funnel.get_lead_status(
-            _request(), "lead-1", "b" * 32, FakeSession(_lead())
-        )
+        await web_funnel.get_lead_status(_request(), "lead-1", "b" * 32, FakeSession(_lead()))
     assert error.value.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_reset_revokes_only_unpaid_possession_bound_draft():
     session = FakeSession(_lead())
-    assert await web_funnel.reset_lead(_request(), "lead-1", "a" * 32, session) == {
-        "status": "revoked"
-    }
+    assert await web_funnel.reset_lead(_request(), "lead-1", "a" * 32, session) == {"status": "revoked"}
     assert session.lead.status == "revoked"
     assert session.lead.revoked_at is not None
     assert session.committed
@@ -152,242 +104,33 @@ async def test_reset_revokes_only_unpaid_possession_bound_draft():
 
 @pytest.mark.asyncio
 async def test_create_replays_same_request_only_to_same_capability(monkeypatch):
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example"
-    )
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret"
-    )
-    response = await web_funnel.create_lead(
-        _request(),
-        _payload(),
-        "a" * 32,
-        "request-1",
-        "https://web.example",
-        "bff-secret",
-        CreateSession(_lead()),
-    )
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
+    response = await web_funnel.create_lead(_request(), _payload(), "a" * 32, "request-1", "https://web.example", "bff-secret", CreateSession(_lead()))
     assert response["lead_id"] == "lead-1"
 
 
 @pytest.mark.asyncio
 async def test_create_hides_replayed_request_from_another_capability(monkeypatch):
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example"
-    )
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret"
-    )
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
     with pytest.raises(HTTPException) as error:
-        await web_funnel.create_lead(
-            _request(),
-            _payload(),
-            "b" * 32,
-            "request-1",
-            "https://web.example",
-            "bff-secret",
-            CreateSession(_lead()),
-        )
+        await web_funnel.create_lead(_request(), _payload(), "b" * 32, "request-1", "https://web.example", "bff-secret", CreateSession(_lead()))
     assert error.value.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_create_requires_server_held_bff_credential(monkeypatch):
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example"
-    )
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret"
-    )
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
     with pytest.raises(HTTPException) as error:
-        await web_funnel.create_lead(
-            _request(),
-            _payload(),
-            "a" * 32,
-            "request-1",
-            "https://web.example",
-            "attacker-token",
-            CreateSession(None),
-        )
+        await web_funnel.create_lead(_request(), _payload(), "a" * 32, "request-1", "https://web.example", "attacker-token", CreateSession(None))
     assert error.value.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_create_concurrent_unique_conflict_converges_to_winner(monkeypatch):
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example"
-    )
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret"
-    )
-    response = await web_funnel.create_lead(
-        _request(),
-        _payload(),
-        "a" * 32,
-        "request-1",
-        "https://web.example",
-        "bff-secret",
-        ConcurrentCreateSession(_lead()),
-    )
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
+    response = await web_funnel.create_lead(_request(), _payload(), "a" * 32, "request-1", "https://web.example", "bff-secret", ConcurrentCreateSession(_lead()))
     assert response["lead_id"] == "lead-1"
-
-
-def _configure_redemption(monkeypatch):
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example"
-    )
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret"
-    )
-    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_REDEMPTION_ENABLED", True)
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "sandbox"
-    )
-    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_REVENUECAT_PROJECT", "nutree")
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_REVENUECAT_SECRET_API_KEY", "secret"
-    )
-    monkeypatch.setattr(
-        web_funnel.settings, "WEB_FUNNEL_REVENUECAT_PRODUCT_IDS", "web_monthly"
-    )
-
-
-class VerifiedSubscriberService:
-    async def get_subscriber_info(self, _app_user_id):
-        return {
-            "subscriber": {
-                "original_app_user_id": "$RCAnonymousID:customer",
-                "entitlements": {
-                    "standard": {
-                        "product_identifier": "web_monthly",
-                        "expires_date": None,
-                    }
-                },
-            }
-        }
-
-
-@pytest.mark.asyncio
-async def test_redemption_finalization_uses_provider_derived_customer_and_fresh_verified_identity(
-    monkeypatch,
-):
-    _configure_redemption(monkeypatch)
-    monkeypatch.setattr(
-        web_funnel,
-        "_get_web_funnel_subscription_service",
-        lambda: VerifiedSubscriberService(),
-    )
-    captured = {}
-
-    async def finalize(_db, **kwargs):
-        captured.update(kwargs)
-        return {"version": "redemption_result_v1", "access_status": "active"}
-
-    monkeypatch.setattr(web_funnel, "finalize_redemption", finalize)
-    token = {
-        "uid": "firebase-uid",
-        "email": "buyer@example.com",
-        "email_verified": True,
-        "iat": int(web_funnel.utcnow().timestamp()),
-        "firebase": {"sign_in_provider": "password"},
-    }
-    response = await web_funnel.finalize_revenuecat_redemption(
-        _request(),
-        web_funnel.WebFunnelRedemptionFinalizeRequest(confirm_apply_purchase=True),
-        Response(),
-        "x" * 16,
-        token,
-        object(),
-    )
-
-    assert response["version"] == "redemption_result_v1"
-    assert captured == {
-        "uid": "firebase-uid",
-        "email": "buyer@example.com",
-        "original_app_user_id": "$RCAnonymousID:customer",
-        "idempotency_key": "x" * 16,
-        "environment": "sandbox",
-        "project": "nutree",
-    }
-
-
-@pytest.mark.asyncio
-async def test_redemption_finalization_rejects_anonymous_identity(monkeypatch):
-    _configure_redemption(monkeypatch)
-    token = {
-        "uid": "firebase-uid",
-        "email": "buyer@example.com",
-        "email_verified": True,
-        "iat": int(web_funnel.utcnow().timestamp()),
-        "firebase": {"sign_in_provider": "anonymous"},
-    }
-    with pytest.raises(HTTPException) as error:
-        await web_funnel.finalize_revenuecat_redemption(
-            _request(),
-            web_funnel.WebFunnelRedemptionFinalizeRequest(confirm_apply_purchase=True),
-            Response(),
-            "x" * 16,
-            token,
-            object(),
-        )
-    assert error.value.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_correlation_binds_verified_anonymous_web_customer(monkeypatch):
-    _configure_redemption(monkeypatch)
-    monkeypatch.setattr(
-        web_funnel,
-        "_get_web_funnel_subscription_service",
-        lambda: VerifiedSubscriberService(),
-    )
-    session = CorrelationSession(_lead())
-    payload = web_funnel.WebFunnelRevenueCatCorrelationRequest(
-        app_user_id="$RCAnonymousID:customer"
-    )
-
-    response = await web_funnel.correlate_revenuecat_customer(
-        _request(),
-        "lead-1",
-        payload,
-        "a" * 32,
-        "https://web.example",
-        "bff-secret",
-        session,
-    )
-
-    assert response["status"] == "payment_verified"
-    assert session.committed
-    binding = session.added[0]
-    assert binding.original_app_user_id == "$RCAnonymousID:customer"
-    assert binding.verified_app_user_id == "$RCAnonymousID:customer"
-    assert binding.entitlement_id == "standard"
-    assert binding.project == "nutree"
-
-
-@pytest.mark.asyncio
-async def test_correlation_hides_unverified_customer_as_not_found(monkeypatch):
-    _configure_redemption(monkeypatch)
-    monkeypatch.setattr(
-        web_funnel,
-        "_get_web_funnel_subscription_service",
-        lambda: VerifiedSubscriberService(),
-    )
-    session = CorrelationSession(_lead())
-    payload = web_funnel.WebFunnelRevenueCatCorrelationRequest(
-        app_user_id="$RCAnonymousID:other"
-    )
-
-    with pytest.raises(HTTPException) as error:
-        await web_funnel.correlate_revenuecat_customer(
-            _request(),
-            "lead-1",
-            payload,
-            "a" * 32,
-            "https://web.example",
-            "bff-secret",
-            session,
-        )
-
-    assert error.value.status_code == 404
-    assert not session.added

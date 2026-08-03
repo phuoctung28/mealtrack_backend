@@ -41,7 +41,6 @@ def test_model_registry_imports_expected_tables() -> None:
         "email_logs",
         "promo_codes",
         "promo_code_redemptions",
-        "web_funnel_redemptions",
     }
 
     assert expected_tables <= set(Base.metadata.tables)

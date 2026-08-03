@@ -15,32 +15,21 @@ from src.api.schemas.request.web_funnel_claim_requests import (
     WebFunnelClaimCompleteRequest,
     WebFunnelClaimExchangeRequest,
     WebFunnelLeadCreateRequest,
-    WebFunnelRedemptionFinalizeRequest,
-    WebFunnelRevenueCatCorrelationRequest,
 )
 from src.app.services.web_funnel_claim_common import (
     RESEND_COOLDOWN,
-    claim_conflict,
     claim_not_found,
     utcnow,
 )
 from src.app.services.web_funnel_claim_completion import complete_claim, recover_claim
 from src.app.services.web_funnel_claim_exchange import exchange_claim
 from src.app.services.web_funnel_claim_payment import next_claim_generation
-from src.app.services.web_funnel_redemption_completion import finalize_redemption
-from src.app.services.web_funnel_redemption_verification import (
-    RevenueCatVerificationState,
-    verify_bound_web_customer,
-    verify_redeemed_customer,
-)
-from src.infra.adapters.revenuecat_adapter import RevenueCatAdapter
 from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
 from src.infra.database.models.web_funnel_claim import (
     WebFunnelClaim,
     WebFunnelLead,
     WebFunnelOutbox,
-    WebFunnelRedemption,
 )
 
 router = APIRouter(prefix="/v1/web-funnel", tags=["Web Funnel"])
@@ -68,25 +57,17 @@ def _projection(lead: WebFunnelLead) -> dict[str, str | int | None]:
 
 def _require_bff_request(origin: str | None, credential: str | None) -> None:
     """Require server-held BFF proof; Origin only narrows browser-origin use."""
-    if (
-        not settings.WEB_FUNNEL_BFF_SHARED_SECRET
-        or not credential
-        or not compare_digest(credential, settings.WEB_FUNNEL_BFF_SHARED_SECRET)
+    if not settings.WEB_FUNNEL_BFF_SHARED_SECRET or not credential or not compare_digest(
+        credential, settings.WEB_FUNNEL_BFF_SHARED_SECRET
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if (
-        settings.WEB_FUNNEL_BFF_ORIGIN
-        and origin
-        and origin != settings.WEB_FUNNEL_BFF_ORIGIN
-    ):
+    if settings.WEB_FUNNEL_BFF_ORIGIN and origin and origin != settings.WEB_FUNNEL_BFF_ORIGIN:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
 def _require_access_key(key: str | None) -> str:
     if not key or len(key) < 32:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     return _hash(key)
 
 
@@ -98,32 +79,6 @@ def _require_fresh_token(token: dict) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Fresh authentication required",
         )
-
-
-def _require_legacy_claim_enabled() -> None:
-    if not settings.WEB_FUNNEL_LEGACY_CLAIM_ENABLED:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-
-def _allowed_revenuecat_products() -> set[str]:
-    return {
-        product_id.strip()
-        for product_id in settings.WEB_FUNNEL_REVENUECAT_PRODUCT_IDS.split(",")
-        if product_id.strip()
-    }
-
-
-def _get_web_funnel_subscription_service() -> RevenueCatAdapter:
-    """Use the private key dedicated to the configured web RevenueCat project."""
-    return RevenueCatAdapter(api_key=settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY)
-
-
-def _subscriber_original_app_user_id(subscriber: dict | None) -> str | None:
-    customer = (subscriber or {}).get("subscriber")
-    original = (
-        customer.get("original_app_user_id") if isinstance(customer, dict) else None
-    )
-    return original if isinstance(original, str) and original else None
 
 
 @router.post("/leads", status_code=status.HTTP_201_CREATED)
@@ -141,9 +96,7 @@ async def create_lead(
     _require_bff_request(origin, bff_credential)
     access_key_hash = _require_access_key(access_key)
     if not request_id or len(request_id) > 128:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid request"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid request")
 
     existing = await db.scalar(
         select(WebFunnelLead).where(WebFunnelLead.request_id == request_id)
@@ -160,9 +113,7 @@ async def create_lead(
         request_id=request_id,
         snapshot_version="web_onboarding_snapshot_v1",
         snapshot=snapshot,
-        snapshot_hash=_hash(
-            json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
-        ),
+        snapshot_hash=_hash(json.dumps(snapshot, sort_keys=True, separators=(",", ":"))),
         status="draft",
         revision=1,
         access_sync_status="pending",
@@ -173,9 +124,7 @@ async def create_lead(
         await db.refresh(lead)
     except IntegrityError:
         await db.rollback()
-        existing = await db.scalar(
-            select(WebFunnelLead).where(WebFunnelLead.request_id == request_id)
-        )
+        existing = await db.scalar(select(WebFunnelLead).where(WebFunnelLead.request_id == request_id))
         if existing and compare_digest(existing.access_key_hash, access_key_hash):
             return _projection(existing)
         raise claim_not_found() from None
@@ -195,14 +144,10 @@ async def reset_lead(
 ):
     """Revoke the browser capability's unpaid draft without revealing ownership."""
     lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
-    if not lead or not compare_digest(
-        lead.access_key_hash, _require_access_key(access_key)
-    ):
+    if not lead or not compare_digest(lead.access_key_hash, _require_access_key(access_key)):
         raise claim_not_found()
     if lead.status not in {"draft", "checkout_started"}:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Lead unavailable"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lead unavailable")
     lead.revoked_at, lead.status = utcnow(), "revoked"
     await db.commit()
     return {"status": "revoked"}
@@ -224,147 +169,6 @@ async def get_lead_status(
     return _projection(lead)
 
 
-@router.post("/leads/{lead_id}/revenuecat-correlation")
-@limiter.limit("5/minute")
-async def correlate_revenuecat_customer(
-    request: Request,
-    lead_id: str,
-    payload: WebFunnelRevenueCatCorrelationRequest,
-    access_key: str | None = Header(default=None, alias="X-Lead-Access-Key"),
-    origin: str | None = Header(default=None, alias="Origin"),
-    bff_credential: str | None = Header(default=None, alias="X-Web-Funnel-BFF-Token"),
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Bind an anonymous web customer only after a private provider read."""
-    _require_bff_request(origin, bff_credential)
-    if not settings.WEB_FUNNEL_REDEMPTION_ENABLED:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    allowed_products = _allowed_revenuecat_products()
-    if (
-        not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-        or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
-        or not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
-        or not allowed_products
-    ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
-    if not lead or not compare_digest(
-        lead.access_key_hash, _require_access_key(access_key)
-    ):
-        raise claim_not_found()
-    subscriber = await _get_web_funnel_subscription_service().get_subscriber_info(
-        payload.app_user_id
-    )
-    verification = verify_bound_web_customer(
-        subscriber,
-        original_app_user_id=payload.app_user_id,
-        allowed_product_ids=allowed_products,
-    )
-    if verification.state is not RevenueCatVerificationState.VERIFIED:
-        raise claim_not_found()
-    existing = await db.scalar(
-        select(WebFunnelRedemption)
-        .where(WebFunnelRedemption.lead_id == lead.id)
-        .with_for_update()
-    )
-    if existing:
-        if (
-            existing.original_app_user_id != payload.app_user_id
-            or existing.environment != settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-            or existing.project != settings.WEB_FUNNEL_REVENUECAT_PROJECT
-        ):
-            raise claim_conflict()
-    else:
-        db.add(
-            WebFunnelRedemption(
-                lead_id=lead.id,
-                provider="revenuecat",
-                environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
-                project=settings.WEB_FUNNEL_REVENUECAT_PROJECT,
-                original_app_user_id=payload.app_user_id,
-                verified_app_user_id=payload.app_user_id,
-                entitlement_id="standard",
-                product_id=verification.product_id or "",
-                verified_at=utcnow(),
-            )
-        )
-    lead.payment_verified_at = utcnow()
-    if lead.status in {"draft", "checkout_started"}:
-        lead.status = "payment_verified"
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise claim_conflict() from None
-    return _projection(lead)
-
-
-@router.post("/redemptions/finalize")
-@limiter.limit("5/minute")
-async def finalize_revenuecat_redemption(
-    request: Request,
-    payload: WebFunnelRedemptionFinalizeRequest,
-    response: Response,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    token: dict = Depends(verify_firebase_token_revocation_checked),
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Finalize one redemption from a fresh, verified Firebase identity only."""
-    if not settings.WEB_FUNNEL_REDEMPTION_ENABLED:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if not payload.confirm_apply_purchase:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Purchase confirmation required",
-        )
-    _require_fresh_token(token)
-    uid, email = token.get("uid"), token.get("email")
-    provider = (token.get("firebase") or {}).get("sign_in_provider")
-    if (
-        not isinstance(uid, str)
-        or not isinstance(email, str)
-        or not token.get("email_verified")
-        or provider == "anonymous"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required"
-        )
-    if not idempotency_key or not 16 <= len(idempotency_key) <= 255:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid idempotency key"
-        )
-    allowed_products = _allowed_revenuecat_products()
-    if (
-        not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
-        or not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-        or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
-        or not allowed_products
-    ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    subscriber = await _get_web_funnel_subscription_service().get_subscriber_info(uid)
-    original_app_user_id = _subscriber_original_app_user_id(subscriber)
-    if (
-        not original_app_user_id
-        or verify_redeemed_customer(
-            subscriber,
-            original_app_user_id=original_app_user_id,
-            allowed_product_ids=allowed_products,
-        ).state
-        is not RevenueCatVerificationState.VERIFIED
-    ):
-        raise claim_not_found()
-    response.headers["Cache-Control"] = "no-store"
-    return await finalize_redemption(
-        db,
-        uid=uid,
-        email=email,
-        original_app_user_id=original_app_user_id,
-        idempotency_key=idempotency_key,
-        environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
-        project=settings.WEB_FUNNEL_REVENUECAT_PROJECT,
-    )
-
-
 @router.post("/leads/{lead_id}/resend")
 @limiter.limit("3/minute")
 async def resend_claim(
@@ -374,11 +178,8 @@ async def resend_claim(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Queue a fresh link generation; old unconsumed credentials are revoked."""
-    _require_legacy_claim_enabled()
     lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
-    if not lead or not compare_digest(
-        lead.access_key_hash, _require_access_key(access_key)
-    ):
+    if not lead or not compare_digest(lead.access_key_hash, _require_access_key(access_key)):
         raise claim_not_found()
     if lead.status not in {"payment_verified", "email_queued", "claim_reserved"}:
         raise claim_not_found()
@@ -392,34 +193,17 @@ async def resend_claim(
     ).all()
     latest = claims[0] if claims else None
     if latest and latest.created_at + RESEND_COOLDOWN > utcnow():
-        return {
-            **_projection(lead),
-            "retry_after_seconds": int(
-                (latest.created_at + RESEND_COOLDOWN - utcnow()).total_seconds()
-            ),
-        }
+        return {**_projection(lead), "retry_after_seconds": int((latest.created_at + RESEND_COOLDOWN - utcnow()).total_seconds())}
     for claim in claims:
         if not claim.consumed_at and not claim.revoked_at:
             claim.revoked_at = utcnow()
     generation = await next_claim_generation(db, lead.id)
     # The worker generates the raw link only in memory and persists its hash after
     # sending. Neither this outbox nor any request payload can leak the secret.
-    db.add(
-        WebFunnelOutbox(
-            idempotency_key=f"claim-email:{lead.id}:{generation}",
-            job_type="claim_email",
-            payload={"lead_id": lead.id, "generation": generation},
-            status="pending",
-            attempts=0,
-            next_attempt_at=utcnow(),
-        )
-    )
+    db.add(WebFunnelOutbox(idempotency_key=f"claim-email:{lead.id}:{generation}", job_type="claim_email", payload={"lead_id": lead.id, "generation": generation}, status="pending", attempts=0, next_attempt_at=utcnow()))
     lead.status = "email_queued"
     await db.commit()
-    return {
-        **_projection(lead),
-        "retry_after_seconds": int(RESEND_COOLDOWN.total_seconds()),
-    }
+    return {**_projection(lead), "retry_after_seconds": int(RESEND_COOLDOWN.total_seconds())}
 
 
 @router.post("/claims/exchange")
@@ -430,7 +214,6 @@ async def exchange(
     response: Response,
     db: AsyncSession = Depends(get_async_db),
 ):
-    _require_legacy_claim_enabled()
     response.headers["Cache-Control"] = "no-store"
     return await exchange_claim(db, payload.magic_token, payload.client_retry_secret)
 
@@ -444,12 +227,9 @@ async def complete(
     token: dict = Depends(verify_firebase_token_revocation_checked),
     db: AsyncSession = Depends(get_async_db),
 ):
-    _require_legacy_claim_enabled()
     response.headers["Cache-Control"] = "no-store"
     _require_fresh_token(token)
-    return await complete_claim(
-        db, token.get("uid", ""), token.get("email"), payload.exchange_token
-    )
+    return await complete_claim(db, token.get("uid", ""), token.get("email"), payload.exchange_token)
 
 
 @router.get("/claims/recovery")
@@ -460,14 +240,8 @@ async def recovery(
     token: dict = Depends(verify_firebase_token_revocation_checked),
     db: AsyncSession = Depends(get_async_db),
 ):
-    _require_legacy_claim_enabled()
     response.headers["Cache-Control"] = "no-store"
     _require_fresh_token(token)
     reservation_id = token.get("wf_reservation")
     generation = token.get("wf_generation")
-    return await recover_claim(
-        db,
-        token.get("uid", ""),
-        reservation_id,
-        generation if isinstance(generation, int) else None,
-    )
+    return await recover_claim(db, token.get("uid", ""), reservation_id, generation if isinstance(generation, int) else None)

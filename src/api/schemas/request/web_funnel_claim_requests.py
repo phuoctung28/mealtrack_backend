@@ -24,10 +24,8 @@ class WebFunnelOnboardingSnapshot(OnboardingCompleteRequest):
             raise ValueError("Invalid birth date") from exc
 
         today = date.today()
-        age = (
-            today.year
-            - birth_date.year
-            - ((today.month, today.day) < (birth_date.month, birth_date.day))
+        age = today.year - birth_date.year - (
+            (today.month, today.day) < (birth_date.month, birth_date.day)
         )
         if not 13 <= age <= 120:
             raise ValueError("Birth date must produce an age between 13 and 120")
@@ -63,19 +61,3 @@ class WebFunnelClaimCompleteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     exchange_token: str = Field(min_length=32, max_length=512)
-
-
-class WebFunnelRevenueCatCorrelationRequest(BaseModel):
-    """Untrusted anonymous customer hint sent only by the web BFF."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    app_user_id: str = Field(min_length=1, max_length=255)
-
-
-class WebFunnelRedemptionFinalizeRequest(BaseModel):
-    """Explicit user consent before applying a verified web purchase."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    confirm_apply_purchase: bool

@@ -29,9 +29,7 @@ class WebFunnelLead(Base, BaseMixin):
     email = Column(String(255), nullable=False)
     access_key_hash = Column(String(64), nullable=False)
     request_id = Column(String(128), nullable=False, unique=True)
-    snapshot_version = Column(
-        String(64), nullable=False, default="web_onboarding_snapshot_v1"
-    )
+    snapshot_version = Column(String(64), nullable=False, default="web_onboarding_snapshot_v1")
     snapshot = Column(JSON, nullable=False)
     snapshot_hash = Column(String(64), nullable=False)
     status = Column(String(32), nullable=False, default="draft")
@@ -63,11 +61,7 @@ class WebFunnelClaim(Base, BaseMixin):
 
     __tablename__ = "web_funnel_claims"
 
-    lead_id = Column(
-        String(36),
-        ForeignKey("web_funnel_leads.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    lead_id = Column(String(36), ForeignKey("web_funnel_leads.id", ondelete="CASCADE"), nullable=False)
     generation = Column(Integer, nullable=False)
     magic_token_hash = Column(String(64), nullable=False, unique=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -84,9 +78,7 @@ class WebFunnelClaim(Base, BaseMixin):
     result = Column(JSON, nullable=True)
 
     __table_args__ = (
-        UniqueConstraint(
-            "lead_id", "generation", name="uq_web_funnel_claim_generation"
-        ),
+        UniqueConstraint("lead_id", "generation", name="uq_web_funnel_claim_generation"),
         Index("ix_web_funnel_claims_lead_id", "lead_id"),
         Index("ix_web_funnel_claims_reservation_uid", "reservation_uid"),
         Index("ix_web_funnel_claims_reservation_id", "reservation_id"),
@@ -96,44 +88,6 @@ class WebFunnelClaim(Base, BaseMixin):
             unique=True,
             postgresql_where=text("revoked_at IS NULL AND consumed_at IS NULL"),
         ),
-    )
-
-
-class WebFunnelRedemption(Base, BaseMixin):
-    """Verified anonymous web-customer binding and one-time app finalization."""
-
-    __tablename__ = "web_funnel_redemptions"
-
-    lead_id = Column(
-        String(36),
-        ForeignKey("web_funnel_leads.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-    )
-    provider = Column(String(32), nullable=False, default="revenuecat")
-    environment = Column(String(32), nullable=False)
-    project = Column(String(128), nullable=False)
-    original_app_user_id = Column(String(255), nullable=False)
-    verified_app_user_id = Column(String(255), nullable=False)
-    entitlement_id = Column(String(128), nullable=False)
-    product_id = Column(String(255), nullable=False)
-    verified_at = Column(DateTime(timezone=True), nullable=False)
-    finalized_uid = Column(String(128), nullable=True, unique=True)
-    finalized_at = Column(DateTime(timezone=True), nullable=True)
-    redeemer_uid = Column(String(128), nullable=True, unique=True)
-    redemption_confirmed_at = Column(DateTime(timezone=True), nullable=True)
-    finalization_key_hash = Column(String(64), nullable=True, unique=True)
-    result = Column(JSON, nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint(
-            "provider",
-            "project",
-            "environment",
-            "original_app_user_id",
-            name="uq_web_funnel_redemptions_provider_customer",
-        ),
-        Index("ix_web_funnel_redemptions_finalized_uid", "finalized_uid"),
     )
 
 
@@ -169,9 +123,6 @@ class WebFunnelOutbox(Base):
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('pending', 'processing', 'completed', 'failed')",
-            name="ck_web_funnel_outbox_status",
-        ),
+        CheckConstraint("status IN ('pending', 'processing', 'completed', 'failed')", name="ck_web_funnel_outbox_status"),
         Index("ix_web_funnel_outbox_due", "status", "next_attempt_at"),
     )
