@@ -321,25 +321,40 @@ async def test_redemption_finalization_uses_provider_derived_customer_and_fresh_
 
 
 @pytest.mark.asyncio
-async def test_redemption_finalization_rejects_anonymous_identity(monkeypatch):
+async def test_redemption_finalization_accepts_anonymous_identity(monkeypatch):
     _configure_redemption(monkeypatch)
+    monkeypatch.setattr(
+        web_funnel,
+        "_get_web_funnel_subscription_service",
+        lambda: VerifiedSubscriberService(),
+    )
+    captured = {}
+
+    class RedemptionService:
+        async def finalize(self, _db, **kwargs):
+            captured.update(kwargs)
+            return {"version": "redemption_result_v1", "access_status": "active"}
+
+    monkeypatch.setattr(
+        web_funnel, "get_web_funnel_redemption_service", lambda: RedemptionService()
+    )
     token = {
         "uid": "firebase-uid",
-        "email": "buyer@example.com",
-        "email_verified": True,
         "iat": int(web_funnel.utcnow().timestamp()),
         "firebase": {"sign_in_provider": "anonymous"},
     }
-    with pytest.raises(HTTPException) as error:
-        await web_funnel.finalize_revenuecat_redemption(
-            _request(),
-            web_funnel.WebFunnelRedemptionFinalizeRequest(confirm_apply_purchase=True),
-            Response(),
-            "x" * 16,
-            token,
-            object(),
-        )
-    assert error.value.status_code == 403
+    response = await web_funnel.finalize_revenuecat_redemption(
+        _request(),
+        web_funnel.WebFunnelRedemptionFinalizeRequest(confirm_apply_purchase=True),
+        Response(),
+        "x" * 16,
+        token,
+        object(),
+    )
+
+    assert response["version"] == "redemption_result_v1"
+    assert captured["uid"] == "firebase-uid"
+    assert captured["email"] is None
 
 
 @pytest.mark.asyncio
