@@ -59,8 +59,9 @@ def _outbox(job_type: str) -> WebFunnelOutbox:
 
 
 @pytest.mark.asyncio
-async def test_reconcile_worker_runs_alongside_claim_email_delivery(monkeypatch):
+async def test_reconcile_worker_runs_while_claim_email_is_disabled(monkeypatch):
     reconcile = AsyncMock(return_value=True)
+    monkeypatch.setattr(dispatcher.settings, "WEB_FUNNEL_EMAIL_ENABLED", False)
     monkeypatch.setattr(dispatcher, "AsyncSessionLocal", lambda: _Session([_outbox("revenuecat_reconcile")]))
     monkeypatch.setattr(dispatcher, "process_revenuecat_reconcile", reconcile)
 
@@ -69,9 +70,10 @@ async def test_reconcile_worker_runs_alongside_claim_email_delivery(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_claim_email_stays_queued_without_claim_link_base_url(monkeypatch):
+async def test_claim_email_stays_queued_while_email_flag_is_disabled(monkeypatch):
     send = AsyncMock()
-    monkeypatch.setattr(dispatcher.settings, "WEB_FUNNEL_CLAIM_LINK_BASE_URL", "")
+    monkeypatch.setattr(dispatcher.settings, "WEB_FUNNEL_EMAIL_ENABLED", False)
+    monkeypatch.setattr(dispatcher.settings, "WEB_FUNNEL_CLAIM_LINK_BASE_URL", "https://nutree.app/open")
     monkeypatch.setattr(dispatcher, "AsyncSessionLocal", lambda: _Session([_outbox("claim_email")]))
     monkeypatch.setattr(dispatcher, "process_claim_email", send)
 

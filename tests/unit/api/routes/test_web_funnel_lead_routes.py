@@ -81,20 +81,23 @@ def _request() -> Request:
 
 
 @pytest.mark.asyncio
-async def test_status_is_possession_bound_and_never_returns_email_or_snapshot():
+async def test_status_is_possession_bound_and_never_returns_email_or_snapshot(monkeypatch):
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_LEADS_ENABLED", True)
     response = await web_funnel.get_lead_status(_request(), "lead-1", "a" * 32, FakeSession(_lead()))
     assert response == {"lead_id": "lead-1", "masked_email": "b***@example.com", "status": "draft"}
 
 
 @pytest.mark.asyncio
-async def test_status_hides_wrong_capability_as_not_found():
+async def test_status_hides_wrong_capability_as_not_found(monkeypatch):
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_LEADS_ENABLED", True)
     with pytest.raises(HTTPException) as error:
         await web_funnel.get_lead_status(_request(), "lead-1", "b" * 32, FakeSession(_lead()))
     assert error.value.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_reset_revokes_only_unpaid_possession_bound_draft():
+async def test_reset_revokes_only_unpaid_possession_bound_draft(monkeypatch):
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_LEADS_ENABLED", True)
     session = FakeSession(_lead())
     assert await web_funnel.reset_lead(_request(), "lead-1", "a" * 32, session) == {"status": "revoked"}
     assert session.lead.status == "revoked"
@@ -104,6 +107,7 @@ async def test_reset_revokes_only_unpaid_possession_bound_draft():
 
 @pytest.mark.asyncio
 async def test_create_replays_same_request_only_to_same_capability(monkeypatch):
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_LEADS_ENABLED", True)
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
     response = await web_funnel.create_lead(_request(), _payload(), "a" * 32, "request-1", "https://web.example", "bff-secret", CreateSession(_lead()))
@@ -112,6 +116,7 @@ async def test_create_replays_same_request_only_to_same_capability(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_hides_replayed_request_from_another_capability(monkeypatch):
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_LEADS_ENABLED", True)
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
     with pytest.raises(HTTPException) as error:
@@ -121,6 +126,7 @@ async def test_create_hides_replayed_request_from_another_capability(monkeypatch
 
 @pytest.mark.asyncio
 async def test_create_requires_server_held_bff_credential(monkeypatch):
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_LEADS_ENABLED", True)
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
     with pytest.raises(HTTPException) as error:
@@ -130,6 +136,7 @@ async def test_create_requires_server_held_bff_credential(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_concurrent_unique_conflict_converges_to_winner(monkeypatch):
+    monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_LEADS_ENABLED", True)
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example")
     monkeypatch.setattr(web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret")
     response = await web_funnel.create_lead(_request(), _payload(), "a" * 32, "request-1", "https://web.example", "bff-secret", ConcurrentCreateSession(_lead()))

@@ -336,13 +336,13 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 
 ---
 
-## Paid Web Claim
+## Paid Web Claim (dark launch)
 
-These endpoints have no feature toggle. Lead creation intentionally fails closed
-until `WEB_FUNNEL_BFF_SHARED_SECRET` is configured. Access is protected by BFF
-proof, possession-bound lead access keys, one-time claim credentials, fresh
-Firebase authentication, and backend RevenueCat verification. The email worker
-requires `WEB_FUNNEL_CLAIM_LINK_BASE_URL` to deliver a claim link.
+All endpoints in this group are disabled by default. Lead capture requires
+`WEB_FUNNEL_LEADS_ENABLED`; email, exchange, and completion each have their own
+`WEB_FUNNEL_EMAIL_ENABLED`, `WEB_FUNNEL_EXCHANGE_ENABLED`, and
+`WEB_FUNNEL_COMPLETE_ENABLED` gate. Do not enable them until the compatible
+mobile release and provider staging checklist have passed.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
