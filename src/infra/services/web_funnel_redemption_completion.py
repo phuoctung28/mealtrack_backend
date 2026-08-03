@@ -78,6 +78,11 @@ async def finalize_redemption(
     )
     if not binding:
         raise claim_not_found()
+    # Redemptions correlated before this rollout have no opaque preflight token.
+    # They retain the prior finalization path; all newly issued tokens require
+    # the Firebase UID bound by preflight before the link can be finalized.
+    if binding.preflight_token_hash and binding.preflight_uid != uid:
+        raise claim_not_found()
     if binding.redeemer_uid != uid:
         raise claim_not_found()
     key_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()

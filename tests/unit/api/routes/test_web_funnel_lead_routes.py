@@ -70,6 +70,9 @@ class CorrelationSession(FakeSession):
     def add(self, item):
         self.added.append(item)
 
+    async def flush(self):
+        return None
+
 
 def _lead() -> WebFunnelLead:
     return WebFunnelLead(
@@ -360,6 +363,7 @@ async def test_correlation_binds_verified_anonymous_web_customer(monkeypatch):
     )
 
     assert response["status"] == "payment_verified"
+    assert len(response["preflight_token"]) >= 32
     assert session.committed
     binding = session.added[0]
     assert binding.original_app_user_id == "$RCAnonymousID:customer"

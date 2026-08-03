@@ -79,3 +79,11 @@ class WebFunnelRedemptionFinalizeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirm_apply_purchase: bool
+
+
+class WebFunnelRedemptionPreflightRequest(BaseModel):
+    """Opaque possession proof issued only after provider-verified correlation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_token: str = Field(min_length=32, max_length=512)
