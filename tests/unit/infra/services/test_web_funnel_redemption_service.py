@@ -75,3 +75,20 @@ async def test_preflight_rejects_replayed_redemption_binding():
         email="buyer@example.com",
         redemption_url="rc-example://redeem?token=opaque",
     )
+
+
+@pytest.mark.asyncio
+async def test_webhook_records_all_revenuecat_aliases():
+    binding = _binding(original_app_user_id="$RCAnonymousID:web")
+    session = Session(binding, _lead())
+
+    assert await WebFunnelRedemptionService().record_webhook_redemption(
+        session,
+        {
+            "type": "PURCHASE_REDEEMED",
+            "redeemed_from": ["$RCAnonymousID:web", "rc-app-user"],
+            "redeemed_by": ["$RCAnonymousID:web", "rc-app-user"],
+        },
+    )
+    assert binding.provider_app_user_ids == ["$RCAnonymousID:web", "rc-app-user"]
+    assert binding.redemption_confirmed_at is not None

@@ -5,7 +5,7 @@ import uuid
 from datetime import date
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -72,8 +72,17 @@ async def finalize_redemption(
     binding = await db.scalar(
         select(WebFunnelRedemption)
         .where(
-            WebFunnelRedemption.original_app_user_id == original_app_user_id,
             WebFunnelRedemption.environment == environment,
+            or_(
+                WebFunnelRedemption.original_app_user_id == original_app_user_id,
+                and_(
+                    WebFunnelRedemption.redeemer_uid == uid,
+                    WebFunnelRedemption.redeemer_uid.is_not(None),
+                ),
+                WebFunnelRedemption.provider_app_user_ids.contains(
+                    [original_app_user_id]
+                ),
+            ),
         )
         .order_by(WebFunnelRedemption.verified_at.desc())
         .with_for_update()

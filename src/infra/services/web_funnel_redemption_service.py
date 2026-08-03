@@ -47,7 +47,7 @@ class WebFunnelRedemptionService:
         if isinstance(original, str):
             originals.add(original)
         redeemers = _event_values(event, "redeemed_by")
-        if not originals or len(redeemers) != 1:
+        if not originals or not redeemers:
             return False
         binding = await db.scalar(
             select(WebFunnelRedemption)
@@ -56,10 +56,11 @@ class WebFunnelRedemptionService:
         )
         if not binding:
             return False
-        redeemer_uid = next(iter(redeemers))
-        if binding.redeemer_uid and binding.redeemer_uid != redeemer_uid:
+        if binding.redeemer_uid and binding.redeemer_uid not in redeemers:
             raise HTTPException(status_code=409, detail="Redemption already bound")
-        binding.redeemer_uid = redeemer_uid
+        binding.provider_app_user_ids = sorted(redeemers)
+        if len(redeemers) == 1:
+            binding.redeemer_uid = next(iter(redeemers))
         binding.redemption_confirmed_at = utc_now()
         return True
 
