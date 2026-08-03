@@ -112,14 +112,6 @@ def _require_legacy_claim_enabled() -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
-def _allowed_revenuecat_products() -> set[str]:
-    return {
-        product_id.strip()
-        for product_id in settings.WEB_FUNNEL_REVENUECAT_PRODUCT_IDS.split(",")
-        if product_id.strip()
-    }
-
-
 def _get_web_funnel_subscription_service():
     """Resolve RevenueCat through the API composition boundary."""
     return get_subscription_service()
@@ -246,12 +238,10 @@ async def correlate_revenuecat_customer(
     _require_bff_request(origin, bff_credential)
     if not settings.WEB_FUNNEL_REDEMPTION_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    allowed_products = _allowed_revenuecat_products()
     if (
         not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
         or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
         or not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
-        or not allowed_products
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
@@ -265,7 +255,6 @@ async def correlate_revenuecat_customer(
     verification = verify_bound_web_customer(
         subscriber,
         original_app_user_id=payload.app_user_id,
-        allowed_product_ids=allowed_products,
     )
     if verification.state is not RevenueCatVerificationState.VERIFIED:
         raise claim_not_found()
@@ -371,12 +360,10 @@ async def finalize_revenuecat_redemption(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid idempotency key"
         )
-    allowed_products = _allowed_revenuecat_products()
     if (
         not settings.WEB_FUNNEL_REVENUECAT_SECRET_API_KEY
         or not settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
         or not settings.WEB_FUNNEL_REVENUECAT_PROJECT
-        or not allowed_products
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     subscriber = await _get_web_funnel_subscription_service().get_subscriber_info(uid)
@@ -386,7 +373,6 @@ async def finalize_revenuecat_redemption(
         or verify_redeemed_customer(
             subscriber,
             original_app_user_id=original_app_user_id,
-            allowed_product_ids=allowed_products,
         ).state
         is not RevenueCatVerificationState.VERIFIED
     ):
