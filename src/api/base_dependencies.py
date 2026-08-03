@@ -591,3 +591,12 @@ def get_web_funnel_redemption_service():
     )
 
     return factory()
+
+
+def get_web_funnel_subscription_service():
+    """Resolve the web-funnel RevenueCat client through the composition root."""
+    from src.bootstrap.web_funnel_redemption import (
+        get_web_funnel_subscription_service as factory,
+    )
+
+    return factory()

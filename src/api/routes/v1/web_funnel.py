@@ -10,8 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.base_dependencies import (
-    get_subscription_service,
     get_web_funnel_redemption_service,
+    get_web_funnel_subscription_service,
 )
 from src.api.dependencies.auth import verify_firebase_token_revocation_checked
 from src.api.middleware.rate_limit import limiter
@@ -117,7 +117,7 @@ def _allowed_revenuecat_products() -> set[str]:
 
 def _get_web_funnel_subscription_service():
     """Resolve RevenueCat through the API composition boundary."""
-    return get_subscription_service()
+    return get_web_funnel_subscription_service()
 
 
 def _subscriber_original_app_user_id(subscriber: dict | None) -> str | None:
