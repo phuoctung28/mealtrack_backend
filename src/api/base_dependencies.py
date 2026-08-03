@@ -230,7 +230,9 @@ def get_catalog_image_generator() -> CloudflareWorkersImageGenerator:
         ) from exc
 
 
-def get_catalog_image_generator_factory() -> Callable[[], CloudflareWorkersImageGenerator]:
+def get_catalog_image_generator_factory() -> Callable[
+    [], CloudflareWorkersImageGenerator
+]:
     """Return a lazy generator factory so routes can finish cheap prechecks first."""
 
     return get_catalog_image_generator

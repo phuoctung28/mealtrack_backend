@@ -6,12 +6,11 @@ Uses RevenueCat as source of truth, with local cache for performance.
 
 import logging
 import os
-from typing import Optional
 
-from fastapi import Request, HTTPException, status
+from fastapi import HTTPException, Request, status
 
-from src.domain.ports.subscription_service_port import SubscriptionServicePort
 from src.api.base_dependencies import get_subscription_service
+from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
 logger = logging.getLogger(__name__)
 

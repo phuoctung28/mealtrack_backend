@@ -9,8 +9,8 @@ import pytest
 from fastapi import HTTPException, Request
 
 from src.api.middleware.premium_check import (
-    require_subscription,
     get_subscription_status,
+    require_subscription,
 )
 
 

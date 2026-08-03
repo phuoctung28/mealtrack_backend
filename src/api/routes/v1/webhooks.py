@@ -13,15 +13,17 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
 
+from src.api.base_dependencies import get_subscription_service
+from src.domain.ports.subscription_service_port import SubscriptionServicePort
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
-from src.observability import increment_metric
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
+from src.observability import increment_metric
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
@@ -50,6 +52,11 @@ def _get_email_service() -> EmailService:
     adapter = ResendEmailAdapter()
     renderer = EmailTemplateRenderer()
     return EmailService(email_adapter=adapter, template_renderer=renderer)
+
+
+def _get_subscription_service() -> SubscriptionServicePort:
+    """Resolve the RevenueCat service through the existing dependency boundary."""
+    return get_subscription_service()
 
 
 @router.post("/revenuecat")
@@ -92,12 +99,16 @@ async def revenuecat_webhook(
 
     # Get user
     async with AsyncUnitOfWork() as uow:
+        user = await find_user_for_revenuecat_event(uow, event)
+
         if event_type == "TRANSFER":
+            if not user:
+                logger.info("RevenueCat transfer ignored: target user not found")
+                return {"status": "ignored", "reason": "user_not_found"}
             await handle_transfer(uow, event)
+            await sync_redeemed_target_subscription(uow, user, event)
             increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
             return {"status": "success"}
-
-        user = await find_user_for_revenuecat_event(uow, event)
 
         if not user:
             logger.error(
@@ -107,7 +118,7 @@ async def revenuecat_webhook(
                 event.get("environment"),
                 len(_candidate_revenuecat_ids(event)),
             )
-            if event_type in NON_RETRYABLE_USERLESS_EVENTS:
+            if event_type in NON_RETRYABLE_USERLESS_EVENTS or _is_anonymous_event(event):
                 return {"status": "ignored", "reason": "user_not_found"}
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -154,6 +165,14 @@ def _candidate_revenuecat_ids(event: dict) -> list[str]:
         and candidate
         and not (candidate in seen or seen.add(candidate))
     ]
+
+
+def _is_anonymous_event(event: dict) -> bool:
+    """Whether all available RevenueCat identities are anonymous placeholders."""
+    candidates = _candidate_revenuecat_ids(event)
+    return bool(candidates) and all(
+        candidate.startswith("$RCAnonymousID:") for candidate in candidates
+    )
 
 
 async def find_user_for_revenuecat_event(uow, event: dict) -> User | None:
@@ -230,6 +249,59 @@ async def handle_transfer(uow, event):
         subscription.id,
         target_id,
     )
+
+
+async def sync_redeemed_target_subscription(uow, user: User, event: dict) -> None:
+    """Refresh the target Firebase user's cache after a RevenueCat redemption."""
+    current = await _get_subscription_service().get_subscription_info(user.firebase_uid)
+    if not current:
+        logger.info("RevenueCat redemption has no active target entitlement")
+        return
+
+    await _lock_subscription_cache(uow, user.firebase_uid)
+    subscription = await get_subscription_by_revenuecat_id(uow, user.firebase_uid)
+    if subscription is None:
+        subscription = Subscription(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            revenuecat_subscriber_id=user.firebase_uid,
+            product_id=current.get("product_id") or event.get("product_id") or "unknown",
+            platform=parse_platform(current.get("store") or event.get("store")),
+            status="active",
+            purchased_at=parse_timestamp(event.get("purchased_at_ms")) or utc_now(),
+            expires_at=_parse_revenuecat_expiry(current.get("expires_date")),
+            store_transaction_id=event.get("transaction_id"),
+            is_sandbox=event.get("environment") == "SANDBOX",
+        )
+        uow.session.add(subscription)
+        return
+
+    subscription.user_id = user.id
+    subscription.product_id = current.get("product_id") or subscription.product_id
+    subscription.platform = parse_platform(current.get("store") or event.get("store"))
+    subscription.status = "active"
+    subscription.expires_at = _parse_revenuecat_expiry(current.get("expires_date"))
+    subscription.updated_at = utc_now()
+
+
+async def _lock_subscription_cache(uow, firebase_uid: str) -> None:
+    """Serialize cache creation for duplicate webhook deliveries of one user."""
+    await uow.session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:firebase_uid))"),
+        {"firebase_uid": firebase_uid},
+    )
+
+
+def _parse_revenuecat_expiry(value: object) -> datetime | None:
+    """Normalize the existing subscription-service expiry response to a datetime."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            logger.warning("RevenueCat transfer returned an invalid expiry timestamp")
+    return None
 
 
 def _preferred_transfer_target(transferred_to: list[str]) -> str | None:

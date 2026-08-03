@@ -211,7 +211,8 @@ The two health routes are declared with `api_route` and answer both GET and HEAD
 | POST | `/v1/tdee/preview` | Preview TDEE calculation without saving |
 
 Preview responses carry the versioned `calculation_contract`
-`onboarding_preview_v2`. Canonical no-training is `training_days_per_week=0`
+`onboarding_preview_v2` and `target_revision=0`, because no profile has been
+persisted yet. Canonical no-training is `training_days_per_week=0`
 and `training_minutes_per_session=0`; `(0, 15)` is legacy compatibility only.
 The unauthenticated endpoint rejects bodies over 8 KiB before JSON parsing and
 applies an IP-based quota. Keto uses 5/20/75 and calories are derived from the
@@ -332,8 +333,6 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 |--------|----------|---------|
 | POST | `/v1/webhooks/revenuecat` | RevenueCat subscription webhook |
 | GET | `/v1/webhooks/revenuecat/health` | Webhook health check |
-
----
 
 ## Response Format
 
