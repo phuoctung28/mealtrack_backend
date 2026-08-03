@@ -109,7 +109,9 @@ class TestUpdateUserMetricsCommandHandler:
         assert profile.is_current is True
         mock_uow.users.update_profile.assert_called_once_with(profile)
 
-    async def test_target_change_increments_revision_once_and_cache_failure_is_non_fatal(self):
+    async def test_target_change_increments_revision_once_and_cache_failure_is_non_fatal(
+        self,
+    ):
         profile = _make_profile(profile_target_revision=1)
         mock_uow = _make_mock_uow(profile)
         cache = MagicMock()
@@ -166,8 +168,27 @@ class TestUpdateUserMetricsCommandHandler:
         await handler.handle(command)
 
         assert profile.training_days_per_week == 0
+        assert profile.training_minutes_per_session == 0
         assert profile.is_current is True
         mock_uow.users.update_profile.assert_called_once_with(profile)
+
+    async def test_no_training_normalizes_a_supplied_session_duration(self):
+        profile = _make_profile(
+            training_days_per_week=4, training_minutes_per_session=60
+        )
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(
+            user_id="test_user",
+            training_days_per_week=0,
+            training_minutes_per_session=60,
+        )
+
+        await handler.handle(command)
+
+        assert profile.training_days_per_week == 0
+        assert profile.training_minutes_per_session == 0
 
     async def test_update_fitness_goal_unlimited(self):
         """Test updating fitness goal succeeds without cooldown."""

@@ -4,7 +4,7 @@ Unit tests for TDEE mapper.
 
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import TdeeCalculationRequest
-from src.domain.model.user import TdeeResponse, MacroTargets
+from src.domain.model.user import MacroTargets, TdeeResponse
 
 
 class TestTdeeMapper:
@@ -24,7 +24,7 @@ class TestTdeeMapper:
             body_fat_percentage=15.0,
             job_type="desk",
             training_days_per_week=0,
-            training_minutes_per_session=15,
+            training_minutes_per_session=0,
             goal="recomp",
             unit_system="metric",
         )
@@ -38,7 +38,7 @@ class TestTdeeMapper:
         assert domain.body_fat_pct == 15.0
         assert domain.job_type.value == "desk"
         assert domain.training_days_per_week == 0
-        # Domain model normalizes training_minutes to 0 when training_days is 0 (sedentary)
+        # Domain model preserves the canonical no-training state.
         assert domain.training_minutes_per_session == 0
         assert domain.goal.value == "recomp"
         assert domain.unit_system.value == "metric"
@@ -69,7 +69,7 @@ class TestTdeeMapper:
 
     def test_to_domain_all_activity_levels(self):
         """Test converting DTO with all job types and training combinations."""
-        # Test sedentary case (training_days=0): domain normalizes minutes to 0
+        # Test sedentary case (training_days=0): API accepts the canonical zero.
         dto = TdeeCalculationRequest(
             age=30,
             sex="male",
@@ -78,7 +78,7 @@ class TestTdeeMapper:
             body_fat_percentage=None,
             job_type="desk",
             training_days_per_week=0,
-            training_minutes_per_session=15,  # Schema requires min 15
+            training_minutes_per_session=0,
             goal="recomp",
             unit_system="metric",
         )
