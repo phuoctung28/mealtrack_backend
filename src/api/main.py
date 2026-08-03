@@ -75,7 +75,6 @@ from src.api.routes.v1.saved_suggestions import router as saved_suggestions_rout
 from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
-from src.api.routes.v1.web_funnel import router as web_funnel_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.api.routes.well_known import router as well_known_router
@@ -332,7 +331,6 @@ app.include_router(users_router)
 app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
-app.include_router(web_funnel_router)
 app.include_router(notifications_router)
 app.include_router(hydration_router)
 app.include_router(ingredients_router)

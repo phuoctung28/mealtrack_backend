@@ -89,12 +89,6 @@ from .movement_entry import MovementEntryORM
 # Promo codes (email marketing)
 from .promo_code import PromoCode, PromoCodeRedemption
 from .referral import PayoutRequest, ReferralCode, ReferralConversion, ReferralWallet
-from .web_funnel_claim import (
-    WebFunnelClaim,
-    WebFunnelLead,
-    WebFunnelOutbox,
-    WebFunnelProviderEvent,
-)
 
 # Weight tracking
 from .weight_entry import WeightEntryORM
@@ -175,8 +169,4 @@ __all__ = [
     "AffiliateEventOutbox",
     # AI Handshake guest trial quota
     "AiHandshakeGuestTrialQuota",
-    "WebFunnelLead",
-    "WebFunnelClaim",
-    "WebFunnelOutbox",
-    "WebFunnelProviderEvent",
 ]

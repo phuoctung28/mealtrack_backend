@@ -126,29 +126,6 @@ class TestWebhookHandler:
                 # commit/rollback are owned by the AsyncUnitOfWork context manager, not called explicitly
                 mock_uow.commit.assert_not_awaited()
 
-    async def test_web_lead_webhook_is_durable_before_authoritative_fetch(
-        self, mock_request
-    ):
-        lead_id = "11111111-1111-1111-1111-111111111111"
-        mock_request.json.return_value = {
-            "event": {"id": "provider-1", "type": "INITIAL_PURCHASE", "app_user_id": lead_id}
-        }
-        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
-            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as uow_class:
-                uow = MagicMock()
-                uow.__aenter__ = AsyncMock(return_value=uow)
-                uow.__aexit__ = AsyncMock(return_value=False)
-                uow_class.return_value = uow
-                with patch(
-                    "src.api.routes.v1.webhooks.reconcile_revenuecat_event",
-                    new_callable=AsyncMock,
-                    return_value=True,
-                ) as reconcile:
-                    result = await revenuecat_webhook(mock_request, authorization="test_secret")
-
-        assert result == {"status": "success"}
-        assert reconcile.await_args.args[2] is None
-
     async def test_webhook_user_not_found_redacts_provider_ids(
         self, mock_request, webhook_event, caplog
     ):

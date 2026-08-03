@@ -76,17 +76,6 @@ ignore_imports =
     src.app.handlers.command_handlers.update_timezone_command_handler -> src.infra.services.daily_context_precompute_service
     src.app.handlers.command_handlers.update_user_last_accessed_command_handler -> src.infra.database.uow_async
     src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler -> src.infra.config.settings
-    src.app.services.web_funnel_claim_cleanup -> src.infra.database.models.user.user
-    src.app.services.web_funnel_claim_cleanup -> src.infra.database.models.web_funnel_claim
-    src.app.services.web_funnel_claim_cleanup -> src.infra.services.web_funnel_firebase_identity
-    src.app.services.web_funnel_claim_completion -> src.infra.database.models.user.profile
-    src.app.services.web_funnel_claim_completion -> src.infra.database.models.user.user
-    src.app.services.web_funnel_claim_completion -> src.infra.database.models.web_funnel_claim
-    src.app.services.web_funnel_claim_completion -> src.infra.database.models.weekly.weekly_macro_budget
-    src.app.services.web_funnel_claim_exchange -> src.infra.database.models.web_funnel_claim
-    src.app.services.web_funnel_claim_exchange -> src.infra.services.web_funnel_firebase_identity
-    src.app.services.web_funnel_claim_payment -> src.infra.config.settings
-    src.app.services.web_funnel_claim_payment -> src.infra.database.models.web_funnel_claim
     src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.adapters.cloudinary_image_store
     src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.adapters.vision_ai_service
     src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.config.settings
@@ -156,8 +145,6 @@ ignore_imports =
     src.infra.database.models.user.user -> src.api.schemas.common.auth_enums
     src.infra.event_bus.pymediator_event_bus -> src.api.exceptions
     src.infra.services.feature_flag_service -> src.api.exceptions
-    src.infra.services.web_funnel_outbox_dispatch_service -> src.app.services.web_funnel_claim_common
-    src.infra.services.web_funnel_outbox_dispatch_service -> src.app.services.web_funnel_claim_payment
 
 [importlinter:contract:api-no-infra]
 name = API does not import infra directly
@@ -271,7 +258,4 @@ ignore_imports =
     src.api.routes.v1.weight_entries -> src.infra.event_bus
     src.api.dependencies.guest_quota -> src.infra.config.settings
     src.api.dependencies.guest_quota -> src.infra.database.config_async
-    src.api.routes.v1.web_funnel -> src.infra.config.settings
-    src.api.routes.v1.web_funnel -> src.infra.database.config_async
-    src.api.routes.v1.web_funnel -> src.infra.database.models.web_funnel_claim
     src.api.services.guest_parse_quota -> src.infra.database.models.ai_handshake_guest_trial_quota

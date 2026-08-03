@@ -3,18 +3,15 @@ Unit tests for SyncUserCommandHandler.
 """
 
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch, MagicMock
 
 import pytest
-from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
 
 from src.app.commands.user.sync_user_command import SyncUserCommand
 from src.app.handlers.command_handlers.sync_user_command_handler import (
     SyncUserCommandHandler,
 )
-from src.domain.exceptions.firebase_identity_exceptions import (
-    FirebaseIdentityConflictError,
-)
+from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
 
 
 @pytest.fixture
@@ -57,8 +54,8 @@ class TestSyncUserCommandHandler:
     async def test_handle_update_existing_user(self, handler):
         """Test updating an existing user."""
         fake_uow = FakeUnitOfWork()
-        from src.domain.model.auth.auth_provider import AuthProvider
         from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
 
         # Pre-populate existing user
         existing_user = UserDomainModel(
@@ -92,60 +89,11 @@ class TestSyncUserCommandHandler:
         assert fake_uow.committed is True
 
     @pytest.mark.asyncio
-    async def test_handle_rejects_email_collision_with_different_firebase_uid(self, handler):
-        """An email lookup must never move an existing account to a new UID."""
-        fake_uow = FakeUnitOfWork()
-        from src.domain.model.auth.auth_provider import AuthProvider
-        from src.domain.model.user import UserDomainModel
-
-        existing_user = UserDomainModel(
-            firebase_uid="firebase_original",
-            email="existing@example.com",
-            username="existinguser",
-            password_hash="",
-            provider=AuthProvider.GOOGLE,
-        )
-        await fake_uow.users.save(existing_user)
-        handler.uow = fake_uow
-
-        command = SyncUserCommand(
-            firebase_uid="firebase_untrusted",
-            email="existing@example.com",
-            provider="google",
-        )
-
-        with pytest.raises(FirebaseIdentityConflictError):
-            await handler.handle(command)
-
-        assert existing_user.firebase_uid == "firebase_original"
-        assert fake_uow.rolled_back is True
-
-    @pytest.mark.asyncio
-    async def test_handle_propagates_persistence_identity_conflict(self, handler):
-        """A unique-index race must retain the generic identity-conflict path."""
-        fake_uow = FakeUnitOfWork()
-        fake_uow.users.save = AsyncMock(
-            side_effect=FirebaseIdentityConflictError("unique-index race")
-        )
-        handler.uow = fake_uow
-
-        command = SyncUserCommand(
-            firebase_uid="firebase_retry",
-            email="retry@example.com",
-            provider="google",
-        )
-
-        with pytest.raises(FirebaseIdentityConflictError):
-            await handler.handle(command)
-
-        assert fake_uow.rolled_back is True
-
-    @pytest.mark.asyncio
     async def test_handle_no_changes(self, handler):
         """Test when user exists but no updates needed."""
         fake_uow = FakeUnitOfWork()
-        from src.domain.model.auth.auth_provider import AuthProvider
         from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
 
         # Pre-populate existing user
         existing_user = UserDomainModel(
@@ -181,11 +129,11 @@ class TestSyncUserCommandHandler:
     async def test_handle_with_standard_subscription(self, handler):
         """Test syncing user with active standard subscription."""
         fake_uow = FakeUnitOfWork()
+        from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
+
         # Pre-populate user with standard subscription
         from uuid import uuid4
-
-        from src.domain.model.auth.auth_provider import AuthProvider
-        from src.domain.model.user import UserDomainModel
 
         user_id = uuid4()
         existing_user = UserDomainModel(
@@ -199,10 +147,10 @@ class TestSyncUserCommandHandler:
         await fake_uow.users.save(existing_user)
 
         # Add standard subscription
+        from src.domain.model.subscription import Subscription
+
         # Use future datetime that's definitely in the future
         from datetime import timedelta
-
-        from src.domain.model.subscription import Subscription
 
         expires_at = datetime.now() + timedelta(days=365)  # 1 year in the future
         subscription = Subscription(
@@ -385,9 +333,8 @@ class TestSyncUserReRegistration:
     async def test_sync_creates_new_user_after_deletion(self, handler):
         """Re-authentication after deletion creates fresh account with new ID."""
         from uuid import uuid4
-
-        from src.domain.model.auth.auth_provider import AuthProvider
         from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
 
         fake_uow = FakeUnitOfWork()
 
@@ -440,9 +387,8 @@ class TestSyncUserReRegistration:
     async def test_deleted_user_record_preserved(self, handler):
         """Deleted user record is not modified on re-registration."""
         from uuid import uuid4
-
-        from src.domain.model.auth.auth_provider import AuthProvider
         from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
 
         fake_uow = FakeUnitOfWork()
 
@@ -492,9 +438,8 @@ class TestSyncUserReRegistration:
     async def test_new_user_triggers_onboarding(self, handler):
         """New user created after re-registration has fresh onboarding state."""
         from uuid import uuid4
-
-        from src.domain.model.auth.auth_provider import AuthProvider
         from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
 
         fake_uow = FakeUnitOfWork()
 
@@ -529,9 +474,8 @@ class TestSyncUserReRegistration:
     async def test_reregistration_creates_notification_preferences(self, handler):
         """Re-registered user gets new default notification preferences."""
         from uuid import uuid4
-
-        from src.domain.model.auth.auth_provider import AuthProvider
         from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
 
         fake_uow = FakeUnitOfWork()
 
