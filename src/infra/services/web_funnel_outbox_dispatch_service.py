@@ -7,6 +7,7 @@ from sqlalchemy import select
 from src.app.services.web_funnel_claim_common import utcnow
 from src.app.services.web_funnel_claim_payment import (
     process_claim_email,
+    process_revenuecat_association,
     process_revenuecat_reconcile,
 )
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
@@ -39,6 +40,9 @@ async def dispatch_web_funnel_outbox(batch_size: int = 25) -> int:
                     result = await adapter.send_email(email, "Open Nutree", f'<p><a href="{url}">Open Nutree</a></p>', tags=["web-claim"])
                     return result.success
                 await process_claim_email(session, row, send)
+                completed += 1
+            elif row.job_type == "revenuecat_association":
+                await process_revenuecat_association(session, row, RevenueCatAdapter())
                 completed += 1
             elif row.job_type == "revenuecat_reconcile":
                 await process_revenuecat_reconcile(session, row, RevenueCatAdapter())

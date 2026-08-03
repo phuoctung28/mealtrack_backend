@@ -21,6 +21,7 @@ from src.infra.database.models.user.user import User
 from src.infra.database.models.web_funnel_claim import (
     WebFunnelClaim,
     WebFunnelLead,
+    WebFunnelOutbox,
 )
 from src.infra.database.models.weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 
@@ -31,7 +32,7 @@ def _age(snapshot: dict) -> int:
     return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
 
 
-def _result(snapshot: dict, revenuecat_customer_id: str) -> dict:
+def _result(snapshot: dict) -> dict:
     age = _age(snapshot)
     request = TdeeRequest(
         age=age, sex=Sex(snapshot["gender"]), height=snapshot["height"], weight=snapshot["weight"],
@@ -47,15 +48,7 @@ def _result(snapshot: dict, revenuecat_customer_id: str) -> dict:
         macro_data = {"protein": protein, "carbs": carbs, "fat": fat, "calories": protein * 4 + carbs * 4 + fat * 9}
     else:
         macro_data = {"protein": macros.protein, "carbs": macros.carbs, "fat": macros.fat, "calories": macros.calories}
-    return {
-        "version": "claim_result_v1",
-        "onboarding_completed": True,
-        "age": age,
-        "tdee": calculation.tdee,
-        "macros": macro_data,
-        "access_status": "pending",
-        "revenuecat_customer_id": revenuecat_customer_id,
-    }
+    return {"version": "claim_result_v1", "onboarding_completed": True, "age": age, "tdee": calculation.tdee, "macros": macro_data, "access_status": "pending"}
 
 
 def _username(email: str) -> str:
@@ -91,7 +84,6 @@ async def complete_claim(db: AsyncSession, uid: str, email: str | None, exchange
     elif user.email != lead.email:
         raise claim_conflict()
     user.onboarding_completed = True
-    user.revenuecat_customer_id = lead.id
     profile = await db.scalar(select(UserProfile).where(UserProfile.user_id == user.id, UserProfile.is_current.is_(True)).with_for_update())
     snapshot = lead.snapshot
     if profile is None:
@@ -108,7 +100,7 @@ async def complete_claim(db: AsyncSession, uid: str, email: str | None, exchange
         profile.training_days_per_week = snapshot["training_days_per_week"]
         profile.training_minutes_per_session = snapshot["training_minutes_per_session"]
         profile.fitness_goal = snapshot["goal"]
-    result = _result(lead.snapshot, lead.id)
+    result = _result(lead.snapshot)
     current_week = _week_start(date.today())
     budget = await db.scalar(
         select(WeeklyMacroBudgetORM).where(
@@ -131,6 +123,7 @@ async def complete_claim(db: AsyncSession, uid: str, email: str | None, exchange
         )
     claim.consumed_uid, claim.consumed_at, claim.result = uid, utcnow(), result
     lead.claimed_at, lead.claimed_uid, lead.status = utcnow(), uid, "claimed"
+    db.add(WebFunnelOutbox(idempotency_key=f"revenuecat-association:{lead.id}:{uid}", job_type="revenuecat_association", payload={"lead_id": lead.id, "uid": uid}, status="pending", attempts=0, next_attempt_at=utcnow()))
     await db.commit()
     return result
 

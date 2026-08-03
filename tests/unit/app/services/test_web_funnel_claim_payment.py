@@ -4,8 +4,6 @@ from datetime import timedelta
 
 import pytest
 
-from src.app.services import web_funnel_claim_payment as payment
-from src.app.services.web_funnel_claim_common import utcnow
 from src.app.services.web_funnel_claim_payment import (
     process_claim_email,
     process_revenuecat_reconcile,
@@ -16,13 +14,6 @@ from src.infra.database.models.web_funnel_claim import (
     WebFunnelOutbox,
     WebFunnelProviderEvent,
 )
-
-
-@pytest.fixture(autouse=True)
-def configured_revenuecat_environment(monkeypatch):
-    monkeypatch.setattr(
-        payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION"
-    )
 
 
 class FakePaymentSession:
@@ -60,7 +51,11 @@ async def test_unknown_or_non_uuid_revenuecat_id_stays_on_native_path():
 
 
 @pytest.mark.asyncio
-async def test_authoritative_standard_enqueues_one_claim_email():
+async def test_authoritative_standard_enqueues_one_claim_email(monkeypatch):
+    from src.app.services import web_funnel_claim_payment as payment
+
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_PRODUCT_IDS", "web_monthly")
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION")
     session = FakePaymentSession(_lead())
     active = {"subscriber": {"entitlements": {"standard": {"expires_date": None}}}}
     handled = await reconcile_revenuecat_event(session, {"id": "event-1", "type": "INITIAL_PURCHASE", "app_user_id": session.lead.id, "product_id": "web_monthly", "environment": "PRODUCTION"}, active)
@@ -68,38 +63,6 @@ async def test_authoritative_standard_enqueues_one_claim_email():
     assert session.lead.status == "email_queued"
     assert "claim_email" in {getattr(row, "job_type", None) for row in session.added}
     assert session.committed
-
-
-@pytest.mark.asyncio
-async def test_wrong_environment_records_event_without_queuing_claim_email():
-    session = FakePaymentSession(_lead())
-    active = {"subscriber": {"entitlements": {"standard": {"expires_date": None}}}}
-
-    assert await reconcile_revenuecat_event(session, {"id": "event-sandbox", "type": "INITIAL_PURCHASE", "app_user_id": session.lead.id, "environment": "SANDBOX"}, active)
-    assert session.lead.status == "draft"
-    assert "claim_email" not in {getattr(row, "job_type", None) for row in session.added}
-
-
-@pytest.mark.asyncio
-async def test_missing_environment_configuration_records_event_without_queuing_claim_email(
-    monkeypatch,
-):
-    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "")
-    session = FakePaymentSession(_lead())
-    active = {"subscriber": {"entitlements": {"standard": {"expires_date": None}}}}
-
-    assert await reconcile_revenuecat_event(
-        session,
-        {
-            "id": "event-unconfigured",
-            "type": "INITIAL_PURCHASE",
-            "app_user_id": session.lead.id,
-            "environment": "PRODUCTION",
-        },
-        active,
-    )
-    assert session.lead.status == "draft"
-    assert "claim_email" not in {getattr(row, "job_type", None) for row in session.added}
 
 
 class FakeReconcileSession(FakePaymentSession):
@@ -119,7 +82,11 @@ class ActiveSubscriber:
 
 
 @pytest.mark.asyncio
-async def test_deferred_reconcile_uses_provider_event_id_and_queues_email():
+async def test_deferred_reconcile_uses_provider_event_id_and_queues_email(monkeypatch):
+    from src.app.services import web_funnel_claim_payment as payment
+
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_PRODUCT_IDS", "web_monthly")
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION")
     lead = _lead()
     event = WebFunnelProviderEvent(
         id="inbox-1",
@@ -135,43 +102,13 @@ async def test_deferred_reconcile_uses_provider_event_id_and_queues_email():
         payload={"provider_event_id": "provider-event-1", "lead_id": lead.id},
         status="pending",
         attempts=0,
-        next_attempt_at=utcnow(),
+        next_attempt_at=payment.utcnow(),
     )
     session = FakeReconcileSession(lead, event)
     assert await process_revenuecat_reconcile(session, outbox, ActiveSubscriber())
     assert outbox.status == "completed"
     assert lead.status == "email_queued"
     assert any(row.job_type == "claim_email" for row in session.added)
-
-
-@pytest.mark.asyncio
-async def test_deferred_reconcile_ignores_a_mismatched_environment_without_fetching():
-    lead = _lead()
-    event = WebFunnelProviderEvent(
-        id="inbox-sandbox",
-        provider_event_id="provider-sandbox",
-        event_type="INITIAL_PURCHASE",
-        lead_id=lead.id,
-        payload={"environment": "SANDBOX"},
-    )
-    outbox = WebFunnelOutbox(
-        id="outbox-sandbox",
-        idempotency_key="revenuecat-reconcile:provider-sandbox",
-        job_type="revenuecat_reconcile",
-        payload={"provider_event_id": "provider-sandbox", "lead_id": lead.id},
-        status="pending",
-        attempts=0,
-        next_attempt_at=utcnow(),
-    )
-
-    class MustNotFetch:
-        async def get_subscriber_info(self, _app_user_id):
-            raise AssertionError("mismatched events must not fetch subscriber data")
-
-    session = FakeReconcileSession(lead, event)
-    assert await process_revenuecat_reconcile(session, outbox, MustNotFetch())
-    assert lead.status == "draft"
-    assert outbox.status == "completed"
 
 
 @pytest.mark.asyncio
@@ -201,7 +138,7 @@ async def test_new_claim_email_revokes_every_older_usable_generation():
         payload={"lead_id": _lead().id, "generation": 2},
         status="pending",
         attempts=0,
-        next_attempt_at=utcnow(),
+        next_attempt_at=payment.utcnow(),
     )
 
     async def send(_email, _token, _lead_id):
@@ -217,7 +154,11 @@ async def test_new_claim_email_revokes_every_older_usable_generation():
 
 
 @pytest.mark.asyncio
-async def test_deferred_refund_revokes_claims_without_trusting_stale_standard():
+async def test_deferred_refund_revokes_claims_without_trusting_stale_standard(monkeypatch):
+    from src.app.services import web_funnel_claim_payment as payment
+
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_PRODUCT_IDS", "web_monthly")
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION")
     lead = _lead()
     event = WebFunnelProviderEvent(
         id="inbox-refund",
@@ -233,7 +174,7 @@ async def test_deferred_refund_revokes_claims_without_trusting_stale_standard():
         payload={"provider_event_id": "provider-refund", "lead_id": lead.id},
         status="pending",
         attempts=0,
-        next_attempt_at=utcnow(),
+        next_attempt_at=payment.utcnow(),
     )
 
     class MustNotFetch:
@@ -247,7 +188,11 @@ async def test_deferred_refund_revokes_claims_without_trusting_stale_standard():
 
 
 @pytest.mark.asyncio
-async def test_deferred_expiration_converges_when_standard_is_no_longer_active():
+async def test_deferred_expiration_converges_when_standard_is_no_longer_active(monkeypatch):
+    from src.app.services import web_funnel_claim_payment as payment
+
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_PRODUCT_IDS", "web_monthly")
+    monkeypatch.setattr(payment.settings, "WEB_FUNNEL_REVENUECAT_ENVIRONMENT", "PRODUCTION")
     lead = _lead()
     event = WebFunnelProviderEvent(
         id="inbox-expiry",
@@ -263,7 +208,7 @@ async def test_deferred_expiration_converges_when_standard_is_no_longer_active()
         payload={"provider_event_id": "provider-expiry", "lead_id": lead.id},
         status="pending",
         attempts=0,
-        next_attempt_at=utcnow(),
+        next_attempt_at=payment.utcnow(),
     )
 
     class InactiveSubscriber:

@@ -7,7 +7,6 @@ from fastapi import HTTPException
 
 from src.app.services.web_funnel_claim_common import hash_secret, utcnow
 from src.app.services.web_funnel_claim_completion import complete_claim, recover_claim
-from src.infra.database.models.user.user import User
 from src.infra.database.models.web_funnel_claim import WebFunnelClaim, WebFunnelLead
 
 
@@ -36,7 +35,7 @@ class FakeCompletionSession:
 
 
 @pytest.mark.asyncio
-async def test_bound_completion_persists_lead_customer_id_in_user_and_result():
+async def test_bound_completion_commits_one_result_and_association_outbox():
     token = "x" * 48
     snapshot = {"birth_year": 1995, "birth_month": 4, "birth_day": 20, "gender": "female", "height": 168, "weight": 62, "job_type": "desk", "training_days_per_week": 3, "training_minutes_per_session": 45, "goal": "recomp"}
     lead = WebFunnelLead(id="lead-1", email="buyer@example.com", access_key_hash="key", request_id="request", snapshot_version="v1", snapshot=snapshot, snapshot_hash="snapshot", status="claim_reserved", revision=1, access_sync_status="pending")
@@ -44,13 +43,10 @@ async def test_bound_completion_persists_lead_customer_id_in_user_and_result():
     session = FakeCompletionSession(claim, lead)
     result = await complete_claim(session, "uid-1", "buyer@example.com", token)
     assert result["version"] == "claim_result_v1"
-    assert result["revenuecat_customer_id"] == lead.id
     assert claim.consumed_uid == "uid-1"
     assert lead.status == "claimed"
-    user = next(item for item in session.added if isinstance(item, User))
-    assert user.revenuecat_customer_id == lead.id
     assert any(hasattr(item, "weekly_budget_id") for item in session.added)
-    assert not any(getattr(item, "job_type", None) == "revenuecat_association" for item in session.added)
+    assert any(getattr(item, "job_type", None) == "revenuecat_association" for item in session.added)
     assert session.committed
 
 
