@@ -110,14 +110,6 @@ async def revenuecat_webhook(
             increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
             return {"status": "success"}
 
-        if event_type == "PURCHASE_REDEEMED":
-            if not user:
-                logger.info("RevenueCat purchase redemption target user not found")
-                raise HTTPException(status_code=404, detail="User not found")
-            await sync_redeemed_target_subscription(uow, user, event)
-            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
-            return {"status": "success"}
-
         if not user:
             logger.error(
                 "RevenueCat webhook: user not found — event_type=%s "
@@ -162,7 +154,6 @@ def _candidate_revenuecat_ids(event: dict) -> list[str]:
         event.get("app_user_id"),
         event.get("original_app_user_id"),
         *(event.get("aliases") or []),
-        *(event.get("redeemed_by") or []),
         *(event.get("transferred_to") or []),
         *(event.get("transferred_from") or []),
     ]
@@ -641,7 +632,6 @@ def parse_platform(store: str) -> str:
     store_map = {
         "APP_STORE": "ios",
         "PLAY_STORE": "android",
-        "PADDLE": "web",
         "STRIPE": "web",
         "MAC_APP_STORE": "ios",
     }
