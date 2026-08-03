@@ -71,8 +71,8 @@ class WebFunnelRevenueCatCorrelationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     app_user_id: str = Field(min_length=1, max_length=255)
-    redemption_link_hash: str | None = Field(
-        default=None, pattern=r"^[a-f0-9]{64}$"
+    redemption_link_hash: str = Field(
+        min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$"
     )
 
 

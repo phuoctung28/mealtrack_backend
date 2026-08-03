@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 def utcnow():
     from datetime import UTC, datetime
+
     return datetime.now(UTC)
 
 
@@ -45,6 +46,8 @@ def _result(snapshot, uid):
             "fat": snapshot.get("custom_fat_g", 65),
         },
     }
+
+
 from src.domain.model.auth import AuthProvider
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.profile import UserProfile
@@ -64,7 +67,6 @@ async def finalize_redemption(
     original_app_user_id: str,
     idempotency_key: str,
     environment: str,
-    project: str,
 ) -> dict:
     """Restore one paid lead once; the provider-derived original ID selects the lead."""
     binding = await db.scalar(
@@ -72,8 +74,8 @@ async def finalize_redemption(
         .where(
             WebFunnelRedemption.original_app_user_id == original_app_user_id,
             WebFunnelRedemption.environment == environment,
-            WebFunnelRedemption.project == project,
         )
+        .order_by(WebFunnelRedemption.verified_at.desc())
         .with_for_update()
     )
     if not binding:
