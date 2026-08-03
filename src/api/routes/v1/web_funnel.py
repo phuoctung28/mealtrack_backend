@@ -58,9 +58,7 @@ def _masked_email(email: str) -> str:
     return f"{local[:1]}***@{domain}"
 
 
-def _projection(
-    lead: WebFunnelLead, *, preflight_token: str | None = None
-) -> dict[str, str | int | None]:
+def _projection(lead: WebFunnelLead) -> dict[str, str | int | None]:
     projection: dict[str, str | int | None] = {
         "lead_id": lead.id,
         "masked_email": _masked_email(lead.email),
@@ -68,8 +66,6 @@ def _projection(
     }
     if lead.status in {"email_queued", "claim_reserved", "claimed", "refunded"}:
         projection["access_status"] = lead.access_sync_status
-    if preflight_token:
-        projection["preflight_token"] = preflight_token
     return projection
 
 
@@ -292,20 +288,24 @@ async def correlate_revenuecat_customer(
                 entitlement_id="standard",
                 product_id=verification.product_id or "",
                 verified_at=utcnow(),
+                redemption_link_hash=payload.redemption_link_hash,
         )
         db.add(existing)
+    if (
+        existing.redemption_link_hash
+        and existing.redemption_link_hash != payload.redemption_link_hash
+    ):
+        raise claim_conflict()
+    existing.redemption_link_hash = payload.redemption_link_hash
     lead.payment_verified_at = utcnow()
     if lead.status in {"draft", "checkout_started"}:
         lead.status = "payment_verified"
     try:
-        await db.flush()
-        preflight_token = await get_web_funnel_redemption_service().issue_preflight_token(
-            db, existing
-        )
+        await db.commit()
     except IntegrityError:
         await db.rollback()
         raise claim_conflict() from None
-    return _projection(lead, preflight_token=preflight_token)
+    return _projection(lead)
 
 
 @router.post("/redemptions/preflight")
@@ -330,7 +330,7 @@ async def preflight_revenuecat_redemption(
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required")
     eligible = await get_web_funnel_redemption_service().preflight(
-        db, uid=uid, email=email, token=payload.preflight_token
+        db, uid=uid, email=email, redemption_url=payload.redemption_url
     )
     if not eligible:
         raise claim_not_found()

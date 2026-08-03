@@ -349,7 +349,8 @@ async def test_correlation_binds_verified_anonymous_web_customer(monkeypatch):
     )
     session = CorrelationSession(_lead())
     payload = web_funnel.WebFunnelRevenueCatCorrelationRequest(
-        app_user_id="$RCAnonymousID:customer"
+        app_user_id="$RCAnonymousID:customer",
+        redemption_link_hash=web_funnel._hash("rc-example://redeem?token=opaque"),
     )
 
     response = await web_funnel.correlate_revenuecat_customer(
@@ -363,13 +364,14 @@ async def test_correlation_binds_verified_anonymous_web_customer(monkeypatch):
     )
 
     assert response["status"] == "payment_verified"
-    assert len(response["preflight_token"]) >= 32
+    assert "preflight_token" not in response
     assert session.committed
     binding = session.added[0]
     assert binding.original_app_user_id == "$RCAnonymousID:customer"
     assert binding.verified_app_user_id == "$RCAnonymousID:customer"
     assert binding.entitlement_id == "standard"
     assert binding.project == "nutree"
+    assert binding.redemption_link_hash == web_funnel._hash("rc-example://redeem?token=opaque")
 
 
 @pytest.mark.asyncio
@@ -382,7 +384,8 @@ async def test_correlation_hides_unverified_customer_as_not_found(monkeypatch):
     )
     session = CorrelationSession(_lead())
     payload = web_funnel.WebFunnelRevenueCatCorrelationRequest(
-        app_user_id="$RCAnonymousID:other"
+        app_user_id="$RCAnonymousID:other",
+        redemption_link_hash=web_funnel._hash("rc-example://redeem?token=opaque"),
     )
 
     with pytest.raises(HTTPException) as error:

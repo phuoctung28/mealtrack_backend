@@ -122,6 +122,7 @@ class WebFunnelRedemption(Base, BaseMixin):
     finalized_at = Column(DateTime(timezone=True), nullable=True)
     redeemer_uid = Column(String(128), nullable=True, unique=True)
     redemption_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    redemption_link_hash = Column(String(64), nullable=True, unique=True)
     preflight_token_hash = Column(String(64), nullable=True, unique=True)
     preflight_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     preflight_uid = Column(String(128), nullable=True)

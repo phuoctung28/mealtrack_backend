@@ -71,6 +71,9 @@ class WebFunnelRevenueCatCorrelationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     app_user_id: str = Field(min_length=1, max_length=255)
+    redemption_link_hash: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$"
+    )
 
 
 class WebFunnelRedemptionFinalizeRequest(BaseModel):
@@ -82,8 +85,8 @@ class WebFunnelRedemptionFinalizeRequest(BaseModel):
 
 
 class WebFunnelRedemptionPreflightRequest(BaseModel):
-    """Opaque possession proof issued only after provider-verified correlation."""
+    """RevenueCat redemption link held only in the authenticated app request."""
 
     model_config = ConfigDict(extra="forbid")
 
-    preflight_token: str = Field(min_length=32, max_length=512)
+    redemption_url: str = Field(min_length=1, max_length=4096)
