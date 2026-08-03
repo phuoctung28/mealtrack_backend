@@ -17,7 +17,6 @@ def upgrade() -> None:
     op.add_column("web_funnel_redemptions", sa.Column("preflight_uid", sa.String(128)))
     op.add_column("web_funnel_redemptions", sa.Column("preflight_at", sa.DateTime(timezone=True)))
     op.create_unique_constraint("uq_web_funnel_redemptions_preflight_token", "web_funnel_redemptions", ["preflight_token_hash"])
-    op.create_unique_constraint("uq_web_funnel_redemptions_preflight_uid", "web_funnel_redemptions", ["preflight_uid"])
 
 
 def downgrade() -> None:
