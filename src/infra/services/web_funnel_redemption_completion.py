@@ -5,7 +5,8 @@ import uuid
 from datetime import date
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, cast, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -79,7 +80,7 @@ async def finalize_redemption(
                     WebFunnelRedemption.redeemer_uid == uid,
                     WebFunnelRedemption.redeemer_uid.is_not(None),
                 ),
-                WebFunnelRedemption.provider_app_user_ids.contains(
+                cast(WebFunnelRedemption.provider_app_user_ids, JSONB).contains(
                     [original_app_user_id]
                 ),
             ),
