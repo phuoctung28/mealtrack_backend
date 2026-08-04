@@ -9,6 +9,17 @@
 
 ## Completed Phases
 
+### August 2026: Authenticated RevenueCat Redemption
+- [x] Paid web checkout correlates an anonymous RevenueCat web customer using a
+  SHA-256 redemption-link digest without exposing the raw link to the backend.
+- [x] Flutter resumes redemption after normal verified Firebase passwordless
+  email-link authentication, finalizes through the backend, refreshes access,
+  and routes the buyer directly to Home.
+- [ ] Revised passwordless-email redemption continuation is implemented locally;
+  staging Firebase link, cold-start, and RevenueCat expiry validation remain.
+- [x] Active Firebase passwordless, anonymous claim, and legacy magic-link UI
+  paths were removed; legacy backend routes remain disabled by default.
+
 ### July 2026: Meal Catalog Phase 0 Production Foundation
 - [x] Four-table catalog recommendation foundation uses `meal_catalog`, `meal_catalog_ingredients`, `meal_recommendations`, and `meal_recommendation_operations`.
 - [x] Catalog import is additive, content-hash protected, serialized, and withholds near duplicates for explicit review.

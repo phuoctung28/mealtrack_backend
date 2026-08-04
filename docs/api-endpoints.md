@@ -336,27 +336,27 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 
 ---
 
-## Paid Web Claim
+## Paid Web Redemption
 
-These endpoints have no feature toggle. Lead creation intentionally fails closed
-until `WEB_FUNNEL_BFF_SHARED_SECRET` is configured. Access is protected by BFF
-proof, possession-bound lead access keys, one-time claim credentials, fresh
-Firebase authentication, and backend RevenueCat verification. The email worker
-requires `WEB_FUNNEL_CLAIM_LINK_BASE_URL` to deliver a claim link.
+Lead creation intentionally fails closed until `WEB_FUNNEL_BFF_SHARED_SECRET`
+is configured. The active redemption flow uses a RevenueCat Redemption Link,
+Google/Apple Firebase authentication, a hash-only preflight binding, and
+backend RevenueCat verification. The browser never authenticates or grants
+access.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/v1/web-funnel/leads` | Trusted BFF creates an access-key-bound onboarding lead. |
 | GET | `/v1/web-funnel/leads/{lead_id}/status` | Returns only the safe, possession-bound lead projection. |
 | POST | `/v1/web-funnel/leads/{lead_id}/reset` | Revokes an unpaid draft for its access-key holder. |
-| POST | `/v1/web-funnel/leads/{lead_id}/resend` | Revokes an old unconsumed link and queues one new generation. |
-| POST | `/v1/web-funnel/claims/exchange` | Exchanges an opaque magic credential for a Firebase custom token and short-lived exchange token. |
-| POST | `/v1/web-funnel/claims/complete` | Completes the reservation-bound claim atomically with a fresh Firebase bearer. |
-| GET | `/v1/web-funnel/claims/recovery` | Returns the authenticated UID's completed result or safe pending state. |
+| POST | `/v1/web-funnel/leads/{lead_id}/revenuecat-correlation` | Correlates the anonymous web customer and redemption-link digest after checkout. |
+| POST | `/v1/web-funnel/redemptions/preflight` | Binds the verified Firebase UID and checkout email to the redemption-link digest before consumption. |
+| POST | `/v1/web-funnel/redemptions/finalize` | Verifies the redeemed RevenueCat customer and attaches the purchase to the authenticated user. |
 
-The RevenueCat webhook records exact lead UUID correlations in a durable inbox;
-the worker fetches authoritative `standard` entitlement state before fulfillment.
-Raw magic, exchange, and retry credentials are never stored or logged.
+The RevenueCat webhook records provider aliases and lifecycle state. Legacy
+magic-claim exchange, resend, and recovery routes remain feature-gated behind
+`WEB_FUNNEL_LEGACY_CLAIM_ENABLED` for migration compatibility and are not part
+of the active redemption flow.
 
 ## Response Format
 

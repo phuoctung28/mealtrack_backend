@@ -48,11 +48,22 @@ async def dispatch_web_funnel_outbox(
         adapter = ResendEmailAdapter()
         completed = 0
         for row in rows:
-            if row.job_type == "claim_email" and settings.WEB_FUNNEL_CLAIM_LINK_BASE_URL:
+            if (
+                row.job_type == "claim_email"
+                and settings.WEB_FUNNEL_LEGACY_CLAIM_ENABLED
+                and settings.WEB_FUNNEL_CLAIM_LINK_BASE_URL
+            ):
+
                 async def send(email: str, token: str, lead_id: str) -> bool:
                     url = claim_link(lead_id, token)
-                    result = await adapter.send_email(email, "Open Nutree", f'<p><a href="{url}">Open Nutree</a></p>', tags=["web-claim"])
+                    result = await adapter.send_email(
+                        email,
+                        "Open Nutree",
+                        f'<p><a href="{url}">Open Nutree</a></p>',
+                        tags=["web-claim"],
+                    )
                     return result.success
+
                 await process_claim_email(session, row, send)
                 completed += 1
             elif row.job_type == "revenuecat_reconcile":

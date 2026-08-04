@@ -203,6 +203,11 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
     ) -> bool:
         """Update existing user with new Firebase data."""
         updated = False
+        provider = AuthProvider.from_string(command.provider)
+
+        if user.provider != provider:
+            user.provider = provider
+            updated = True
 
         if user.email != command.email:
             user.email = command.email
