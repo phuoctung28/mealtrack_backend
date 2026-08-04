@@ -164,7 +164,7 @@ downloading Cloudinary bytes. Graph nodes must not import provider SDKs,
 ## Data Flow Example: Meal Recommendation Plan
 
 1. `POST /v1/meal-recommendations/three-day` resolves timezone and daily calories, then builds or replays a durable recommendation plan.
-2. The plan-level response is compact: it includes only the selected slots. Slot ingredients, alternatives, and scores stay out of the summary payload.
+2. The plan-level response is compact: it includes only the selected slots, with ingredients for each selected meal. Alternatives, scores, and full meal-detail fields stay out of the summary payload.
 3. `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` hydrates one selected slot and its alternatives when the client needs drill-down data.
 4. `swap`, `log`, and `skip` return the changed-slot detail shape so the mobile client can patch its cached plan without reloading everything.
 5. Recommendation analytics are scheduled through `BackgroundTaskManager` when available. Catalog meals are read from the process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback. Meal-history affinity is projected from aggregate linked ingredient buckets instead of loading the full meal graph, and logging a recommended meal reuses the already loaded selected catalog projection without fabricating image data.

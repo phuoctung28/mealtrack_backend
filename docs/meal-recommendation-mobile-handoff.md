@@ -86,7 +86,7 @@ Authorization: Bearer <firebase-jwt>
 Behavior:
 
 - Returns the compact plan summary for the owner-scoped plan.
-- The response includes selected slots only. Slot ingredients, alternatives, and scores are omitted from the summary payload.
+- The response includes selected slots only. Each selected meal includes its ingredients; alternatives, scores, and full meal details are omitted from the summary payload.
 
 ### Swap Slot
 
@@ -156,7 +156,8 @@ The plan summary is compact:
 
 - plan metadata: `id`, `status`, `timezone`, `start_date`, `daily_calories`, `allergy_evaluated`
 - slot summary: `id`, `slot_date`, `day_index`, `meal_type`, `catalog_meal_id`, compact `catalog_meal`, `target_calories`, `position`, `selection_version`, `logged_meal_id`, `shown_at`, `skipped_at`
-- omitted from plan summary: `score`, `alternatives`, and `catalog_meal.ingredients`
+- included in the compact `catalog_meal`: selected meal ingredients
+- omitted from plan summary: `score`, `alternatives`, and full meal-detail fields such as `description`
 
 Use `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` for the hydrated selected slot payload when the user needs details or alternatives.
 
