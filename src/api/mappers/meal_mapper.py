@@ -83,6 +83,7 @@ class MealMapper:
             CustomNutritionResponse,
             MacrosResponse,
             MealTranslationResponse,
+            NutritionOverrideResponse,
             TranslatedFoodItemResponse,
         )
 
@@ -96,12 +97,13 @@ class MealMapper:
 
             # Map total nutrition macros
             if hasattr(meal.nutrition, "macros") and meal.nutrition.macros:
+                effective_macros = meal.nutrition.effective_macros
                 total_nutrition = MacrosResponse(
-                    protein=meal.nutrition.macros.protein,
-                    carbs=meal.nutrition.macros.carbs,
-                    fat=meal.nutrition.macros.fat,
-                    fiber=meal.nutrition.macros.fiber,
-                    sugar=meal.nutrition.macros.sugar,
+                    protein=effective_macros.protein,
+                    carbs=effective_macros.carbs,
+                    fat=effective_macros.fat,
+                    fiber=effective_macros.fiber,
+                    sugar=effective_macros.sugar,
                 )
             # Handle legacy structure where nutrition has direct properties
             elif hasattr(meal.nutrition, "protein"):
@@ -123,7 +125,7 @@ class MealMapper:
                     if hasattr(item, "macros") and item.macros:
                         nutrition_dto = NutritionResponse(
                             nutrition_id=str(item.name),
-                            calories=item_calories,
+                            calories=item.macros.total_calories,
                             protein_g=item.macros.protein,
                             carbs_g=item.macros.carbs,
                             fat_g=item.macros.fat,
@@ -176,6 +178,16 @@ class MealMapper:
                         description=None,
                         nutrition=nutrition_dto,
                         custom_nutrition=custom_nutrition_dto,
+                        nutrition_override=(
+                            NutritionOverrideResponse(
+                                calories=item.nutrition_override.calories,
+                                protein=item.nutrition_override.protein,
+                                carbs=item.nutrition_override.carbs,
+                                fat=item.nutrition_override.fat,
+                            )
+                            if item.nutrition_override
+                            else None
+                        ),
                         fdc_id=getattr(item, "fdc_id", None),
                         food_reference_id=getattr(item, "food_reference_id", None),
                         is_custom=getattr(item, "is_custom", False),
@@ -269,6 +281,16 @@ class MealMapper:
                 meal.weight_grams if hasattr(meal, "weight_grams") else None
             ),
             total_nutrition=total_nutrition,
+            nutrition_override=(
+                NutritionOverrideResponse(
+                    calories=meal.nutrition.nutrition_override.calories,
+                    protein=meal.nutrition.nutrition_override.protein,
+                    carbs=meal.nutrition.nutrition_override.carbs,
+                    fat=meal.nutrition.nutrition_override.fat,
+                )
+                if meal.nutrition and meal.nutrition.nutrition_override
+                else None
+            ),
             translations=translations_response,
             food_label_metadata=MealMapper._food_label_metadata(meal),
             value_insights=value_insights_response,

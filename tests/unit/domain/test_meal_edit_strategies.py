@@ -10,7 +10,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.app.commands.meal.edit_meal_command import CustomNutritionData, FoodItemChange
+from src.app.commands.meal.edit_meal_command import (
+    CustomNutritionData,
+    FoodItemChange,
+    NutritionOverride,
+)
 from src.domain.model import FoodItem, Macros
 from src.domain.strategies.meal_edit_strategies import (
     AddFoodItemStrategy,
@@ -165,6 +169,39 @@ class TestUpdateFoodItemStrategy:
         assert updated_item.macros.protein == 60.0  # Doubled
         assert updated_item.macros.fat == 16.0  # Doubled
         assert updated_item.food_reference_id == 1001
+
+    @pytest.mark.asyncio
+    async def test_update_keeps_manual_values_independent_from_source_macros(self):
+        strategy = UpdateFoodItemStrategy(Mock())
+        food_items_dict = {
+            "item1": FoodItem(
+                id="item1",
+                name="Chicken",
+                quantity=100.0,
+                unit="g",
+                macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
+            )
+        }
+
+        await strategy.apply(
+            food_items_dict,
+            FoodItemChange(
+                action="update",
+                id="item1",
+                nutrition_override=NutritionOverride(
+                    calories=123.4,
+                    protein=-5.0,
+                    carbs=999.0,
+                    fat=1.0,
+                ),
+            ),
+        )
+
+        updated_item = food_items_dict["item1"]
+        assert updated_item.macros.protein == 30.0
+        assert updated_item.calories == 123.4
+        assert updated_item.effective_macros.protein == -5.0
+        assert updated_item.effective_macros.carbs == 999.0
 
     @pytest.mark.asyncio
     async def test_update_unit_with_nutrition_service_success(self):

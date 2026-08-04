@@ -16,6 +16,7 @@ from src.app.events.meal import MealEditedEvent
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import FoodItemTranslation, MealStatus
 from src.domain.model.meal_projection import MealProjection
+from src.domain.model.nutrition import Macros, NutritionOverride
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
@@ -68,6 +69,25 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
                 # 3. Recalculate nutrition
                 updated_nutrition = self._calculate_total_nutrition(updated_food_items)
+                existing_override = (
+                    meal.nutrition.nutrition_override if meal.nutrition else None
+                )
+                requested_override = command.nutrition_override or existing_override
+                if requested_override is not None:
+                    nutrition_override = NutritionOverride(
+                        calories=requested_override.calories,
+                        protein=requested_override.protein,
+                        carbs=requested_override.carbs,
+                        fat=requested_override.fat,
+                    )
+                    updated_nutrition.nutrition_override = nutrition_override
+                    updated_nutrition.macros = Macros(
+                        protein=nutrition_override.protein,
+                        carbs=nutrition_override.carbs,
+                        fat=nutrition_override.fat,
+                        fiber=updated_nutrition.macros.fiber,
+                        sugar=updated_nutrition.macros.sugar,
+                    )
 
                 updated_created_at = command.created_at or meal.created_at
                 if command.meal_type is not None:

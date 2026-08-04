@@ -59,7 +59,12 @@ from src.api.services.guest_parse_quota import (
     QuotaUnavailableError,
     validate_install_id,
 )
-from src.app.commands.meal import CustomNutritionData, EditMealCommand, FoodItemChange
+from src.app.commands.meal import (
+    CustomNutritionData,
+    EditMealCommand,
+    FoodItemChange,
+    NutritionOverride,
+)
 from src.app.commands.meal.attach_meal_photo_command import AttachMealPhotoCommand
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
@@ -801,6 +806,17 @@ async def update_meal_ingredients(
                 quantity=change_request.quantity,
                 unit=change_request.unit,
                 custom_nutrition=custom_nutrition,
+                nutrition_override=(
+                    NutritionOverride(
+                        calories=change_request.nutrition_override.calories,
+                        protein=change_request.nutrition_override.protein,
+                        carbs=change_request.nutrition_override.carbs,
+                        fat=change_request.nutrition_override.fat,
+                    )
+                    if change_request.nutrition_override
+                    else None
+                ),
+                clear_nutrition_override=change_request.clear_nutrition_override,
                 allowed_units=[
                     unit.model_dump() for unit in change_request.allowed_units
                 ],
@@ -814,6 +830,16 @@ async def update_meal_ingredients(
         created_at=payload.created_at,
         meal_type=payload.meal_type,
         food_item_changes=food_item_changes,
+        nutrition_override=(
+            NutritionOverride(
+                calories=payload.nutrition_override.calories,
+                protein=payload.nutrition_override.protein,
+                carbs=payload.nutrition_override.carbs,
+                fat=payload.nutrition_override.fat,
+            )
+            if payload.nutrition_override
+            else None
+        ),
     )
 
     logger.info("Sending command to event bus: %s", command)

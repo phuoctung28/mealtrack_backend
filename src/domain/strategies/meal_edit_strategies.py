@@ -8,13 +8,26 @@ import uuid
 from abc import ABC, abstractmethod
 
 from src.domain.model.meal.food_item_change import FoodItemChange
-from src.domain.model.nutrition import FoodItem, Macros
+from src.domain.model.nutrition import FoodItem, Macros, NutritionOverride
 from src.domain.services import NutritionCalculationService
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
 logger = logging.getLogger(__name__)
 
 MAX_QUANTITY_GRAMS = 10000.0  # 10kg max per food item
+
+
+def _resolved_nutrition_override(change, existing: FoodItem | None = None):
+    if change.clear_nutrition_override:
+        return None
+    if change.nutrition_override is not None:
+        return NutritionOverride(
+            calories=change.nutrition_override.calories,
+            protein=change.nutrition_override.protein,
+            carbs=change.nutrition_override.carbs,
+            fat=change.nutrition_override.fat,
+        )
+    return existing.nutrition_override if existing else None
 
 
 def _validate_quantity_grams(quantity_grams: float, quantity: float, unit: str) -> None:
@@ -101,6 +114,9 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                 food_reference_id=existing_item.food_reference_id,
                 is_custom=True,
                 allowed_units=change.allowed_units or existing_item.allowed_units,
+                nutrition_override=_resolved_nutrition_override(
+                    change, existing_item
+                ),
             )
             logger.info(
                 f"Updated food item with custom nutrition: {existing_item.name}"
@@ -136,6 +152,9 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     food_reference_id=existing_item.food_reference_id,
                     is_custom=existing_item.is_custom,
                     allowed_units=change.allowed_units or existing_item.allowed_units,
+                    nutrition_override=_resolved_nutrition_override(
+                        change, existing_item
+                    ),
                 )
                 logger.info(f"Updated food item with unit change: {existing_item.name}")
             else:
@@ -196,6 +215,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             food_reference_id=existing_item.food_reference_id,
             is_custom=existing_item.is_custom,
             allowed_units=change.allowed_units or existing_item.allowed_units,
+            nutrition_override=_resolved_nutrition_override(change, existing_item),
         )
         logger.info(f"Updated food item with scaling: {existing_item.name}")
 
@@ -228,6 +248,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 unit,
                 change.custom_nutrition,
                 change.allowed_units,
+                change.nutrition_override,
             )
             food_items_dict[new_item_id] = food_item
             logger.info(f"Added custom food item: {change.name}")
@@ -254,6 +275,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                     fdc_id=change.fdc_id,
                     is_custom=False,
                     allowed_units=change.allowed_units,
+                    nutrition_override=_resolved_nutrition_override(change),
                 )
                 logger.info(f"Added food item from nutrition service: {change.name}")
                 return
@@ -272,6 +294,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             fdc_id=change.fdc_id,
             is_custom=True,
             allowed_units=change.allowed_units,
+            nutrition_override=_resolved_nutrition_override(change),
         )
 
     def _create_from_custom_nutrition(
@@ -282,6 +305,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
         unit: str,
         custom_nutrition,
         allowed_units=None,
+        nutrition_override=None,
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
         quantity_grams = convert_quantity_to_grams(quantity, unit, name)
@@ -304,6 +328,16 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             fdc_id=None,
             is_custom=True,
             allowed_units=allowed_units,
+            nutrition_override=(
+                NutritionOverride(
+                    calories=nutrition_override.calories,
+                    protein=nutrition_override.protein,
+                    carbs=nutrition_override.carbs,
+                    fat=nutrition_override.fat,
+                )
+                if nutrition_override
+                else None
+            ),
         )
 
 

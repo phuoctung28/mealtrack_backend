@@ -13,6 +13,9 @@ def effective_meal_calories(meal: Any) -> float:
     if nutrition is None:
         return 0.0
 
+    if getattr(nutrition, "nutrition_override", None) is not None:
+        return float(nutrition.nutrition_override.calories)
+
     if getattr(meal, "source", None) == "food_label":
         metadata = getattr(meal, "food_label_metadata", None)
         label_calories = _food_label_calories(metadata)

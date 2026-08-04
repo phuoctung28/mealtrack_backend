@@ -600,7 +600,14 @@ class AsyncMealRepository(MealRepositoryPort):
         db_nutrition.protein = domain_nutrition.macros.protein
         db_nutrition.carbs = domain_nutrition.macros.carbs
         db_nutrition.fat = domain_nutrition.macros.fat
+        db_nutrition.fiber = domain_nutrition.macros.fiber
+        db_nutrition.sugar = domain_nutrition.macros.sugar
         db_nutrition.confidence_score = domain_nutrition.confidence_score
+        db_nutrition.nutrition_override = (
+            domain_nutrition.nutrition_override.to_dict()
+            if domain_nutrition.nutrition_override
+            else None
+        )
 
         # food_items pre-loaded via selectinload in save() — safe to iterate
         for item in db_nutrition.food_items:

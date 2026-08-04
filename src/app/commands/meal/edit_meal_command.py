@@ -4,10 +4,14 @@ Command to edit meal ingredients and portions.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from src.app.events.base import Command
-from src.domain.model.meal.food_item_change import FoodItemChange, CustomNutritionData
+from src.domain.model.meal.food_item_change import (
+    CustomNutritionData,
+    FoodItemChange,
+    NutritionOverride,
+)
 
 
 @dataclass
@@ -20,6 +24,7 @@ class EditMealCommand(Command):
     created_at: Optional[datetime] = None
     meal_type: Optional[str] = None
     food_item_changes: List[FoodItemChange] = field(default_factory=list)
+    nutrition_override: Optional[NutritionOverride] = None
 
 
 @dataclass
