@@ -79,7 +79,7 @@ def test_current_openapi_schema_exposes_full_plan_fields():
     assert "macros" in meal_fields
 
 
-def test_summary_openapi_schema_omits_full_plan_fields():
+def test_summary_openapi_schema_keeps_selected_ingredients_compact():
     schema = MealRecommendationPlanSummaryResponse.model_json_schema()
     definitions = schema["$defs"]
 
@@ -88,7 +88,7 @@ def test_summary_openapi_schema_omits_full_plan_fields():
 
     assert "alternatives" not in slot_fields
     assert "score" not in slot_fields
-    assert "ingredients" not in meal_fields
+    assert "ingredients" in meal_fields
     assert "description" not in meal_fields
     assert "macros" in meal_fields
 
