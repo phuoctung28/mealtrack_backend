@@ -2,7 +2,6 @@
 
 import hashlib
 
-from fastapi import HTTPException
 from sqlalchemy import select
 
 from src.domain.utils.timezone_utils import utc_now
@@ -56,11 +55,8 @@ class WebFunnelRedemptionService:
         )
         if not binding:
             return False
-        if binding.redeemer_uid and binding.redeemer_uid not in redeemers:
-            raise HTTPException(status_code=409, detail="Redemption already bound")
-        binding.provider_app_user_ids = sorted(redeemers)
-        if len(redeemers) == 1:
-            binding.redeemer_uid = next(iter(redeemers))
+        existing_aliases = set(binding.provider_app_user_ids or [])
+        binding.provider_app_user_ids = sorted(existing_aliases | redeemers)
         binding.redemption_confirmed_at = utc_now()
         return True
 

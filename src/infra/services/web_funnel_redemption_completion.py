@@ -20,6 +20,16 @@ def claim_conflict():
     return HTTPException(status_code=409, detail="Claim conflict")
 
 
+def existing_account_sign_in_required():
+    return HTTPException(
+        status_code=409,
+        detail={
+            "code": "EXISTING_ACCOUNT_REQUIRES_SIGN_IN",
+            "message": "Sign in to the existing Nutree account to continue.",
+        },
+    )
+
+
 def claim_not_found():
     return HTTPException(status_code=404, detail="Claim not found")
 
@@ -90,6 +100,8 @@ async def finalize_redemption(
     )
     if not binding:
         raise claim_not_found()
+    if binding.preflight_uid and binding.preflight_uid != uid:
+        raise claim_not_found()
     if binding.redeemer_uid and binding.redeemer_uid != uid:
         raise claim_not_found()
     binding.redeemer_uid = uid
@@ -113,6 +125,16 @@ async def finalize_redemption(
         select(User).where(User.email == lead.email).with_for_update()
     )
     if email_owner and email_owner.firebase_uid != uid:
+        owner_profile = await db.scalar(
+            select(UserProfile)
+            .where(
+                UserProfile.user_id == email_owner.id,
+                UserProfile.is_current.is_(True),
+            )
+            .with_for_update()
+        )
+        if not email_owner.onboarding_completed and owner_profile is None:
+            raise existing_account_sign_in_required()
         raise claim_conflict()
     if user and (user.email.lower() != lead.email.lower() or user.onboarding_completed):
         raise claim_conflict()
