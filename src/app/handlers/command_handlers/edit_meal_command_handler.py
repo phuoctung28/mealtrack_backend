@@ -62,6 +62,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 updated_food_items = await self._apply_food_item_changes(
                     meal.nutrition.food_items if meal.nutrition else [],
                     command.food_item_changes,
+                    food_reference_repository=getattr(uow, "food_references", None),
                 )
                 self._realign_translations_after_food_item_changes(
                     meal, updated_food_items
@@ -176,7 +177,12 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 await uow.rollback()
                 raise
 
-    async def _apply_food_item_changes(self, current_food_items, changes):
+    async def _apply_food_item_changes(
+        self,
+        current_food_items,
+        changes,
+        food_reference_repository=None,
+    ):
         """Apply food item changes to current list using strategy pattern."""
         from src.domain.services import NutritionCalculationService
         from src.domain.strategies.meal_edit_strategies import (
@@ -193,6 +199,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         nutrition_service = NutritionCalculationService()
         strategies = FoodItemChangeStrategyFactory.create_strategies(
             nutrition_service,
+            food_reference_repository=food_reference_repository,
         )
 
         # Apply each change using the appropriate strategy

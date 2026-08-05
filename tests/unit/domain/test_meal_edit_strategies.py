@@ -6,7 +6,7 @@ on food items during meal editing.
 """
 
 import uuid
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -16,6 +16,10 @@ from src.app.commands.meal.edit_meal_command import (
     NutritionOverride,
 )
 from src.domain.model import FoodItem, Macros
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+    FoodReferenceServingProjection,
+)
 from src.domain.strategies.meal_edit_strategies import (
     AddFoodItemStrategy,
     FoodItemChangeStrategyFactory,
@@ -254,6 +258,58 @@ class TestUpdateFoodItemStrategy:
         )
 
     @pytest.mark.asyncio
+    async def test_update_unit_uses_canonical_fatsecret_reference(self):
+        mock_nutrition_service = Mock()
+        mock_food_references = Mock()
+        mock_food_references.get_nutrition_projection = AsyncMock(
+            return_value=FoodReferenceNutritionProjection(
+                id=1002,
+                name="Pâté",
+                source="fatsecret",
+                is_verified=True,
+                protein_100g=3.0,
+                carbs_100g=1.0,
+                fat_100g=5.0,
+                servings=[
+                    FoodReferenceServingProjection(
+                        name="Muỗng Canh",
+                        grams=15.0,
+                        milliliters=None,
+                    ),
+                ],
+            )
+        )
+        strategy = UpdateFoodItemStrategy(
+            mock_nutrition_service,
+            mock_food_references,
+        )
+        food_items_dict = {
+            "item1": FoodItem(
+                id="item1",
+                name="Pâté",
+                quantity=1.0,
+                unit="Muỗng Canh",
+                macros=Macros(protein=3.0, carbs=1.0, fat=5.0),
+                food_reference_id=1002,
+                is_custom=True,
+            )
+        }
+
+        await strategy.apply(
+            food_items_dict,
+            FoodItemChange(action="update", id="item1", quantity=1.0, unit="kg"),
+        )
+
+        updated_item = food_items_dict["item1"]
+        assert updated_item.quantity == 1.0
+        assert updated_item.unit == "kg"
+        assert updated_item.macros.protein == pytest.approx(30.0)
+        assert updated_item.macros.carbs == pytest.approx(10.0)
+        assert updated_item.macros.fat == pytest.approx(50.0)
+        mock_food_references.get_nutrition_projection.assert_awaited_once_with(1002)
+        mock_nutrition_service.get_nutrition_for_ingredient.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_update_custom_nutrition_preserves_food_reference_id(self):
         """Custom nutrition updates preserve canonical food reference identity."""
         mock_nutrition_service = Mock()
@@ -291,8 +347,8 @@ class TestUpdateFoodItemStrategy:
         assert updated_item.is_custom is True
 
     @pytest.mark.asyncio
-    async def test_update_unit_nutrition_service_fails_uses_scaling(self):
-        """Test falling back to scaling when nutrition service fails."""
+    async def test_update_unit_nutrition_service_fails_preserves_source(self):
+        """Keep source nutrition unchanged when canonical data is unavailable."""
         # Arrange
         mock_nutrition_service = Mock()
         mock_nutrition_service.get_nutrition_for_ingredient.return_value = (
@@ -320,16 +376,12 @@ class TestUpdateFoodItemStrategy:
         # Act
         await strategy.apply(food_items_dict, change)
 
-        # Assert - Should use scaling fallback with unit conversion
+        # Assert - Never synthesize a new unit's nutrition from the old unit.
         updated_item = food_items_dict["item1"]
         assert updated_item.quantity == 150.0
         assert updated_item.unit == "oz"
-        # scale = 150oz * 28.35g/oz / 100g = 42.525x
-        scale = 150.0 * 28.35 / 100.0
-        # calories derived from scaled macros: (30*scale)*4 + (0*scale)*4 + (8*scale)*9
-        expected_cal = round(30.0 * scale * 4 + 0 + 8.0 * scale * 9, 1)
-        assert updated_item.calories == pytest.approx(expected_cal, rel=0.01)
-        assert updated_item.macros.protein == pytest.approx(30.0 * scale, rel=0.01)
+        assert updated_item.calories == pytest.approx(192.0)
+        assert updated_item.macros.protein == pytest.approx(30.0)
 
     @pytest.mark.asyncio
     async def test_update_quantity_only(self):
