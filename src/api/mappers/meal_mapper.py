@@ -131,7 +131,9 @@ class MealMapper:
                     if hasattr(item, "macros") and item.macros:
                         nutrition_dto = NutritionResponse(
                             nutrition_id=str(item.name),
-                            calories=item.macros.total_calories,
+                            # Use effective item calories so label/overrides
+                            # are not replaced by macro-derived totals.
+                            calories=item_calories,
                             protein_g=item.macros.protein,
                             carbs_g=item.macros.carbs,
                             fat_g=item.macros.fat,

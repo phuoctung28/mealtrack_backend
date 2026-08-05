@@ -13,8 +13,12 @@ def effective_meal_calories(meal: Any) -> float:
     if nutrition is None:
         return 0.0
 
-    if getattr(nutrition, "nutrition_override", None) is not None:
-        return float(nutrition.nutrition_override.calories)
+    override = getattr(nutrition, "nutrition_override", None)
+    # Avoid truthy Mock children from incomplete unit-test doubles.
+    if override is not None and not isinstance(override, type(None)):
+        override_calories = getattr(override, "calories", None)
+        if isinstance(override_calories, (int, float)):
+            return float(override_calories)
 
     if getattr(meal, "source", None) == "food_label":
         metadata = getattr(meal, "food_label_metadata", None)
@@ -22,6 +26,12 @@ def effective_meal_calories(meal: Any) -> float:
         if label_calories is not None:
             item = (getattr(nutrition, "food_items", None) or [None])[0]
             return _scaled_label_calories(label_calories, item, metadata)
+
+    # Prefer nutrition.calories when it is a real number (includes item
+    # override sums on the Nutrition value object).
+    nutrition_calories = getattr(nutrition, "calories", None)
+    if isinstance(nutrition_calories, (int, float)):
+        return float(nutrition_calories)
 
     return _macro_calories(getattr(nutrition, "macros", None))
 

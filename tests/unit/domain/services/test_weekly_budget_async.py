@@ -16,10 +16,15 @@ def _ready_meal(*, protein: float, carbs: float, fat: float, created_at: datetim
     meal = Mock()
     meal.status = MealStatus.READY
     meal.created_at = created_at
+    meal.source = "scan"
+    meal.food_label_metadata = None
+    meal.nutrition.nutrition_override = None
+    meal.nutrition.food_items = []
     meal.nutrition.macros.protein = protein
     meal.nutrition.macros.carbs = carbs
     meal.nutrition.macros.fat = fat
     meal.nutrition.macros.fiber = 0.0
+    meal.nutrition.calories = protein * 4 + carbs * 4 + fat * 9
     return meal
 
 
@@ -61,7 +66,11 @@ class TestCalculateWeeklyConsumedAsync:
 
         ready_meal = Mock()
         ready_meal.status = MealStatus.READY
-        ready_meal.nutrition.calories = 9999
+        ready_meal.source = "scan"
+        ready_meal.food_label_metadata = None
+        ready_meal.nutrition.nutrition_override = None
+        ready_meal.nutrition.food_items = []
+        ready_meal.nutrition.calories = 495
         ready_meal.nutrition.macros.protein = 30
         ready_meal.nutrition.macros.carbs = 60
         ready_meal.nutrition.macros.fat = 15
@@ -69,6 +78,10 @@ class TestCalculateWeeklyConsumedAsync:
 
         processing_meal = Mock()
         processing_meal.status = MealStatus.PROCESSING
+        processing_meal.source = "scan"
+        processing_meal.food_label_metadata = None
+        processing_meal.nutrition.nutrition_override = None
+        processing_meal.nutrition.food_items = []
         processing_meal.nutrition.calories = 300
         processing_meal.nutrition.macros.protein = 20
         processing_meal.nutrition.macros.carbs = 40
