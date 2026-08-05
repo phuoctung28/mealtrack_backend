@@ -131,12 +131,14 @@ class Nutrition:
 
     @property
     def calories(self) -> float:
-        """Use a user-entered value when one exists."""
-        return (
-            self.nutrition_override.calories
-            if self.nutrition_override
-            else self.macros.total_calories
-        )
+        """Meal calories prefer meal override; else sum item effective calories
+        so per-ingredient calorie overrides are not dropped; else macros.
+        """
+        if self.nutrition_override is not None:
+            return float(self.nutrition_override.calories)
+        if self.food_items:
+            return float(sum(item.calories for item in self.food_items))
+        return float(self.macros.total_calories)
 
     @property
     def effective_macros(self) -> Macros:

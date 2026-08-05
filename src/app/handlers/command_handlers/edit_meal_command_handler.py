@@ -68,18 +68,37 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                     meal, updated_food_items
                 )
 
-                # 3. Recalculate nutrition
+                # 3. Recalculate nutrition from current ingredients.
                 updated_nutrition = self._calculate_total_nutrition(updated_food_items)
                 existing_override = (
                     meal.nutrition.nutrition_override if meal.nutrition else None
                 )
-                requested_override = command.nutrition_override or existing_override
-                if requested_override is not None:
+                # Meal-level override is only for intentional whole-meal edits.
+                # Ingredient composition changes must clear it so totals follow
+                # the ingredient sum (unless this request sets a new override).
+                if command.nutrition_override is not None:
                     nutrition_override = NutritionOverride(
-                        calories=requested_override.calories,
-                        protein=requested_override.protein,
-                        carbs=requested_override.carbs,
-                        fat=requested_override.fat,
+                        calories=command.nutrition_override.calories,
+                        protein=command.nutrition_override.protein,
+                        carbs=command.nutrition_override.carbs,
+                        fat=command.nutrition_override.fat,
+                    )
+                    updated_nutrition.nutrition_override = nutrition_override
+                    updated_nutrition.macros = Macros(
+                        protein=nutrition_override.protein,
+                        carbs=nutrition_override.carbs,
+                        fat=nutrition_override.fat,
+                        fiber=updated_nutrition.macros.fiber,
+                        sugar=updated_nutrition.macros.sugar,
+                    )
+                elif command.food_item_changes:
+                    updated_nutrition.nutrition_override = None
+                elif existing_override is not None:
+                    nutrition_override = NutritionOverride(
+                        calories=existing_override.calories,
+                        protein=existing_override.protein,
+                        carbs=existing_override.carbs,
+                        fat=existing_override.fat,
                     )
                     updated_nutrition.nutrition_override = nutrition_override
                     updated_nutrition.macros = Macros(
