@@ -289,6 +289,12 @@ class FoodItemChangeRequest(BaseModel):
     custom_nutrition: Optional["CustomNutritionRequest"] = Field(
         None, description="Custom nutrition data for non-USDA ingredients"
     )
+    nutrition_override: Optional["NutritionOverrideRequest"] = Field(
+        None, description="Independent nutrition values entered by the user"
+    )
+    clear_nutrition_override: bool = Field(
+        False, description="Restore source nutrition for this ingredient"
+    )
 
     class Config:
         json_schema_extra = {
@@ -340,6 +346,15 @@ class CustomNutritionRequest(BaseModel):
         }
 
 
+class NutritionOverrideRequest(BaseModel):
+    """Absolute values that intentionally bypass nutrition recalculation."""
+
+    calories: float
+    protein: float
+    carbs: float
+    fat: float
+
+
 class EditMealIngredientsRequest(BaseModel):
     """Request DTO for editing meal ingredients."""
 
@@ -352,6 +367,9 @@ class EditMealIngredientsRequest(BaseModel):
     meal_type: Optional[str] = Field(
         None, description="Updated meal type derived from the user's local log time"
     )
+    nutrition_override: Optional[NutritionOverrideRequest] = Field(
+        None, description="Independent meal-level nutrition values"
+    )
     food_item_changes: list[FoodItemChangeRequest] = Field(
         default_factory=list, description="List of ingredient changes"
     )
@@ -362,6 +380,7 @@ class EditMealIngredientsRequest(BaseModel):
             self.dish_name is None
             and self.created_at is None
             and self.meal_type is None
+            and self.nutrition_override is None
             and not self.food_item_changes
         ):
             raise ValueError("At least one meal edit field is required")

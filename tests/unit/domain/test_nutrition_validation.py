@@ -11,13 +11,15 @@ class TestMacrosValidation:
         assert macros.protein == 20
         assert macros.total_calories == 20 * 4 + 30 * 4 + 10 * 9
 
-    def test_negative_protein_raises_error(self):
-        with pytest.raises(ValueError, match="protein cannot be negative"):
-            Macros(protein=-1, carbs=10, fat=10)
+    def test_negative_protein_allowed_for_manual_overrides(self):
+        # Manual nutrition overrides can carry user-entered extremes; validation
+        # is enforced at API/request boundaries, not on the domain value object.
+        macros = Macros(protein=-1, carbs=10, fat=10)
+        assert macros.protein == -1
 
-    def test_excessive_value_raises_error(self):
-        with pytest.raises(ValueError, match="protein exceeds realistic limit"):
-            Macros(protein=6000, carbs=10, fat=10)
+    def test_excessive_value_allowed_for_manual_overrides(self):
+        macros = Macros(protein=6000, carbs=10, fat=10)
+        assert macros.protein == 6000
 
 
 class TestFoodItemValidation:

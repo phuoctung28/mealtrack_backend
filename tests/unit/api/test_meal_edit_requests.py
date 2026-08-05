@@ -2,8 +2,9 @@
 Unit tests for meal edit request validation.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 from pydantic import ValidationError
 
 from src.api.schemas.request.meal_requests import (
@@ -12,6 +13,7 @@ from src.api.schemas.request.meal_requests import (
     CustomNutritionRequest,
     EditMealIngredientsRequest,
     FoodItemChangeRequest,
+    NutritionOverrideRequest,
 )
 
 
@@ -95,6 +97,21 @@ class TestFoodItemChangeRequest:
         # Assert
         assert request.action == "remove"
         assert request.id == "test-food-item-id"
+
+    def test_manual_nutrition_override_allows_independent_values(self):
+        request = FoodItemChangeRequest(
+            action="update",
+            id="test-food-item-id",
+            nutrition_override=NutritionOverrideRequest(
+                calories=123.4,
+                protein=-5.0,
+                carbs=999.0,
+                fat=1.0,
+            ),
+        )
+
+        assert request.nutrition_override.calories == 123.4
+        assert request.nutrition_override.protein == -5.0
 
     def test_invalid_action(self):
         """Test invalid action value."""
@@ -381,6 +398,18 @@ class TestEditMealIngredientsRequest:
         assert request.dish_name == "Updated Meal Name"
         assert len(request.food_item_changes) == 1
         assert request.food_item_changes[0].action == "add"
+
+    def test_accepts_meal_nutrition_override_without_food_changes(self):
+        request = EditMealIngredientsRequest(
+            nutrition_override=NutritionOverrideRequest(
+                calories=777.0,
+                protein=1.0,
+                carbs=2.0,
+                fat=3.0,
+            )
+        )
+
+        assert request.nutrition_override.calories == 777.0
 
     def test_valid_edit_request_without_dish_name(self):
         """Test valid edit request without dish name."""

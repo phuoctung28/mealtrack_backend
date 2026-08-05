@@ -373,11 +373,11 @@ class NutritionCalculationService:
                 confidence_score=1.0,
             )
 
-        total_protein = sum(item.macros.protein for item in food_items)
-        total_carbs = sum(item.macros.carbs for item in food_items)
-        total_fat = sum(item.macros.fat for item in food_items)
-        total_fiber = sum(item.macros.fiber for item in food_items)
-        total_sugar = sum(item.macros.sugar for item in food_items)
+        total_protein = sum(item.effective_macros.protein for item in food_items)
+        total_carbs = sum(item.effective_macros.carbs for item in food_items)
+        total_fat = sum(item.effective_macros.fat for item in food_items)
+        total_fiber = sum(item.effective_macros.fiber for item in food_items)
+        total_sugar = sum(item.effective_macros.sugar for item in food_items)
 
         # Calculate average confidence
         avg_confidence = sum(item.confidence for item in food_items) / len(food_items)

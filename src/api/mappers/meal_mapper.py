@@ -17,6 +17,9 @@ from src.api.schemas.response import (
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+)
 from src.domain.services.meal_calorie_service import (
     effective_food_item_calories,
     effective_meal_calories,
@@ -66,6 +69,9 @@ class MealMapper:
         image_url: str | None = None,
         target_language: str | None = None,
         value_insights: MealValueInsights | None = None,
+        source_nutrition_by_food_reference: dict[
+            int, FoodReferenceNutritionProjection
+        ] | None = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -83,6 +89,7 @@ class MealMapper:
             CustomNutritionResponse,
             MacrosResponse,
             MealTranslationResponse,
+            NutritionOverrideResponse,
             TranslatedFoodItemResponse,
         )
 
@@ -96,12 +103,13 @@ class MealMapper:
 
             # Map total nutrition macros
             if hasattr(meal.nutrition, "macros") and meal.nutrition.macros:
+                effective_macros = meal.nutrition.effective_macros
                 total_nutrition = MacrosResponse(
-                    protein=meal.nutrition.macros.protein,
-                    carbs=meal.nutrition.macros.carbs,
-                    fat=meal.nutrition.macros.fat,
-                    fiber=meal.nutrition.macros.fiber,
-                    sugar=meal.nutrition.macros.sugar,
+                    protein=effective_macros.protein,
+                    carbs=effective_macros.carbs,
+                    fat=effective_macros.fat,
+                    fiber=effective_macros.fiber,
+                    sugar=effective_macros.sugar,
                 )
             # Handle legacy structure where nutrition has direct properties
             elif hasattr(meal.nutrition, "protein"):
@@ -123,6 +131,8 @@ class MealMapper:
                     if hasattr(item, "macros") and item.macros:
                         nutrition_dto = NutritionResponse(
                             nutrition_id=str(item.name),
+                            # Use effective item calories so label/overrides
+                            # are not replaced by macro-derived totals.
                             calories=item_calories,
                             protein_g=item.macros.protein,
                             carbs_g=item.macros.carbs,
@@ -165,6 +175,10 @@ class MealMapper:
                             ),
                         )
 
+                    source_nutrition_dto = MealMapper._source_nutrition_response(
+                        source_nutrition_by_food_reference,
+                        getattr(item, "food_reference_id", None),
+                    )
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),
                         name=item.name,
@@ -176,6 +190,17 @@ class MealMapper:
                         description=None,
                         nutrition=nutrition_dto,
                         custom_nutrition=custom_nutrition_dto,
+                        source_nutrition=source_nutrition_dto,
+                        nutrition_override=(
+                            NutritionOverrideResponse(
+                                calories=item.nutrition_override.calories,
+                                protein=item.nutrition_override.protein,
+                                carbs=item.nutrition_override.carbs,
+                                fat=item.nutrition_override.fat,
+                            )
+                            if item.nutrition_override
+                            else None
+                        ),
                         fdc_id=getattr(item, "fdc_id", None),
                         food_reference_id=getattr(item, "food_reference_id", None),
                         is_custom=getattr(item, "is_custom", False),
@@ -269,6 +294,16 @@ class MealMapper:
                 meal.weight_grams if hasattr(meal, "weight_grams") else None
             ),
             total_nutrition=total_nutrition,
+            nutrition_override=(
+                NutritionOverrideResponse(
+                    calories=meal.nutrition.nutrition_override.calories,
+                    protein=meal.nutrition.nutrition_override.protein,
+                    carbs=meal.nutrition.nutrition_override.carbs,
+                    fat=meal.nutrition.nutrition_override.fat,
+                )
+                if meal.nutrition and meal.nutrition.nutrition_override
+                else None
+            ),
             translations=translations_response,
             food_label_metadata=MealMapper._food_label_metadata(meal),
             value_insights=value_insights_response,
@@ -279,6 +314,46 @@ class MealMapper:
             cook_time_min=getattr(meal, "cook_time_min", None),
             cuisine_type=getattr(meal, "cuisine_type", None),
             origin_country=getattr(meal, "origin_country", None),
+        )
+
+    @staticmethod
+    def _source_nutrition_response(
+        source_nutrition_by_food_reference: dict[
+            int, FoodReferenceNutritionProjection
+        ]
+        | None,
+        food_reference_id: int | None,
+    ):
+        if not source_nutrition_by_food_reference or food_reference_id is None:
+            return None
+
+        reference = source_nutrition_by_food_reference.get(food_reference_id)
+        if reference is None or any(
+            value is None
+            for value in (
+                reference.protein_100g,
+                reference.carbs_100g,
+                reference.fat_100g,
+            )
+        ):
+            return None
+
+        from src.api.schemas.response.meal_responses import CustomNutritionResponse
+
+        macros = Macros(
+            protein=reference.protein_100g,
+            carbs=reference.carbs_100g,
+            fat=reference.fat_100g,
+            fiber=reference.fiber_100g,
+            sugar=reference.sugar_100g,
+        )
+        return CustomNutritionResponse(
+            calories_per_100g=macros.total_calories,
+            protein_per_100g=macros.protein,
+            carbs_per_100g=macros.carbs,
+            fat_per_100g=macros.fat,
+            fiber_per_100g=macros.fiber,
+            sugar_per_100g=macros.sugar,
         )
 
     @staticmethod
