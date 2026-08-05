@@ -23,6 +23,7 @@ from fastapi import (
 
 from src.api.base_dependencies import (
     get_ai_model_manager,
+    get_async_food_reference_repository,
     get_cache_service,
     get_image_store,
 )
@@ -93,7 +94,6 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.meal_value_insight_service import MealValueInsightService
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
-from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.event_bus import BackgroundTaskManager, EventBus
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,8 @@ STATUS_MAPPING = {
 }
 
 
-async def _source_nutrition_by_food_reference(meal):
+async def _source_nutrition_by_food_reference(meal, food_reference_repository):
+    """Load per-100g density for catalog-backed ingredients via the port."""
     food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
     food_reference_ids = {
         item.food_reference_id
@@ -126,13 +127,12 @@ async def _source_nutrition_by_food_reference(meal):
         return {}
 
     source_nutrition = {}
-    async with AsyncUnitOfWork() as uow:
-        for food_reference_id in food_reference_ids:
-            reference = await uow.food_references.get_nutrition_projection(
-                food_reference_id
-            )
-            if reference is not None:
-                source_nutrition[food_reference_id] = reference
+    for food_reference_id in food_reference_ids:
+        reference = await food_reference_repository.get_nutrition_projection(
+            food_reference_id
+        )
+        if reference is not None:
+            source_nutrition[food_reference_id] = reference
     return source_nutrition
 
 
@@ -612,6 +612,7 @@ async def get_meal(
     cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
+    food_reference_repository=Depends(get_async_food_reference_repository),
 ):
     """Get detailed information about a specific meal.
 
@@ -653,7 +654,9 @@ async def get_meal(
         )
 
     # Use mapper to convert to response with translation support
-    source_nutrition = await _source_nutrition_by_food_reference(meal)
+    source_nutrition = await _source_nutrition_by_food_reference(
+        meal, food_reference_repository
+    )
     return MealMapper.to_detailed_response(
         meal,
         image_url,
