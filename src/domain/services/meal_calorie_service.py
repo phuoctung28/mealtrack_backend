@@ -7,18 +7,18 @@ def effective_meal_calories(meal: Any) -> float:
     """Return calories users expect for a meal.
 
     Food-label scans should match the printed label calories. Other meal
-    sources keep the canonical macro-derived value.
+    sources keep the canonical macro-derived value, unless a meal-level
+    override is set or ingredient calorie overrides require summing items.
     """
+    from src.domain.model.nutrition.nutrition import Nutrition, NutritionOverride
+
     nutrition = getattr(meal, "nutrition", None)
     if nutrition is None:
         return 0.0
 
     override = getattr(nutrition, "nutrition_override", None)
-    # Avoid truthy Mock children from incomplete unit-test doubles.
-    if override is not None and not isinstance(override, type(None)):
-        override_calories = getattr(override, "calories", None)
-        if isinstance(override_calories, (int, float)):
-            return float(override_calories)
+    if isinstance(override, NutritionOverride):
+        return float(override.calories)
 
     if getattr(meal, "source", None) == "food_label":
         metadata = getattr(meal, "food_label_metadata", None)
@@ -27,11 +27,9 @@ def effective_meal_calories(meal: Any) -> float:
             item = (getattr(nutrition, "food_items", None) or [None])[0]
             return _scaled_label_calories(label_calories, item, metadata)
 
-    # Prefer nutrition.calories when it is a real number (includes item
-    # override sums on the Nutrition value object).
-    nutrition_calories = getattr(nutrition, "calories", None)
-    if isinstance(nutrition_calories, (int, float)):
-        return float(nutrition_calories)
+    # Real Nutrition VOs may include per-item calorie overrides in .calories.
+    if isinstance(nutrition, Nutrition):
+        return float(nutrition.calories)
 
     return _macro_calories(getattr(nutrition, "macros", None))
 
