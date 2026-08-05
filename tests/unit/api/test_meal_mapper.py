@@ -11,6 +11,9 @@ import pytest
 from src.api.mappers.meal_mapper import STATUS_MAPPING, MealMapper
 from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
 from src.domain.model.meal import FoodItemTranslation, MealTranslation
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+)
 from src.domain.services.meal_value_insight_contract import (
     IngredientValueInsight,
     MealValueInsights,
@@ -168,6 +171,53 @@ class TestMealMapper:
         assert result.image_url == "https://example.com/image.jpg"
         # total_weight_grams is calculated from food items
         assert result.total_weight_grams == 350 or result.total_weight_grams is None
+
+    def test_to_detailed_response_includes_canonical_source_nutrition(self):
+        item = FoodItem(
+            id="item-1",
+            name="Pâté",
+            quantity=1,
+            unit="g",
+            macros=Macros(protein=0.2, carbs=0.1, fat=0.3),
+            food_reference_id=321,
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/pate.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            created_at=datetime(2025, 1, 15),
+            ready_at=datetime(2025, 1, 15),
+            nutrition=Nutrition(macros=item.macros, food_items=[item]),
+        )
+        source = FoodReferenceNutritionProjection(
+            id=321,
+            name="Pâté",
+            source="fatsecret",
+            is_verified=True,
+            protein_100g=20,
+            carbs_100g=10,
+            fat_100g=30,
+            fiber_100g=2,
+            sugar_100g=1,
+        )
+
+        result = MealMapper.to_detailed_response(
+            meal,
+            source_nutrition_by_food_reference={321: source},
+        )
+
+        nutrition = result.food_items[0].source_nutrition
+        assert nutrition is not None
+        assert nutrition.protein_per_100g == 20
+        assert nutrition.carbs_per_100g == 10
+        assert nutrition.fat_per_100g == 30
+        assert nutrition.calories_per_100g == pytest.approx(386)
 
     def test_to_detailed_response_uses_item_id_translations_when_list_is_stale(self):
         """Translated food item IDs preserve locale after ingredient add/remove."""

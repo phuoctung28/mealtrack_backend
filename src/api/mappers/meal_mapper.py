@@ -17,6 +17,9 @@ from src.api.schemas.response import (
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+)
 from src.domain.services.meal_calorie_service import (
     effective_food_item_calories,
     effective_meal_calories,
@@ -66,6 +69,9 @@ class MealMapper:
         image_url: str | None = None,
         target_language: str | None = None,
         value_insights: MealValueInsights | None = None,
+        source_nutrition_by_food_reference: dict[
+            int, FoodReferenceNutritionProjection
+        ] | None = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -167,6 +173,10 @@ class MealMapper:
                             ),
                         )
 
+                    source_nutrition_dto = MealMapper._source_nutrition_response(
+                        source_nutrition_by_food_reference,
+                        getattr(item, "food_reference_id", None),
+                    )
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),
                         name=item.name,
@@ -178,6 +188,7 @@ class MealMapper:
                         description=None,
                         nutrition=nutrition_dto,
                         custom_nutrition=custom_nutrition_dto,
+                        source_nutrition=source_nutrition_dto,
                         nutrition_override=(
                             NutritionOverrideResponse(
                                 calories=item.nutrition_override.calories,
@@ -301,6 +312,46 @@ class MealMapper:
             cook_time_min=getattr(meal, "cook_time_min", None),
             cuisine_type=getattr(meal, "cuisine_type", None),
             origin_country=getattr(meal, "origin_country", None),
+        )
+
+    @staticmethod
+    def _source_nutrition_response(
+        source_nutrition_by_food_reference: dict[
+            int, FoodReferenceNutritionProjection
+        ]
+        | None,
+        food_reference_id: int | None,
+    ):
+        if not source_nutrition_by_food_reference or food_reference_id is None:
+            return None
+
+        reference = source_nutrition_by_food_reference.get(food_reference_id)
+        if reference is None or any(
+            value is None
+            for value in (
+                reference.protein_100g,
+                reference.carbs_100g,
+                reference.fat_100g,
+            )
+        ):
+            return None
+
+        from src.api.schemas.response.meal_responses import CustomNutritionResponse
+
+        macros = Macros(
+            protein=reference.protein_100g,
+            carbs=reference.carbs_100g,
+            fat=reference.fat_100g,
+            fiber=reference.fiber_100g,
+            sugar=reference.sugar_100g,
+        )
+        return CustomNutritionResponse(
+            calories_per_100g=macros.total_calories,
+            protein_per_100g=macros.protein,
+            carbs_per_100g=macros.carbs,
+            fat_per_100g=macros.fat,
+            fiber_per_100g=macros.fiber,
+            sugar_per_100g=macros.sugar,
         )
 
     @staticmethod

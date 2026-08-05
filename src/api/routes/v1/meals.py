@@ -93,6 +93,7 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.meal_value_insight_service import MealValueInsightService
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.event_bus import BackgroundTaskManager, EventBus
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,27 @@ STATUS_MAPPING = {
     "FAILED": "failed",
     "INACTIVE": "inactive",
 }
+
+
+async def _source_nutrition_by_food_reference(meal):
+    food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+    food_reference_ids = {
+        item.food_reference_id
+        for item in food_items
+        if getattr(item, "food_reference_id", None) is not None
+    }
+    if not food_reference_ids:
+        return {}
+
+    source_nutrition = {}
+    async with AsyncUnitOfWork() as uow:
+        for food_reference_id in food_reference_ids:
+            reference = await uow.food_references.get_nutrition_projection(
+                food_reference_id
+            )
+            if reference is not None:
+                source_nutrition[food_reference_id] = reference
+    return source_nutrition
 
 
 def _parse_target_date(target_date: str | None):
@@ -631,11 +653,13 @@ async def get_meal(
         )
 
     # Use mapper to convert to response with translation support
+    source_nutrition = await _source_nutrition_by_food_reference(meal)
     return MealMapper.to_detailed_response(
         meal,
         image_url,
         target_language=language,
         value_insights=value_insights,
+        source_nutrition_by_food_reference=source_nutrition,
     )
 
 

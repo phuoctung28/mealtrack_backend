@@ -232,6 +232,10 @@ class FoodItemResponse(BaseModel):
     custom_nutrition: CustomNutritionResponse | None = Field(
         None, description="Custom nutrition per 100g for custom ingredients"
     )
+    source_nutrition: CustomNutritionResponse | None = Field(
+        None,
+        description="Canonical source nutrition per 100g for source-backed ingredients",
+    )
     nutrition_override: NutritionOverrideResponse | None = Field(
         None, description="Independent nutrition values entered by the user"
     )
