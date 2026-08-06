@@ -137,3 +137,10 @@ class MealRecommendationPlanRepositoryPort(ABC):
         meal_id: str,
     ) -> PersistedMealRecommendationSlotMutationResult:
         """Attach a materialized meal to a claimed slot log and return the slot."""
+
+    async def clear_links_for_deleted_meal(self, *, meal_id: str) -> None:
+        """Clear recommendation links before a normal meal is hard-deleted.
+
+        Default no-op for lightweight fakes; production repos must implement.
+        """
+        return None
