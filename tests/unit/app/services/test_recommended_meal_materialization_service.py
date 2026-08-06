@@ -137,7 +137,42 @@ async def test_materializer_preserves_food_reference_ids_and_macro_snapshot():
     assert meal.nutrition is not None
     assert meal.nutrition.macros.protein == 30
     assert meal.nutrition.food_items[0].food_reference_id == 123
-    assert meal.image is None
+    # Placeholder image keeps inserts valid when meal.image_id is NOT NULL.
+    assert meal.image is not None
+    assert meal.image.url is None
+    assert meal.image.size_bytes == 1
+
+
+@pytest.mark.asyncio
+async def test_materializer_attaches_catalog_image_url_when_present():
+    plan, slot = _plan_and_slot()
+    catalog_meal = slot.selected.catalog_meal
+    assert catalog_meal is not None
+    slot = PersistedMealRecommendationSlot(
+        **{
+            **slot.__dict__,
+            "selected": PersistedMealRecommendationCandidate(
+                **{
+                    **slot.selected.__dict__,
+                    "catalog_meal": CatalogMeal(
+                        **{
+                            **catalog_meal.__dict__,
+                            "image_url": "https://cdn.example.com/meals/tuna.jpg",
+                        }
+                    ),
+                }
+            ),
+        }
+    )
+
+    meal = await RecommendedMealMaterializationService().materialize(
+        _Uow(),
+        plan=plan,
+        slot=slot,
+    )
+
+    assert meal.image is not None
+    assert meal.image.url == "https://cdn.example.com/meals/tuna.jpg"
 
 
 @pytest.mark.asyncio

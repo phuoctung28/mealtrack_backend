@@ -8,8 +8,9 @@ from uuid import uuid4
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationNotFoundError,
 )
-from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_recommendation import (
+    CatalogMeal,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
@@ -17,6 +18,9 @@ from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 from src.domain.utils.timezone_utils import noon_utc_for_date
 
 logger = logging.getLogger(__name__)
+
+# mealimage.url is VARCHAR(255); keep inserts valid when catalog URLs are longer.
+_MEAL_IMAGE_URL_MAX_LEN = 255
 
 
 class RecommendedMealMaterializationService:
@@ -42,10 +46,11 @@ class RecommendedMealMaterializationService:
             raise MealRecommendationNotFoundError
         catalog_meal = slot.selected.catalog_meal
         ingredient_count = len(catalog_meal.ingredients)
+        meal_image = _meal_image_for_catalog(catalog_meal)
         logger.info(
             "materialize.start user_id=%s plan_id=%s slot_id=%s "
             "catalog_meal_id=%s ingredients=%s meal_type=%s "
-            "slot_date=%s timezone=%s",
+            "slot_date=%s timezone=%s has_image_url=%s image_id=%s",
             plan.user_id,
             plan.id,
             slot.id,
@@ -54,6 +59,8 @@ class RecommendedMealMaterializationService:
             slot.meal_type,
             slot.slot_date,
             plan.timezone,
+            bool(meal_image.url),
+            meal_image.image_id,
         )
 
         food_items = [
@@ -68,13 +75,16 @@ class RecommendedMealMaterializationService:
             for ingredient in catalog_meal.ingredients
         ]
         meal_time = noon_utc_for_date(slot.slot_date, plan.timezone)
+        # Always attach a MealImage row. Production still enforces NOT NULL on
+        # meal.image_id in some environments; image-less inserts 500 there.
+        # Matches manual / AI-suggestion materialization (placeholder image).
         meal = Meal(
             meal_id=str(uuid4()),
             user_id=plan.user_id,
             status=MealStatus.READY,
             created_at=meal_time,
             ready_at=meal_time,
-            image=None,
+            image=meal_image,
             dish_name=catalog_meal.name,
             nutrition=Nutrition(
                 macros=Macros(
@@ -91,11 +101,25 @@ class RecommendedMealMaterializationService:
         saved = await uow.meals.save(meal)
         logger.info(
             "materialize.saved user_id=%s plan_id=%s slot_id=%s meal_id=%s "
-            "food_item_count=%s",
+            "food_item_count=%s image_id=%s",
             plan.user_id,
             plan.id,
             slot.id,
             saved.meal_id,
             len(food_items),
+            saved.image.image_id if saved.image is not None else None,
         )
         return saved
+
+
+def _meal_image_for_catalog(catalog_meal: CatalogMeal) -> MealImage:
+    """Build a mealimage row from catalog URL, or a placeholder when absent."""
+
+    raw_url = (catalog_meal.image_url or "").strip() or None
+    url = raw_url if raw_url and len(raw_url) <= _MEAL_IMAGE_URL_MAX_LEN else None
+    return MealImage(
+        image_id=str(uuid4()),
+        format="jpeg",
+        size_bytes=1,
+        url=url,
+    )
