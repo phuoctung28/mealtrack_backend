@@ -275,6 +275,10 @@ async def test_finalization_attaches_purchase_to_authenticated_user():
         "training_days_per_week": 3,
         "training_minutes_per_session": 45,
         "goal": "recomp",
+        "target_calories": None,
+        "custom_protein_g": None,
+        "custom_carbs_g": None,
+        "custom_fat_g": None,
     }
 
     class Session:
@@ -318,3 +322,9 @@ async def test_finalization_attaches_purchase_to_authenticated_user():
     )
     assert subscription.platform == "web"
     assert result["access_status"] == "active"
+    assert result["macros"] == {
+        "calories": 2000,
+        "protein": 150,
+        "carbs": 200,
+        "fat": 65,
+    }

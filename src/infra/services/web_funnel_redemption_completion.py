@@ -52,6 +52,11 @@ def _username(email):
     return email.split("@", 1)[0][:50]
 
 
+def _snapshot_value(snapshot, key, default):
+    value = snapshot.get(key)
+    return default if value is None else value
+
+
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
@@ -73,10 +78,10 @@ def _result(snapshot, uid):
         "firebase_uid": uid,
         "onboarding_completed": True,
         "macros": {
-            "calories": snapshot.get("target_calories", 2000),
-            "protein": snapshot.get("custom_protein_g", 150),
-            "carbs": snapshot.get("custom_carbs_g", 200),
-            "fat": snapshot.get("custom_fat_g", 65),
+            "calories": _snapshot_value(snapshot, "target_calories", 2000),
+            "protein": _snapshot_value(snapshot, "custom_protein_g", 150),
+            "carbs": _snapshot_value(snapshot, "custom_carbs_g", 200),
+            "fat": _snapshot_value(snapshot, "custom_fat_g", 65),
         },
     }
 
