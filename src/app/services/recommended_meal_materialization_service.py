@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 from src.domain.exceptions.meal_recommendation_exceptions import (
@@ -15,6 +16,8 @@ from src.domain.model.meal_recommendation import (
 from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 from src.domain.utils.timezone_utils import noon_utc_for_date
 
+logger = logging.getLogger(__name__)
+
 
 class RecommendedMealMaterializationService:
     """Build and persist normal meals from immutable catalog recipe snapshots."""
@@ -27,8 +30,31 @@ class RecommendedMealMaterializationService:
         slot: PersistedMealRecommendationSlot,
     ) -> Meal:
         if slot.selected is None or slot.selected.catalog_meal is None:
+            logger.warning(
+                "materialize.missing_catalog_meal user_id=%s plan_id=%s "
+                "slot_id=%s selected_null=%s catalog_meal_id=%s",
+                plan.user_id,
+                plan.id,
+                slot.id,
+                slot.selected is None,
+                slot.selected.catalog_meal_id if slot.selected is not None else None,
+            )
             raise MealRecommendationNotFoundError
         catalog_meal = slot.selected.catalog_meal
+        ingredient_count = len(catalog_meal.ingredients)
+        logger.info(
+            "materialize.start user_id=%s plan_id=%s slot_id=%s "
+            "catalog_meal_id=%s ingredients=%s meal_type=%s "
+            "slot_date=%s timezone=%s",
+            plan.user_id,
+            plan.id,
+            slot.id,
+            catalog_meal.id,
+            ingredient_count,
+            slot.meal_type,
+            slot.slot_date,
+            plan.timezone,
+        )
 
         food_items = [
             FoodItem(
@@ -62,4 +88,14 @@ class RecommendedMealMaterializationService:
             meal_type=slot.meal_type,
             source="meal_recommendation",
         )
-        return await uow.meals.save(meal)
+        saved = await uow.meals.save(meal)
+        logger.info(
+            "materialize.saved user_id=%s plan_id=%s slot_id=%s meal_id=%s "
+            "food_item_count=%s",
+            plan.user_id,
+            plan.id,
+            slot.id,
+            saved.meal_id,
+            len(food_items),
+        )
+        return saved
