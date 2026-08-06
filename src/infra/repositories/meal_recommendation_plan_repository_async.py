@@ -525,7 +525,9 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                 MealRecommendationOperationORM.result_logged_meal_id == meal_id
             )
         )
-        await self._flush_operations()
+        # Plain flush — do not use _flush_operations(), which remaps IntegrityError
+        # into meal-recommendation swap/idempotency domain errors (wrong for delete).
+        await self._session.flush()
 
     async def _load_batch(
         self, *, user_id: str, batch_id: str
