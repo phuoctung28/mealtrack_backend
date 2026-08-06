@@ -317,8 +317,29 @@ async def test_log_route_sends_recommended_meal_command():
         item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
     )
     assert command.request_id == "log-1"
+    assert command.language == "en"
     assert response.plan_id == "plan-1"
     assert response.slot.id == "slot-1"
+
+
+@pytest.mark.asyncio
+async def test_log_route_forwards_request_language_to_command():
+    event_bus = _EventBus()
+
+    await log_recommended_meal(
+        request=_request(language="vi"),
+        plan_id="plan-1",
+        slot_id="slot-1",
+        body=LogRecommendedMealRequest(request_id="log-1"),
+        user_id="user-1",
+        event_bus=event_bus,
+        analytics_service=_Analytics(),
+    )
+
+    command = next(
+        item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
+    )
+    assert command.language == "vi"
 
 
 @pytest.mark.asyncio

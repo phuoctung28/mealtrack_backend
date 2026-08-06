@@ -230,6 +230,7 @@ async def log_recommended_meal(
                 plan_id=plan_id,
                 slot_id=slot_id,
                 request_id=body.request_id,
+                language=get_request_language(request),
             )
         )
     except MealRecommendationCreationError as exc:
