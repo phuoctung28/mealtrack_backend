@@ -223,13 +223,6 @@ async def log_recommended_meal(
 ) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
-    logger.info(
-        "meal_recommendation.log.start user_id=%s plan_id=%s slot_id=%s request_id=%s",
-        user_id,
-        plan_id,
-        slot_id,
-        body.request_id,
-    )
     try:
         result = await event_bus.send(
             LogRecommendedMealCommand(
@@ -241,42 +234,7 @@ async def log_recommended_meal(
         )
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
-        logger.warning(
-            "meal_recommendation.log.failed user_id=%s plan_id=%s slot_id=%s "
-            "request_id=%s status=%s detail=%s error_type=%s",
-            user_id,
-            plan_id,
-            slot_id,
-            body.request_id,
-            exc.status_code,
-            exc.public_detail,
-            type(exc).__name__,
-        )
         raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
-    except Exception:
-        logger.exception(
-            "meal_recommendation.log.unhandled user_id=%s plan_id=%s slot_id=%s "
-            "request_id=%s",
-            user_id,
-            plan_id,
-            slot_id,
-            body.request_id,
-        )
-        raise
-    logged_meal_id = (
-        result.slot.logged_meal_id
-        if result.slot is not None
-        else None
-    )
-    logger.info(
-        "meal_recommendation.log.materialized user_id=%s plan_id=%s slot_id=%s "
-        "request_id=%s logged_meal_id=%s",
-        user_id,
-        plan_id,
-        slot_id,
-        body.request_id,
-        logged_meal_id,
-    )
     response = to_slot_detail_response(
         result.plan_id,
         await localize_meal_recommendation_slot(
@@ -294,15 +252,6 @@ async def log_recommended_meal(
     )
     metric_status = "success"
     record_operation_latency("log", started, metric_status)
-    logger.info(
-        "meal_recommendation.log.success user_id=%s plan_id=%s slot_id=%s "
-        "request_id=%s logged_meal_id=%s",
-        user_id,
-        plan_id,
-        slot_id,
-        body.request_id,
-        logged_meal_id,
-    )
     return response
 
 
