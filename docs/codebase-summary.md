@@ -1,8 +1,35 @@
 # Backend Codebase Summary
 
-**Last Updated:** August 7, 2026
-**Status:** Navigation snapshot — discover live counts from the tree and OpenAPI, not this file
-**Runtime:** FastAPI 0.136.3 on Python 3.13.2 with async SQLAlchemy 2.0
+**Status:** Primary discovery map (WHERE) — not a hand-maintained inventory  
+**Runtime:** FastAPI on Python 3.13 with async SQLAlchemy 2.0
+
+---
+
+## Docs route
+
+### Evergreen (load by need)
+
+| Role | File |
+|------|------|
+| Product intent (WHY) | `project-overview-pdr.md` |
+| Architecture boundaries | `system-architecture.md` |
+| CQRS conventions | `cqrs-guide.md` |
+| API conventions (not route tables) | `api-endpoints.md` |
+| Database ops + schema judgment | `database-guide.md` → `standards/db-api.md` |
+| Integration policy | `external-services.md` |
+| Code / test judgment | `code-standards.md`, `testing-standards.md` |
+| Ops recovery | `troubleshooting.md`, `runbooks/` |
+| Accepted decisions | `decisions/` |
+| Content import (when needed) | `meal-catalog-import-schema.md` |
+
+### Stateful archive (not default load)
+
+Historical dual tracks, journals, specs, plans under docs, feature notes, and
+progress records: [`archive/`](./archive/) — see `archive/README.md`.
+
+Executable truth always wins: `src/`, `tests/`, OpenAPI `/docs`, `migrations/`,
+scripts, dependency manifests. Active execution plans live under repo-root
+`plans/` (not under `docs/`).
 
 ---
 
@@ -10,49 +37,18 @@
 
 | Need | Owner |
 |------|-------|
-| Live HTTP surface | `/docs` (Swagger) and `src/api/main.py` router registrations |
+| Live HTTP surface | OpenAPI: `/docs`, `/redoc`, `/openapi.json`; registration in `src/api/main.py` |
+| Offline OpenAPI dump + conventions | `api-endpoints.md` (Live OpenAPI contract; not a route table) |
 | Layer layout | `src/api/`, `src/app/`, `src/domain/`, `src/infra/` plus root/bootstrap/cron |
 | Tests | `pytest tests/unit --cov=src --cov-fail-under=65` (default CI path) |
 | Migrations | `migrations/versions/` via Alembic |
+| Settings / env keys | `src/infra/config/settings.py`, `.env.example` |
 
 Do not hand-maintain file, LOC, or endpoint counts in this document.
 
 ---
 
-## Live API Surface
-
-The current HTTP surface includes:
-
-- Meal logging and analysis: image upload, upload-token, scan-by-url, food-label scan-by-url, manual meals, parse-text, ingredient edits with optional nutrition overrides, streak, weekly budget, and daily macros.
-- Meal recommendations: durable three-day catalog plans, compact summaries (including selected ingredients), slot detail hydration, and swap/log/skip mutations.
-- Paid web redemption: `/v1/web-funnel/*` lead, RevenueCat correlation, passwordless preflight, and finalize routes.
-- User and profile management: Firebase sync, onboarding completion, metrics, TDEE, language, timezone, and account deletion.
-
-Onboarding TDEE preview is versioned as `onboarding_preview_v2`; the backend
-owns activity/motivation calculation, Keto 5/20/75 policy, and macro-derived
-calories. No-training is `(0, 0)` with `(0, 15)` retained for legacy clients.
-Preview bodies are capped at 8 KiB before parsing and subject to IP quota;
-custom macro triples, reset, and target/cache revisions are fenced against
-stale writes. Body-fat projections are illustrative/source-guarded, and the
-related migration exists but is not applied or deployed.
-- Discovery and planning: meal suggestions discover, recipes, and save.
-- Nutrition and activity tracking: nutrition bulk/presence, activities daily/bulk, hydration, movement, and the journey progress snapshot.
-- Support routes: foods, ingredients, notifications, feature flags, saved suggestions, cheat days, referrals, promo codes, unified code validation, monitoring, health, app download, and well-known links.
-
----
-
-## Core Runtime Notes
-
-- Runtime DB access uses PostgreSQL/Neon via `src/infra/database/config_async.py` and async SQLAlchemy.
-- Redis is optional for cache-aside and AI-context caching; required state is modeled separately.
-- The active meal-image-name vector cache uses `pgvector`; Pinecone is legacy documentation only and has no runtime adapter.
-- OpenAI is the default AI provider. Cloudflare Workers AI is available for configured text and vision purposes. Gemini packages remain in dependencies, but the runtime provider registry is OpenAI + Cloudflare.
-- Database migrations live in `migrations/versions/` and are applied with Alembic.
-- The event bus is a singleton PyMediator registry wired from `src/api/dependencies/event_bus.py`.
-
----
-
-## Key Directories
+## Key directories
 
 | Directory | Purpose |
 |-----------|---------|
@@ -70,37 +66,25 @@ related migration exists but is not applied or deployed.
 
 ---
 
-## Recent Characterization Work
+## Core runtime pointers
 
-- **Manual nutrition overrides:** meal and ingredient edit requests can store absolute override macros/calories while preserving source nutrition for clear/restore.
-- **Paid web redemption:** RevenueCat web checkout correlates by redemption-link hash, preflights after Firebase passwordless email-link sign-in, and finalizes against provider aliases.
-- **Meal recommendation contract:** compact selected-slot summaries include ingredients; slot detail hydrates alternatives; swap/log/skip return changed-slot detail responses.
-- **Food-label scan:** `/v1/meals/food-label/scan-by-url` analyzes Cloudinary nutrition-label images directly and persists only validated READY meals.
-- **Hydration API:** catalog, daily, and weekly handlers own goal, percentage, and streak presentation.
+- DB: PostgreSQL/Neon via `src/infra/database/config_async.py` (async SQLAlchemy).
+- Redis: optional cache-aside; required state is modeled separately (see
+  `external-services.md` and `decisions/260608-2223-selective-cache-admission-policy.md`).
+- Vector cache: active meal-image-name path uses `pgvector`.
+- AI: OpenAI default; optional Cloudflare Workers AI for configured text/vision.
+- Event bus: singleton PyMediator from `src/api/dependencies/event_bus.py`.
+- Migrations: `migrations/versions/` via Alembic / `migrations/run.py`.
+
+Non-derivable calorie and weekly-budget rules: `AGENTS.md` / `CLAUDE.md`
+MUST-Follow. Meal scan vs hydration and other system rules:
+`system-architecture.md`.
 
 ---
 
-## Entry Points
+## Entry points
 
 - **FastAPI app:** `src/api/main.py`
-- **CLI:** `python -m src.api.main` or `uvicorn src.api.main:app --reload`
-- **Tests:** `pytest tests/unit --cov=src --cov-fail-under=65` for the default CI-aligned suite
-- **Migrations:** `alembic upgrade head` or `python migrations/run.py` for fresh bootstrap / guarded recovery
-
----
-
-## Core Domain Services
-
-| Service | Purpose |
-|---------|---------|
-| TdeeCalculationService | TDEE + macro calculations |
-| MealCoreService | Meal lifecycle & state machine |
-| NutritionCalculationService | Nutrition aggregation from food items |
-| SuggestionOrchestrationService | Session-based meal suggestions |
-| MealRecommendation ranking services | Deterministic catalog-backed three-day recommendations |
-| TranslationService | 7-language support (en, vi, es, fr, de, ja, zh) |
-| MealDiscoveryService | Image-based meal discovery |
-
----
-
-See detailed docs: `system-architecture.md`, `cqrs-guide.md`, `database-guide.md`, `external-services.md`
+- **Dev server:** `uvicorn src.api.main:app --reload`
+- **Default tests:** `pytest tests/unit --cov=src --cov-fail-under=65`
+- **Migrations:** `alembic upgrade head` or `python migrations/run.py`

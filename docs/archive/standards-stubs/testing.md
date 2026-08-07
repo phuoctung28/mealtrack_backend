@@ -1,8 +1,12 @@
 # Testing & QA
 
+**Status:** Superseded stub — not evergreen authority  
+**Current authority:** [testing-standards.md](../../testing-standards.md)  
+**CI gate:** `pytest tests/unit --cov=src --cov-fail-under=65`
+
 ## Standards
 - **Framework**: `pytest` with `pytest-asyncio`.
-- **Target Coverage**: 70%+ overall.
+- **Target Coverage**: superseded — see testing-standards.md (CI 65% unit gate).
 - **AAA Pattern**: Arrange, Act, Assert.
 
 ## Test Types

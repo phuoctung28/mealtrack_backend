@@ -1,9 +1,10 @@
 # Backend System Architecture Overview
 
-**Last Updated:** August 7, 2026
-**Architecture:** 4-Layer Clean + CQRS + Event-Driven
-**Event Bus:** PyMediator (singleton registry pattern)
-**Inventory:** discover live layout under `src/` (`api/`, `app/`, `domain/`, `infra/`, plus root/bootstrap/cron); do not hand-maintain file or LOC counts here
+**Status:** Evergreen architecture authority  
+**Architecture:** 4-Layer Clean + CQRS + Event-Driven  
+**Event Bus:** PyMediator (singleton registry pattern)  
+**Inventory:** discover live layout under `src/` (`api/`, `app/`, `domain/`,
+`infra/`, plus root/bootstrap/cron); do not hand-maintain file or LOC counts here
 
 ---
 
@@ -125,10 +126,21 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 ### Calories and nutrition overrides
 
 Default rule: meal calories are derived from macros with the fiber-aware formula
-owned by the backend. Exception: when a meal-level or ingredient-level
-`NutritionOverride` is set, the backend presents the absolute override values
-(including calories) until cleared. Source macros remain available for restore.
-See `PUT /v1/meals/{meal_id}/ingredients` in `api-endpoints.md`.
+owned by the backend (AGENTS MUST-Follow). Exception: when a meal-level or
+ingredient-level `NutritionOverride` is set, the backend presents the absolute
+override values (including calories) until cleared. Source macros remain
+available for restore. HTTP shape: `api-endpoints.md`.
+
+### Meal scan vs hydration
+
+Meal image analyze and scan-by-url treat visible edible or drinkable intake as
+normal meal nutrition (`Meal`, typically `source="scanner"`). They must **not**
+create `hydration_entries`. Caloric drinks are foods; water and zero-cal
+hydration drinks are logged only through `/v1/hydration/*`. Food-label scan is a
+separate path (`source="food_label"`) with validated label contracts. Non-null
+`beverage_metadata` on meal-scan output fails validation. Legacy
+`source="scan_beverage"` hydration rows may still exist for compatibility reads;
+new scans must not create them.
 
 ---
 
@@ -137,7 +149,7 @@ See `PUT /v1/meals/{meal_id}/ingredients` in `api-endpoints.md`.
 1. `POST /v1/meals/image/analyze` receives image bytes.
 2. Route creates `UploadMealImageImmediatelyCommand`.
 3. `EventBus.send()` calls `UploadMealImageImmediatelyHandler`.
-4. Handler uploads to Cloudinary, runs `VisionAIService`, parses nutrition, and persists a READY `Meal(source="scanner")`.
+4. Handler uploads to Cloudinary, runs `VisionAIService`, parses nutrition, and persists a READY `Meal(source="scanner")` with **no hydration side effects**.
 5. If `AI_MEAL_ANALYZE_GRAPH_ENABLED=true`, the handler enters `MealAnalyzeWorkflow`; the app-layer graph owns image acquisition, vision parsing, persistence, cache invalidation, and meal value insight scheduling.
 6. If `AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED=true`, optional reference validation may run after meal creation. Provider timeout or mismatch keeps the original meal result.
 7. Meal value insight scheduling is best-effort after persistence and cache invalidation. It stores only safe state fields such as `meal_value_insight_scheduled` and never blocks the READY meal response.
@@ -196,7 +208,8 @@ Nutree mobile ──→ MealTrack (validate/apply code)
 | Ledger credits/reversals, payout state | nutree-affiliate |
 | `affiliate_event_outbox` retry queue | MealTrack (infrastructure only) |
 
-**Integration:** See `docs/external-services.md` → nutree-affiliate section.
+**Integration:** See `external-services.md` (nutree-affiliate boundary) and
+`src/infra/adapters/affiliate_service_adapter.py`.
 
 ---
 

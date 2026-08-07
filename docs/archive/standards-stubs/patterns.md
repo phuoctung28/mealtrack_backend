@@ -1,5 +1,9 @@
 # Project Patterns
 
+**Status:** Superseded stub — not evergreen authority  
+**Current authority:** [code-standards.md](../../code-standards.md) and
+[cqrs-guide.md](../../cqrs-guide.md)
+
 ## Dependency Injection
 Use constructor injection for all services and repositories. In FastAPI routes, use `Depends()`.
 

@@ -1,5 +1,9 @@
 # Infrastructure & Integrations
 
+**Status:** Stateful / superseded — not evergreen authority  
+**Current authority:** [`../../external-services.md`](../../external-services.md) and
+[`../../system-architecture.md`](../../system-architecture.md)
+
 Details of external services and infrastructure components.
 
 ## External Integrations

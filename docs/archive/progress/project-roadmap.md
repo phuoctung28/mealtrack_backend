@@ -1,8 +1,11 @@
 # MealTrack Backend - Project Roadmap
 
+**Status:** Stateful progress record — archived; not evergreen product authority  
+**Evergreen route:** `docs/codebase-summary.md` and root `README.md` Quick Links
+
 **Version:** 0.6.8
 **Last Updated:** August 7, 2026
-**Status:** Core backend runtime is production-oriented; catalog rollout still has explicit staging, corpus, load, and rollback evidence gates. Discover live inventory from `src/` and `tests/` rather than fixed counts in this file.
+**Note:** Core backend runtime is production-oriented; catalog rollout still has explicit staging, corpus, load, and rollback evidence gates. Discover live inventory from `src/` and `tests/` rather than fixed counts in this file.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---

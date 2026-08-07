@@ -1,552 +1,159 @@
-# Backend External Services Integration
+# Backend External Services
 
-**Last Updated:** August 7, 2026
-**Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, USDA FoodData Central, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
-**Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
+**Status:** Evergreen integration policy (fail-fast vs degrade)  
+**Config owner:** `src/infra/config/settings.py` and `.env.example`  
+**Adapter owner:** `src/infra/adapters/`, `src/infra/services/`, `src/infra/cache/`, `src/infra/monitoring/`  
+**Incident response:** `docs/runbooks/provider-outage.md` and sibling runbooks
 
----
-
-## Firebase
-
-**Purpose:** Authentication + Push Notifications (FCM)
-
-### Authentication
-- Firebase Admin SDK for JWT verification
-- Dev bypass middleware enabled only when `ENVIRONMENT=development` and `ENABLE_DEV_AUTH_BYPASS=1` (`X-Dev-User-Id` header)
-- Maps Firebase UID to database UUID
-
-**Config:** `FIREBASE_CREDENTIALS=path/to/credentials.json`
-
-### Firebase Cloud Messaging (FCM)
-- Platform-specific payload builders in `src/infra/services/push/`
-  - `android_payload_builder.py`: high-priority Android config with channel ID (`meal_reminders` or `daily_summary`)
-  - `apns_payload_builder.py`: APNs Time Sensitive payload with `interruption-level` in payload body (not headers), priority 10
-- `FirebaseService` rejects blank title/body before building APNs payloads and mobile `data` fields
-- Multi-device support via `user_fcm_tokens` table
-- Deduplication across workers via `notification_sent_log` table (migration 047)
-- Trial-expiry pushes at T-2d and T-1d via `CronTrialPushService` (`src/infra/services/cron_trial_push_service.py`)
-- Notifications rescheduled automatically on timezone changes — triggered from `UpdateTimezoneCommandHandler` and `RegisterFcmTokenCommandHandler`
-- Cron push entrypoint (`src/cron/push.py`) owns all push scheduling: precompute notification rows, schedule trial-expiry rows, claim due rows, batch-send, mark sent, clean expired rows
-- Cron dispatch helper (`CronNotificationDispatchService`) uses database row claiming (`pending` → `processing`) plus stale-processing recovery instead of a background loop or leader lock
-- APNs diagnostics surfaced at `/v1/health/notifications` via `apns_diagnostics()` to verify `interruption-level` placement
+Do not treat this file as a provider HOW-TO or env inventory. Discover keys from
+settings, wiring from adapters, and live health from OpenAPI `/docs`.
 
 ---
 
-## Cloudinary
+## Failure policy matrix
 
-**Purpose:** Image Storage + CDN
+| Dependency | Class | On failure |
+|------------|-------|------------|
+| PostgreSQL | **Required** | Fail fast (typically 503) |
+| Firebase Auth | **Required** | Fail fast (401) |
+| AI provider stack | **Required for AI routes** | Circuit breaker → next model in chain; exhausted chain raises `AIUnavailableError` |
+| Cloudflare Workers AI | **Optional routed provider** | Skip / fall through; disable via env |
+| Cloudinary | **Best-effort media** | Degrade (fallback URL construction where coded) |
+| RevenueCat | **Billing sync** | Webhook/cache degrade; last-known subscription where available. Premium route gates are not enforced yet |
+| Redis optional caches | **Optional** | Bypass cache; continue from source of truth |
+| Redis meal-suggestion sessions | **Required transient state** (current design) | Session writes fail when store unavailable |
+| DeepL, FatSecret, USDA, OFF, Brave, image stock APIs | **Optional enrichment** | Degrade to local/prior results when safe |
+| PostHog | **Optional analytics** | Skip capture |
+| Sentry | **Optional observability** | Local logs only; facade no-ops without DSN |
+| nutree-affiliate | **Optional partner** | Validate may return inactive; lifecycle events retry via outbox |
 
-- Folder organization ("mealtrack"), secure URL generation
-- Format support: JPEG, PNG
-- Fallback to direct URL construction if Resource API unavailable
+**Redis rule:** optional caches are never the source of truth for nutrition,
+notification delivery, FCM token ownership, or write-path correctness. Cache
+admission policy: `docs/decisions/260608-2223-selective-cache-admission-policy.md`.
 
-**Config:** `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
-
-**Used for:** Meal images, user avatars
-
----
-
-## AI Provider Routing
-
-**Purpose:** Text generation, structured output, and vision analysis.
-
-### Provider Fallback Architecture
-
-`AIModelManager` orchestrates providers through `AIProviderPort`. Each purpose has a fallback chain; models are tried in order until one succeeds. The circuit breaker opens after 5 failures within 60s and allows retry after 30s.
-
-Runtime provider registration currently instantiates OpenAI and Cloudflare Workers AI only. Gemini packages are present in dependencies, but they are not registered as a runtime provider.
-
-**Default model:** `gpt-5.4-mini-2026-03-17` for text and vision when `OPENAI_API_KEY` is configured.
-
-**Text chain when Cloudflare text routing is configured:**
-```
-@cf/meta/llama-3.3-70b-instruct-fp8-fast  →  gpt-5.4-mini-2026-03-17
-```
-
-**Vision chain when Cloudflare vision fallback is configured:**
-```
-gpt-5.4-mini-2026-03-17  →  @cf/google/gemma-4-26b-a4b-it
-```
-
-**Catalog image generation:** `scripts/generate_catalog_meal_images.py` calls
-Cloudflare Workers AI after catalog import. The code default is
-`@cf/black-forest-labs/flux-2-klein-9b`; an environment override may select a
-different supported model. URL responses are persisted directly. Base64 image
-responses are uploaded through `CloudinaryImageStore`, and the resulting
-Cloudinary URL is persisted to `meal_catalog.image_url`.
-
-**Text purposes routed through Cloudflare by default:**
-```
-recipe, general, meal_names, discovery, parse_text, barcode
-```
-
-**Vision purposes routed through Cloudflare when enabled:**
-```
-meal_scan, ingredient_scan, food_label_scan
-```
-
-Logs emitted: `[AI-ATTEMPT]`, `[AI-FALLBACK-SUCCESS]`, `[AI-ATTEMPT-FAILED]`. Never log prompt content, food payloads, or raw AI output.
-
-### Vision AI (Meal Analysis)
-- 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context, combined
-- Food-label scan strategy: reads Cloudinary-hosted Nutrition Facts labels, preferring an optional cropped label image and validating output through `FoodLabelNutritionResponse`
-- Optional LangGraph app-layer workflow is gated by `AI_MEAL_ANALYZE_GRAPH_ENABLED`; it does not change provider order or API response contracts.
-- Optional FatSecret reference validation is gated separately by `AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED` and is never required for a valid scan.
-- JSON parsing with multiple fallbacks: direct, markdown extraction, regex, truncation recovery
-- Safety detection for blocked responses
-
-### Token Limits by Use Case
-
-| Use Case | Tokens |
-|----------|--------|
-| Weekly meal plan | 8000 |
-| Meal suggestions (per count, max 8000) | 1500 × count |
-| Daily multi-meal | 3000 |
-| Single meal | 1500 |
-
-**Config:** `OPENAI_API_KEY`, `OPENAI_TEXT_MODEL`, `OPENAI_VISION_MODEL`, `CLOUDFLARE_WORKERS_AI_*`
+**Privacy rule:** never log prompts, food payloads, raw AI output, base64
+images, emails, auth tokens, full barcodes, or secrets. Prefer operation name,
+internal IDs, status codes, and error class.
 
 ---
 
-## OpenAI Responses API Prompt Caching
+## Adapter map (WHERE)
 
-**Purpose:** Best-effort provider-side prefix caching for repeated long OpenAI requests through LangChain `ChatOpenAI`.
-
-- OpenAI text and vision calls use LangChain `ChatOpenAI` with Responses API enabled.
-- Enabled with `OPENAI_PROMPT_CACHE_ENABLED`.
-- Optional retention uses `OPENAI_PROMPT_CACHE_RETENTION`; key namespace uses `OPENAI_PROMPT_CACHE_KEY_PREFIX`.
-- Cache keys are derived from the model, purpose, and a hash of the system prompt. They never contain raw user prompt text, images, emails, or IDs.
-- Prompt caching only helps when the repeated prefix is at least 1024 tokens. Shorter prompts should not be expected to benefit.
-- Treat caching as best-effort, not guaranteed savings. Monitor `ai.openai.prompt_cache.request.count`, `ai.openai.prompt_cache.cached_tokens`, and `ai.openai.prompt_cache.input_tokens` before claiming cost reduction.
-- Cached-token evidence comes from LangChain `AIMessage.usage_metadata.input_token_details.cache_read` or OpenAI-native token metadata when LangChain exposes it in `response_metadata`.
-
----
-
-## Barcode Food Data Cascade
-
-**Purpose:** Resolve packaged-food barcode scans while keeping uncertain web/LLM results out of the canonical food catalog.
-
-Source order:
-1. `food_reference` cache using canonical GTIN aliases.
-2. FatSecret exact barcode lookup.
-3. OpenFoodFacts exact barcode lookup.
-4. USDA FoodData Central Branded exact `gtinUpc` lookup.
-5. Brave Search + AI as an identity/estimate hint only.
-6. AI estimate as last resort.
-
-Reliability rules:
-- GTIN validation happens before provider calls; invalid values return 400.
-- Exact FatSecret/OpenFoodFacts/USDA hits are cacheable verified external data.
-- Brave-only nutrition and name-only provider matches are returned as editable estimates and are not cached.
-- Barcode logs and metrics must not include full raw barcode values; use source, reason, and redacted correlation only.
-
-Config:
-- `USDA_FDC_API_KEY` enables USDA FoodData Central branded-food exact-match fallback.
-- `BRAVE_SEARCH_API_KEY` enables Brave Search estimate fallback.
+| Concern | Owner paths |
+|---------|-------------|
+| Settings / env | `src/infra/config/settings.py` |
+| Firebase Auth + FCM | `src/infra/services/firebase_service.py`, `firebase_auth_service.py`, `src/infra/services/push/` |
+| Cloudinary images | `src/infra/adapters/cloudinary_image_store.py` |
+| AI routing / circuit breaker | `src/infra/services/ai/` (`ai_model_manager.py`, providers, adapters) |
+| Vision analysis | `src/infra/adapters/vision_ai_service.py` |
+| OpenAI prompt-cache policy | `src/infra/services/ai/openai_prompt_cache_policy.py` |
+| Food providers (USDA, FatSecret, OFF, Brave) | `src/infra/adapters/food_data_service.py`, `fat_secret_service.py`, `open_food_facts_service.py`, `brave_search_nutrition_service.py` |
+| Translation | `src/infra/adapters/deepl_translation_adapter.py` |
+| Stock / generated images | `pexels_image_adapter.py`, `unsplash_image_adapter.py`, `imagen_image_generator.py`, `pollinations_image_generator.py`, `cloudflare_workers_image_generator.py` |
+| RevenueCat | `src/infra/adapters/revenuecat_adapter.py`; webhooks in `src/api/routes/v1/webhooks.py` |
+| Web funnel redemption | `src/infra/services/web_funnel_*` |
+| PostHog | `src/infra/adapters/posthog_adapter.py` |
+| Resend email | `src/infra/adapters/resend_email_adapter.py` |
+| Redis | `src/infra/cache/` |
+| Sentry / observability facade | `src/infra/monitoring/`, `src/observability.py` |
+| Affiliate outbox client | `src/infra/adapters/affiliate_service_adapter.py`; cron `src/cron/affiliate_outbox.py` |
+| DB pool | `src/infra/database/config_async.py`, `connection_policy.py` — see `database-guide.md` |
 
 ---
 
-## Cloudflare Workers AI (Text + Vision)
+## Non-derivable integration rules
 
-**Purpose:** Optional routed provider for configured text purposes and optional fallback for image scanning after OpenAI.
+### AI provider routing
 
-**Two independent routing paths:**
-- **Text path:** LangChain adapter (`ChatCloudflareWorkersAI`) for text-generation purposes.
-- **Vision path:** Direct Workers AI REST (`/ai/run/{model}`) with `httpx` for image analysis.
+- Runtime registry is **OpenAI + optional Cloudflare Workers AI**. Gemini
+  packages may remain in dependencies but are not registered as a runtime
+  provider unless code changes that fact.
+- `AIModelManager` owns per-purpose fallback chains and the circuit breaker
+  (failures open the breaker; recovery is coded in the manager).
+- Text and vision Cloudflare paths are independent (LangChain text vs REST
+  vision). Vision model IDs and purpose lists are settings-owned — read
+  `CLOUDFLARE_WORKERS_AI_*` from settings, not this doc.
+- Optional graph workflow (`AI_MEAL_ANALYZE_GRAPH_ENABLED`) must not change
+  provider order or READY meal API contracts.
+- Optional FatSecret meal validation is never required for a valid scan.
+- Prompt cache (OpenAI Responses via LangChain) is best-effort; keys hash
+  system prompt only — never raw user text/images. Monitor facade metrics before
+  claiming savings.
+- Never log `[AI-*]` payloads beyond provider, model alias, purpose, status,
+  error class.
 
-### How It Works
+### Barcode cascade reliability
 
-- Text: Uses LangChain's `ChatCloudflareWorkersAI` (`langchain-cloudflare>=0.3.4`) — this is LangChain inside FastAPI, not the app running on Cloudflare Workers runtime.
-- Vision: Posts `messages[].content[].image_url` (base64 data URL) directly to the Workers AI REST endpoint. Response is normalized from `result.response` or `result.choices[0].message.content`.
-- Cloudflare model IDs stored raw (`@cf/...`) in fallback chains; `AIModelManager` routes to the CF provider via an explicit ownership map.
-- If `CLOUDFLARE_AI_GATEWAY_ID` is set, LangChain passes it as the `ai_gateway` field to Workers AI.
-- Returns the same normalized `dict` shape as other AI providers — handlers are provider-agnostic.
-- Circuit breaker trips on 429/5xx/timeout.
-- Vision model: `@cf/google/gemma-4-26b-a4b-it` (Vision=Yes, messages/image_url contract). Deprecated model `@cf/unum/uform-gen2-qwen-500m` must not be used.
+Order and verification rules (handlers/adapters own exact implementation):
 
-### Env Vars
+1. Local `food_reference` / cache with GTIN aliases  
+2. FatSecret exact barcode  
+3. OpenFoodFacts exact barcode  
+4. USDA FDC branded exact `gtinUpc` (when key present)  
+5. Brave + AI as estimate hints only  
+6. AI estimate last  
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `CLOUDFLARE_WORKERS_AI_ENABLED` | `true` | Master switch — text path inactive unless this is `true` |
-| `CLOUDFLARE_ACCOUNT_ID` | `` | Cloudflare account ID |
-| `CLOUDFLARE_API_TOKEN` | `` | API token with Workers AI permission |
-| `CLOUDFLARE_AI_GATEWAY_ID` | `` | Optional AI Gateway ID; leave blank for direct Workers AI |
-| `CLOUDFLARE_WORKERS_AI_TEXT_MODEL` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Model for text generation |
-| `CLOUDFLARE_WORKERS_AI_TEXT_PURPOSES` | `recipe,general,meal_names,discovery,parse_text,barcode` | Text purposes that prefer CF first, with OpenAI fallback |
-| `CLOUDFLARE_WORKERS_AI_JSON_MODE` | `true` | Reserved; currently unused by LangChain adapter |
-| `CLOUDFLARE_WORKERS_AI_TIMEOUT_SECONDS` | `60` | HTTP timeout per request |
-| `CLOUDFLARE_WORKERS_AI_IMAGE_MODEL` | `@cf/black-forest-labs/flux-2-klein-9b` | Default catalog image generation model; override only when the env var is set |
-| `CLOUDFLARE_WORKERS_AI_VISION_ENABLED` | `true` | Enable CF vision as image-analysis fallback after OpenAI |
-| `CLOUDFLARE_WORKERS_AI_VISION_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Vision model for image analysis |
-| `CLOUDFLARE_WORKERS_AI_VISION_PURPOSES` | `meal_scan,ingredient_scan,food_label_scan` | Image purposes that include CF vision as fallback |
+Invalid GTIN → 400 before external calls. Exact provider hits may be cached as
+verified data. Brave-only / name-only / AI estimates return `is_estimate=true`
+and must not enter the global catalog. Logs must not include full raw barcodes.
 
-### Production Rollout (Vision)
+### Redis cache posture
 
-Set these env vars in Render (no redeployment needed, env var change restarts the service):
+| Data | Policy |
+|------|--------|
+| Food search/details, nutrition lookup, AI cost caches | Optional cache-aside; miss/error → source of truth |
+| Auth UID mapping | Process-local TTL, not Redis |
+| Notification rows / FCM ownership | Database only — do not cache as source of truth |
+| Meal suggestion sessions | Required Redis-backed transient state today |
 
-```
-CLOUDFLARE_WORKERS_AI_ENABLED=true
-CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true
-CLOUDFLARE_WORKERS_AI_VISION_MODEL=@cf/google/gemma-4-26b-a4b-it
-CLOUDFLARE_WORKERS_AI_VISION_PURPOSES=meal_scan,ingredient_scan,food_label_scan
-```
+Default: do not cache. Admission checklist lives in the selective-cache decision
+above. `FAIL_ON_CACHE_ERROR=false` is the expected production posture for
+optional caches.
 
-Keep `OPENAI_API_KEY` configured — OpenAI remains primary for image scanning.
+### RevenueCat and web redemption
 
-### Rollback
+- Webhooks update local `subscriptions`; signature verification is constant-time.
+- Web checkout handoff is `/v1/web-funnel/*` (hash-only redemption link, Firebase
+  passwordless, preflight/finalize). Contracts: `api-endpoints.md`.
+- Billing ownership is RevenueCat Web; legacy direct Paddle fulfillment is gone.
+- Premium feature gates are planned, not enforced on routes.
 
-Disable vision without redeploying:
-```
-CLOUDFLARE_WORKERS_AI_VISION_ENABLED=false
-```
+### Sentry ownership
 
-Disable all CF:
-```
-CLOUDFLARE_WORKERS_AI_ENABLED=false
-```
+- Runtime code uses the `src.observability` facade only. Direct `sentry_sdk`
+  imports belong in `src/infra/monitoring/sentry.py`.
+- One root-cause ERROR per unexpected request failure (API exception handlers).
+  Do not log-and-rethrow (duplicate Sentry issues). Background/cron boundaries
+  own their own capture when they swallow exceptions.
+- Expected 4xx domain failures are silent at ERROR level.
+- Severity contract: INFO = normal; WARNING = degrade/retry/slow; ERROR =
+  user-impacting; CRITICAL = service unusable. Same privacy allowlist as above.
+- Use Sentry metrics for operational AI failure alerts; use PostHog for product
+  / LLM product traces — not P1 outage paging.
 
-### Privacy Notes
+### nutree-affiliate boundary
 
-- API token is loaded from env/settings and never logged.
-- Logs include only: provider name, model alias, purpose value, HTTP status code, and error class.
-- Prompts, food payloads, raw AI responses, base64 image bytes, and account IDs are never logged.
+MealTrack and nutree-affiliate are **separate services and databases**. Never
+join or write affiliate tables from MealTrack.
 
-### Cloudflare AI Gateway
+- Sync path: HMAC-signed HTTP via `affiliate_service_adapter` +
+  `affiliate_event_outbox` + cron dispatcher.
+- Identity: `mealtrack_user_id` here; `affiliate_id` only in affiliate service.
+- Architecture ownership table: `system-architecture.md` → Affiliate System
+  Boundary.
+- Signing contract and outbox retry live in the adapter, model, and
+  `tests/unit/infra/adapters/test_affiliate_service_adapter_signing.py`.
 
-Workers AI calls route through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) when `CLOUDFLARE_AI_GATEWAY_ID` is set.
+### Health surfaces
 
-Dashboard: `https://dash.cloudflare.com → AI Gateway → {gateway_id}`
-
-**Privacy:** `cf-aig-collect-log-payload: false` is sent on every vision call — no food images, prompts, or AI responses are stored in CF logs. Request metadata only (model, tokens, latency, cost).
-
-**Cache:** disabled for vision (`cf-aig-skip-cache: true`). Images are always unique; caching adds overhead with zero hit rate.
-
-**Workers AI gateway routing** (Pattern B): the existing REST URL (`api.cloudflare.com`) is unchanged — CF routes internally when `cf-aig-gateway-id` header is present. No URL changes needed.
-
----
-
-## Food, Translation, Image, and Email Providers
-
-| Service | Purpose | Config |
-|---------|---------|--------|
-| DeepL | Meal and suggestion translation | `DEEPL_API_KEY` |
-| USDA FoodData Central | Manual meal food search/details | `USDA_FDC_API_KEY` |
-| FatSecret | Barcode and ingredient nutrition fallback | `FATSECRET_CLIENT_ID`, `FATSECRET_CLIENT_SECRET` |
-| OpenFoodFacts | Barcode product lookup | none |
-| Brave Search | Barcode nutrition and image validation fallback | `BRAVE_SEARCH_API_KEY` |
-| Pexels / Unsplash | Meal discovery food photos | `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY` |
-| Pollinations / Google Imagen | Generated image fallback adapters | provider-specific adapter config |
-| Resend | Lifecycle and webhook-triggered email | `RESEND_API_KEY`, `EMAIL_ENABLED`, `EMAIL_FROM` |
-
-### Meal Catalog Provider Outages
-
-Use [Provider Outage Runbook](./runbooks/provider-outage.md) when FatSecret,
-USDA, DeepL, Cloudflare Workers AI, or Redis degrades during catalog or food
-search traffic.
-
-- `/v1/foods/search` is local-first: Redis cache errors are treated as misses,
-  verified `food_reference` results are returned first, and provider enrichment
-  can degrade to local-only results.
-- `FAIL_ON_CACHE_ERROR=false` is the expected production posture for optional
-  caches. Redis-backed required state must be documented separately and may fail
-  fast.
-- Provider credentials are read from configured environment/secret storage.
-  Never paste credentials, tokens, raw search text, meal payloads, or user IDs
-  into incident notes.
-- Catalog image generation can be paused during Cloudflare Workers AI outage;
-  existing catalog rows remain readable.
+Discover paths in OpenAPI. Typical ops probes: `/health`, `/v1/health/db-pool`,
+`/v1/health/db-connections`, `/v1/health/notifications`.
 
 ---
 
-## RevenueCat
-
-**Purpose:** Subscription management for in-app and web checkout.
-
-- Webhook sync to local `subscriptions` table
-- Premium status check with Redis cache fallback
-- Signature verification via constant-time HMAC comparison
-- Webhook events handled in `src/api/routes/v1/webhooks.py`:
-
-| Event | Action |
-|-------|--------|
-| `INITIAL_PURCHASE` | Create subscription record, credit referral wallet |
-| `RENEWAL` | Update expiry, reset billing-issue flag |
-| `CANCELLATION` | Set status to `cancelled` |
-| `EXPIRATION` | Set status to `expired` |
-| `BILLING_ISSUE` | Set status to `billing_issue` |
-| `PRODUCT_CHANGE` | Update product ID and expiry |
-| `REFUND` | Set status to `refunded`, revoke referral credit |
-| `TRANSFER` | Re-point subscription to new subscriber ID |
-
-- PostHog lifecycle mirroring for CANCELLATION, EXPIRATION, BILLING_ISSUE, REFUND, RENEWAL, PRODUCT_CHANGE events (configurable via `POSTHOG_API_KEY`)
-- **Web redemption handoff:** anonymous RevenueCat Web customers are correlated through `/v1/web-funnel/*` using a SHA-256 redemption-link digest (raw link never stored). After Firebase passwordless email-link sign-in, `preflight` binds the Firebase UID/email and `finalize` attaches the verified purchase. Webhook provider aliases close the anonymous → authenticated gap. Route contracts live in `api-endpoints.md`.
-- Legacy direct Paddle fulfillment columns were removed; web billing ownership remains RevenueCat Web, not a parallel Paddle webhook path in this service.
-
-**Config:** `REVENUECAT_SECRET_API_KEY`, `REVENUECAT_WEBHOOK_SECRET`, plus web-funnel BFF secret and related settings in `src/infra/config/settings.py`
-
-**Status:** Premium feature gates planned, not currently enforced on routes
-
----
-
-## PostHog
-
-**Purpose:** Product analytics — subscription lifecycle event capture
-
-- `src/infra/adapters/posthog_adapter.py`: fire-and-forget async capture via `httpx` (3s timeout)
-- Only sends events when `POSTHOG_API_KEY` is set; silently skips otherwise
-- Currently captures subscription lifecycle events mirrored from RevenueCat webhooks
-
-**Config:** `POSTHOG_API_KEY`, `POSTHOG_HOST` (default: `https://app.posthog.com`)
-
----
-
-## Redis Cache
-
-**Purpose:** Selective performance and AI-cost optimization. Redis is not the source of truth for user nutrition, notification delivery, FCM token ownership, or write-path correctness.
-
-- **Default posture:** Do not cache unless the value passes the cache admission checklist in `docs/superpowers/specs/2026-05-21-redis-optimize-design.md`.
-- **Pattern:** Cache-aside only for optional read caches where DB/API fallback is correct.
-- **Connection Pool:** 10 connections by default (`REDIS_MAX_CONNECTIONS`) | **Default TTL:** 1 hour
-- **Error Handling:** Optional caches degrade by bypassing Redis. Required Redis-backed state must be documented and health-checked separately.
-
-**Config:** `REDIS_URL=redis://host:port/db`
-
-### Cache Policy by Data Type
-
-| Data | Redis Policy |
-|------|--------------|
-| Food search/details | Cache; stable-ish data with high reuse |
-| Nutrition lookup | Cache; expensive lookup chain with bounded stale window |
-| AI provider cache names | Cache; cost optimization only, fall back to uncached calls |
-| Daily/weekly nutrition read models | Conditional cache; short TTL plus write/event invalidation |
-| Auth UID mapping | Process-local TTL cache, not Redis |
-| Notification precompute and FCM token ownership | Do not cache; database is source of truth |
-| Meal suggestion sessions | Required Redis-backed transient state in the current implementation; writes fail when the session store is unavailable |
-
----
-
-## Sentry Monitoring
-
-**Purpose:** Error tracking, Sentry Logs, operational metrics, performance profiling, crash reporting
-
-- Sentry is an infrastructure connector only. Runtime code calls `src.observability` facade functions; direct `sentry_sdk` imports belong only in `src/infra/monitoring/sentry.py`.
-- FastAPI, Starlette, SQLAlchemy, and logging integrations are initialized before the `FastAPI` app is created.
-- Sentry Logs are emitted only through the provider-neutral `log_event(...)` facade when `SENTRY_ENABLE_LOGS=true`.
-- Operational metrics are emitted only through provider-neutral metric facade calls when `SENTRY_ENABLE_METRICS=true`.
-- Gracefully disabled if `SENTRY_DSN` is not set; the facade falls back to no-op behavior.
-- Request context is allowlisted: request ID, method, route/path, environment, release, and internal user ID when available.
-- Log and metric attributes use the same allowlist and scalar-only filtering as request context.
-- Cron entrypoints capture swallowed failures and flush via the facade before exit.
-- Affiliate outbox permanent failures send an operational alert with row/event identifiers only; raw affiliate payload is never attached.
-
-**Config:** `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENABLE_LOGS=true`, `SENTRY_ENABLE_METRICS=true`, `SENTRY_TRACES_SAMPLE_RATE=0.1`, `SENTRY_PROFILES_SAMPLE_RATE=0.05`, `SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `SENTRY_PROFILE_LIFECYCLE`, `SENTRY_SEND_PII=false`
-
-### Single-Owner Rule and Duplicate Suppression
-
-Python `ERROR` log records are automatically captured by Sentry as issues via the logging integration. This means every `logger.error(...)` in the request path generates a Sentry issue — logging the same failure twice (log-and-rethrow pattern) produces two distinct Sentry issues for one real event.
-
-The single-owner logging strategy prevents this:
-- **One root-cause ERROR per unexpected request failure** — owned by `src/api/exception_handlers.py`.
-- **Expected 4xx domain exceptions** convert silently to responses; zero ERROR logs and zero Sentry issues.
-- **Background/cron boundaries** own their own ERROR log + `capture_exception` because they swallow rather than propagate.
-
-When to call each facade function:
-
-| Function | When |
-|----------|------|
-| `capture_exception(exc)` | Swallowed exceptions at background/cron boundaries that never reach the global handler |
-| `log_event("warning", "...")` | Degradation signals that need structured log metadata (e.g. `ai.provider.failure`) |
-| `increment_metric("...")` | Operational counters: permanent outbox failures, retry counts |
-| `distribution_metric("...")` | Latency histograms: `meal.manual_save.db_ms`, `meal.manual_save.cache_ms` |
-
-Do **not** call `capture_exception` after a `logger.error(..., exc_info=True)` — the logging integration already ships it to Sentry.
-
-### Event Contract
-
-Sent to Sentry:
-- Unhandled API exceptions and unexpected 500-class failures.
-- `ERROR` logs with exception info through the logging integration.
-- Structured operational logs emitted through the facade when Sentry Logs are enabled.
-- Operational counter, gauge, and distribution metrics emitted through the facade.
-- Caught-and-swallowed cron failures.
-- Affiliate outbox permanent failures.
-- Sampled FastAPI/Starlette request transactions, SQLAlchemy spans, coarse cron spans, and sampled profiles.
-
-Not sent to Sentry:
-- Expected 4xx validation/auth/not-found responses or business exceptions.
-- Product analytics or audit logs.
-- Request/response bodies, auth headers, Firebase tokens/claims, emails, food payloads, raw image URLs, raw provider payloads, or secrets.
-- Debug/info Python logging records as Sentry issues.
-- Unstructured application logs outside the observability facade.
-
-### Application Log Severity
-
-Use the production log levels as an operational contract:
-
-- `INFO`: normal milestones, successful startup/cron/request completion, and
-  expected client rejections such as 400/401/403/404.
-- `WARNING`: unexpected but non-breaking signals such as slow requests, 429 rate
-  limits, invalid webhook authorization, automatic retries, and optional
-  dependency degradation.
-- `ERROR`: user-impacting failures that need engineering attention, including
-  unhandled exceptions, 5xx responses, and broken required provider calls.
-- `CRITICAL`: page-worthy service-unusable paths only, such as a required
-  startup dependency failure that aborts serving.
-
-Log content must remain safe before it reaches Sentry or any downstream log
-sink. Do not log emails, email subjects, auth data, Firebase claims, raw image
-URLs, raw AI response text, food payloads, raw webhook provider payloads, DSNs,
-API keys, or service account JSON. Use operation names, generated internal IDs,
-event types, environment, durations, sizes, counts, and error class names.
-
-### Operational Setup
-
-- Alerts: page on new/reopened production issues with level `error`; route affiliate outbox permanent failures to backend operations.
-- Dashboards: track error rate, p95 request latency, slow SQL spans, cron failure count, and affiliate outbox permanent failure count.
-- Release health: set `SENTRY_RELEASE` during deploy so issues and performance regressions are grouped by release.
-
----
-
-## Database (PostgreSQL/Neon)
-
-See `database-guide.md` for schema, connection pool, and migration details.
-
-**Config:** `APP_DATABASE_URL=postgresql://user:pass@host/db` for app runtime; `DATABASE_URL_DIRECT` is migration/admin only.
-
----
-
-## Service Health Checks
-
-```
-GET /health                    # Basic health (200 if running)
-GET /v1/health/db-pool         # DB pool metrics
-GET /v1/health/db-connections  # PostgreSQL connection stats
-GET /v1/health/notifications   # FCM health
-```
-
----
-
-## Error Handling & Graceful Degradation
-
-| Service | Failure Mode | Recovery |
-|---------|--------------|----------|
-| Firebase Auth | Fail fast (401) | Requests rejected |
-| PostgreSQL | Fail fast (503) | Requests rejected |
-| AI provider stack | Circuit breaker → try fallback | Falls through to next model in chain; exhausted chain raises AIUnavailableError |
-| Workers AI | Circuit breaker (429/5xx/timeout) | Optional routed provider; disable with env flags |
-| Cloudinary | Degrade (fallback URL) | Continue with best-effort image |
-| RevenueCat | Webhook/cache degradation | Continue with last-known subscription state where available; premium route gates are not yet enforced |
-| PostHog | Degrade (log warning) | Continue without analytics |
-| Redis | Degrade (bypass cache) | Continue without caching |
-| Sentry | Degrade (log locally) | Continue with local logging |
-
----
-
-## nutree-affiliate (Internal Service)
-
-**Purpose:** Affiliate identity, code management, commission ledger, and payout state for KOL/PT partner program. Runs as a separate Vercel deployment with its own Neon Postgres database.
-
-**Ownership boundary:** MealTrack must never join against or write the affiliate database directly. All affiliate state lives in nutree-affiliate.
-
-### Integration Points
-
-| Direction | Protocol | Endpoint |
-|-----------|----------|----------|
-| MealTrack → nutree-affiliate | HMAC-signed HTTP POST | `POST /api/internal/codes/validate` |
-| MealTrack → nutree-affiliate | HMAC-signed HTTP POST | `POST /api/internal/mealtrack-events` |
-
-### Request Signing (HMAC-SHA256)
-
-```
-message  = f"{unix_timestamp}.{raw_body}"
-signature = HMAC-SHA256(AFFILIATE_INTERNAL_SECRET, message)
-headers   = { X-Timestamp: unix_timestamp, X-Signature: hex_signature }
-```
-
-Replay window: ±300 seconds. Implemented in `src/infra/adapters/affiliate_service_adapter.py`. Cross-service contract test in `tests/unit/infra/adapters/test_affiliate_service_adapter_signing.py`.
-
-### Lifecycle Event Flow
-
-RevenueCat webhook → MealTrack webhook handler → `affiliate_event_outbox` (same DB transaction) → cron dispatcher → nutree-affiliate `/api/internal/mealtrack-events`.
-
-Events enqueued: `subscription_initial_purchase`, `subscription_renewal`, `subscription_canceled`, `subscription_expired`, `subscription_refund`.
-
-Events do **not** include `affiliate_id` — nutree-affiliate resolves it internally by `mealtrack_user_id`. Events for non-attributed users are silently ignored by nutree-affiliate.
-
-### Outbox Table (`affiliate_event_outbox`)
-
-| Column | Notes |
-|--------|-------|
-| `event_id` | Idempotency key forwarded to nutree-affiliate inbox |
-| `status` | `pending` / `sent` / `failed` |
-| `attempts` | Max 5; exponential back-off 1m→5m→30m→2h |
-| `next_attempt_at` | Dispatcher claims rows where `status=pending AND next_attempt_at <= now` |
-
-Permanent failures (5 attempts exhausted) capture a Sentry error. Cron: `src/cron/affiliate_outbox.py` — schedule every 5 min.
-
-### Failure Modes
-
-| Failure | MealTrack behavior |
-|---------|--------------------|
-| nutree-affiliate down during code validate | Returns `active=False`; apply raises `invalid_code` |
-| nutree-affiliate down during attribution | Logs warning; apply still succeeds; no retry |
-| nutree-affiliate down during lifecycle event | Outbox row stays `pending`; retried on next cron run |
-| Outbox row hits max retries | Status → `failed`, Sentry alert fired |
-
-**Config:** `AFFILIATE_INTEGRATION_ENABLED`, `AFFILIATE_API_BASE_URL`, `AFFILIATE_INTERNAL_SECRET`, `AFFILIATE_CODE_VALIDATE_TIMEOUT_SECONDS` (default 3.0s)
-
-### Rollout Checklist
-
-1. Create nutree-affiliate Neon database and run `npx ts-node api/migrate.ts`
-2. Set `AFFILIATE_INTERNAL_SECRET` in both nutree-affiliate and MealTrack (same value)
-3. Set `AFFILIATE_API_BASE_URL` in MealTrack (e.g. `https://nutree-affiliate.vercel.app`)
-4. Deploy nutree-affiliate **before** enabling MealTrack feature flag
-5. Set `AFFILIATE_INTEGRATION_ENABLED=true` in MealTrack
-6. Add Render cron job: `python -m src.cron.affiliate_outbox` — every 5 min
-7. Monitor `affiliate_event_outbox` for `status=failed` rows and Sentry alerts
-8. Rotate `AFFILIATE_INTERNAL_SECRET` if compromised — update both services simultaneously
-
----
-
-## AI Observability (Sentry + PostHog)
-
-### Operational metrics (Sentry)
-Primary dashboard for incident response and alerting.
-
-Metrics emitted via `src.observability`:
-- `ai.vision.request.count` — total image analysis requests (tags: status, ai_purpose)
-- `ai.vision.request.duration_ms` — end-to-end duration (distribution)
-- `ai.vision.provider.attempt.count` — per-provider attempt count
-- `ai.vision.provider.failure.count` — transient provider failures
-- `ai.vision.fallback.count` — provider fallbacks triggered
-- `ai.vision.parse_failure.count` — JSON parse failures
-- `ai.vision.schema_validation_failure.count` — schema validation failures
-- `ai.vision.request.failure.count` — all providers exhausted
-
-Recommended Sentry dashboard panels:
-- Success rate = `request.count{status=success}` / `request.count`
-- 503 rate = `request.failure.count` / `request.count`
-- p95 duration = `request.duration_ms` distribution p95
-- Parse/schema failure rate per provider
-
-Alert thresholds (starting points, tune after baseline):
-- 503 rate > 5% over 5 min → P1 alert
-- Parse/schema failure count > 10/min → investigate provider
-- p95 duration > 20s → latency regression
-
-### Cloudflare vision fallback rollout gates
-Before enabling Cloudflare vision fallback:
-1. Enable via env: `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=true`
-2. Monitor `schema_validation_failure.count{ai_provider=cloudflare-workers-ai}` after OpenAI fallbacks
-3. Compare `request.duration_ms` p95 vs OpenAI primary image scans
-4. Rollback: set `CLOUDFLARE_WORKERS_AI_VISION_ENABLED=false` — zero-downtime via env
-
-### LLM traces (PostHog)
-PostHog AI observability is wired via `src/api/main.py` LangChain OpenTelemetry integration.
-Use for: model latency trends, token costs, product funnel correlation.
-Do NOT use PostHog for operational failure alerts — use Sentry metrics.
-
----
-
-See related: `system-architecture.md`, `database-guide.md`, `cqrs-guide.md`
+## Related
+
+- Architecture: `system-architecture.md`
+- Database: `database-guide.md`
+- HTTP conventions: `api-endpoints.md`
+- Provider outage: `runbooks/provider-outage.md`

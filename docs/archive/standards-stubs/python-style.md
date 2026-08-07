@@ -1,5 +1,8 @@
 # Python Style & Conventions
 
+**Status:** Superseded stub — not evergreen authority  
+**Current authority:** [code-standards.md](../../code-standards.md)
+
 **Python Version**: 3.13
 
 ## Tools
