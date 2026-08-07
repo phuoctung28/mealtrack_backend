@@ -247,8 +247,8 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                     score=Decimal(str(alternative.score)),
                     selection_version=expected_version + 1,
                     seen_at=now if position == 0 else None,
-                    catalog_meal=alternative.catalog_meal,
                 )
+                row._domain_catalog_meal = alternative.catalog_meal
                 self._session.add(row)
                 new_rows.append(row)
             target = new_rows[0]
@@ -899,6 +899,9 @@ def _candidate_to_domain(
 
 
 def _candidate_catalog_meal(row: MealRecommendationORM) -> CatalogMeal | None:
+    domain_catalog_meal = getattr(row, "_domain_catalog_meal", None)
+    if domain_catalog_meal is not None:
+        return domain_catalog_meal
     catalog_meal = row.catalog_meal
     if catalog_meal is None:
         return None
