@@ -97,7 +97,7 @@ class UserProfile(Base, BaseMixin):
 
     # Constraints
     __table_args__ = (
-        CheckConstraint("age >= 13 AND age <= 120", name="check_age_range"),
+        CheckConstraint("age >= 12 AND age <= 120", name="check_age_range"),
         CheckConstraint("height_cm > 0", name="check_height_positive"),
         CheckConstraint("weight_kg > 0", name="check_weight_positive"),
         CheckConstraint(
