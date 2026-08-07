@@ -115,6 +115,7 @@ class WebFunnelRedemption(Base, BaseMixin):
     project = Column(String(128), nullable=False)
     original_app_user_id = Column(String(255), nullable=False)
     verified_app_user_id = Column(String(255), nullable=False)
+    provider_app_user_ids = Column(JSON, nullable=True)
     entitlement_id = Column(String(128), nullable=False)
     product_id = Column(String(255), nullable=False)
     verified_at = Column(DateTime(timezone=True), nullable=False)

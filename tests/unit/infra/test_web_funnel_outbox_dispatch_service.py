@@ -61,7 +61,11 @@ def _outbox(job_type: str) -> WebFunnelOutbox:
 @pytest.mark.asyncio
 async def test_reconcile_worker_runs_alongside_claim_email_delivery(monkeypatch):
     reconcile = AsyncMock(return_value=True)
-    monkeypatch.setattr(dispatcher, "AsyncSessionLocal", lambda: _Session([_outbox("revenuecat_reconcile")]))
+    monkeypatch.setattr(
+        dispatcher,
+        "AsyncSessionLocal",
+        lambda: _Session([_outbox("revenuecat_reconcile")]),
+    )
     monkeypatch.setattr(dispatcher, "process_revenuecat_reconcile", reconcile)
 
     assert await dispatcher.dispatch_web_funnel_outbox() == 1
@@ -72,7 +76,27 @@ async def test_reconcile_worker_runs_alongside_claim_email_delivery(monkeypatch)
 async def test_claim_email_stays_queued_without_claim_link_base_url(monkeypatch):
     send = AsyncMock()
     monkeypatch.setattr(dispatcher.settings, "WEB_FUNNEL_CLAIM_LINK_BASE_URL", "")
-    monkeypatch.setattr(dispatcher, "AsyncSessionLocal", lambda: _Session([_outbox("claim_email")]))
+    monkeypatch.setattr(
+        dispatcher, "AsyncSessionLocal", lambda: _Session([_outbox("claim_email")])
+    )
+    monkeypatch.setattr(dispatcher, "process_claim_email", send)
+
+    assert await dispatcher.dispatch_web_funnel_outbox() == 0
+    send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_claim_email_stays_queued_when_legacy_claims_are_disabled(monkeypatch):
+    send = AsyncMock()
+    monkeypatch.setattr(
+        dispatcher.settings,
+        "WEB_FUNNEL_CLAIM_LINK_BASE_URL",
+        "https://nutree.app/open-nutree",
+    )
+    monkeypatch.setattr(dispatcher.settings, "WEB_FUNNEL_LEGACY_CLAIM_ENABLED", False)
+    monkeypatch.setattr(
+        dispatcher, "AsyncSessionLocal", lambda: _Session([_outbox("claim_email")])
+    )
     monkeypatch.setattr(dispatcher, "process_claim_email", send)
 
     assert await dispatcher.dispatch_web_funnel_outbox() == 0

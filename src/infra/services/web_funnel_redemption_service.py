@@ -1,9 +1,6 @@
 """Infrastructure persistence for web-funnel redemptions."""
 
-import hashlib
-
-from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.web_funnel_claim import (
@@ -19,20 +16,25 @@ class WebFunnelRedemptionService:
     async def finalize(self, *args, **kwargs):
         return await finalize_redemption(*args, **kwargs)
 
-    async def preflight(self, db, *, uid: str, email: str, redemption_url: str) -> bool:
-        """Bind a matching verified Firebase identity without disclosing checkout email."""
-        redemption_link_hash = hashlib.sha256(redemption_url.encode()).hexdigest()
+    async def preflight(
+        self, db, *, uid: str, email: str, redemption_link_hash: str
+    ) -> bool:
+        """Bind a matching verified Firebase identity before consuming the link."""
         binding = await db.scalar(
             select(WebFunnelRedemption)
             .where(WebFunnelRedemption.redemption_link_hash == redemption_link_hash)
             .with_for_update()
         )
-        if not binding or binding.finalized_uid or binding.redeemer_uid:
-            return False
-        lead = await db.get(WebFunnelLead, binding.lead_id, with_for_update=True)
-        if not lead or lead.email.lower() != email.lower():
+        if not binding or binding.finalized_uid:
             return False
         if binding.preflight_uid and binding.preflight_uid != uid:
+            return False
+        if binding.redeemer_uid and binding.redeemer_uid != uid:
+            return False
+        lead = await db.get(WebFunnelLead, binding.lead_id, with_for_update=True)
+        if not lead or lead.status in {"refunded", "revoked", "conflict"}:
+            return False
+        if not lead.email.strip().lower() == email.strip().lower():
             return False
         binding.preflight_uid = uid
         binding.preflight_at = utc_now()
@@ -47,19 +49,23 @@ class WebFunnelRedemptionService:
         if isinstance(original, str):
             originals.add(original)
         redeemers = _event_values(event, "redeemed_by")
-        if not originals or len(redeemers) != 1:
+        if not originals or not redeemers:
+            return False
+        environment = event.get("environment")
+        if not isinstance(environment, str):
             return False
         binding = await db.scalar(
             select(WebFunnelRedemption)
-            .where(WebFunnelRedemption.original_app_user_id.in_(originals))
+            .where(
+                WebFunnelRedemption.original_app_user_id.in_(originals),
+                func.lower(WebFunnelRedemption.environment) == environment.lower(),
+            )
             .with_for_update()
         )
         if not binding:
             return False
-        redeemer_uid = next(iter(redeemers))
-        if binding.redeemer_uid and binding.redeemer_uid != redeemer_uid:
-            raise HTTPException(status_code=409, detail="Redemption already bound")
-        binding.redeemer_uid = redeemer_uid
+        existing_aliases = set(binding.provider_app_user_ids or [])
+        binding.provider_app_user_ids = sorted(existing_aliases | redeemers)
         binding.redemption_confirmed_at = utc_now()
         return True
 

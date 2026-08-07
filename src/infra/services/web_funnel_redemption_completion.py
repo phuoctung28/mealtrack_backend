@@ -5,8 +5,19 @@ import uuid
 from datetime import date
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.domain.model.auth import AuthProvider
+from src.infra.database.models.subscription import Subscription
+from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.user import User
+from src.infra.database.models.web_funnel_claim import (
+    WebFunnelLead,
+    WebFunnelRedemption,
+)
+from src.infra.database.models.weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 
 
 def utcnow():
@@ -17,6 +28,16 @@ def utcnow():
 
 def claim_conflict():
     return HTTPException(status_code=409, detail="Claim conflict")
+
+
+def existing_account_sign_in_required():
+    return HTTPException(
+        status_code=409,
+        detail={
+            "code": "EXISTING_ACCOUNT_REQUIRES_SIGN_IN",
+            "message": "Sign in to the existing Nutree account to continue.",
+        },
+    )
 
 
 def claim_not_found():
@@ -31,6 +52,23 @@ def _username(email):
     return email.split("@", 1)[0][:50]
 
 
+def _snapshot_value(snapshot, key, default):
+    value = snapshot.get(key)
+    return default if value is None else value
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def _auth_provider(firebase_provider: str | None) -> AuthProvider:
+    return (
+        AuthProvider.APPLE
+        if firebase_provider == "apple.com"
+        else AuthProvider.GOOGLE
+    )
+
+
 def _week_start(today):
     return today.fromordinal(today.toordinal() - today.weekday())
 
@@ -40,23 +78,12 @@ def _result(snapshot, uid):
         "firebase_uid": uid,
         "onboarding_completed": True,
         "macros": {
-            "calories": snapshot.get("target_calories", 2000),
-            "protein": snapshot.get("custom_protein_g", 150),
-            "carbs": snapshot.get("custom_carbs_g", 200),
-            "fat": snapshot.get("custom_fat_g", 65),
+            "calories": _snapshot_value(snapshot, "target_calories", 2000),
+            "protein": _snapshot_value(snapshot, "custom_protein_g", 150),
+            "carbs": _snapshot_value(snapshot, "custom_carbs_g", 200),
+            "fat": _snapshot_value(snapshot, "custom_fat_g", 65),
         },
     }
-
-
-from src.domain.model.auth import AuthProvider
-from src.infra.database.models.subscription import Subscription
-from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.models.user.user import User
-from src.infra.database.models.web_funnel_claim import (
-    WebFunnelLead,
-    WebFunnelRedemption,
-)
-from src.infra.database.models.weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 
 
 async def finalize_redemption(
@@ -67,25 +94,42 @@ async def finalize_redemption(
     original_app_user_id: str,
     idempotency_key: str,
     environment: str,
+    auth_provider: str | None = None,
 ) -> dict:
     """Restore one paid lead once; the provider-derived original ID selects the lead."""
     binding = await db.scalar(
         select(WebFunnelRedemption)
         .where(
-            WebFunnelRedemption.original_app_user_id == original_app_user_id,
             WebFunnelRedemption.environment == environment,
+            or_(
+                WebFunnelRedemption.original_app_user_id == original_app_user_id,
+                and_(
+                    WebFunnelRedemption.redeemer_uid == uid,
+                    WebFunnelRedemption.redeemer_uid.is_not(None),
+                ),
+                cast(WebFunnelRedemption.provider_app_user_ids, JSONB).contains(
+                    [original_app_user_id]
+                ),
+            ),
         )
         .order_by(WebFunnelRedemption.verified_at.desc())
         .with_for_update()
     )
     if not binding:
         raise claim_not_found()
+    # New redemption-link claims must be explicitly bound to this Firebase UID
+    # before RevenueCat consumption. Legacy rows without a link hash keep their
+    # historical lookup behavior and are handled by the gated legacy endpoints.
+    if binding.preflight_uid and binding.preflight_uid != uid:
+        raise claim_not_found()
+    if binding.redemption_link_hash and not binding.preflight_uid:
+        raise claim_not_found()
     if binding.redeemer_uid and binding.redeemer_uid != uid:
         raise claim_not_found()
     binding.redeemer_uid = uid
     key_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()
     if binding.finalized_uid:
-        if binding.finalized_uid != uid or binding.finalization_key_hash != key_hash:
+        if binding.finalized_uid != uid:
             raise claim_conflict()
         return binding.result or {
             "version": "redemption_result_v1",
@@ -94,17 +138,19 @@ async def finalize_redemption(
     lead = await db.get(WebFunnelLead, binding.lead_id, with_for_update=True)
     if not lead or lead.status in {"refunded", "revoked", "conflict"}:
         raise claim_not_found()
-    if email is not None and email.lower() != lead.email.lower():
+    if email is None or _normalize_email(email) != _normalize_email(lead.email):
         raise claim_conflict()
     user = await db.scalar(
         select(User).where(User.firebase_uid == uid).with_for_update()
     )
     email_owner = await db.scalar(
-        select(User).where(User.email == lead.email).with_for_update()
+        select(User)
+        .where(func.lower(User.email) == _normalize_email(lead.email))
+        .with_for_update()
     )
     if email_owner and email_owner.firebase_uid != uid:
-        raise claim_conflict()
-    if user and (user.email.lower() != lead.email.lower() or user.onboarding_completed):
+        raise existing_account_sign_in_required()
+    if user and _normalize_email(user.email) != _normalize_email(lead.email):
         raise claim_conflict()
     if user is None:
         user = User(
@@ -112,8 +158,8 @@ async def finalize_redemption(
             email=lead.email,
             username=_username(lead.email),
             password_hash="",
-            provider=AuthProvider.EMAIL_LINK,
-            onboarding_completed=True,
+            provider=_auth_provider(auth_provider),
+            onboarding_completed=False,
         )
         db.add(user)
         await db.flush()
@@ -125,35 +171,34 @@ async def finalize_redemption(
         .where(UserProfile.user_id == user.id, UserProfile.is_current.is_(True))
         .with_for_update()
     )
-    if profile is not None:
-        raise claim_conflict()
-    db.add(
-        UserProfile(
-            user_id=user.id,
-            age=_age(snapshot),
-            gender=snapshot["gender"],
-            height_cm=snapshot["height"],
-            weight_kg=snapshot["weight"],
-            body_fat_percentage=snapshot.get("body_fat_percentage"),
-            date_of_birth=date(
-                snapshot["birth_year"], snapshot["birth_month"], snapshot["birth_day"]
-            ),
-            job_type=snapshot["job_type"],
-            training_days_per_week=snapshot["training_days_per_week"],
-            training_minutes_per_session=snapshot["training_minutes_per_session"],
-            fitness_goal=snapshot["goal"],
-            meals_per_day=snapshot.get("meals_per_day", 3),
-            pain_points=snapshot.get("pain_points", []),
-            dietary_preferences=snapshot.get("dietary_preferences", []),
-            training_level=snapshot.get("training_level"),
-            challenge_duration=snapshot.get("challenge_duration"),
-            training_types=snapshot.get("training_types"),
-            custom_protein_g=snapshot.get("custom_protein_g"),
-            custom_carbs_g=snapshot.get("custom_carbs_g"),
-            custom_fat_g=snapshot.get("custom_fat_g"),
-            target_weight_kg=snapshot.get("target_weight_kg"),
+    if profile is None:
+        db.add(
+            UserProfile(
+                user_id=user.id,
+                age=_age(snapshot),
+                gender=snapshot["gender"],
+                height_cm=snapshot["height"],
+                weight_kg=snapshot["weight"],
+                body_fat_percentage=snapshot.get("body_fat_percentage"),
+                date_of_birth=date(
+                    snapshot["birth_year"], snapshot["birth_month"], snapshot["birth_day"]
+                ),
+                job_type=snapshot["job_type"],
+                training_days_per_week=snapshot["training_days_per_week"],
+                training_minutes_per_session=snapshot["training_minutes_per_session"],
+                fitness_goal=snapshot["goal"],
+                meals_per_day=snapshot.get("meals_per_day", 3),
+                pain_points=snapshot.get("pain_points", []),
+                dietary_preferences=snapshot.get("dietary_preferences", []),
+                training_level=snapshot.get("training_level"),
+                challenge_duration=snapshot.get("challenge_duration"),
+                training_types=snapshot.get("training_types"),
+                custom_protein_g=snapshot.get("custom_protein_g"),
+                custom_carbs_g=snapshot.get("custom_carbs_g"),
+                custom_fat_g=snapshot.get("custom_fat_g"),
+                target_weight_kg=snapshot.get("target_weight_kg"),
+            )
         )
-    )
     result = {
         **_result(snapshot, uid),
         "version": "redemption_result_v1",
@@ -181,17 +226,29 @@ async def finalize_redemption(
                 target_fat=macros["fat"] * 7,
             )
         )
-    db.add(
-        Subscription(
-            user_id=user.id,
-            revenuecat_subscriber_id=uid,
-            product_id=binding.product_id,
-            platform="ios",
-            status="active",
-            purchased_at=utcnow(),
-            is_sandbox=binding.environment.upper() == "SANDBOX",
+    subscription = await db.scalar(
+        select(Subscription)
+        .where(
+            Subscription.user_id == user.id,
+            Subscription.revenuecat_subscriber_id == uid,
+            Subscription.product_id == binding.product_id,
         )
+        .with_for_update()
     )
+    if subscription is None:
+        db.add(
+            Subscription(
+                user_id=user.id,
+                revenuecat_subscriber_id=uid,
+                product_id=binding.product_id,
+                platform="web",
+                status="active",
+                purchased_at=utcnow(),
+                is_sandbox=binding.environment.upper() == "SANDBOX",
+            )
+        )
+    else:
+        subscription.status = "active"
     binding.finalized_uid, binding.finalized_at = uid, utcnow()
     binding.finalization_key_hash, binding.result = key_hash, result
     lead.claimed_uid, lead.claimed_at, lead.status, lead.access_sync_status = (

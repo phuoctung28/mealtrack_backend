@@ -85,8 +85,10 @@ class WebFunnelRedemptionFinalizeRequest(BaseModel):
 
 
 class WebFunnelRedemptionPreflightRequest(BaseModel):
-    """RevenueCat redemption link held only in the authenticated app request."""
+    """Non-secret digest used to check account eligibility before redemption."""
 
     model_config = ConfigDict(extra="forbid")
 
-    redemption_url: str = Field(min_length=1, max_length=4096)
+    redemption_link_hash: str = Field(
+        min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$"
+    )

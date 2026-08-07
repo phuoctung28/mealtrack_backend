@@ -103,6 +103,12 @@ def _require_fresh_token(token: dict) -> None:
         )
 
 
+def _is_supported_redemption_provider(provider: object) -> bool:
+    # Firebase represents passwordless Email Link sign-in as the password
+    # provider. Email matching and email_verified remain mandatory below.
+    return provider in {"google.com", "apple.com", "password"}
+
+
 def _require_legacy_claim_enabled() -> None:
     if not settings.WEB_FUNNEL_LEGACY_CLAIM_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -313,13 +319,16 @@ async def preflight_revenuecat_redemption(
         not isinstance(uid, str)
         or not isinstance(email, str)
         or not token.get("email_verified")
-        or provider == "anonymous"
+        or not _is_supported_redemption_provider(provider)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required"
         )
     eligible = await get_web_funnel_redemption_service().preflight(
-        db, uid=uid, email=email, redemption_url=payload.redemption_url
+        db,
+        uid=uid,
+        email=email,
+        redemption_link_hash=payload.redemption_link_hash,
     )
     if not eligible:
         raise claim_not_found()
@@ -347,14 +356,15 @@ async def finalize_revenuecat_redemption(
     _require_fresh_token(token)
     uid, email = token.get("uid"), token.get("email")
     provider = (token.get("firebase") or {}).get("sign_in_provider")
-    if not isinstance(uid, str):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Valid Firebase identity required")
-    if provider != "anonymous" and (
-        not isinstance(email, str) or not token.get("email_verified")
+    if (
+        not isinstance(uid, str)
+        or not _is_supported_redemption_provider(provider)
+        or not isinstance(email, str)
+        or not token.get("email_verified")
     ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required")
-    if provider == "anonymous":
-        email = None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Verified email required"
+        )
     if not idempotency_key or not 16 <= len(idempotency_key) <= 255:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid idempotency key"
@@ -383,6 +393,7 @@ async def finalize_revenuecat_redemption(
         original_app_user_id=original_app_user_id,
         idempotency_key=idempotency_key,
         environment=settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT,
+        auth_provider=provider,
     )
 
 
