@@ -12,6 +12,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+from src.api.exceptions import ValidationException
 from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
@@ -240,7 +241,7 @@ class UploadMealImageImmediatelyHandler(
                 image_url=image_url,
                 reason="parser_not_food",
             )
-            raise ValueError(
+            raise ValidationException(
                 "Image does not appear to contain food. "
                 "Please take a photo of food and try again."
             )
@@ -260,7 +261,7 @@ class UploadMealImageImmediatelyHandler(
                 image_url=image_url,
                 reason="nutrition_empty_or_zero_calorie",
             )
-            raise ValueError(
+            raise ValidationException(
                 "No edible food detected in the image. "
                 "Please take a photo of food and try again."
             )
@@ -349,7 +350,7 @@ class UploadMealImageImmediatelyHandler(
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
         if command.scan_mode == "food_label":
-            raise ValueError(
+            raise ValidationException(
                 "Food-label scans require the scan-by-url image flow. "
                 "Use /v1/meals/food-label/scan-by-url."
             )
