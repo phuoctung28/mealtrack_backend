@@ -64,8 +64,8 @@ class TdeeRequest:
 
     def __post_init__(self):
         """Validate invariants."""
-        if not (13 <= self.age <= 120):
-            raise ValueError(f"Age must be between 13 and 120: {self.age}")
+        if not (12 <= self.age <= 120):
+            raise ValueError(f"Age must be between 12 and 120: {self.age}")
 
         if self.unit_system == UnitSystem.METRIC:
             if not (100 <= self.height <= 272):

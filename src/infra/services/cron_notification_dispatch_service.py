@@ -29,6 +29,14 @@ DEACTIVATABLE_FCM_ERRORS = {
 }
 
 PROCESSING_RECLAIM_AFTER = timedelta(minutes=10)
+_NORMAL_NOTIFICATION_TYPES = {
+    "meal_reminder_breakfast",
+    "meal_reminder_lunch",
+    "meal_reminder_dinner",
+    "daily_summary",
+    "hydration_reminder_afternoon",
+    "hydration_reminder_evening",
+}
 
 
 class CronNotificationDispatchService:
@@ -53,12 +61,19 @@ class CronNotificationDispatchService:
         if not due:
             return
 
+        regular_notification_user_ids = await _fetch_regular_notification_user_ids(
+            {notification.user_id for notification in due}, now
+        )
+
         logger.info("Sending %d claimed due notifications", len(due))
 
         # Batch-fetch real-time calories_consumed from DB for meal reminders.
         # daily_summary uses the JSONB snapshot; trial_expiry ignores calories.
         meal_reminder_ids = [
-            n.user_id for n in due if n.notification_type.startswith("meal_reminder")
+            n.user_id
+            for n in due
+            if n.notification_type.startswith("meal_reminder")
+            and n.user_id in regular_notification_user_ids
         ]
         consumed_map: dict[str, int] = {}
         if meal_reminder_ids:
@@ -68,6 +83,7 @@ class CronNotificationDispatchService:
             n.user_id
             for n in due
             if n.notification_type.startswith("hydration_reminder")
+            and n.user_id in regular_notification_user_ids
         ]
         hydration_map: dict[str, tuple[int, int]] = {}
         if hydration_user_ids:
@@ -91,6 +107,26 @@ class CronNotificationDispatchService:
             tokens = ctx.get("fcm_tokens", [])
             if not tokens:
                 failed_ids.append(notif.id)
+                continue
+
+            has_regular_notification_access = (
+                notif.user_id in regular_notification_user_ids
+            )
+            if (
+                notif.notification_type in _NORMAL_NOTIFICATION_TYPES
+                and not has_regular_notification_access
+            ):
+                title, body = _render_message(
+                    notif.notification_type,
+                    0,
+                    ctx.get("gender", "male"),
+                    ctx.get("language_code", "en"),
+                    subscription_hook=True,
+                )
+                group = groups[(notif.notification_type, title, body)]
+                group["tokens"].extend(tokens)
+                group["ids"].append(str(notif.id))
+                group["row_ids"].append(notif.id)
                 continue
 
             calorie_goal = int(ctx.get("calorie_goal", 2000))
@@ -316,9 +352,13 @@ def _render_message(
     consumed_ml: int = 0,
     goal_ml: int = 2000,
     remaining_ml: int = 0,
+    subscription_hook: bool = False,
 ) -> tuple[str, str]:
     """Render non-empty title + body for a notification type."""
     messages = get_messages(lang, gender)
+    if subscription_hook:
+        hook = messages["subscription_hook"]
+        return hook["title"], hook["body"]
     if notification_type == "meal_reminder_breakfast":
         cfg = messages["meal_reminder"]["breakfast"]
         return "Nutree", cfg.get("body", "Time to log your meal 🍽️")
@@ -371,6 +411,39 @@ def _render_message(
 def _chunked(lst: list, size: int):
     for i in range(0, len(lst), size):
         yield lst[i : i + size]
+
+
+async def _fetch_regular_notification_user_ids(
+    user_ids: set[str], now: datetime
+) -> set[str]:
+    """Load users eligible for regular reminders once per dispatch tick."""
+    if not user_ids:
+        return set()
+
+    try:
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
+                text("""
+                    SELECT u.id AS user_id
+                    FROM users u
+                    WHERE u.id = ANY(:ids)
+                      AND u.onboarding_completed = true
+                      AND EXISTS (
+                          SELECT 1
+                          FROM subscriptions s
+                          WHERE s.user_id = u.id
+                            AND s.status IN ('active', 'cancelled')
+                            AND (s.expires_at IS NULL OR s.expires_at > :now)
+                      )
+                """),
+                {"ids": list(user_ids), "now": now},
+            )
+            return {row.user_id for row in result.fetchall()}
+    except Exception:
+        logger.exception(
+            "Failed to resolve regular notification eligibility; using hook copy"
+        )
+        return set()
 
 
 async def _fetch_calories_consumed_batch(

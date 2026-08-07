@@ -175,7 +175,7 @@ async def test_create_three_day_recommendations_snapshots_target_and_timezone():
     )
     assert response.id == "plan-1"
     assert not hasattr(response.slots[0], "alternatives")
-    assert not hasattr(response.slots[0].catalog_meal, "ingredients")
+    assert response.slots[0].catalog_meal.ingredients[0].display_name == "Rice"
     assert command.idempotency_key == "key-1"
     assert command.timezone == "Asia/Ho_Chi_Minh"
     assert command.daily_calories == 2150
@@ -219,7 +219,7 @@ async def test_get_plan_returns_owner_scoped_compact_summary():
     assert response.slots[0].catalog_meal.name == "Breakfast Rice"
     assert response.slots[0].catalog_meal.calories == 380
     assert not hasattr(response.slots[0], "alternatives")
-    assert not hasattr(response.slots[0].catalog_meal, "ingredients")
+    assert response.slots[0].catalog_meal.ingredients[0].display_name == "Rice"
 
 
 @pytest.mark.asyncio
@@ -255,6 +255,7 @@ async def test_get_plan_translates_catalog_text_from_request_language():
     assert response.slots[0].catalog_meal.name == "vi:Breakfast Rice"
     assert response.slots[0].catalog_meal.cuisine == "vi:vietnamese"
     assert response.slots[0].catalog_meal.calories == 380
+    assert response.slots[0].catalog_meal.ingredients[0].display_name == "vi:Rice"
     assert translator.calls == [
         (
             [
@@ -316,8 +317,29 @@ async def test_log_route_sends_recommended_meal_command():
         item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
     )
     assert command.request_id == "log-1"
+    assert command.language == "en"
     assert response.plan_id == "plan-1"
     assert response.slot.id == "slot-1"
+
+
+@pytest.mark.asyncio
+async def test_log_route_forwards_request_language_to_command():
+    event_bus = _EventBus()
+
+    await log_recommended_meal(
+        request=_request(language="vi"),
+        plan_id="plan-1",
+        slot_id="slot-1",
+        body=LogRecommendedMealRequest(request_id="log-1"),
+        user_id="user-1",
+        event_bus=event_bus,
+        analytics_service=_Analytics(),
+    )
+
+    command = next(
+        item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
+    )
+    assert command.language == "vi"
 
 
 @pytest.mark.asyncio

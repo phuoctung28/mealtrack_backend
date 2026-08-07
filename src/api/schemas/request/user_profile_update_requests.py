@@ -35,7 +35,7 @@ class UpdateMetricsRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    age: int | None = Field(None, ge=13, le=120, description="User age")
+    age: int | None = Field(None, ge=12, le=120, description="User age")
     height_cm: float | None = Field(None, ge=100, le=272, description="Height in cm")
     weight_kg: float | None = Field(None, description="Weight in kg", gt=0)
     biological_sex: str | None = Field(

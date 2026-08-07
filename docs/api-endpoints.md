@@ -118,7 +118,7 @@ The two health routes are declared with `api_route` and answer both GET and HEAD
 
 ### Meal Recommendation Contract
 
-- `create` and `get` return the compact summary contract: selected slots only, with no slot-level ingredients, alternatives, or scores in the plan payload.
+- `create` and `get` return the compact summary contract: selected slots only, with ingredients for each selected meal. Alternatives, scores, and full meal details remain available from slot detail responses.
 - Slot detail hydrates exactly one selected slot plus its alternatives. Mutation responses reuse the same changed-slot shape so clients can patch cached plans in place.
 - `swap`, `log`, and `skip` are owner-scoped, idempotent by request ID, and reject already terminal selected slots.
 - `shown_at`, `skipped_at`, and `logged_at` are backend-owned outcome fields. Clients must not infer terminal state by recalculating recommendation logic.

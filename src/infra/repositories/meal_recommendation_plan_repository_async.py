@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -505,6 +505,29 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             user_id=user_id,
             slot=_rows_to_slot_detail(anchor, rows),
         )
+
+    async def clear_links_for_deleted_meal(self, *, meal_id: str) -> None:
+        """Detach recommendation state from a meal about to be hard-deleted.
+
+        ``logged_meal_id`` FKs use ON DELETE SET NULL. That leaves ``logged_at``
+        set and breaks ``ck_meal_recommendations_logged_coherent``. Log operation
+        rows also require ``result_logged_meal_id`` non-null, so SET NULL there
+        violates ``ck_meal_recommendation_operations_payload``. Clear both sides
+        before the meal row is removed.
+        """
+        await self._session.execute(
+            update(MealRecommendationORM)
+            .where(MealRecommendationORM.logged_meal_id == meal_id)
+            .values(logged_meal_id=None, logged_at=None)
+        )
+        await self._session.execute(
+            delete(MealRecommendationOperationORM).where(
+                MealRecommendationOperationORM.result_logged_meal_id == meal_id
+            )
+        )
+        # Plain flush — do not use _flush_operations(), which remaps IntegrityError
+        # into meal-recommendation swap/idempotency domain errors (wrong for delete).
+        await self._session.flush()
 
     async def _load_batch(
         self, *, user_id: str, batch_id: str

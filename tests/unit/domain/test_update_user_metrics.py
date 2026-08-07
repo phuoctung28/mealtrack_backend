@@ -296,12 +296,12 @@ class TestUpdateUserMetricsCommandHandler:
         mock_uow = _make_mock_uow(profile)
 
         handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
-        command = UpdateUserMetricsCommand(user_id="test_user", age=12)
+        command = UpdateUserMetricsCommand(user_id="test_user", age=11)
 
         with pytest.raises(ValidationException) as exc_info:
             await handler.handle(command)
 
-        assert "Age must be between 13 and 120" in str(exc_info.value)
+        assert "Age must be between 12 and 120" in str(exc_info.value)
 
     async def test_invalid_height(self):
         """Test validation for invalid height."""

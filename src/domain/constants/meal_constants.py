@@ -174,7 +174,7 @@ class TDEEConstants:
     MIN_CALORIES_MALE = 1500
 
     # Validation ranges
-    MIN_AGE = 13
+    MIN_AGE = 12
     MAX_AGE = 120
     MIN_WEIGHT_KG = 30
     MAX_WEIGHT_KG = 300

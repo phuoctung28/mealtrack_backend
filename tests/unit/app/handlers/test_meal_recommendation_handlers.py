@@ -104,10 +104,23 @@ class _SkipPlanRepo(_PlanRepo):
 
 
 class _Materializer:
-    def __init__(self):
-        self.materialize = AsyncMock(
-            return_value=type("Meal", (), {"meal_id": "meal-1"})()
-        )
+    def __init__(self, meal=None):
+        food_item = type(
+            "FoodItem",
+            (),
+            {"id": "food-1", "name": "Rice"},
+        )()
+        nutrition = type("Nutrition", (), {"food_items": [food_item]})()
+        self.meal = meal or type(
+            "Meal",
+            (),
+            {
+                "meal_id": "meal-1",
+                "dish_name": "Rice Bowl",
+                "nutrition": nutrition,
+            },
+        )()
+        self.materialize = AsyncMock(return_value=self.meal)
 
 
 class _Uow:
@@ -183,12 +196,13 @@ def _catalog_meal(meal_id: str) -> CatalogMeal:
     )
 
 
-def _log_command() -> LogRecommendedMealCommand:
+def _log_command(*, language: str = "en") -> LogRecommendedMealCommand:
     return LogRecommendedMealCommand(
         user_id="user-1",
         plan_id="plan-1",
         slot_id="slot-1",
         request_id="log-1",
+        language=language,
     )
 
 
@@ -314,6 +328,80 @@ async def test_log_handler_claims_materializes_then_finalizes():
         request_id="log-1",
         meal_id="meal-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_log_handler_translates_and_invalidates_cache_for_non_english():
+    plans = _LogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    translation_service = type(
+        "TranslationService",
+        (),
+        {"translate_meal": AsyncMock(return_value=None)},
+    )()
+    cache_invalidation = type(
+        "CacheInvalidation",
+        (),
+        {"after_meal_write": AsyncMock()},
+    )()
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+        meal_translation_service=translation_service,
+        cache_invalidation=cache_invalidation,
+    )
+
+    await handler.handle(_log_command(language="vi"))
+
+    translation_service.translate_meal.assert_awaited_once()
+    kwargs = translation_service.translate_meal.await_args.kwargs
+    assert kwargs["target_language"] == "vi"
+    assert kwargs["dish_name"] == "Rice Bowl"
+    assert kwargs["food_items"][0].name == "Rice"
+    cache_invalidation.after_meal_write.assert_awaited_once_with(
+        "user-1", _plan().slots[0].slot_date
+    )
+
+
+@pytest.mark.asyncio
+async def test_log_handler_skips_translation_for_english():
+    plans = _LogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    translation_service = type(
+        "TranslationService",
+        (),
+        {"translate_meal": AsyncMock(return_value=None)},
+    )()
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+        meal_translation_service=translation_service,
+    )
+
+    await handler.handle(_log_command(language="en"))
+
+    translation_service.translate_meal.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_log_handler_does_not_fail_when_translation_raises():
+    plans = _LogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    translation_service = type(
+        "TranslationService",
+        (),
+        {"translate_meal": AsyncMock(side_effect=RuntimeError("deepl down"))},
+    )()
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+        meal_translation_service=translation_service,
+    )
+
+    result = await handler.handle(_log_command(language="vi"))
+
+    assert result.plan_id == "plan-1"
+    translation_service.translate_meal.assert_awaited_once()
 
 
 @pytest.mark.asyncio

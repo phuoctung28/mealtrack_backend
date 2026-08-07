@@ -8,6 +8,24 @@ MAX_FOOD_ITEM_QUANTITY = 10000.0
 
 
 @dataclass
+class NutritionOverride:
+    """Absolute nutrition values entered directly by a user."""
+
+    calories: float
+    protein: float
+    carbs: float
+    fat: float
+
+    def to_dict(self) -> dict:
+        return {
+            "calories": self.calories,
+            "protein": self.protein,
+            "carbs": self.carbs,
+            "fat": self.fat,
+        }
+
+
+@dataclass
 class FoodItem:
     """Represents a single food item in a meal with nutritional information."""
 
@@ -22,6 +40,7 @@ class FoodItem:
     food_reference_id: int | None = None
     is_custom: bool = False  # Whether this is a custom ingredient
     allowed_units: list[dict[str, Any]] | None = None
+    nutrition_override: NutritionOverride | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -42,8 +61,24 @@ class FoodItem:
 
     @property
     def calories(self) -> float:
-        """Derive calories from macros: P*4 + C*4 + F*9."""
-        return self.macros.total_calories
+        """Use a user-entered value when one exists."""
+        return (
+            self.nutrition_override.calories
+            if self.nutrition_override
+            else self.macros.total_calories
+        )
+
+    @property
+    def effective_macros(self) -> Macros:
+        if self.nutrition_override is None:
+            return self.macros
+        return Macros(
+            protein=self.nutrition_override.protein,
+            carbs=self.nutrition_override.carbs,
+            fat=self.nutrition_override.fat,
+            fiber=self.macros.fiber,
+            sugar=self.macros.sugar,
+        )
 
     def to_dict(self) -> dict:
         """Convert to dictionary format."""
@@ -53,7 +88,7 @@ class FoodItem:
             "quantity": self.quantity,
             "unit": self.unit,
             "calories": self.calories,
-            "macros": self.macros.to_dict(),
+            "macros": self.effective_macros.to_dict(),
             "confidence": self.confidence,
             "is_custom": self.is_custom,
         }
@@ -65,6 +100,8 @@ class FoodItem:
             result["food_reference_id"] = self.food_reference_id
         if self.allowed_units:
             result["allowed_units"] = self.allowed_units
+        if self.nutrition_override:
+            result["nutrition_override"] = self.nutrition_override.to_dict()
         return result
 
 
@@ -76,6 +113,7 @@ class Nutrition:
     micros: Micros | None = None
     food_items: list[FoodItem] | None = None
     confidence_score: float = 1.0  # 0.0-1.0 overall confidence score
+    nutrition_override: NutritionOverride | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -93,14 +131,35 @@ class Nutrition:
 
     @property
     def calories(self) -> float:
-        """Derive calories from macros: P*4 + C*4 + F*9."""
-        return self.macros.total_calories
+        """Meal calories prefer meal override; else sum of item effective
+        calories when any ingredient has a calorie override; else macros.
+        """
+        if self.nutrition_override is not None:
+            return float(self.nutrition_override.calories)
+        if self.food_items and any(
+            getattr(item, "nutrition_override", None) is not None
+            for item in self.food_items
+        ):
+            return float(sum(item.calories for item in self.food_items))
+        return float(self.macros.total_calories)
+
+    @property
+    def effective_macros(self) -> Macros:
+        if self.nutrition_override is None:
+            return self.macros
+        return Macros(
+            protein=self.nutrition_override.protein,
+            carbs=self.nutrition_override.carbs,
+            fat=self.nutrition_override.fat,
+            fiber=self.macros.fiber,
+            sugar=self.macros.sugar,
+        )
 
     def to_dict(self) -> dict:
         """Convert to dictionary format."""
         result = {
             "calories": self.calories,
-            "macros": self.macros.to_dict(),
+            "macros": self.effective_macros.to_dict(),
             "confidence_score": self.confidence_score,
         }
 
@@ -109,5 +168,8 @@ class Nutrition:
 
         if self.food_items:
             result["food_items"] = [item.to_dict() for item in self.food_items]
+
+        if self.nutrition_override:
+            result["nutrition_override"] = self.nutrition_override.to_dict()
 
         return result

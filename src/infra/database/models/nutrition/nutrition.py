@@ -2,7 +2,7 @@
 Nutrition model for overall nutritional information of a meal.
 """
 
-from sqlalchemy import Column, Float, Text, String, ForeignKey
+from sqlalchemy import JSON, Column, Float, ForeignKey, String, Text
 from sqlalchemy.orm import relationship
 
 from src.infra.database.base import Base
@@ -16,6 +16,7 @@ class NutritionORM(Base, SecondaryEntityMixin):
 
     confidence_score = Column(Float, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
+    nutrition_override = Column(JSON, nullable=True)
 
     # Macro fields -- calories are always derived: P*4 + (C-fiber)*4 + fiber*2 + F*9
     protein = Column(Float, default=0, nullable=False)

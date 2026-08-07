@@ -7,13 +7,17 @@ from uuid import uuid4
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationNotFoundError,
 )
-from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_recommendation import (
+    CatalogMeal,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
 from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 from src.domain.utils.timezone_utils import noon_utc_for_date
+
+# mealimage.url is VARCHAR(255); keep inserts valid when catalog URLs are longer.
+_MEAL_IMAGE_URL_MAX_LEN = 255
 
 
 class RecommendedMealMaterializationService:
@@ -42,13 +46,16 @@ class RecommendedMealMaterializationService:
             for ingredient in catalog_meal.ingredients
         ]
         meal_time = noon_utc_for_date(slot.slot_date, plan.timezone)
+        # Always attach a MealImage row. Production still enforces NOT NULL on
+        # meal.image_id in some environments; image-less inserts 500 there.
+        # Matches manual / AI-suggestion materialization (placeholder image).
         meal = Meal(
             meal_id=str(uuid4()),
             user_id=plan.user_id,
             status=MealStatus.READY,
             created_at=meal_time,
             ready_at=meal_time,
-            image=None,
+            image=_meal_image_for_catalog(catalog_meal),
             dish_name=catalog_meal.name,
             nutrition=Nutrition(
                 macros=Macros(
@@ -63,3 +70,16 @@ class RecommendedMealMaterializationService:
             source="meal_recommendation",
         )
         return await uow.meals.save(meal)
+
+
+def _meal_image_for_catalog(catalog_meal: CatalogMeal) -> MealImage:
+    """Build a mealimage row from catalog URL, or a placeholder when absent."""
+
+    raw_url = (catalog_meal.image_url or "").strip() or None
+    url = raw_url if raw_url and len(raw_url) <= _MEAL_IMAGE_URL_MAX_LEN else None
+    return MealImage(
+        image_id=str(uuid4()),
+        format="jpeg",
+        size_bytes=1,
+        url=url,
+    )

@@ -8,13 +8,30 @@ import uuid
 from abc import ABC, abstractmethod
 
 from src.domain.model.meal.food_item_change import FoodItemChange
-from src.domain.model.nutrition import FoodItem, Macros
+from src.domain.model.nutrition import FoodItem, Macros, NutritionOverride
 from src.domain.services import NutritionCalculationService
-from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
+from src.domain.services.nutrition_calculation_service import (
+    ScaledNutritionResult,
+    convert_quantity_to_grams,
+    scale_per_100g_nutrition,
+)
 
 logger = logging.getLogger(__name__)
 
 MAX_QUANTITY_GRAMS = 10000.0  # 10kg max per food item
+
+
+def _resolved_nutrition_override(change, existing: FoodItem | None = None):
+    if change.clear_nutrition_override:
+        return None
+    if change.nutrition_override is not None:
+        return NutritionOverride(
+            calories=change.nutrition_override.calories,
+            protein=change.nutrition_override.protein,
+            carbs=change.nutrition_override.carbs,
+            fat=change.nutrition_override.fat,
+        )
+    return existing.nutrition_override if existing else None
 
 
 def _validate_quantity_grams(quantity_grams: float, quantity: float, unit: str) -> None:
@@ -64,6 +81,10 @@ class RemoveFoodItemStrategy(FoodItemChangeStrategy):
 class UpdateFoodItemStrategy(FoodItemChangeStrategy):
     """Strategy for updating an existing food item."""
 
+    def __init__(self, nutrition_service, food_reference_repository=None):
+        super().__init__(nutrition_service)
+        self.food_reference_repository = food_reference_repository
+
     async def apply(
         self, food_items_dict: dict[str, FoodItem], change: FoodItemChange
     ) -> None:
@@ -101,22 +122,24 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                 food_reference_id=existing_item.food_reference_id,
                 is_custom=True,
                 allowed_units=change.allowed_units or existing_item.allowed_units,
+                nutrition_override=_resolved_nutrition_override(
+                    change, existing_item
+                ),
             )
             logger.info(
                 f"Updated food item with custom nutrition: {existing_item.name}"
             )
             return
 
-        # Priority 2: Check if unit changed - if so, fetch fresh nutrition data
+        # Priority 2: A unit switch must use the selected unit's canonical
+        # source nutrition, rather than rescaling the previously selected unit.
         unit_changed = change.unit and change.unit != existing_item.unit
 
         if unit_changed:
-            # Unit changed - fetch fresh nutrition data
-            scaled_nutrition = self.nutrition_service.get_nutrition_for_ingredient(
-                name=existing_item.name,
-                quantity=new_quantity,
-                unit=new_unit,
-                fdc_id=existing_item.fdc_id,
+            scaled_nutrition = await self._get_selected_unit_nutrition(
+                existing_item,
+                new_quantity,
+                new_unit,
             )
 
             if scaled_nutrition:
@@ -136,14 +159,17 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     food_reference_id=existing_item.food_reference_id,
                     is_custom=existing_item.is_custom,
                     allowed_units=change.allowed_units or existing_item.allowed_units,
+                    nutrition_override=_resolved_nutrition_override(
+                        change, existing_item
+                    ),
                 )
                 logger.info(f"Updated food item with unit change: {existing_item.name}")
             else:
-                # Fallback to simple scaling
                 logger.warning(
-                    "Could not fetch nutrition for unit change, using scaling"
+                    "Could not load canonical nutrition for unit change; "
+                    "preserving the existing source nutrition"
                 )
-                self._apply_simple_scaling(
+                self._preserve_source_nutrition(
                     food_items_dict, change, existing_item, new_quantity, new_unit
                 )
         else:
@@ -196,8 +222,90 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             food_reference_id=existing_item.food_reference_id,
             is_custom=existing_item.is_custom,
             allowed_units=change.allowed_units or existing_item.allowed_units,
+            nutrition_override=_resolved_nutrition_override(change, existing_item),
         )
         logger.info(f"Updated food item with scaling: {existing_item.name}")
+
+    async def _get_selected_unit_nutrition(
+        self,
+        existing_item: FoodItem,
+        quantity: float,
+        unit: str,
+    ) -> ScaledNutritionResult | None:
+        if existing_item.food_reference_id and self.food_reference_repository:
+            reference = await self.food_reference_repository.get_nutrition_projection(
+                existing_item.food_reference_id
+            )
+            if reference is not None and all(
+                value is not None
+                for value in (
+                    reference.protein_100g,
+                    reference.carbs_100g,
+                    reference.fat_100g,
+                )
+            ):
+                allowed_units = [
+                    {
+                        "unit": serving.name,
+                        "gram_weight": serving.grams,
+                        "description": serving.name,
+                    }
+                    for serving in reference.servings
+                    if serving.grams is not None and serving.grams > 0
+                ]
+                nutrition = scale_per_100g_nutrition(
+                    {
+                        "protein": reference.protein_100g,
+                        "carbs": reference.carbs_100g,
+                        "fat": reference.fat_100g,
+                        "fiber": reference.fiber_100g,
+                        "sugar": reference.sugar_100g,
+                    },
+                    quantity,
+                    unit,
+                    allowed_units=allowed_units,
+                    food_name=reference.name,
+                )
+                return ScaledNutritionResult(
+                    calories=nutrition["calories"],
+                    protein=nutrition["protein"],
+                    carbs=nutrition["carbs"],
+                    fat=nutrition["fat"],
+                )
+
+            # A canonical source was expected but is unavailable. Do not make
+            # a new value out of the prior unit's nutrition.
+            return None
+
+        return self.nutrition_service.get_nutrition_for_ingredient(
+            name=existing_item.name,
+            quantity=quantity,
+            unit=unit,
+            fdc_id=existing_item.fdc_id,
+        )
+
+    def _preserve_source_nutrition(
+        self,
+        food_items_dict: dict[str, FoodItem],
+        change: FoodItemChange,
+        existing_item: FoodItem,
+        quantity: float,
+        unit: str,
+    ) -> None:
+        food_items_dict[change.id] = FoodItem(
+            id=existing_item.id,
+            name=existing_item.name,
+            quantity=quantity,
+            unit=unit,
+            macros=existing_item.macros,
+            micros=existing_item.micros,
+            confidence=existing_item.confidence,
+            fdc_id=existing_item.fdc_id,
+            food_reference_id=existing_item.food_reference_id,
+            is_custom=existing_item.is_custom,
+            allowed_units=change.allowed_units or existing_item.allowed_units,
+            nutrition_override=_resolved_nutrition_override(change, existing_item),
+        )
 
 
 class AddFoodItemStrategy(FoodItemChangeStrategy):
@@ -228,6 +336,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 unit,
                 change.custom_nutrition,
                 change.allowed_units,
+                change.nutrition_override,
             )
             food_items_dict[new_item_id] = food_item
             logger.info(f"Added custom food item: {change.name}")
@@ -254,6 +363,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                     fdc_id=change.fdc_id,
                     is_custom=False,
                     allowed_units=change.allowed_units,
+                    nutrition_override=_resolved_nutrition_override(change),
                 )
                 logger.info(f"Added food item from nutrition service: {change.name}")
                 return
@@ -272,6 +382,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             fdc_id=change.fdc_id,
             is_custom=True,
             allowed_units=change.allowed_units,
+            nutrition_override=_resolved_nutrition_override(change),
         )
 
     def _create_from_custom_nutrition(
@@ -282,6 +393,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
         unit: str,
         custom_nutrition,
         allowed_units=None,
+        nutrition_override=None,
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
         quantity_grams = convert_quantity_to_grams(quantity, unit, name)
@@ -304,6 +416,16 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             fdc_id=None,
             is_custom=True,
             allowed_units=allowed_units,
+            nutrition_override=(
+                NutritionOverride(
+                    calories=nutrition_override.calories,
+                    protein=nutrition_override.protein,
+                    carbs=nutrition_override.carbs,
+                    fat=nutrition_override.fat,
+                )
+                if nutrition_override
+                else None
+            ),
         )
 
 
@@ -312,11 +434,16 @@ class FoodItemChangeStrategyFactory:
 
     @staticmethod
     def create_strategies(
-        nutrition_service: NutritionCalculationService, food_service=None
+        nutrition_service: NutritionCalculationService,
+        food_service=None,
+        food_reference_repository=None,
     ) -> dict[str, FoodItemChangeStrategy]:
         """Create all available strategies."""
         return {
             "add": AddFoodItemStrategy(nutrition_service, food_service),
-            "update": UpdateFoodItemStrategy(nutrition_service),
+            "update": UpdateFoodItemStrategy(
+                nutrition_service,
+                food_reference_repository,
+            ),
             "remove": RemoveFoodItemStrategy(nutrition_service),
         }

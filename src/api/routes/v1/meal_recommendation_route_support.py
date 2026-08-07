@@ -273,15 +273,7 @@ def _catalog_meal_response(catalog_meal: CatalogMeal) -> MealRecommendationCatal
             fiber_g=float(catalog_meal.fiber_g),
             sugar_g=float(catalog_meal.sugar_g),
         ),
-        ingredients=[
-            MealRecommendationIngredientResponse(
-                food_reference_id=ingredient.food_reference_id,
-                display_name=ingredient.display_name,
-                quantity=float(ingredient.quantity),
-                unit=ingredient.unit,
-            )
-            for ingredient in catalog_meal.ingredients
-        ],
+        ingredients=_catalog_meal_ingredients(catalog_meal),
     )
 
 
@@ -301,4 +293,19 @@ def _catalog_meal_summary_response(
             fiber_g=float(catalog_meal.fiber_g),
             sugar_g=float(catalog_meal.sugar_g),
         ),
+        ingredients=_catalog_meal_ingredients(catalog_meal),
     )
+
+
+def _catalog_meal_ingredients(
+    catalog_meal: CatalogMeal,
+) -> list[MealRecommendationIngredientResponse]:
+    return [
+        MealRecommendationIngredientResponse(
+            food_reference_id=ingredient.food_reference_id,
+            display_name=ingredient.display_name,
+            quantity=float(ingredient.quantity),
+            unit=ingredient.unit,
+        )
+        for ingredient in catalog_meal.ingredients
+    ]
