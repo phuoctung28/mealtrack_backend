@@ -1,10 +1,11 @@
 # Backend Database Guide
 
-**Last Updated:** August 7, 2026
-**Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
-**Migrations:** Alembic via `migrations/versions/` and `migrations/run.py`
-**Models:** discover ORM packages under `src/infra/database/models/` (do not hand-maintain table counts here)
-**Extensions:** `vector` for embeddings and `pg_trgm` for indexed local food search
+**Status:** Evergreen data ops and connection policy  
+**Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)  
+**Migrations:** Alembic via `migrations/versions/` and `migrations/run.py`  
+**Models:** discover ORM packages under `src/infra/database/models/` (do not hand-maintain table counts here)  
+**Extensions:** `vector` for embeddings and `pg_trgm` for indexed local food search  
+**Schema judgment:** [`standards/db-api.md`](./standards/db-api.md)
 
 ---
 

@@ -1,5 +1,8 @@
 # Project Changelog
 
+**Status:** Stateful release notes — archived; not evergreen product authority  
+**Evergreen route:** see `docs/codebase-summary.md` and root `README.md`
+
 ## 2026-08-07
 
 ### Changed

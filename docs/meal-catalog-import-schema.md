@@ -1,5 +1,8 @@
 # Meal Catalog Import Schema
 
+**Status:** Content-ops satellite — load when importing catalog manifests  
+**Not** default agent Tier-3 authority
+
 Product/content team owns a JSON manifest. Backend imports it into `meal_catalog`
 and derives nutrition from `food_reference`.
 

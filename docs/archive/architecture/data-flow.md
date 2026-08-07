@@ -1,5 +1,9 @@
 # Data Flow & Patterns
 
+**Status:** Stateful / superseded — not evergreen authority  
+**Current authority:** [`../../system-architecture.md`](../../system-architecture.md) and
+[`../../cqrs-guide.md`](../../cqrs-guide.md)
+
 Patterns used for data processing and communication.
 
 ## CQRS (Command Query Responsibility Segregation)

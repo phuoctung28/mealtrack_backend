@@ -1,12 +1,24 @@
 # Backend Testing Standards
 
-**Last Updated:** August 7, 2026
-**Coverage Target:** CI gate 65% for unit coverage; docs target 70%+ overall, 100% critical paths, 80%+ new features
-**Suite discovery:** `pytest tests/unit --collect-only` (prefer `tests/unit`; unscoped collection can hit import collisions)
+**Status:** Evergreen test judgment  
+**Hard CI gate:** `pytest tests/unit --cov=src --cov-fail-under=65`  
+**Suite discovery:** `pytest tests/unit --collect-only`  
+Prefer targeted paths; broad unscoped `pytest` can hit duplicate-package import
+collisions.
 
 ---
 
-## Test Organization
+## Coverage story (single authority)
+
+| Level | Rule |
+|-------|------|
+| **Hard gate** | Unit suite must meet **65%** line coverage under the CI command above. This is the only number that fails the pipeline. |
+| **Aspirational** | Prefer high coverage on domain services, handlers, and critical user paths. Treat “100% critical / 80%+ new feature” as engineering judgment, not a second CI threshold. |
+| **Do not** | Document a competing “overall 70% minimum” as if it were the CI gate. |
+
+---
+
+## Test organization
 
 ```
 tests/
@@ -25,149 +37,69 @@ tests/
 └── migrations/         # Alembic migration validation
 ```
 
+Default `pytest.ini` addopts ignore `tests/integration` and select
+`not integration`. Explicit integration runs must clear or override addopts.
+
 ---
 
-## Test Naming Convention
+## Naming and structure
 
-Describe: **what** + **condition** + **expected result**
+Describe **what + condition + expected result**.
 
 ```python
 def test_tdee_calculation_with_body_fat_uses_katch_mcardle():
-    pass
-
-def test_meal_type_determined_by_time_returns_breakfast_before_1030():
-    pass
-
-def test_repository_find_by_id_raises_not_found_when_missing():
-    pass
+    # Arrange
+    ...
+    # Act
+    ...
+    # Assert
+    ...
 ```
 
 ---
 
-## Test Structure
+## Markers and commands
 
-```python
-def test_feature_condition_expected():
-    # Arrange: set up data
-    user = create_test_user()
-    command = CreateManualMealCommand(user_id=user.id, ...)
-    
-    # Act: execute
-    meal = await handler.handle(command)
-    
-    # Assert: verify
-    assert meal.status == MealStatus.PROCESSING
-    assert meal.user_id == user.id
-```
-
----
-
-## Coverage Requirements
-
-| Category | Minimum | Target |
-|----------|---------|--------|
-| Overall | 70% | 75%+ |
-| Critical paths | 100% | — |
-| New features | 80% | 90%+ |
-| Domain services | 80%+ | 90%+ |
-| Handlers | 75%+ | 85%+ |
-
----
-
-## Test Markers
-
-```python
-import pytest
-
-@pytest.mark.unit
-def test_tdee_calculation():
-    pass
-
-@pytest.mark.integration
-def test_meal_creation_saves_to_db():
-    pass
-```
-
-**Run specific tests:**
 ```bash
-pytest -m unit                      # Unit tests only
-pytest tests/integration -o addopts="" -m integration  # Explicit integration run
+pytest -m unit
+pytest tests/unit --cov=src --cov-fail-under=65
+pytest tests/integration -o addopts="" -m integration
 TEST_DATABASE_URL=postgresql+asyncpg://nutree:nutree@localhost:5432/nutree_test \
   pytest tests/integration/postgres -o addopts="" -m integration -q
-pytest --cov=src --cov-report=html  # With coverage report
 ```
 
-Default `pytest` uses `pytest.ini` addopts that ignore `tests/integration` and
-select `not integration`. CI runs `lint-imports` and then
-`pytest tests/unit --cov=src --cov-fail-under=65`.
+PostgreSQL integration tests require `TEST_DATABASE_URL` with
+`postgresql+asyncpg://` and refuse SQLite or missing URLs. Fresh schemas use
+`scripts/init_postgres_db.py` (enables `vector` and `pg_trgm`). Local food
+search tests need `pg_trgm` for `similarity()`.
 
-Broad unscoped `pytest` currently hits two duplicate-package import collisions.
-Use targeted paths or the unit command above until the collisions are resolved.
-
-PostgreSQL integration tests require `TEST_DATABASE_URL` with the
-`postgresql+asyncpg://` driver and refuse SQLite or missing URLs. The CI
-`postgres-integration` job uses `pgvector/pgvector:pg16`, initializes a fresh
-PostgreSQL schema through `scripts/init_postgres_db.py`, then executes only
-`tests/integration/postgres`. Use the initializer for empty PostgreSQL
-databases because legacy pre-PostgreSQL migration revisions are not replayable
-from base. The initializer enables both `vector` and `pg_trgm`; local food
-search tests require `pg_trgm` because the repository uses PostgreSQL
-`similarity()`.
+CI runs `lint-imports` then the unit coverage command. The
+`postgres-integration` job uses `pgvector/pgvector:pg16` and only
+`tests/integration/postgres`.
 
 ---
 
-## Mocking Strategy
+## Mocking
 
-Mock external services, preserve domain logic:
+Mock external services; preserve domain logic. Prefer fakes under `tests/fakes/`
+or narrow port doubles over broad patches when testing handlers.
 
-```python
-from unittest.mock import AsyncMock, patch
-
-@pytest.fixture
-def mock_vision_ai():
-    return AsyncMock(
-        analyze=AsyncMock(
-            return_value='{"nutrition": {"calories": 500, ...}}'
-        )
-    )
-```
+Vector cache: exercise nearest-neighbor against the PostgreSQL `pgvector`
+adapter or a narrow port fake. Pinecone is not a runtime adapter.
 
 ---
 
-## Fixtures (Reusable)
+## Fixtures
 
-Place shared fixtures in `tests/conftest.py`; keep domain-specific fixtures in
-`tests/fixtures/` or the nearest package-level `conftest.py`:
-
-```python
-@pytest.fixture
-async def test_user():
-    return User(id="test-user", firebase_uid="uid-123")
-
-@pytest.fixture
-async def test_meal(test_user):
-    return Meal(id="meal-1", user_id=test_user.id, status=MealStatus.READY)
-
-@pytest.fixture
-async def event_bus():
-    return create_event_bus()
-```
+Shared fixtures: `tests/conftest.py`. Domain-specific: `tests/fixtures/` or
+package-level `conftest.py`.
 
 ---
 
-## Performance Testing
+## Performance and load
 
-For integration tests with DB access, assert timing directly unless the
-`pytest-benchmark` plugin is added to the environment:
-
-```python
-@pytest.mark.integration
-async def test_meal_repository_find_by_id_performance():
-    result = await repo.find_by_id("meal-1")
-    assert result is not None
-```
-
-Catalog release load gates use Locust:
+Integration timing assertions are fine without `pytest-benchmark`. Catalog
+release load gates use Locust:
 
 ```bash
 MEALTRACK_LOAD_TEST_TOKEN="$TOKEN" \
@@ -176,20 +108,19 @@ locust -f tests/performance/locust_meal_catalog.py --headless \
   --csv /tmp/meal-catalog-baseline
 ```
 
-Do not print bearer tokens or raw response payloads. Commit aggregate CSV
-statistics and environment shape only when recording release evidence.
+Do not print bearer tokens or raw payloads. Commit aggregate stats only when
+recording release evidence.
 
 ---
 
-## Best Practices
+## Best practices
 
-- **Unit tests**: No DB, no external APIs
-- **Integration tests**: Use test DB, mock external services
-- **Isolation**: Each test is independent
-- **Clarity**: Test names describe intent clearly
-- **Coverage**: Critical paths at 100%, happy paths at 80%+
-- **Async**: Use `async def test_` for async handlers
+- Unit: no DB, no external APIs
+- Integration: test DB allowed; mock third parties unless the test is explicitly a provider gate
+- Isolation: each test independent
+- Async: `async def test_` for async handlers
+- Architecture tests own layer and logging guardrails
 
 ---
 
-See related: `code-standards.md`, `cqrs-guide.md`
+See related: `code-standards.md`, `cqrs-guide.md`, `runbooks/` for release gates

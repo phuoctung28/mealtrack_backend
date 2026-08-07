@@ -1,3 +1,6 @@
+**Status:** Archived feature note — not evergreen authority
+**Evergreen:** `docs/system-architecture.md`, `docs/api-endpoints.md`, `docs/codebase-summary.md`
+
 # Meal Recommendation Mobile Handoff
 
 Status: backend is MVP-ready for mobile integration once the target environment

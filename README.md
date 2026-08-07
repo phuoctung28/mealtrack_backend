@@ -4,11 +4,20 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 ## Quick Links
 
-- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Vision, goals, and requirements.
-- **[System Architecture](./docs/system-architecture.md)** - Multi-layer architecture and data flow.
-- **[Code Standards](./docs/code-standards.md)** - Development guidelines and patterns.
-- **[Codebase Summary](./docs/codebase-summary.md)** - Directory structure and file organization.
-- **[Project Roadmap](./docs/project-roadmap.md)** - Future plans and completed features.
+Primary evergreen docs (agents and people share this map):
+
+- **[Project Overview & PDR](./docs/project-overview-pdr.md)** — vision, goals, product constraints.
+- **[Codebase Summary](./docs/codebase-summary.md)** — discovery map (points to code/OpenAPI).
+- **[System Architecture](./docs/system-architecture.md)** — layer boundaries and non-derivable rules.
+- **[Code Standards](./docs/code-standards.md)** — style and structure judgment.
+- **[Testing Standards](./docs/testing-standards.md)** — test strategy and CI unit coverage gate.
+- **[Database Guide](./docs/database-guide.md)** — connection/migration policy (schema judgment in [`docs/standards/db-api.md`](./docs/standards/db-api.md)).
+- **[API Conventions](./docs/api-endpoints.md)** — OpenAPI how-to (`/docs`, `/openapi.json`), auth, errors, non-derivable contracts.
+- **[External Services](./docs/external-services.md)** — fail-fast vs degrade integration policy.
+- **[Troubleshooting](./docs/troubleshooting.md)** — recovery; incidents in [`docs/runbooks/`](./docs/runbooks/).
+
+Stateful progress/history and superseded docs: [`docs/archive/`](./docs/archive/)
+(roadmap/changelog under `archive/progress/`).
 
 ## 🚀 Features
 

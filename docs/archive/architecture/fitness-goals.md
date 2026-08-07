@@ -1,5 +1,9 @@
 # Fitness Goal System
 
+**Status:** Stateful / superseded — not evergreen authority  
+**Current authority:** domain enums/services under `src/domain/` and
+[`../../system-architecture.md`](../../system-architecture.md)
+
 Unified system for health metrics and goal-based calculations.
 
 ## Goal Enums

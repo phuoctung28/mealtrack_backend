@@ -1,5 +1,8 @@
 # Core Architecture
 
+**Status:** Stateful / superseded — not evergreen authority  
+**Current authority:** [`../../system-architecture.md`](../../system-architecture.md)
+
 **Version:** 0.4.7
 **Last Updated:** January 11, 2026
 

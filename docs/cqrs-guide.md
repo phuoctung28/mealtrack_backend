@@ -2,8 +2,7 @@
 
 **Last Updated:** June 17, 2026
 **Event Bus:** PyMediator with singleton registry pattern
-**Handlers:** 87 handler files across commands, queries, and events
-**Domains:** Activity, Cheat Day, Codes, Daily Meal, Food, Hydration, Ingredient, Meal, Meal Plan, Meal Suggestion, Movement, Notification, Nutrition, Promo Code, Referral, Saved Suggestion, TDEE, User, Weight
+**Handlers / domains:** discover under `src/app/` (commands, queries, handlers, events); do not hand-maintain counts here
 
 ---
 

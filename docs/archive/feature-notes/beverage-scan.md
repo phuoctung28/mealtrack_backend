@@ -1,3 +1,6 @@
+**Status:** Archived feature note — not evergreen authority
+**Evergreen:** `docs/system-architecture.md`, `docs/api-endpoints.md`, `docs/codebase-summary.md`
+
 # Beverage Scan
 
 Meal image scan no longer has a packaged-beverage hydration route.

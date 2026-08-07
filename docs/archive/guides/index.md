@@ -1,5 +1,8 @@
 # Developer Guides
 
+**Status:** Stateful rollout/ops notes — not evergreen product authority  
+**Evergreen route:** see `../../../codebase-summary.md` and root `README.md` Quick Links
+
 Comprehensive guides for specific features and implementation details.
 
 ## Features

@@ -1,3 +1,6 @@
+**Status:** Archived feature note — not evergreen authority
+**Evergreen:** `docs/system-architecture.md`, `docs/api-endpoints.md`, `docs/codebase-summary.md`
+
 # Movement Feature — Backend Release Readiness
 
 **Date:** 2026-05-31
