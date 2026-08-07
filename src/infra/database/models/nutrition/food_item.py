@@ -2,7 +2,7 @@
 Food item model for individual food components within a meal.
 """
 
-from sqlalchemy import Column, String, Float, Integer, ForeignKey, Boolean, JSON
+from sqlalchemy import JSON, Boolean, Column, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from src.infra.database.base import Base
@@ -19,6 +19,7 @@ class FoodItemORM(Base, PrimaryEntityMixin):
     unit = Column(String(120), nullable=False)
     confidence = Column(Float, nullable=True)
     allowed_units = Column(JSON, nullable=True)
+    nutrition_override = Column(JSON, nullable=True)
 
     # Edit support fields
     fdc_id = Column(

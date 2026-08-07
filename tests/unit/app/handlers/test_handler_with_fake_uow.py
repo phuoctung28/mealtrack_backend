@@ -47,6 +47,9 @@ class TestDeleteMealWithFakeUoW:
         mock_uow = MagicMock()
         mock_uow.meals.find_by_id = AsyncMock(return_value=meal)
         mock_uow.meals.delete = AsyncMock(return_value=None)
+        mock_uow.meal_recommendation_plans.clear_links_for_deleted_meal = AsyncMock(
+            return_value=None
+        )
         mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
         mock_uow.__aexit__ = AsyncMock(return_value=False)
 
@@ -59,7 +62,58 @@ class TestDeleteMealWithFakeUoW:
         # Assert
         assert result["meal_id"] == meal.meal_id
         assert "deleted" in result["message"].lower()
+        mock_uow.meal_recommendation_plans.clear_links_for_deleted_meal.assert_awaited_once_with(
+            meal_id=meal.meal_id
+        )
         mock_uow.meals.delete.assert_called_once_with(meal.meal_id)
+
+
+    @pytest.mark.asyncio
+    async def test_delete_meal_clears_recommendation_links_before_delete(self):
+        """Recommended-meal FK clear must run before hard-deleting the meal."""
+        user_id = str(uuid4())
+        meal = Meal.create_new_processing(
+            user_id=user_id,
+            image=MealImage(
+                image_id=str(uuid4()),
+                format="jpeg",
+                size_bytes=100000,
+                url="https://example.com/image.jpg",
+            ),
+        )
+        from src.domain.model.nutrition import Nutrition, Macros
+
+        meal = meal.mark_ready(
+            nutrition=Nutrition(
+                macros=Macros(protein=30, carbs=50, fat=20), food_items=[]
+            ),
+            dish_name="Recommended meal",
+        )
+        meal = meal.__class__(
+            **{**meal.__dict__, "source": "meal_recommendation"}
+        )
+
+        call_order: list[str] = []
+
+        async def clear_links(*, meal_id: str) -> None:
+            call_order.append(f"clear:{meal_id}")
+
+        async def delete_meal(meal_id: str) -> None:
+            call_order.append(f"delete:{meal_id}")
+
+        mock_uow = MagicMock()
+        mock_uow.meals.find_by_id = AsyncMock(return_value=meal)
+        mock_uow.meals.delete = AsyncMock(side_effect=delete_meal)
+        mock_uow.meal_recommendation_plans.clear_links_for_deleted_meal = AsyncMock(
+            side_effect=clear_links
+        )
+        mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+        mock_uow.__aexit__ = AsyncMock(return_value=False)
+
+        handler = DeleteMealCommandHandler(uow=mock_uow)
+        await handler.handle(DeleteMealCommand(meal_id=meal.meal_id, user_id=user_id))
+
+        assert call_order == [f"clear:{meal.meal_id}", f"delete:{meal.meal_id}"]
 
 
 # Removed TestSyncUserWithFakeUoW - SyncUserCommand not in scope for this demo

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MealRecommendationMacrosResponse(BaseModel):
@@ -40,6 +40,12 @@ class MealRecommendationCatalogMealSummaryResponse(BaseModel):
     image_url: str | None = None
     calories: int
     macros: MealRecommendationMacrosResponse
+    # Selected meals are rendered with their ingredients in the plan deck.
+    # Alternatives remain omitted from the summary and are returned by the
+    # hydrated slot-detail endpoint only.
+    ingredients: list[MealRecommendationIngredientResponse] = Field(
+        default_factory=list
+    )
 
 
 class MealRecommendationAlternativeResponse(BaseModel):

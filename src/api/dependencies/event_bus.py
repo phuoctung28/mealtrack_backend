@@ -619,7 +619,11 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         LogRecommendedMealCommand,
-        LogRecommendedMealCommandHandler(uow=AsyncUnitOfWork()),
+        LogRecommendedMealCommandHandler(
+            uow=AsyncUnitOfWork(),
+            meal_translation_service=meal_translation_service,
+            cache_invalidation=cache_invalidation_service,
+        ),
     )
     event_bus.register_handler(
         SkipMealRecommendationSlotCommand,

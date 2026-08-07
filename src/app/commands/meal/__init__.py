@@ -10,6 +10,7 @@ from .edit_meal_command import (
     CustomNutritionData,
     EditMealCommand,
     FoodItemChange,
+    NutritionOverride,
 )
 from .scan_by_url_command import ScanByUrlCommand
 from .upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
@@ -21,6 +22,7 @@ __all__ = [
     "AddCustomIngredientCommand",
     "FoodItemChange",
     "CustomNutritionData",
+    "NutritionOverride",
     "DeleteMealCommand",
     "DeleteMealPhotoCommand",
     "AttachMealPhotoCommand",

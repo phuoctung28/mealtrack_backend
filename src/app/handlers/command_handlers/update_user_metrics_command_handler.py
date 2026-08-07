@@ -85,8 +85,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
             # Update provided fields only
             if command.age is not None:
-                if command.age < 13 or command.age > 120:
-                    raise ValidationException("Age must be between 13 and 120")
+                if command.age < 12 or command.age > 120:
+                    raise ValidationException("Age must be between 12 and 120")
                 profile.age = command.age
 
             if command.height_cm is not None:

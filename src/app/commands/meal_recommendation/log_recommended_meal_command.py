@@ -11,3 +11,5 @@ class LogRecommendedMealCommand(Command):
     plan_id: str
     slot_id: str
     request_id: str
+    # ISO 639-1 request language; used to persist meal_translation after materialize.
+    language: str = "en"

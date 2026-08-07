@@ -63,6 +63,10 @@ NOTIFICATION_MESSAGES = {
                     "body_template": "Almost there, bro! {consumed_ml}ml logged today\nJust {remaining_ml}ml left to hit your goal 💧",
                 },
             },
+            "subscription_hook": {
+                "title": "Your Nutree plan is ready",
+                "body": "Your personalized nutrition plan is ready, bro\nSubscribe to unlock your next step ✨",
+            },
         },
         "female": {
             "meal_reminder": {
@@ -110,6 +114,10 @@ NOTIFICATION_MESSAGES = {
                 "evening": {
                     "body_template": "Almost there, mate! {consumed_ml}ml logged today\nJust {remaining_ml}ml left to hit your goal 💧",
                 },
+            },
+            "subscription_hook": {
+                "title": "Your Nutree plan is ready",
+                "body": "Your personalized nutrition plan is ready, mate\nSubscribe to unlock your next step ✨",
             },
         },
     },
@@ -161,6 +169,10 @@ NOTIFICATION_MESSAGES = {
                     "body_template": "Chiều tà rồi bro! Uống được {consumed_ml}ml rồi, còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
                 },
             },
+            "subscription_hook": {
+                "title": "Kế hoạch Nutree đã sẵn sàng",
+                "body": "Kế hoạch dinh dưỡng của bro đã sẵn sàng\nĐăng ký để mở khóa bước tiếp theo ✨",
+            },
         },
         "female": {
             "meal_reminder": {
@@ -208,6 +220,10 @@ NOTIFICATION_MESSAGES = {
                 "evening": {
                     "body_template": "Chiều tà rồi bạn ơi! Uống được {consumed_ml}ml rồi, còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
                 },
+            },
+            "subscription_hook": {
+                "title": "Kế hoạch Nutree đã sẵn sàng",
+                "body": "Kế hoạch dinh dưỡng của bạn đã sẵn sàng\nĐăng ký để mở khóa bước tiếp theo ✨",
             },
         },
     },

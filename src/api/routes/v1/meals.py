@@ -23,6 +23,7 @@ from fastapi import (
 
 from src.api.base_dependencies import (
     get_ai_model_manager,
+    get_async_food_reference_repository,
     get_cache_service,
     get_image_store,
 )
@@ -59,7 +60,12 @@ from src.api.services.guest_parse_quota import (
     QuotaUnavailableError,
     validate_install_id,
 )
-from src.app.commands.meal import CustomNutritionData, EditMealCommand, FoodItemChange
+from src.app.commands.meal import (
+    CustomNutritionData,
+    EditMealCommand,
+    FoodItemChange,
+    NutritionOverride,
+)
 from src.app.commands.meal.attach_meal_photo_command import AttachMealPhotoCommand
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
@@ -107,6 +113,27 @@ STATUS_MAPPING = {
     "FAILED": "failed",
     "INACTIVE": "inactive",
 }
+
+
+async def _source_nutrition_by_food_reference(meal, food_reference_repository):
+    """Load per-100g density for catalog-backed ingredients via the port."""
+    food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+    food_reference_ids = {
+        item.food_reference_id
+        for item in food_items
+        if getattr(item, "food_reference_id", None) is not None
+    }
+    if not food_reference_ids:
+        return {}
+
+    source_nutrition = {}
+    for food_reference_id in food_reference_ids:
+        reference = await food_reference_repository.get_nutrition_projection(
+            food_reference_id
+        )
+        if reference is not None:
+            source_nutrition[food_reference_id] = reference
+    return source_nutrition
 
 
 def _parse_target_date(target_date: str | None):
@@ -585,6 +612,7 @@ async def get_meal(
     cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
+    food_reference_repository=Depends(get_async_food_reference_repository),
 ):
     """Get detailed information about a specific meal.
 
@@ -626,11 +654,15 @@ async def get_meal(
         )
 
     # Use mapper to convert to response with translation support
+    source_nutrition = await _source_nutrition_by_food_reference(
+        meal, food_reference_repository
+    )
     return MealMapper.to_detailed_response(
         meal,
         image_url,
         target_language=language,
         value_insights=value_insights,
+        source_nutrition_by_food_reference=source_nutrition,
     )
 
 
@@ -801,6 +833,17 @@ async def update_meal_ingredients(
                 quantity=change_request.quantity,
                 unit=change_request.unit,
                 custom_nutrition=custom_nutrition,
+                nutrition_override=(
+                    NutritionOverride(
+                        calories=change_request.nutrition_override.calories,
+                        protein=change_request.nutrition_override.protein,
+                        carbs=change_request.nutrition_override.carbs,
+                        fat=change_request.nutrition_override.fat,
+                    )
+                    if change_request.nutrition_override
+                    else None
+                ),
+                clear_nutrition_override=change_request.clear_nutrition_override,
                 allowed_units=[
                     unit.model_dump() for unit in change_request.allowed_units
                 ],
@@ -814,6 +857,16 @@ async def update_meal_ingredients(
         created_at=payload.created_at,
         meal_type=payload.meal_type,
         food_item_changes=food_item_changes,
+        nutrition_override=(
+            NutritionOverride(
+                calories=payload.nutrition_override.calories,
+                protein=payload.nutrition_override.protein,
+                carbs=payload.nutrition_override.carbs,
+                fat=payload.nutrition_override.fat,
+            )
+            if payload.nutrition_override
+            else None
+        ),
     )
 
     logger.info("Sending command to event bus: %s", command)

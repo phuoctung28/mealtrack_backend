@@ -75,3 +75,9 @@ class AsyncFoodReferenceUowAdapter:
     async def upsert(self, data: dict[str, Any]) -> None:
         async with self._uow_factory() as uow:
             await uow.food_references.upsert(data)
+
+    async def get_nutrition_projection(self, food_reference_id: int) -> Any | None:
+        async with self._uow_factory() as uow:
+            return await uow.food_references.get_nutrition_projection(
+                food_reference_id
+            )

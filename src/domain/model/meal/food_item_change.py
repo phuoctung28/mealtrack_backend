@@ -18,6 +18,8 @@ class FoodItemChange:
     quantity: Optional[float] = None
     unit: Optional[str] = None
     custom_nutrition: Optional["CustomNutritionData"] = None
+    nutrition_override: Optional["NutritionOverride"] = None
+    clear_nutrition_override: bool = False
     allowed_units: Optional[list[dict[str, Any]]] = None
 
 
@@ -31,3 +33,11 @@ class CustomNutritionData:
     fat_per_100g: float
     fiber_per_100g: float = 0.0
     sugar_per_100g: float = 0.0
+
+
+@dataclass
+class NutritionOverride:
+    calories: float
+    protein: float
+    carbs: float
+    fat: float

@@ -41,6 +41,12 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
                     raise AuthorizationException(
                         "You do not have permission to delete this meal"
                     )
+                # Recommended-meal logs set meal_recommendations.logged_meal_id
+                # with ON DELETE SET NULL. Clearing only the FK leaves logged_at
+                # set and violates ck_meal_recommendations_logged_coherent.
+                plans = getattr(uow, "meal_recommendation_plans", None)
+                if plans is not None:
+                    await plans.clear_links_for_deleted_meal(meal_id=command.meal_id)
                 await uow.meals.delete(command.meal_id)
                 log_date = (meal.created_at or utc_now()).date()
             else:
