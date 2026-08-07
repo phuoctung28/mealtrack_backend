@@ -1,9 +1,9 @@
 # Backend Database Guide
 
-**Last Updated:** July 29, 2026
+**Last Updated:** August 7, 2026
 **Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
 **Migrations:** Alembic via `migrations/versions/` and `migrations/run.py`
-**Tables:** 39 ORM model files across core, normalized tracking, referral, notification, and cache models
+**Models:** discover ORM packages under `src/infra/database/models/` (do not hand-maintain table counts here)
 **Extensions:** `vector` for embeddings and `pg_trgm` for indexed local food search
 
 ---

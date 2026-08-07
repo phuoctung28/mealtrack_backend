@@ -1,5 +1,17 @@
 # Project Changelog
 
+## 2026-08-07
+
+### Changed
+
+- Profile and TDEE age floor is **12** (App Store alignment); web-funnel birthdate
+  validation remains its own lead contract until that path is aligned.
+- Meal edit now supports independent meal- and ingredient-level nutrition
+  overrides: absolute calories/macros while set, with clear/restore back to
+  source nutrition.
+- Documentation refresh: evergreen docs no longer hand-maintain inventory
+  counts; web-funnel auth path and nutrition-override contracts are documented.
+
 ## 2026-08-04
 
 ### Changed
@@ -15,6 +27,8 @@
   client-side RevenueCat customer-ID mapping replacement: authenticated users
   use their Firebase UID consistently.
 - Kept legacy backend claim endpoints disabled by default for migration safety.
+- Redemption preflight and provider-alias correlation close anonymous web
+  checkout to authenticated Firebase UID attachment.
 
 ## 2026-08-01
 

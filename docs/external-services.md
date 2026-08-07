@@ -1,6 +1,6 @@
 # Backend External Services Integration
 
-**Last Updated:** July 29, 2026
+**Last Updated:** August 7, 2026
 **Services:** Firebase, Cloudinary, OpenAI, Cloudflare Workers AI, RevenueCat, PostHog, Redis, Sentry, DeepL, FatSecret, OpenFoodFacts, USDA FoodData Central, Brave Search, Pexels, Unsplash, Resend, Google Imagen, Pollinations, nutree-affiliate
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
@@ -261,7 +261,7 @@ search traffic.
 
 ## RevenueCat
 
-**Purpose:** Subscription Management
+**Purpose:** Subscription management for in-app and web checkout.
 
 - Webhook sync to local `subscriptions` table
 - Premium status check with Redis cache fallback
@@ -280,8 +280,10 @@ search traffic.
 | `TRANSFER` | Re-point subscription to new subscriber ID |
 
 - PostHog lifecycle mirroring for CANCELLATION, EXPIRATION, BILLING_ISSUE, REFUND, RENEWAL, PRODUCT_CHANGE events (configurable via `POSTHOG_API_KEY`)
+- **Web redemption handoff:** anonymous RevenueCat Web customers are correlated through `/v1/web-funnel/*` using a SHA-256 redemption-link digest (raw link never stored). After Firebase passwordless email-link sign-in, `preflight` binds the Firebase UID/email and `finalize` attaches the verified purchase. Webhook provider aliases close the anonymous → authenticated gap. Route contracts live in `api-endpoints.md`.
+- Legacy direct Paddle fulfillment columns were removed; web billing ownership remains RevenueCat Web, not a parallel Paddle webhook path in this service.
 
-**Config:** `REVENUECAT_SECRET_API_KEY`, `REVENUECAT_WEBHOOK_SECRET`
+**Config:** `REVENUECAT_SECRET_API_KEY`, `REVENUECAT_WEBHOOK_SECRET`, plus web-funnel BFF secret and related settings in `src/infra/config/settings.py`
 
 **Status:** Premium feature gates planned, not currently enforced on routes
 

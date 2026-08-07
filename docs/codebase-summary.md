@@ -1,34 +1,21 @@
 # Backend Codebase Summary
 
-**Generated:** July 29, 2026
-**Status:** Current snapshot of the live backend codebase
+**Last Updated:** August 7, 2026
+**Status:** Navigation snapshot — discover live counts from the tree and OpenAPI, not this file
 **Runtime:** FastAPI 0.136.3 on Python 3.13.2 with async SQLAlchemy 2.0
 
 ---
 
-## Codebase Metrics
+## How to discover inventory
 
-| Metric | Value |
-|--------|-------|
-| Source files | 704 Python files in `src/` |
-| Source LOC | 65,423 LOC in `src/` |
-| Test files | 350 Python files in `tests/` |
-| Collected tests | 2,013 unit tests in `tests/unit`; broad unscoped collection still hits two duplicate-package import collisions |
-| Route files | 31 route files total; 28 endpoint-bearing modules |
-| Router registrations | 29 `include_router(...)` calls in `main.py` |
-| Endpoint decorators | 98 standard `@router` verb handlers plus 2 health `api_route` declarations |
+| Need | Owner |
+|------|-------|
+| Live HTTP surface | `/docs` (Swagger) and `src/api/main.py` router registrations |
+| Layer layout | `src/api/`, `src/app/`, `src/domain/`, `src/infra/` plus root/bootstrap/cron |
+| Tests | `pytest tests/unit --cov=src --cov-fail-under=65` (default CI path) |
+| Migrations | `migrations/versions/` via Alembic |
 
----
-
-## Layer Snapshot
-
-| Layer | Files | LOC | Notes |
-|-------|-------|-----|-------|
-| API | 97 | 12,709 | Routes, middleware, schemas, dependency wiring, and API mappers |
-| Application | 244 | 14,684 | CQRS commands, queries, handlers, and orchestration services |
-| Domain | 192 | 19,522 | Entities, services, ports, policies, and bounded contexts |
-| Infrastructure | 162 | 17,762 | Database, cache, adapters, observability, and service integrations |
-| **Total** | **695** | **64,677** | Layer directories only; the remaining `src/` files are root/bootstrap/cron modules |
+Do not hand-maintain file, LOC, or endpoint counts in this document.
 
 ---
 
@@ -36,8 +23,9 @@
 
 The current HTTP surface includes:
 
-- Meal logging and analysis: image upload, upload-token, scan-by-url, food-label scan-by-url, manual meals, parse-text, streak, weekly budget, and daily macros.
-- Meal recommendations: durable three-day catalog plans, compact summaries, slot detail hydration, and swap/log/skip mutations.
+- Meal logging and analysis: image upload, upload-token, scan-by-url, food-label scan-by-url, manual meals, parse-text, ingredient edits with optional nutrition overrides, streak, weekly budget, and daily macros.
+- Meal recommendations: durable three-day catalog plans, compact summaries (including selected ingredients), slot detail hydration, and swap/log/skip mutations.
+- Paid web redemption: `/v1/web-funnel/*` lead, RevenueCat correlation, passwordless preflight, and finalize routes.
 - User and profile management: Firebase sync, onboarding completion, metrics, TDEE, language, timezone, and account deletion.
 
 Onboarding TDEE preview is versioned as `onboarding_preview_v2`; the backend
@@ -66,27 +54,29 @@ related migration exists but is not applied or deployed.
 
 ## Key Directories
 
-| Directory | Files | Purpose |
-|-----------|-------|---------|
-| `src/api/routes/v1/` | 28 | Versioned REST route modules |
-| `src/api/schemas/` | 37 | Pydantic DTOs |
-| `src/app/commands/` | 57 | Write-operation command packages |
-| `src/app/queries/` | 56 | Read-operation query packages |
-| `src/app/handlers/` | 96 | CQRS handlers and support modules |
-| `src/domain/model/` | 66 | Domain entities and value objects |
-| `src/domain/services/` | 70 | Domain services and policies |
-| `src/infra/database/models/` | 51 | ORM model packages and table declarations |
-| `src/infra/repositories/` | 26 | Data access adapters |
-| `src/infra/services/` | 27 | Infrastructure services and AI providers |
-| `tests/` | 350 | Unit, architecture, migration, and explicit integration tests |
+| Directory | Purpose |
+|-----------|---------|
+| `src/api/routes/v1/` | Versioned REST route modules |
+| `src/api/schemas/` | Pydantic DTOs |
+| `src/app/commands/` | Write-operation command packages |
+| `src/app/queries/` | Read-operation query packages |
+| `src/app/handlers/` | CQRS handlers and support modules |
+| `src/domain/model/` | Domain entities and value objects |
+| `src/domain/services/` | Domain services and policies |
+| `src/infra/database/models/` | ORM model packages and table declarations |
+| `src/infra/repositories/` | Data access adapters |
+| `src/infra/services/` | Infrastructure services and AI providers |
+| `tests/` | Unit, architecture, migration, and explicit integration tests |
 
 ---
 
 ## Recent Characterization Work
 
-- **Meal recommendation contract refresh:** `/v1/meal-recommendations/three-day` and `GET /v1/meal-recommendations/{plan_id}` return compact selected-slot summaries; slot detail hydrates one selected slot plus alternatives; swap/log/skip return changed-slot detail responses.
+- **Manual nutrition overrides:** meal and ingredient edit requests can store absolute override macros/calories while preserving source nutrition for clear/restore.
+- **Paid web redemption:** RevenueCat web checkout correlates by redemption-link hash, preflights after Firebase passwordless email-link sign-in, and finalizes against provider aliases.
+- **Meal recommendation contract:** compact selected-slot summaries include ingredients; slot detail hydrates alternatives; swap/log/skip return changed-slot detail responses.
 - **Food-label scan:** `/v1/meals/food-label/scan-by-url` analyzes Cloudinary nutrition-label images directly and persists only validated READY meals.
-- **Hydration API refresh:** `GET /v1/hydration/catalog` exposes the visible drink catalog, while `GET /v1/hydration/daily` and `GET /v1/hydration/weekly` now derive goal, percentage, and streak behavior from the current handlers.
+- **Hydration API:** catalog, daily, and weekly handlers own goal, percentage, and streak presentation.
 
 ---
 

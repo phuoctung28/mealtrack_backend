@@ -1,11 +1,11 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** July 29, 2026
+**Last Updated:** August 7, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
-**API Docs:** `/docs` (Swagger UI)
+**API Docs:** `/docs` (Swagger UI) — live route inventory; do not hand-maintain endpoint counts here
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
 Dev mode: `X-Dev-User-Id` header (requires `ENVIRONMENT=development` and `ENABLE_DEV_AUTH_BYPASS=1`)
-**Surface:** 31 route files, 29 router registrations, 98 standard endpoint decorators, and 2 health `api_route` declarations serving GET+HEAD.
+**Registration owner:** `src/api/main.py` (`include_router(...)` calls)
 
 ---
 
@@ -49,9 +49,17 @@ The two health routes are declared with `api_route` and answer both GET and HEAD
 | GET | `/v1/meals/{meal_id}` | Get meal details |
 | GET | `/v1/meals/{meal_id}/value-insights` | Get value-insight cache status or trigger refresh |
 | DELETE | `/v1/meals/{meal_id}` | Delete meal (soft delete) |
-| PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients |
+| PUT | `/v1/meals/{meal_id}/ingredients` | Update meal ingredients (supports meal- and item-level nutrition overrides) |
 | PUT | `/v1/meals/{meal_id}/photo` | Replace a meal photo |
 | DELETE | `/v1/meals/{meal_id}/photo` | Remove a meal photo |
+
+### Manual Nutrition Override Contract
+
+- `PUT /v1/meals/{meal_id}/ingredients` accepts optional meal-level `nutrition_override` and per-item `nutrition_override` / `clear_nutrition_override`.
+- Overrides are absolute user-entered values (`calories`, `protein`, `carbs`, `fat`). While set, the backend presents those values instead of recalculating calories from macros for the overridden meal or ingredient.
+- Clearing an ingredient override restores source/macro-derived nutrition for that item. Source nutrition and macros remain stored; overrides do not rewrite catalog or AI source rows.
+- Clients must still treat the backend response as the calorie source of truth and must not re-derive override calories on mobile.
+- This is distinct from `custom_nutrition` on non-USDA ingredients (per-100g macros), where calories remain fiber-aware and macro-derived.
 
 ### Meal Value Insights Contract
 
@@ -340,9 +348,11 @@ Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EX
 
 Lead creation intentionally fails closed until `WEB_FUNNEL_BFF_SHARED_SECRET`
 is configured. The active redemption flow uses a RevenueCat Redemption Link,
-Google/Apple Firebase authentication, a hash-only preflight binding, and
-backend RevenueCat verification. The browser never authenticates or grants
-access.
+Firebase passwordless email-link authentication, a hash-only preflight binding
+(SHA-256 of the redemption link — raw link never stored), provider-alias
+correlation on the webhook path, and backend RevenueCat verification before
+attaching the purchase to the authenticated Firebase UID. The browser never
+grants app access on its own.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
@@ -353,10 +363,10 @@ access.
 | POST | `/v1/web-funnel/redemptions/preflight` | Binds the verified Firebase UID and checkout email to the redemption-link digest before consumption. |
 | POST | `/v1/web-funnel/redemptions/finalize` | Verifies the redeemed RevenueCat customer and attaches the purchase to the authenticated user. |
 
-The RevenueCat webhook records provider aliases and lifecycle state. Legacy
-magic-claim exchange, resend, and recovery routes remain feature-gated behind
-`WEB_FUNNEL_LEGACY_CLAIM_ENABLED` for migration compatibility and are not part
-of the active redemption flow.
+The RevenueCat webhook records provider aliases and lifecycle state used to
+finalize anonymous web purchases. Legacy magic-claim exchange, resend, and
+recovery routes remain feature-gated behind `WEB_FUNNEL_LEGACY_CLAIM_ENABLED`
+for migration compatibility and are not part of the active redemption flow.
 
 ## Response Format
 

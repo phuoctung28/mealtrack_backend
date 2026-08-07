@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.6.7
-**Last Updated:** July 29, 2026
-**Status:** Current backend snapshot. `src/` contains 704 Python files and 65,423 LOC; `tests/` contains 350 Python files and the default unit suite collects 2,013 tests. The live API surface spans 31 route files, 29 router registrations, and 98 standard route verb handlers plus 2 health `api_route` declarations.
+**Version:** 0.6.8
+**Last Updated:** August 7, 2026
+**Status:** Current backend product contract. Discover live inventory from `src/`, `tests/`, and `/docs` rather than fixed file counts in this document.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI service for meal tracking, nutrition analysis, hydration, movement, and deterministic meal recommendations. It uses 4-layer Clean Architecture with CQRS across API, application, domain, and infrastructure layers, while `src/` also contains root/bootstrap/cron modules outside those layer directories.
+MealTrack Backend is a FastAPI service for meal tracking, nutrition analysis, hydration, movement, deterministic meal recommendations, and paid web-to-app subscription handoff. It uses 4-layer Clean Architecture with CQRS across API, application, domain, and infrastructure layers, while `src/` also contains root/bootstrap/cron modules outside those layer directories.
 
 ---
 
@@ -34,8 +34,9 @@ Help users understand nutrition with accurate tracking, deterministic recommenda
 - Gemini packages remain in dependencies, but the runtime provider registry is OpenAI + Cloudflare.
 
 ### 2. RESTful API
-- Meals: image/analyze, upload-token, scan-by-url, food-label/scan-by-url, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, `/{id}` (GET/DELETE), ingredients (PUT).
+- Meals: image/analyze, upload-token, scan-by-url, food-label/scan-by-url, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, `/{id}` (GET/DELETE), ingredients (PUT, including optional nutrition overrides), photo replace/delete.
 - Meal recommendations: three-day create/replay, compact summary reads, slot detail hydration, swap/log/skip mutations.
+- Web funnel: BFF-bound leads, RevenueCat customer correlation, passwordless redemption preflight/finalize.
 - User Profiles: create, metrics (GET/POST), TDEE, custom macros.
 - Users: sync, Firebase UID lookups, metrics, timezone, language, delete.
 - Meal Suggestions: discover, recipes, save.
@@ -76,7 +77,7 @@ Help users understand nutrition with accurate tracking, deterministic recommenda
 - **Auth**: Firebase JWT with development bypass guardrails.
 - **Event Bus**: PyMediator with singleton registry pattern.
 - **Notifications**: Firebase Cloud Messaging with platform-specific configs and deduplication.
-- **Subscriptions**: RevenueCat webhook integration.
+- **Subscriptions**: RevenueCat webhook integration plus authenticated web-funnel redemption for web checkout handoff. Legacy direct Paddle fulfillment schema was retired; billing ownership stays with RevenueCat Web.
 
 ---
 
@@ -95,7 +96,8 @@ Help users understand nutrition with accurate tracking, deterministic recommenda
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.6.7 | Jul 29, 2026 | Refreshed the project overview with current repo counts, current API surface, deterministic recommendation behavior, hydration semantics, and the pgvector-backed active vector cache. |
+| 0.6.8 | Aug 7, 2026 | Documented paid web redemption, manual nutrition overrides, and stopped hand-maintaining inventory counts in evergreen docs. |
+| 0.6.7 | Jul 29, 2026 | Refreshed the project overview with current API surface, deterministic recommendation behavior, hydration semantics, and the pgvector-backed active vector cache. |
 | 0.6.6 | Jun 27, 2026 | Documentation refresh for current runtime versions, current codebase metrics, OpenAI-first AI routing, and updated test/CI defaults. |
 | 0.6.5 | Jun 13, 2026 | Added validation retry orchestration for structured AI nutrition output, with exactly one repair attempt for meal image scan and text parse flows, controlled `AIOutputValidationError` handling, preserved ingredient-recognition's unstructured contract, and kept calorie divergence checks anchored to backend-derived macro calories. |
 | 0.6.4 | Jun 13, 2026 | Added canonical AI nutrition contracts for image and text flows, rejected impossible over-limit food quantities at validation time, preserved current text-parse macro compatibility, and removed silent invalid-food filtering from the legacy parser. |

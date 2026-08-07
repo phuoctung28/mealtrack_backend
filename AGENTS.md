@@ -6,13 +6,13 @@ Monorepo submodule. 4-layer Clean + CQRS + PyMediator event bus.
 
 | Item | Value |
 |------|-------|
-| **Framework** | FastAPI 0.115+ / Python 3.13 |
-| **Database** | PostgreSQL/Neon + SQLAlchemy 2.0 |
+| **Framework** | FastAPI 0.136+ / Python 3.13 |
+| **Database** | PostgreSQL/Neon + SQLAlchemy 2.0 async |
 | **Migrations** | Alembic |
 | **Event Bus** | PyMediator (singleton) |
-| **AI** | Google Gemini (multi-model) |
+| **AI** | OpenAI default; optional Cloudflare Workers AI for configured text/vision |
 | **Auth** | Firebase JWT |
-| **Cache** | Redis (cache-aside) |
+| **Cache** | Redis (cache-aside, optional) |
 
 ## Critical Commands (Daily Use)
 
@@ -25,7 +25,9 @@ alembic upgrade head
 alembic revision --autogenerate -m "description"
 
 # Code quality (run before commit)
-black src/ tests/ && flake8 src/ && mypy src/ && pytest
+black src/ tests/ && ruff check src/ && mypy src/
+# Default CI-aligned tests (prefer targeted path; unscoped pytest can hit import collisions)
+pytest tests/unit --cov=src --cov-fail-under=65
 ```
 
 ## MUST-Follow Rules (Non-Inferable)
@@ -40,10 +42,10 @@ black src/ tests/ && flake8 src/ && mypy src/ && pytest
 - Queries return immediately
 - Events processed asynchronously
 
-**Calories = Derived from Macros** (non-negotiable)
-- Backend is source of truth: `P*4 + (C-fiber)*4 + fiber*2 + F*9`
-- Mobile receives all calorie values from backend
-- Never re-derive on mobile
+**Calories = Backend is source of truth** (non-negotiable)
+- Default: fiber-aware macro formula `P*4 + max(C-fiber,0)*4 + fiber*2 + F*9`
+- Exception: active meal/ingredient `nutrition_override` uses absolute user values until cleared
+- Mobile receives all calorie values from backend; never re-derive on mobile
 
 **Weekly Budget remaining_days Includes Today**
 - Mon=7, Tue=6, ..., Sun=1

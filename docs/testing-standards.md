@@ -1,8 +1,8 @@
 # Backend Testing Standards
 
-**Last Updated:** July 29, 2026
+**Last Updated:** August 7, 2026
 **Coverage Target:** CI gate 65% for unit coverage; docs target 70%+ overall, 100% critical paths, 80%+ new features
-**Suite Size:** 350 Python files in `tests/`; `tests/unit` currently collects 2,013 tests
+**Suite discovery:** `pytest tests/unit --collect-only` (prefer `tests/unit`; unscoped collection can hit import collisions)
 
 ---
 

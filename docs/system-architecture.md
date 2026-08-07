@@ -1,9 +1,9 @@
 # Backend System Architecture Overview
 
-**Last Updated:** July 29, 2026
+**Last Updated:** August 7, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 704 Python files, 65,423 LOC in `src/`
+**Inventory:** discover live layout under `src/` (`api/`, `app/`, `domain/`, `infra/`, plus root/bootstrap/cron); do not hand-maintain file or LOC counts here
 
 ---
 
@@ -24,37 +24,25 @@ device, and purchase gates remain open.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (97 files)                    │
+│                         API Layer                            │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (244 files)                   │
+│                    Application Layer                         │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (192 files)                      │
+│                      Domain Layer                            │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
 ┌────────────────────────▼────────────────────────────────────┐
-│            Infrastructure Layer (162 files)                  │
+│                 Infrastructure Layer                         │
 │  DB │ Cache │ External APIs │ Event Bus │ Config             │
 └─────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Layer Statistics
-
-| Layer | Files | LOC | Key Contents |
-|-------|-------|-----|-------------|
-| API | 97 | 12,709 | Routes, middleware, schemas, dependencies, and API mappers |
-| App | 244 | 14,684 | CQRS commands, queries, handlers, and orchestration services |
-| Domain | 192 | 19,522 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
-| Infra | 162 | 17,762 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
-| **Total** | **695** | **64,677** | Layer directories only; `src/` also has root/bootstrap/cron modules outside the four layers |
 
 **Layer rule:** Domain has no outer-layer or external I/O dependencies. See `cqrs-guide.md` for handler patterns.
 
@@ -124,7 +112,7 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 | Context | Key Entities |
 |---------|-------------|
 | Meal | Meal (state machine), MealImage, Ingredient, image cache projection |
-| Nutrition | Nutrition, FoodItem, Macros, Micros |
+| Nutrition | Nutrition, FoodItem, Macros, Micros, optional meal/item `NutritionOverride` |
 | User | User, UserProfile, Activity, TdeeRequest, weight history |
 | Hydration | Hydration entries, drink catalog, caloric drink logging |
 | Movement | Movement entries, activity catalog, daily movement summaries |
@@ -132,7 +120,15 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 | Meal Planning | Weekly budget, meal planning, meal suggestion, saved suggestion models |
 | Notification | UserFcmToken, NotificationPreferences, PushNotification, queued notification rows |
 | AI | GPTAnalysisResponse, GPTFoodItem, GPTResponseError |
-| Commerce | Subscription state, referral code application, promo code redemption |
+| Commerce | Subscription state, RevenueCat web-funnel redemption, referral codes, promo codes |
+
+### Calories and nutrition overrides
+
+Default rule: meal calories are derived from macros with the fiber-aware formula
+owned by the backend. Exception: when a meal-level or ingredient-level
+`NutritionOverride` is set, the backend presents the absolute override values
+(including calories) until cleared. Source macros remain available for restore.
+See `PUT /v1/meals/{meal_id}/ingredients` in `api-endpoints.md`.
 
 ---
 

@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.7
-**Last Updated:** July 29, 2026
-**Status:** Core backend runtime is production-oriented; catalog rollout still has explicit staging, corpus, load, and rollback evidence gates. The repository has 704 source files in `src/`, 65,423 LOC in `src/`, 350 Python test files, and 2,013 tests in `tests/unit`.
+**Version:** 0.6.8
+**Last Updated:** August 7, 2026
+**Status:** Core backend runtime is production-oriented; catalog rollout still has explicit staging, corpus, load, and rollback evidence gates. Discover live inventory from `src/` and `tests/` rather than fixed counts in this file.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
@@ -15,10 +15,19 @@
 - [x] Flutter resumes redemption after normal verified Firebase passwordless
   email-link authentication, finalizes through the backend, refreshes access,
   and routes the buyer directly to Home.
+- [x] Redemption preflight binds Firebase UID/email to the link digest; webhook
+  provider aliases support finalize for anonymous web customers.
 - [ ] Revised passwordless-email redemption continuation is implemented locally;
   staging Firebase link, cold-start, and RevenueCat expiry validation remain.
 - [x] Active Firebase passwordless, anonymous claim, and legacy magic-link UI
   paths were removed; legacy backend routes remain disabled by default.
+
+### August 2026: Manual Nutrition Overrides
+- [x] Meal and ingredient edits accept absolute `nutrition_override` values
+  (calories + macros) that the backend presents until cleared.
+- [x] Clearing an ingredient override restores source/macro-derived nutrition;
+  source rows are not rewritten by overrides.
+- [x] Profile/TDEE minimum age lowered to 12 for App Store alignment.
 
 ### July 2026: Meal Catalog Phase 0 Production Foundation
 - [x] Four-table catalog recommendation foundation uses `meal_catalog`, `meal_catalog_ingredients`, `meal_recommendations`, and `meal_recommendation_operations`.
