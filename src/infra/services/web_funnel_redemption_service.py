@@ -54,16 +54,19 @@ class WebFunnelRedemptionService:
         environment = event.get("environment")
         if not isinstance(environment, str):
             return False
-        binding = await db.scalar(
-            select(WebFunnelRedemption)
-            .where(
-                WebFunnelRedemption.original_app_user_id.in_(originals),
-                func.lower(WebFunnelRedemption.environment) == environment.lower(),
+        bindings = list(
+            await db.scalars(
+                select(WebFunnelRedemption)
+                .where(
+                    WebFunnelRedemption.original_app_user_id.in_(originals),
+                    func.lower(WebFunnelRedemption.environment) == environment.lower(),
+                )
+                .with_for_update()
             )
-            .with_for_update()
         )
-        if not binding:
+        if len(bindings) != 1:
             return False
+        binding = bindings[0]
         existing_aliases = set(binding.provider_app_user_ids or [])
         binding.provider_app_user_ids = sorted(existing_aliases | redeemers)
         binding.redemption_confirmed_at = utc_now()

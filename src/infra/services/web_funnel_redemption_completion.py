@@ -5,7 +5,7 @@ import uuid
 from datetime import date
 
 from fastapi import HTTPException
-from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy import cast, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,24 +97,37 @@ async def finalize_redemption(
     auth_provider: str | None = None,
 ) -> dict:
     """Restore one paid lead once; the provider-derived original ID selects the lead."""
+    key_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()
     binding = await db.scalar(
         select(WebFunnelRedemption)
         .where(
             WebFunnelRedemption.environment == environment,
-            or_(
-                WebFunnelRedemption.original_app_user_id == original_app_user_id,
-                and_(
-                    WebFunnelRedemption.redeemer_uid == uid,
-                    WebFunnelRedemption.redeemer_uid.is_not(None),
-                ),
-                cast(WebFunnelRedemption.provider_app_user_ids, JSONB).contains(
-                    [original_app_user_id]
-                ),
-            ),
+            WebFunnelRedemption.finalization_key_hash == key_hash,
         )
-        .order_by(WebFunnelRedemption.verified_at.desc())
         .with_for_update()
     )
+    if binding and not _provider_identity_matches(binding, original_app_user_id):
+        raise claim_not_found()
+    if binding is None:
+        binding = await _find_pending_binding(
+            db,
+            original_app_user_id=original_app_user_id,
+            environment=environment,
+        )
+    if binding is None:
+        # A concurrent finalizer may have committed while this request waited
+        # on the pending purchase row lock. Re-read the key after that lock so
+        # the losing request receives the committed idempotent result.
+        binding = await db.scalar(
+            select(WebFunnelRedemption)
+            .where(
+                WebFunnelRedemption.environment == environment,
+                WebFunnelRedemption.finalization_key_hash == key_hash,
+            )
+            .with_for_update()
+        )
+        if binding and not _provider_identity_matches(binding, original_app_user_id):
+            raise claim_not_found()
     if not binding:
         raise claim_not_found()
     # New redemption-link claims must be explicitly bound to this Firebase UID
@@ -127,7 +140,6 @@ async def finalize_redemption(
     if binding.redeemer_uid and binding.redeemer_uid != uid:
         raise claim_not_found()
     binding.redeemer_uid = uid
-    key_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()
     if binding.finalized_uid:
         if binding.finalized_uid != uid:
             raise claim_conflict()
@@ -259,3 +271,52 @@ async def finalize_redemption(
     )
     await db.commit()
     return result
+
+
+async def _find_pending_binding(
+    db: AsyncSession,
+    *,
+    original_app_user_id: str,
+    environment: str,
+) -> WebFunnelRedemption | None:
+    """Prefer the current unfinalized purchase and fail closed on alias ambiguity."""
+    exact_pending = await db.scalar(
+        select(WebFunnelRedemption)
+        .where(
+            WebFunnelRedemption.environment == environment,
+            WebFunnelRedemption.original_app_user_id == original_app_user_id,
+            WebFunnelRedemption.finalized_uid.is_(None),
+        )
+        .with_for_update()
+    )
+    if exact_pending:
+        return exact_pending
+
+    alias_pending = list(
+        await db.scalars(
+            select(WebFunnelRedemption)
+            .where(
+                WebFunnelRedemption.environment == environment,
+                WebFunnelRedemption.finalized_uid.is_(None),
+                cast(WebFunnelRedemption.provider_app_user_ids, JSONB).contains(
+                    [original_app_user_id]
+                ),
+            )
+            .with_for_update()
+        )
+    )
+    if len(alias_pending) == 1:
+        return alias_pending[0]
+    if alias_pending:
+        return None
+
+    return None
+
+
+def _provider_identity_matches(
+    binding: WebFunnelRedemption,
+    original_app_user_id: str,
+) -> bool:
+    return binding.original_app_user_id == original_app_user_id or original_app_user_id in (
+        binding.provider_app_user_ids or []
+    )

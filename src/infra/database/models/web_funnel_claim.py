@@ -39,7 +39,7 @@ class WebFunnelLead(Base, BaseMixin):
     payment_verified_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     claimed_at = Column(DateTime(timezone=True), nullable=True)
-    claimed_uid = Column(String(128), nullable=True, unique=True)
+    claimed_uid = Column(String(128), nullable=True)
     access_sync_status = Column(String(16), nullable=False, default="pending")
 
     __table_args__ = (
@@ -119,9 +119,9 @@ class WebFunnelRedemption(Base, BaseMixin):
     entitlement_id = Column(String(128), nullable=False)
     product_id = Column(String(255), nullable=False)
     verified_at = Column(DateTime(timezone=True), nullable=False)
-    finalized_uid = Column(String(128), nullable=True, unique=True)
+    finalized_uid = Column(String(128), nullable=True)
     finalized_at = Column(DateTime(timezone=True), nullable=True)
-    redeemer_uid = Column(String(128), nullable=True, unique=True)
+    redeemer_uid = Column(String(128), nullable=True)
     redemption_confirmed_at = Column(DateTime(timezone=True), nullable=True)
     redemption_link_hash = Column(String(64), nullable=True, unique=True)
     preflight_token_hash = Column(String(64), nullable=True, unique=True)

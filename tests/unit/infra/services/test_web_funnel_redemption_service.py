@@ -1,6 +1,7 @@
 """Focused safety tests for authenticated RevenueCat redemption."""
 
 import hashlib
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -31,6 +32,9 @@ class Session:
     async def scalar(self, _statement):
         return self.binding
 
+    async def scalars(self, _statement):
+        return [self.binding] if self.binding else []
+
     async def get(self, _model, _identifier, **_kwargs):
         return self.lead
 
@@ -39,11 +43,16 @@ class Session:
 
 
 class StatementCaptureSession:
-    statement = None
+    def __init__(self):
+        self.statements = []
 
     async def scalar(self, statement):
-        self.statement = statement
+        self.statements.append(statement)
         return None
+
+    async def scalars(self, statement):
+        self.statements.append(statement)
+        return []
 
 
 class FinalizationSession:
@@ -63,8 +72,9 @@ def _lead(email="buyer@example.com"):
     return WebFunnelLead(id="lead-1", email=email)
 
 
-def _binding(**values):
-    return WebFunnelRedemption(lead_id="lead-1", **values)
+def _binding(lead_id="lead-1", **values):
+    values.setdefault("original_app_user_id", "$RCAnonymousID:web")
+    return WebFunnelRedemption(lead_id=lead_id, **values)
 
 
 def _link_hash(link="rc-example://redeem?token=opaque"):
@@ -178,9 +188,137 @@ async def test_finalization_uses_jsonb_containment_for_provider_aliases():
         )
 
     assert error.value.status_code == 404
-    sql = str(session.statement.compile(dialect=postgresql.dialect()))
-    assert "CAST(web_funnel_redemptions.provider_app_user_ids AS JSONB) @>" in sql
-    assert "provider_app_user_ids LIKE" not in sql
+    sql_statements = [
+        str(statement.compile(dialect=postgresql.dialect()))
+        for statement in session.statements
+    ]
+    assert any(
+        "CAST(web_funnel_redemptions.provider_app_user_ids AS JSONB) @>" in sql
+        for sql in sql_statements
+    )
+    assert all("provider_app_user_ids LIKE" not in sql for sql in sql_statements)
+    assert all(
+        "web_funnel_redemptions.redeemer_uid =" not in sql
+        for sql in sql_statements
+    )
+
+
+@pytest.mark.asyncio
+async def test_finalization_retry_returns_stored_result_for_same_purchase():
+    binding = _binding(
+        redeemer_uid="firebase-uid",
+        finalized_uid="firebase-uid",
+        finalization_key_hash=hashlib.sha256(
+            b"request-retry-same-purchase"
+        ).hexdigest(),
+        result={"version": "redemption_result_v1", "access_status": "active"},
+    )
+
+    result = await finalize_redemption(
+        FinalizationSession(binding, _lead(), None, None),
+        uid="firebase-uid",
+        email="buyer@example.com",
+        original_app_user_id="$RCAnonymousID:web",
+        idempotency_key="request-retry-same-purchase",
+        environment="SANDBOX",
+    )
+
+    assert result == binding.result
+
+
+@pytest.mark.asyncio
+async def test_finalization_retry_selects_by_idempotency_key_hash():
+    key = "request-keyed-retry"
+    binding = _binding(
+        redeemer_uid="firebase-uid",
+        finalized_uid="firebase-uid",
+        finalization_key_hash=hashlib.sha256(key.encode()).hexdigest(),
+        result={"version": "redemption_result_v1", "access_status": "active"},
+    )
+
+    class Session:
+        def __init__(self):
+            self.statements = []
+
+        async def scalar(self, statement):
+            self.statements.append(statement)
+            return binding
+
+    session = Session()
+    assert (
+        await finalize_redemption(
+            session,
+            uid="firebase-uid",
+            email="buyer@example.com",
+            original_app_user_id="$RCAnonymousID:web",
+            idempotency_key=key,
+            environment="SANDBOX",
+        )
+        == binding.result
+    )
+    assert "finalization_key_hash" in str(
+        session.statements[0].compile(dialect=postgresql.dialect())
+    )
+
+
+@pytest.mark.asyncio
+async def test_finalization_does_not_reuse_finalized_purchase_for_new_key():
+    class Session:
+        async def scalar(self, _statement):
+            return None
+
+        async def scalars(self, _statement):
+            return []
+
+    with pytest.raises(HTTPException) as error:
+        await finalize_redemption(
+            Session(),
+            uid="firebase-uid",
+            email="buyer@example.com",
+            original_app_user_id="$RCAnonymousID:web",
+            idempotency_key="request-different-key",
+            environment="SANDBOX",
+        )
+
+    assert error.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_finalization_rechecks_key_after_pending_lock_race():
+    key = "request-concurrent-retry"
+    binding = _binding(
+        redeemer_uid="firebase-uid",
+        finalized_uid="firebase-uid",
+        finalization_key_hash=hashlib.sha256(key.encode()).hexdigest(),
+        result={"version": "redemption_result_v1", "access_status": "active"},
+    )
+
+    class Session:
+        def __init__(self):
+            self.key_lookups = 0
+
+        async def scalar(self, statement):
+            sql = str(statement.compile(dialect=postgresql.dialect()))
+            if "finalization_key_hash" in sql:
+                self.key_lookups += 1
+                return binding if self.key_lookups == 2 else None
+            return None
+
+        async def scalars(self, _statement):
+            return []
+
+    session = Session()
+    result = await finalize_redemption(
+        session,
+        uid="firebase-uid",
+        email="buyer@example.com",
+        original_app_user_id="$RCAnonymousID:web",
+        idempotency_key=key,
+        environment="SANDBOX",
+    )
+
+    assert result == binding.result
+    assert session.key_lookups == 2
 
 
 @pytest.mark.asyncio
@@ -328,3 +466,188 @@ async def test_finalization_attaches_purchase_to_authenticated_user():
         "carbs": 200,
         "fat": 65,
     }
+
+
+@pytest.mark.asyncio
+async def test_finalization_allows_second_purchase_for_existing_authenticated_user():
+    binding = _binding(
+        original_app_user_id="$RCAnonymousID:second-purchase",
+        redemption_link_hash=_link_hash("rc-example://second-purchase"),
+        preflight_uid="existing-user",
+        product_id="web_monthly",
+        environment="SANDBOX",
+        verified_at=utcnow(),
+    )
+    lead = _lead()
+    lead.snapshot = {"target_calories": 2000}
+    existing_user = User(
+        id="user-1",
+        firebase_uid="existing-user",
+        email="buyer@example.com",
+        onboarding_completed=False,
+    )
+
+    class Session:
+        def __init__(self):
+            self.scalars = iter(
+                [
+                    binding,
+                    existing_user,
+                    None,
+                    object(),
+                    object(),
+                    SimpleNamespace(status="active"),
+                ]
+            )
+
+        async def scalar(self, _statement):
+            return next(self.scalars)
+
+        async def get(self, _model, _identifier, **_kwargs):
+            return lead
+
+        async def commit(self):
+            return None
+
+    result = await finalize_redemption(
+        Session(),
+        uid="existing-user",
+        email="buyer@example.com",
+        original_app_user_id="$RCAnonymousID:second-purchase",
+        idempotency_key="request-second-purchase",
+        environment="SANDBOX",
+    )
+
+    assert result["access_status"] == "active"
+    assert binding.redeemer_uid == "existing-user"
+    assert binding.finalized_uid == "existing-user"
+
+
+@pytest.mark.asyncio
+async def test_finalization_prefers_one_pending_alias_over_older_finalized_purchase():
+    old_binding = _binding(
+        original_app_user_id="$RCAnonymousID:root",
+        provider_app_user_ids=["$RCAnonymousID:root"],
+        finalized_uid="existing-user",
+        result={"version": "redemption_result_v1", "access_status": "active"},
+    )
+    new_binding = _binding(
+        original_app_user_id="$RCAnonymousID:new",
+        provider_app_user_ids=["$RCAnonymousID:root", "$RCAnonymousID:new"],
+        preflight_uid="existing-user",
+        product_id="web_monthly",
+        environment="SANDBOX",
+        verified_at=utcnow(),
+    )
+    lead = _lead()
+    lead.snapshot = {"target_calories": 2000}
+    existing_user = User(
+        id="user-1",
+        firebase_uid="existing-user",
+        email="buyer@example.com",
+        onboarding_completed=True,
+    )
+
+    class Session:
+        def __init__(self):
+            self.pending_lookup_count = 2
+            self.scalar_results = iter(
+                [existing_user, None, object(), object(), SimpleNamespace(status="active")]
+            )
+
+        async def scalar(self, _statement):
+            if self.pending_lookup_count:
+                self.pending_lookup_count -= 1
+                return None
+            return next(self.scalar_results)
+
+        async def scalars(self, _statement):
+            return [new_binding]
+
+        async def get(self, _model, _identifier, **_kwargs):
+            return lead
+
+        async def commit(self):
+            return None
+
+    result = await finalize_redemption(
+        Session(),
+        uid="existing-user",
+        email="buyer@example.com",
+        original_app_user_id="$RCAnonymousID:root",
+        idempotency_key="request-alias-purchase",
+        environment="SANDBOX",
+    )
+
+    assert result["access_status"] == "active"
+    assert old_binding.finalized_uid == "existing-user"
+    assert new_binding.finalized_uid == "existing-user"
+
+    new_binding.result = result
+
+    class RetrySession:
+        async def scalar(self, _statement):
+            return new_binding
+
+    assert (
+        await finalize_redemption(
+            RetrySession(),
+            uid="existing-user",
+            email="buyer@example.com",
+            original_app_user_id="$RCAnonymousID:root",
+            idempotency_key="request-alias-purchase",
+            environment="SANDBOX",
+        )
+        == new_binding.result
+    )
+
+
+@pytest.mark.asyncio
+async def test_finalization_rejects_multiple_pending_alias_matches():
+    class Session:
+        async def scalar(self, _statement):
+            return None
+
+        async def scalars(self, _statement):
+            return [_binding(), _binding(lead_id="lead-2")]
+
+    with pytest.raises(HTTPException) as error:
+        await finalize_redemption(
+            Session(),
+            uid="existing-user",
+            email="buyer@example.com",
+            original_app_user_id="$RCAnonymousID:root",
+            idempotency_key="request-ambiguous-alias",
+            environment="SANDBOX",
+        )
+
+    assert error.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_webhook_rejects_ambiguous_repeat_purchase_aliases():
+    first = _binding(original_app_user_id="$RCAnonymousID:first")
+    second = _binding(
+        lead_id="lead-2", original_app_user_id="$RCAnonymousID:second"
+    )
+
+    class Session:
+        async def scalars(self, _statement):
+            return [first, second]
+
+    recorded = await WebFunnelRedemptionService().record_webhook_redemption(
+        Session(),
+        {
+            "type": "PURCHASE_REDEEMED",
+            "environment": "SANDBOX",
+            "redeemed_from": [
+                "$RCAnonymousID:first",
+                "$RCAnonymousID:second",
+            ],
+            "redeemed_by": ["$RCAnonymousID:canonical"],
+        },
+    )
+
+    assert not recorded
+    assert first.redemption_confirmed_at is None
+    assert second.redemption_confirmed_at is None
