@@ -357,6 +357,61 @@ def test_alternatives_apply_calorie_gate_before_diversity_rerank():
     ]
 
 
+def test_alternatives_widen_past_tolerance_when_pool_can_fill_count():
+    optimizer = ThreeDayPlanOptimizer()
+    profile = IngredientAffinityService().build_profile([], now=datetime.now(UTC))
+    target_calories = 500
+    ranked_pool = RecipeScoringService().rank(
+        [
+            _catalog_meal("selected", "breakfast", 500),
+            _catalog_meal("near-1", "breakfast", 510),
+            _catalog_meal("near-2", "breakfast", 540),
+            _catalog_meal("far-1", "breakfast", 800),
+            _catalog_meal("far-2", "breakfast", 900),
+            _catalog_meal("far-3", "breakfast", 1000),
+        ],
+        meal_type="breakfast",
+        target_calories=target_calories,
+        affinity=profile,
+    )
+
+    shortlist = optimizer._rank_pool_with_fallback(
+        ranked_pool,
+        target_calories=target_calories,
+        selected_ids={"selected"},
+        minimum_count=1,
+    )
+
+    within_tolerance = [
+        item
+        for item in ranked_pool
+        if item.catalog_meal.id != "selected"
+        and abs(item.catalog_meal.calories - target_calories) / target_calories
+        <= 0.30
+    ]
+
+    assert len(within_tolerance) == 2
+    assert shortlist[0].catalog_meal.id == "near-1"
+
+    result = optimizer._select_alternatives_from_pool(
+        ranked_pool,
+        day_index=0,
+        meal_type="breakfast",
+        target_calories=target_calories,
+        selected_catalog_meal_id="selected",
+        selected_catalog_meal_ids={"selected"},
+    )
+
+    assert not isinstance(result, MealRecommendationInsufficiency)
+    assert [item.catalog_meal.id for item in result] == [
+        "near-1",
+        "near-2",
+        "far-1",
+        "far-2",
+        "far-3",
+    ]
+
+
 def _slot_golden(plan):
     return [
         (slot.day_index, slot.meal_type, slot.catalog_meal.id, round(slot.score, 6))
