@@ -12,7 +12,7 @@ Date: 2026-08-09 15:58
 ## Validation
 
 - `uv run --python 3.13.2 lint-imports`: passed.
-- `uv run --python 3.13.2 pytest tests/unit --cov=src --cov-fail-under=65`: passed, 2231 passed / 0 failed / 44 warnings, 79.33% coverage.
+- `uv run --python 3.13.2 pytest tests/unit --cov=src --cov-fail-under=65`: passed, 2305 passed / 0 failed / 44 warnings, 79.99% coverage after merging `origin/delivery`.
 - `uv run --python 3.13.2 pytest tests/integration/ai/test_openai_translation_smoke.py`: skipped cleanly.
 - `tests/architecture/test_async_db_runtime_boundaries.py::test_repository_transaction_boundary_allowlist_does_not_expand`: failed on pre-existing allowlist mismatch in `src/infra/repositories/admin_meal_catalog_repository_async.py`.
 - Repository-wide Ruff/format checks remain red on baseline debt; focused new adapter and fixture files are clean.

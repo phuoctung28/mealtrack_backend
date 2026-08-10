@@ -33,7 +33,7 @@ credential-gated smoke coverage.
 - Active residue also exists in `/Users/alexnguyen/orca/workspaces/mealtrack_backend/bramble/src/api/mappers/meal_mapper.py:82`, `/Users/alexnguyen/orca/workspaces/mealtrack_backend/bramble/src/domain/services/translation/__init__.py:1-3`, and `/Users/alexnguyen/orca/workspaces/mealtrack_backend/bramble/.importlinter:162-176`; a hand-selected source list is not a sufficient zero-residue gate.
 - Code rollback cannot identify OpenAI-written data because the schema has no provider provenance. Release must record a cutover timestamp and retain the pre-cutover search-cache namespace for scoped rollback without adding a migration.
 - Deterministic translation admission protects numbers, placeholders, recognized locale units, and known brands; full semantic equivalence remains a provider-quality limitation rather than a lexical proof.
-- Unit validation is green at 2231 passed / 44 warnings / 79.33% coverage; focused adapter, fixture, compile, mypy, and import-boundary checks pass.
+- Unit validation is green at 2305 passed / 44 warnings / 79.99% coverage after merging `origin/delivery`; focused adapter, fixture, compile, mypy, and import-boundary checks pass.
 - Release validation remains open: the repository-wide Ruff/format baseline is not green, and `tests/architecture/test_async_db_runtime_boundaries.py::test_repository_transaction_boundary_allowlist_does_not_expand` still fails on the pre-existing `src/infra/repositories/admin_meal_catalog_repository_async.py` allowlist mismatch.
 
 ## Requirements

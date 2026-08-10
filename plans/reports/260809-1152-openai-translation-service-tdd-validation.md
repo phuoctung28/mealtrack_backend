@@ -16,8 +16,8 @@ Date: 2026-08-09
 - Translation-focused unit tests: 81 passed
 - Translation integration smoke: 1 skipped
 - Architecture tests: 13 passed, 1 failed
-- Full unit suite: 2231 passed, 0 failed, 44 warnings
-- Coverage: 79.33% line coverage, threshold 65% reached
+- Full unit suite: 2305 passed, 0 failed, 44 warnings
+- Coverage: 79.99% line coverage, threshold 65% reached after merging `origin/delivery`
 - Focused Ruff for new adapter/fixture/translation-service files: passed
 - Repository-wide Ruff/format checks: not green on pre-existing baseline debt
 

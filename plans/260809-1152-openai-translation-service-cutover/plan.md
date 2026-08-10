@@ -70,7 +70,7 @@ User approval: Option 1 approved on Sunday, August 9, 2026. Apply all 14 accepte
 ### Session 2 — 2026-08-09 (implementation validation; 1 pre-existing gate failure)
 
 - `uv run --python 3.13.2 lint-imports`: passed.
-- `uv run --python 3.13.2 pytest tests/unit --cov=src --cov-fail-under=65`: passed, 2231 passed / 0 failed / 44 warnings, 79.33% coverage.
+- `uv run --python 3.13.2 pytest tests/unit --cov=src --cov-fail-under=65`: passed, 2305 passed / 0 failed / 44 warnings, 79.99% coverage after merging `origin/delivery`.
 - `uv run --python 3.13.2 pytest tests/integration/ai/test_openai_translation_smoke.py`: skipped cleanly in this environment.
 - `tests/architecture/test_async_db_runtime_boundaries.py::test_repository_transaction_boundary_allowlist_does_not_expand`: failed on the pre-existing allowlist mismatch in `src/infra/repositories/admin_meal_catalog_repository_async.py`.
 - Impact: translation cutover implementation is complete, but the release gate stays open until the pre-existing allowlist mismatch and repository-wide Ruff/format baseline are reconciled or explicitly re-approved.

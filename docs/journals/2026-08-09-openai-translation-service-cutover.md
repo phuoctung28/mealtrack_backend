@@ -22,7 +22,7 @@ This was the kind of cutover that punishes sloppy thinking. If we had treated tr
   - `uv run --python 3.13.2 lint-imports`
   - `uv run --python 3.13.2 pytest tests/unit --cov=src --cov-fail-under=65`
   - `uv run --python 3.13.2 pytest tests/integration/ai/test_openai_translation_smoke.py` skipped cleanly
-- Post-fix full unit gate: `2231 passed`, `44 warnings`, `79.33%` coverage.
+- Post-fix full unit gate: `2305 passed`, `44 warnings`, `79.99%` coverage after merging `origin/delivery`.
 - Focused semantic, metadata, empty, and concurrency checks passed.
 - Residue gate is reconciled.
 - Known failure: `tests/architecture/test_async_db_runtime_boundaries.py::test_repository_transaction_boundary_allowlist_does_not_expand` failed on the pre-existing allowlist mismatch in `src/infra/repositories/admin_meal_catalog_repository_async.py`.
