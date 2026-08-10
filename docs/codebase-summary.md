@@ -52,7 +52,7 @@ Do not hand-maintain file, LOC, or endpoint counts in this document.
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/api/routes/v1/` | Versioned REST route modules |
+| `src/api/routes/v1/` | Versioned REST route modules (meals/webhooks use thin entry files plus sibling modules by flow) |
 | `src/api/schemas/` | Pydantic DTOs |
 | `src/app/commands/` | Write-operation command packages |
 | `src/app/queries/` | Read-operation query packages |

@@ -32,6 +32,7 @@ from src.app.commands.meal_suggestion import (
     SaveMealSuggestionCommand,
 )
 from src.app.queries.meal import GetMealByIdQuery
+from src.domain.model.nutrition.macros import Macros
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -241,10 +242,7 @@ async def save_meal_suggestion(
     """
     language = get_request_language(request)
     derived_calories = round(
-        body.protein * 4
-        + max(body.carbs - body.fiber, 0) * 4
-        + body.fiber * 2
-        + body.fat * 9
+        Macros.raw_total_calories(body.protein, body.carbs, body.fat, body.fiber)
     )
     command = SaveMealSuggestionCommand(
         user_id=user_id,

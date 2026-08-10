@@ -224,6 +224,62 @@ def test_guest_parse_invalid_text(monkeypatch, client: TestClient):
     quota_svc.reserve.assert_not_awaited()
 
 
+def test_guest_parse_trial_requires_no_auth_dependency(monkeypatch):
+    """AUTH BOUNDARY: the guest-trial route must work with NO Authorization
+    header and NO auth dependency overrides at all — proving it does not sit
+    behind `verify_firebase_token` / `get_current_user_id` like the
+    authenticated meal routes do. Uses a fresh app import with ONLY the
+    non-auth dependencies (event bus, quota service) overridden.
+    """
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv("GUEST_INSTALL_HASH_SECRET", "test-secret")
+
+    import importlib
+    import sys
+
+    sys.modules.pop("src.api.main", None)
+    main = importlib.import_module("src.api.main")
+
+    main.initialize_firebase = lambda: None  # type: ignore[assignment]
+
+    async def _noop_async(*args, **kwargs):
+        return None
+
+    main.initialize_cache_layer = _noop_async  # type: ignore[assignment]
+    main.shutdown_cache_layer = _noop_async  # type: ignore[assignment]
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.api.dependencies.guest_quota import get_guest_quota_service
+
+    async def send(msg):
+        return _Resp()
+
+    quota_svc = MagicMock()
+    quota_svc.reserve = AsyncMock(return_value="abc123hash")
+    quota_svc.mark_completed = AsyncMock(return_value=None)
+    quota_svc.release_reservation = AsyncMock(return_value=None)
+
+    # Deliberately NOT overriding get_current_user_id / verify_firebase_token /
+    # verify_firebase_uid_ownership: if the route ever grows an auth
+    # dependency, this test will fail with 401/403 instead of 200.
+    main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(send)
+    main.app.dependency_overrides[get_guest_quota_service] = lambda: quota_svc
+
+    try:
+        with TestClient(main.app) as anon_client:
+            r = anon_client.post(
+                "/v1/meals/parse-text/guest-trial",
+                json={"text": "2 eggs scrambled", "current_items": []},
+                headers={"X-Guest-Install-Id": "install-abc123"},
+                # deliberately no Authorization header
+            )
+    finally:
+        main.app.dependency_overrides = {}
+
+    assert r.status_code == 200, r.text
+    quota_svc.reserve.assert_awaited_once_with("install-abc123")
+
+
 def test_authenticated_parse_text_unchanged(monkeypatch, client: TestClient):
     """Regression guard: existing /v1/meals/parse-text still returns 200."""
     import src.api.main as main

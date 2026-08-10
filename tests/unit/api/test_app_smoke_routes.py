@@ -96,9 +96,9 @@ def test_meals_analyze_rejects_invalid_target_date(client: TestClient):
 
 def test_meals_analyze_rejects_too_large(monkeypatch, client: TestClient):
     # Avoid allocating 10MB in tests by shrinking limit
-    import src.api.routes.v1.meals as meals_routes
+    import src.api.routes.v1.meals_analyze as meals_analyze_routes
 
-    monkeypatch.setattr(meals_routes, "MAX_FILE_SIZE", 3)
+    monkeypatch.setattr(meals_analyze_routes, "MAX_FILE_SIZE", 3)
 
     r = client.post(
         "/v1/meals/image/analyze",
@@ -294,6 +294,300 @@ def test_user_profiles_onboarding_invalid_birth_date(client: TestClient):
     r = client.post("/v1/user-profiles/", json=payload)
     assert r.status_code == 400
     assert r.json()["detail"] == "Invalid birth date"
+
+
+def test_meals_manual_create_happy_path(client: TestClient):
+    """Smoke coverage for POST /v1/meals/manual (manual+text group, happy path)."""
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.model.meal import Meal, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    class _ManualCreateBus:
+        async def send(self, msg):
+            return Meal(
+                meal_id=str(uuid4()),
+                user_id=str(uuid4()),
+                status=MealStatus.READY,
+                created_at=datetime(2026, 7, 2, 12, 0),
+                ready_at=datetime(2026, 7, 2, 12, 0),
+                image=None,
+                dish_name="Chicken Rice",
+                source="manual",
+                nutrition=Nutrition(
+                    macros=Macros(protein=30, carbs=50, fat=10),
+                    food_items=[
+                        FoodItem(
+                            id="item-1",
+                            name="Chicken",
+                            quantity=150,
+                            unit="g",
+                            macros=Macros(protein=30, carbs=50, fat=10),
+                        )
+                    ],
+                ),
+            )
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _ManualCreateBus()
+
+    payload = {
+        "dish_name": "Chicken Rice",
+        "items": [{"fdc_id": 12345, "quantity": 150, "unit": "g"}],
+        "meal_type": "lunch",
+        "source": "manual",
+    }
+    r = client.post("/v1/meals/manual", json=payload)
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "success"
+    assert body["meal_detail"]["dish_name"] == "Chicken Rice"
+
+
+def test_meals_get_by_id_read_group(client: TestClient):
+    """Smoke coverage for GET /v1/meals/{meal_id} (read group)."""
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.model.meal import Meal, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    meal_id = str(uuid4())
+    meal = Meal(
+        meal_id=meal_id,
+        user_id=str(uuid4()),
+        status=MealStatus.READY,
+        created_at=datetime(2026, 7, 2, 12, 0),
+        ready_at=datetime(2026, 7, 2, 12, 0),
+        image=None,
+        dish_name="Grilled Salmon",
+        source="scanner",
+        nutrition=Nutrition(
+            macros=Macros(protein=35, carbs=5, fat=20),
+            food_items=[
+                FoodItem(
+                    id="item-1",
+                    name="Salmon",
+                    quantity=200,
+                    unit="g",
+                    macros=Macros(protein=35, carbs=5, fat=20),
+                )
+            ],
+        ),
+    )
+
+    class _GetMealBus:
+        async def send(self, msg):
+            return meal
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _GetMealBus()
+
+    r = client.get(f"/v1/meals/{meal_id}")
+
+    assert r.status_code == 200, r.text
+    assert r.json()["dish_name"] == "Grilled Salmon"
+    assert r.json()["meal_id"] == meal_id
+
+
+def test_meals_edit_ingredients_edit_group(client: TestClient):
+    """Smoke coverage for PUT /v1/meals/{meal_id}/ingredients (edit group)."""
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.app.commands.meal import EditMealCommand
+    from src.domain.model.meal import Meal, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    meal_id = str(uuid4())
+    meal = Meal(
+        meal_id=meal_id,
+        user_id=str(uuid4()),
+        status=MealStatus.READY,
+        created_at=datetime(2026, 7, 2, 12, 0),
+        ready_at=datetime(2026, 7, 2, 12, 0),
+        image=None,
+        dish_name="Updated Dish",
+        source="scanner",
+        nutrition=Nutrition(
+            macros=Macros(protein=35, carbs=5, fat=20),
+            food_items=[
+                FoodItem(
+                    id="item-1",
+                    name="Salmon",
+                    quantity=200,
+                    unit="g",
+                    macros=Macros(protein=35, carbs=5, fat=20),
+                )
+            ],
+        ),
+    )
+    sent = []
+
+    class _EditBus:
+        async def send(self, msg):
+            sent.append(msg)
+            if isinstance(msg, EditMealCommand):
+                return {"success": True}
+            return meal
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _EditBus()
+
+    r = client.put(
+        f"/v1/meals/{meal_id}/ingredients",
+        json={"dish_name": "Updated Dish", "food_item_changes": []},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {"success": True}
+    edit_command = next(m for m in sent if isinstance(m, EditMealCommand))
+    assert edit_command.meal_id == meal_id
+    assert edit_command.dish_name == "Updated Dish"
+
+
+def test_meals_streak_smoke(client: TestClient):
+    """Smoke coverage for GET /v1/meals/streak."""
+    from src.api.dependencies.event_bus import get_configured_event_bus
+
+    class _StreakBus:
+        async def send(self, msg):
+            return {
+                "current_streak": 5,
+                "best_streak": 10,
+                "last_logged_date": "2026-07-02",
+                "scan_count": 3,
+            }
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _StreakBus()
+
+    r = client.get("/v1/meals/streak")
+
+    assert r.status_code == 200, r.text
+    assert r.json()["current_streak"] == 5
+    assert r.json()["best_streak"] == 10
+
+
+def test_meals_daily_breakdown_smoke(client: TestClient):
+    """Smoke coverage for GET /v1/meals/weekly/daily-breakdown."""
+    from src.api.dependencies.event_bus import get_configured_event_bus
+
+    day = {
+        "date": "2026-07-02",
+        "calories_consumed": 1800.0,
+        "calories_target": 2000.0,
+        "protein_consumed": 120.0,
+        "protein_target": 150.0,
+        "carbs_consumed": 180.0,
+        "carbs_target": 200.0,
+        "fat_consumed": 60.0,
+        "fat_target": 70.0,
+        "meal_count": 3,
+    }
+
+    class _BreakdownBus:
+        async def send(self, msg):
+            return {"days": [day], "week_start": "2026-06-30"}
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _BreakdownBus()
+
+    r = client.get("/v1/meals/weekly/daily-breakdown")
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["week_start"] == "2026-06-30"
+    assert len(body["days"]) == 1
+
+
+def test_meals_weekly_budget_smoke(client: TestClient):
+    """Smoke coverage for GET /v1/meals/weekly/budget."""
+    from src.api.dependencies.event_bus import get_configured_event_bus
+
+    class _BudgetBus:
+        async def send(self, msg):
+            return {
+                "week_start_date": "2026-06-30",
+                "target_calories": 14000.0,
+                "target_protein": 700.0,
+                "target_carbs": 1750.0,
+                "target_fat": 466.7,
+                "consumed_calories": 2100.0,
+                "consumed_protein": 100.0,
+                "consumed_carbs": 250.0,
+                "consumed_fat": 100.0,
+                "remaining_calories": 11900.0,
+                "remaining_protein": 600.0,
+                "remaining_carbs": 1500.0,
+                "remaining_fat": 366.7,
+                "adjusted_daily_calories": 2000.0,
+                "adjusted_daily_carbs": 250.0,
+                "adjusted_daily_fat": 66.7,
+                "daily_protein": 100.0,
+                "remaining_days": 6,
+                "bmr_floor_active": False,
+                "cheat_days": [],
+            }
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _BudgetBus()
+
+    r = client.get("/v1/meals/weekly/budget")
+
+    assert r.status_code == 200, r.text
+    assert r.json()["target_calories"] == 14000.0
+
+
+def test_meals_value_insights_unavailable_without_cache_service(client: TestClient):
+    """Smoke coverage for GET /v1/meals/{meal_id}/value-insights.
+
+    Documents CURRENT behavior: with no cache_service configured (default in
+    TestClient/test env), the endpoint returns status="unavailable" rather
+    than attempting AI generation.
+    """
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.model.meal import Meal, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    meal_id = str(uuid4())
+    meal = Meal(
+        meal_id=meal_id,
+        user_id=str(uuid4()),
+        status=MealStatus.READY,
+        created_at=datetime(2026, 7, 2, 12, 0),
+        ready_at=datetime(2026, 7, 2, 12, 0),
+        image=None,
+        dish_name="Grilled Salmon",
+        source="scanner",
+        nutrition=Nutrition(
+            macros=Macros(protein=35, carbs=5, fat=20),
+            food_items=[
+                FoodItem(
+                    id="item-1",
+                    name="Salmon",
+                    quantity=200,
+                    unit="g",
+                    macros=Macros(protein=35, carbs=5, fat=20),
+                )
+            ],
+        ),
+    )
+
+    class _ValueInsightsBus:
+        async def send(self, msg):
+            return meal
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _ValueInsightsBus()
+
+    r = client.get(f"/v1/meals/{meal_id}/value-insights")
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "unavailable"
+    assert body["value_insights"] is None
 
 
 def test_users_sync_forbidden_when_token_uid_mismatch(client: TestClient):

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import and_, bindparam, or_, select, text
 
+from src.domain.constants.calorie_sql import CALORIE_FORMULA_SQL_FRAGMENT
 from src.domain.services.notification_messages import get_messages
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.notification.notification import NotificationORM
@@ -458,13 +459,10 @@ async def _fetch_calories_consumed_batch(
     window_start = now - timedelta(hours=24)
     async with AsyncUnitOfWork() as uow:
         result = await uow.session.execute(
-            text("""
+            text(f"""
                 SELECT m.user_id,
                        COALESCE(SUM(
-                           (n.protein * 4.0)
-                           + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
-                           + (n.fiber * 2.0)
-                           + (n.fat * 9.0)
+                           {CALORIE_FORMULA_SQL_FRAGMENT}
                        ), 0) AS consumed_calories
                 FROM meal m
                 JOIN nutrition n ON n.meal_id = m.meal_id
