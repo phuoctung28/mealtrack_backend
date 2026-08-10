@@ -11,6 +11,7 @@ that SQLite (the default unit-test engine) cannot execute.
 """
 
 from datetime import date, timedelta
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -39,6 +40,7 @@ class _FakeSession:
     def __init__(self, query_results):
         self._results = list(query_results)
         self.executed_count = 0
+        self.nested_count = 0
 
     async def execute(self, _stmt, _params=None):
         self.executed_count += 1
@@ -48,6 +50,12 @@ class _FakeSession:
 
     async def flush(self):
         pass
+
+    @asynccontextmanager
+    async def begin_nested(self):
+        """Mirror SQLAlchemy savepoints used to isolate per-user calorie goals."""
+        self.nested_count += 1
+        yield
 
 
 class _FakeUow:
@@ -251,6 +259,9 @@ async def test_precompute_db_locks_calorie_goals_for_mixed_user_batch():
     }
     assert user_budget_stale not in captured_build_args["calorie_goals"]
     assert user_no_profile not in captured_build_args["calorie_goals"]
+    # Custom + matching-revision users enter savepoints; stale raises inside and
+    # still consumes a nested transaction.
+    assert session.nested_count == 3
 
     # CURRENT behavior: return value is len(pref_rows), regardless of per-user
     # skips (stale revision / missing profile). Not "count of users with a goal".
