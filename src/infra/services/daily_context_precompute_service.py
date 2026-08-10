@@ -10,12 +10,17 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from src.domain.constants.calorie_sql import CALORIE_FORMULA_SQL_FRAGMENT
 from src.domain.model.user import MacroTargets
+from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     build_tdee_request,
 )
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.services.weekly_budget_service import WeeklyBudgetService
+from src.domain.services.weekly_budget_service import (
+    WeeklyBudgetService,
+    WeeklyEffectivePreload,
+)
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.notification.notification import NotificationORM
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -238,12 +243,9 @@ class DailyContextPrecomputeService:
             day_end_utc = day_start_utc + timedelta(days=1)
 
             consumed_result = await session.execute(
-                text("""
+                text(f"""
                     SELECT COALESCE(SUM(
-                        (n.protein * 4.0)
-                        + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
-                        + (n.fiber * 2.0)
-                        + (n.fat * 9.0)
+                        {CALORIE_FORMULA_SQL_FRAGMENT}
                     ), 0) as total
                     FROM meal m
                     JOIN nutrition n ON n.meal_id = m.meal_id
@@ -382,6 +384,10 @@ class DailyContextPrecomputeService:
         target_date: date,
         profile_row=None,
         user_timezone: str = "UTC",
+        *,
+        weekly_budget=None,
+        cheat_dates: list[date] | None = None,
+        weekly_preload: WeeklyEffectivePreload | None = None,
     ) -> int:
         """Get today's adjusted calorie goal from weekly budget, then TDEE fallback."""
         if profile_row is None:
@@ -411,9 +417,10 @@ class DailyContextPrecomputeService:
                 for field in ("custom_protein_g", "custom_carbs_g", "custom_fat_g")
             )
             week_start = target_date - timedelta(days=target_date.weekday())
-            weekly_budget = await uow.weekly_budgets.find_by_user_and_week(
-                user_id, week_start
-            )
+            if weekly_budget is None:
+                weekly_budget = await uow.weekly_budgets.find_by_user_and_week(
+                    user_id, week_start
+                )
             if not weekly_budget:
                 if is_custom:
                     return int(
@@ -439,6 +446,8 @@ class DailyContextPrecomputeService:
                 base_daily_fat=weekly_budget.target_fat / 7,
                 bmr=result.bmr,
                 user_timezone=user_timezone,
+                cheat_dates=cheat_dates,
+                weekly_preload=weekly_preload,
             )
             adjusted = effective.adjusted
             policy_macros = self._tdee_service.apply_adjusted_macro_policy(
@@ -462,7 +471,7 @@ class DailyContextPrecomputeService:
 
     async def _precompute_db(self, tz_name: str, today: date) -> int:
         """
-        All DB work: 5 SQL queries + 1 bulk INSERT.
+        All DB work: 9 SQL queries + 1 bulk INSERT.
         Returns count of users processed.
         Only processes users with at least one active FCM token.
         """
@@ -563,15 +572,12 @@ class DailyContextPrecomputeService:
 
             # Canonical formula: P*4 + (C-fiber)*4 + fiber*2 + F*9.
             consumed_result = await session.execute(
-                text("""
+                text(f"""
                     SELECT
                         m.user_id,
                         COALESCE(
                             SUM(
-                                (n.protein * 4.0)
-                                + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
-                                + (n.fiber * 2.0)
-                                + (n.fat * 9.0)
+                                {CALORIE_FORMULA_SQL_FRAGMENT}
                             ),
                             0
                         ) AS consumed_calories
@@ -595,16 +601,171 @@ class DailyContextPrecomputeService:
                 row.user_id: float(row.consumed_calories) for row in consumed_rows
             }
 
-            # ---- Compute calorie goals via TDEE (per user, with fallback) ----
+            week_start = today - timedelta(days=today.weekday())
+            week_end = week_start + timedelta(days=6)
+            week_start_utc = datetime.combine(
+                week_start, datetime.min.time(), tzinfo=tz
+            ).astimezone(UTC)
+            week_end_utc = week_start_utc + timedelta(days=7)
+
+            budget_result = await session.execute(
+                text("""
+                    SELECT weekly_budget_id, user_id, week_start_date,
+                           target_calories, target_protein, target_carbs, target_fat,
+                           consumed_calories, consumed_protein, consumed_carbs,
+                           consumed_fat, target_revision
+                    FROM weekly_macro_budgets
+                    WHERE user_id = ANY(:ids)
+                      AND week_start_date = :week_start
+                """),
+                {"ids": user_ids, "week_start": week_start},
+            )
+            budgets_by_user = {
+                row.user_id: WeeklyMacroBudget(
+                    weekly_budget_id=row.weekly_budget_id,
+                    user_id=row.user_id,
+                    week_start_date=row.week_start_date,
+                    target_calories=row.target_calories,
+                    target_protein=row.target_protein,
+                    target_carbs=row.target_carbs,
+                    target_fat=row.target_fat,
+                    consumed_calories=row.consumed_calories,
+                    consumed_protein=row.consumed_protein,
+                    consumed_carbs=row.consumed_carbs,
+                    consumed_fat=row.consumed_fat,
+                    target_revision=row.target_revision,
+                )
+                for row in budget_result.fetchall()
+            }
+
+            cheat_result = await session.execute(
+                text("""
+                    SELECT user_id, date
+                    FROM cheat_days
+                    WHERE user_id = ANY(:ids)
+                      AND date >= :week_start
+                      AND date <= :week_end
+                    ORDER BY user_id, date
+                """),
+                {"ids": user_ids, "week_start": week_start, "week_end": week_end},
+            )
+            cheat_dates_by_user: dict[str, list[date]] = defaultdict(list)
+            for row in cheat_result.fetchall():
+                cheat_dates_by_user[row.user_id].append(row.date)
+
+            meal_result = await session.execute(
+                text(f"""
+                    SELECT m.user_id, m.created_at, m.status,
+                           n.protein, n.carbs, n.fat, n.fiber
+                    FROM meal m
+                    JOIN nutrition n ON n.meal_id = m.meal_id
+                    WHERE m.user_id = ANY(:ids)
+                      AND m.created_at >= :week_start
+                      AND m.created_at < :week_end
+                      AND m.status = 'READY'
+                """),
+                {
+                    "ids": user_ids,
+                    "week_start": week_start_utc.replace(tzinfo=None),
+                    "week_end": week_end_utc.replace(tzinfo=None),
+                },
+            )
+            ready_meals_by_user: dict[str, list[tuple]] = defaultdict(list)
+            hydratable_dates_by_user: dict[str, set[date]] = defaultdict(set)
+            tz = ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC")
+            for row in meal_result.fetchall():
+                ready_meals_by_user[row.user_id].append(
+                    (row.created_at, row.protein, row.carbs, row.fat, row.fiber)
+                )
+                if row.created_at:
+                    local_day = row.created_at.replace(tzinfo=UTC).astimezone(tz).date()
+                    hydratable_dates_by_user[row.user_id].add(local_day)
+
+            hydratable_result = await session.execute(
+                text("""
+                    SELECT m.user_id, m.created_at
+                    FROM meal m
+                    WHERE m.user_id = ANY(:ids)
+                      AND m.created_at >= :week_start
+                      AND m.created_at < :week_end
+                      AND m.status != 'INACTIVE'
+                      AND (
+                          m.status != 'READY'
+                          OR (m.ready_at IS NOT NULL AND EXISTS (
+                              SELECT 1 FROM nutrition n WHERE n.meal_id = m.meal_id
+                          ))
+                      )
+                """),
+                {
+                    "ids": user_ids,
+                    "week_start": week_start_utc.replace(tzinfo=None),
+                    "week_end": week_end_utc.replace(tzinfo=None),
+                },
+            )
+            for row in hydratable_result.fetchall():
+                if row.created_at:
+                    local_day = row.created_at.replace(tzinfo=UTC).astimezone(tz).date()
+                    hydratable_dates_by_user[row.user_id].add(local_day)
+
+            movement_result = await session.execute(
+                text("""
+                    SELECT user_id,
+                           DATE(timezone(:tz_name, logged_at)) AS local_date,
+                           COALESCE(SUM(kcal_burned), 0) AS kcal
+                    FROM movement_entries
+                    WHERE user_id = ANY(:ids)
+                      AND include_in_balance = true
+                      AND logged_at >= :week_start
+                      AND logged_at < :week_end
+                    GROUP BY user_id, DATE(timezone(:tz_name, logged_at))
+                """),
+                {
+                    "ids": user_ids,
+                    "tz_name": tz_name,
+                    "week_start": week_start_utc.replace(tzinfo=None),
+                    "week_end": week_end_utc.replace(tzinfo=None),
+                },
+            )
+            movement_by_user: dict[str, dict[date, float]] = defaultdict(dict)
+            for row in movement_result.fetchall():
+                local_date = (
+                    row.local_date
+                    if isinstance(row.local_date, date)
+                    else date.fromisoformat(str(row.local_date))
+                )
+                movement_by_user[row.user_id][local_date] = float(row.kcal)
+
+            # ---- Compute calorie goals (batch preload + full effective-adjusted) ----
             calorie_goals: dict[str, int] = {}
             for user_id in user_ids:
                 profile = profiles_by_user.get(user_id)
                 if profile is None:
-                    logger.warning("Skipping notification target without profile for %s", user_id)
+                    logger.warning(
+                        "Skipping notification target without profile for %s", user_id
+                    )
                     continue
+                weekly_budget = budgets_by_user.get(user_id)
+                weekly_preload = None
+                if weekly_budget is not None:
+                    weekly_preload = WeeklyBudgetService.build_weekly_effective_preload(
+                        meal_rows=ready_meals_by_user.get(user_id, []),
+                        hydratable_dates=hydratable_dates_by_user.get(user_id, set()),
+                        movement_by_date=movement_by_user.get(user_id, {}),
+                        cheat_dates=cheat_dates_by_user.get(user_id, []),
+                        week_start=week_start,
+                        target_date=today,
+                        user_timezone=tz_name,
+                    )
                 try:
                     calorie_goals[user_id] = await self._get_user_calorie_goal(
-                        uow, user_id, today, profile, tz_name
+                        uow,
+                        user_id,
+                        today,
+                        profile,
+                        tz_name,
+                        weekly_budget=weekly_budget,
+                        cheat_dates=cheat_dates_by_user.get(user_id, []),
+                        weekly_preload=weekly_preload,
                     )
                 except Exception as exc:
                     logger.warning(
@@ -613,7 +774,7 @@ class DailyContextPrecomputeService:
                         exc,
                     )
 
-            # ---- Query 5 / bulk INSERT: pre-build notification rows ----
+            # ---- Query 9 / bulk INSERT: pre-build notification rows ----
             notif_rows = self._build_notification_rows(
                 pref_rows=pref_rows,
                 tokens_by_user=tokens_by_user,

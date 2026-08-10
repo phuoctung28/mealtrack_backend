@@ -252,7 +252,10 @@ ignore_imports =
     src.api.routes.v1.meal_suggestions -> src.infra.database.config_async
     src.api.routes.v1.meal_suggestions -> src.infra.adapters.unsplash_image_adapter
     src.api.routes.v1.meal_suggestions -> src.infra.event_bus
-    src.api.routes.v1.meals -> src.infra.event_bus
+    src.api.routes.v1.meals_analyze -> src.infra.event_bus
+    src.api.routes.v1.meals_edit -> src.infra.event_bus
+    src.api.routes.v1.meals_manual_text -> src.infra.event_bus
+    src.api.routes.v1.meals_read -> src.infra.event_bus
     src.api.routes.v1.monitoring -> src.infra.cache.metrics
     src.api.routes.v1.movement -> src.infra.event_bus
     src.api.routes.v1.notifications -> src.infra.event_bus
@@ -261,13 +264,14 @@ ignore_imports =
     src.api.routes.v1.tdee -> src.infra.event_bus
     src.api.routes.v1.user_profiles -> src.infra.event_bus
     src.api.routes.v1.users -> src.infra.event_bus
-    src.api.routes.v1.webhooks -> src.infra.adapters.posthog_adapter
-    src.api.routes.v1.webhooks -> src.infra.adapters.resend_email_adapter
-    src.api.routes.v1.webhooks -> src.infra.database.models.subscription
-    src.api.routes.v1.webhooks -> src.infra.database.models.user.user
+    src.api.routes.v1.webhook_subscription_lifecycle -> src.infra.adapters.posthog_adapter
+    src.api.routes.v1.webhook_subscription_lifecycle -> src.infra.adapters.resend_email_adapter
+    src.api.routes.v1.webhook_subscription_lifecycle -> src.infra.database.models.subscription
+    src.api.routes.v1.webhook_lookup_parsing -> src.infra.database.models.user.user
+    src.api.routes.v1.webhook_referral_funnel -> src.infra.database.models.subscription
     src.api.routes.v1.webhooks -> src.infra.database.uow_async
-    src.api.routes.v1.webhooks -> src.infra.repositories.referral_repository
-    src.api.routes.v1.webhooks -> src.infra.services.email_template_renderer
+    src.api.routes.v1.webhook_referral_funnel -> src.infra.repositories.referral_repository
+    src.api.routes.v1.webhook_subscription_lifecycle -> src.infra.services.email_template_renderer
     src.api.routes.v1.weight_entries -> src.infra.event_bus
     src.api.dependencies.guest_quota -> src.infra.config.settings
     src.api.dependencies.guest_quota -> src.infra.database.config_async

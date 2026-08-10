@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from src.domain.model.nutrition.macros import Macros
+
 
 def effective_meal_calories(meal: Any) -> float:
     """Return calories users expect for a meal.
@@ -57,8 +59,7 @@ def _macro_calories(macros: Any) -> float:
     carbs = _safe_number(getattr(macros, "carbs", 0.0))
     fat = _safe_number(getattr(macros, "fat", 0.0))
     fiber = _safe_number(getattr(macros, "fiber", 0.0))
-    net_carbs = max(0.0, carbs - fiber)
-    return round(protein * 4 + net_carbs * 4 + fiber * 2 + fat * 9, 1)
+    return round(Macros.raw_total_calories(protein, carbs, fat, fiber), 1)
 
 
 def _safe_number(value: Any) -> float:

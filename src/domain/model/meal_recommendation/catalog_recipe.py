@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
+from src.domain.model.nutrition.macros import Macros
+
 
 @dataclass(frozen=True)
 class CatalogMealIngredient:
@@ -51,7 +53,7 @@ class CatalogMeal:
         carbs = float(self.carbs_g)
         fat = float(self.fat_g)
         fiber = float(self.fiber_g)
-        return round(protein * 4 + max(0.0, carbs - fiber) * 4 + fiber * 2 + fat * 9)
+        return round(Macros.raw_total_calories(protein, carbs, fat, fiber))
 
     @property
     def status(self) -> str:

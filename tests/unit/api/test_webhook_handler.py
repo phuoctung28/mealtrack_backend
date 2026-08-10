@@ -8,17 +8,59 @@ import pytest
 from fastapi import HTTPException
 
 from src.api.routes.v1.webhooks import (
+    _credit_referral_on_purchase,
+    _revoke_referral_on_refund,
     find_user_for_revenuecat_event,
     handle_billing_issue,
     handle_cancellation,
     handle_expiration,
+    handle_product_change,
     handle_purchase,
+    handle_refund,
     handle_renewal,
     handle_transfer,
     parse_platform,
     parse_timestamp,
     revenuecat_webhook,
 )
+from src.domain.utils.timezone_utils import utc_now
+from src.infra.database.models.referral.referral_conversion import ReferralConversion
+from src.infra.database.models.referral.referral_wallet import ReferralWallet
+
+
+class _FakeReferralRepo:
+    """In-memory referral repo performing REAL wallet arithmetic (not mocked away).
+
+    Mirrors the exact balance/total math of ReferralRepository.credit_wallet /
+    revoke_from_wallet, minus the SQL session — so `_credit_referral_on_purchase`
+    and `_revoke_referral_on_refund` exercise their real money-movement logic.
+    """
+
+    def __init__(self, conversion=None, wallet=None):
+        self.conversion = conversion
+        self.wallet = wallet or ReferralWallet(
+            user_id=conversion.referrer_user_id if conversion else "referrer_1",
+            balance=0,
+            total_earned=0,
+            total_revoked=0,
+            total_withdrawn=0,
+            updated_at=utc_now(),
+        )
+
+    async def get_conversion_by_referred_user(self, user_id, for_update=False):
+        return self.conversion
+
+    async def credit_wallet(self, user_id, amount):
+        self.wallet.balance += amount
+        self.wallet.total_earned += amount
+        self.wallet.updated_at = utc_now()
+        return self.wallet
+
+    async def revoke_from_wallet(self, user_id, amount):
+        self.wallet.balance = max(0, self.wallet.balance - amount)
+        self.wallet.total_revoked += amount
+        self.wallet.updated_at = utc_now()
+        return self.wallet
 
 
 class TestWebhookHelpers:
@@ -119,7 +161,7 @@ class TestWebhookHandler:
                 mock_uow.session.execute.return_value = mock_result
 
                 # Mock no existing subscription (async)
-                with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
+                with patch('src.api.routes.v1.webhook_subscription_lifecycle.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
                     result = await revenuecat_webhook(mock_request, authorization="test_secret")
 
                 assert result == {"status": "success"}
@@ -355,10 +397,10 @@ class TestWebhookHandler:
                 mock_uow_class.return_value = mock_uow
 
                 with patch(
-                    "src.api.routes.v1.webhooks._get_subscription_service",
+                    "src.api.routes.v1.webhook_referral_funnel._get_subscription_service",
                     return_value=mock_service,
                 ), patch(
-                    "src.api.routes.v1.webhooks._lock_subscription_cache",
+                    "src.api.routes.v1.webhook_referral_funnel._lock_subscription_cache",
                     new_callable=AsyncMock,
                 ):
                     result = await revenuecat_webhook(
@@ -409,10 +451,10 @@ class TestWebhookHandler:
                 mock_uow_class.return_value = mock_uow
 
                 with patch(
-                    "src.api.routes.v1.webhooks._get_subscription_service",
+                    "src.api.routes.v1.webhook_referral_funnel._get_subscription_service",
                     return_value=mock_service,
                 ), patch(
-                    "src.api.routes.v1.webhooks._lock_subscription_cache",
+                    "src.api.routes.v1.webhook_referral_funnel._lock_subscription_cache",
                     new_callable=AsyncMock,
                 ) as lock_cache:
                     result = await revenuecat_webhook(
@@ -467,8 +509,8 @@ class TestWebhookHandler:
         }
 
         # Mock no existing subscription (async) and referral credit side effect
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None), \
-             patch('src.api.routes.v1.webhooks._credit_referral_on_purchase', new_callable=AsyncMock):
+        with patch('src.api.routes.v1.webhook_subscription_lifecycle.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None), \
+             patch('src.api.routes.v1.webhook_subscription_lifecycle.credit_referral_on_purchase', new_callable=AsyncMock):
             await handle_purchase(mock_uow, user, event)
 
         # Verify subscription was added
@@ -488,7 +530,7 @@ class TestWebhookHandler:
         }
 
         # Mock existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+        with patch('src.api.routes.v1.webhook_subscription_lifecycle.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
             await handle_renewal(mock_uow, user, event)
 
         assert subscription.status == "active"
@@ -501,7 +543,7 @@ class TestWebhookHandler:
         event = {"app_user_id": "user_123"}
 
         # Mock existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
+        with patch('src.api.routes.v1.webhook_subscription_lifecycle.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
             await handle_cancellation(mock_uow, user, event)
 
         assert subscription.status == "cancelled"
@@ -514,7 +556,7 @@ class TestWebhookHandler:
         event = {"app_user_id": "user_123"}
 
         # Mock existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
+        with patch('src.api.routes.v1.webhook_subscription_lifecycle.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
             await handle_expiration(mock_uow, user, event)
 
         assert subscription.status == "expired"
@@ -526,7 +568,7 @@ class TestWebhookHandler:
         event = {"app_user_id": "user_123"}
 
         # Mock existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
+        with patch('src.api.routes.v1.webhook_subscription_lifecycle.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
             await handle_billing_issue(mock_uow, user, event)
 
         assert subscription.status == "billing_issue"
@@ -545,3 +587,316 @@ class TestWebhookHandler:
 
         assert subscription.revenuecat_subscriber_id == "firebase_uid_123"
         assert subscription.updated_at is not None
+
+    async def test_handle_product_change(self, mock_uow):
+        """Test handling product change event (e.g., monthly to yearly)."""
+        user = MagicMock(id="user_123")
+        subscription = MagicMock()
+        event = {"app_user_id": "user_123", "product_id": "premium_yearly"}
+
+        with patch(
+            "src.api.routes.v1.webhook_subscription_lifecycle.get_or_create_subscription",
+            new_callable=AsyncMock,
+            return_value=subscription,
+        ):
+            await handle_product_change(mock_uow, user, event)
+
+        assert subscription.product_id == "premium_yearly"
+        assert subscription.status == "active"
+        assert subscription.updated_at is not None
+
+    async def test_handle_refund(self, mock_uow):
+        """Test handling refund event: marks subscription refunded and revokes referral."""
+        user = MagicMock(id="user_123")
+        subscription = MagicMock()
+        event = {"app_user_id": "user_123", "transaction_id": "tx_1"}
+
+        with (
+            patch(
+                "src.api.routes.v1.webhook_subscription_lifecycle.get_or_create_subscription",
+                new_callable=AsyncMock,
+                return_value=subscription,
+            ),
+            patch(
+                "src.api.routes.v1.webhook_subscription_lifecycle.revoke_referral_on_refund",
+                new_callable=AsyncMock,
+            ) as revoke_mock,
+        ):
+            await handle_refund(mock_uow, user, event)
+
+        assert subscription.status == "refunded"
+        assert subscription.updated_at is not None
+        mock_uow.affiliate_outbox.enqueue.assert_awaited_once()
+        revoke_mock.assert_awaited_once_with(mock_uow, "user_123")
+
+    async def test_credit_referral_on_purchase_credits_wallet_for_real(self):
+        """REAL money movement: pending conversion → converted + wallet credited
+        by the exact commission_amount_vnd. Uses a fake repo that performs the
+        same arithmetic as ReferralRepository, not a mocked-away function.
+        """
+        conversion = ReferralConversion(
+            referrer_user_id="referrer_1",
+            referred_user_id="referred_1",
+            code_used="ABC123",
+            status="pending",
+            commission_amount=2.0,
+            commission_currency="USD",
+            commission_amount_vnd=50000,
+        )
+        repo = _FakeReferralRepo(conversion=conversion)
+        uow = MagicMock()
+        uow.referrals = repo
+
+        await _credit_referral_on_purchase(uow, "referred_1")
+
+        assert conversion.status == "converted"
+        assert conversion.converted_at is not None
+        assert repo.wallet.balance == 50000
+        assert repo.wallet.total_earned == 50000
+
+    async def test_credit_referral_on_purchase_noop_when_not_pending(self):
+        """A conversion that is already converted/revoked must not be re-credited."""
+        conversion = ReferralConversion(
+            referrer_user_id="referrer_1",
+            referred_user_id="referred_1",
+            code_used="ABC123",
+            status="converted",
+            commission_amount=2.0,
+            commission_currency="USD",
+            commission_amount_vnd=50000,
+        )
+        repo = _FakeReferralRepo(conversion=conversion)
+        uow = MagicMock()
+        uow.referrals = repo
+
+        await _credit_referral_on_purchase(uow, "referred_1")
+
+        assert conversion.status == "converted"  # unchanged
+        assert repo.wallet.balance == 0  # no double-credit
+
+    async def test_credit_referral_on_purchase_noop_when_no_conversion(self):
+        """No matching conversion row → no-op, no wallet touched."""
+        repo = _FakeReferralRepo(conversion=None)
+        uow = MagicMock()
+        uow.referrals = repo
+
+        await _credit_referral_on_purchase(uow, "referred_1")
+
+        assert repo.wallet.balance == 0
+
+    async def test_revoke_referral_on_refund_revokes_wallet_for_real(self):
+        """REAL money movement: converted conversion → revoked + wallet balance
+        reduced by the exact commission_amount_vnd (floored at 0).
+        """
+        conversion = ReferralConversion(
+            referrer_user_id="referrer_1",
+            referred_user_id="referred_1",
+            code_used="ABC123",
+            status="converted",
+            commission_amount=2.0,
+            commission_currency="USD",
+            commission_amount_vnd=50000,
+        )
+        wallet = ReferralWallet(
+            user_id="referrer_1",
+            balance=80000,
+            total_earned=80000,
+            total_revoked=0,
+            total_withdrawn=0,
+            updated_at=utc_now(),
+        )
+        repo = _FakeReferralRepo(conversion=conversion, wallet=wallet)
+        uow = MagicMock()
+        uow.referrals = repo
+
+        await _revoke_referral_on_refund(uow, "referred_1")
+
+        assert conversion.status == "revoked"
+        assert conversion.revoked_at is not None
+        assert repo.wallet.balance == 30000
+        assert repo.wallet.total_revoked == 50000
+
+    async def test_revoke_referral_on_refund_floors_balance_at_zero(self):
+        """Revoking more than the current balance floors at 0, never negative."""
+        conversion = ReferralConversion(
+            referrer_user_id="referrer_1",
+            referred_user_id="referred_1",
+            code_used="ABC123",
+            status="converted",
+            commission_amount=2.0,
+            commission_currency="USD",
+            commission_amount_vnd=50000,
+        )
+        wallet = ReferralWallet(
+            user_id="referrer_1",
+            balance=10000,  # already partially withdrawn/spent
+            total_earned=50000,
+            total_revoked=0,
+            total_withdrawn=40000,
+            updated_at=utc_now(),
+        )
+        repo = _FakeReferralRepo(conversion=conversion, wallet=wallet)
+        uow = MagicMock()
+        uow.referrals = repo
+
+        await _revoke_referral_on_refund(uow, "referred_1")
+
+        assert repo.wallet.balance == 0
+        assert repo.wallet.total_revoked == 50000
+
+    async def test_revoke_referral_on_refund_noop_when_not_converted(self):
+        """A conversion still pending (never credited) must not be revoked."""
+        conversion = ReferralConversion(
+            referrer_user_id="referrer_1",
+            referred_user_id="referred_1",
+            code_used="ABC123",
+            status="pending",
+            commission_amount=2.0,
+            commission_currency="USD",
+            commission_amount_vnd=50000,
+        )
+        repo = _FakeReferralRepo(conversion=conversion)
+        uow = MagicMock()
+        uow.referrals = repo
+
+        await _revoke_referral_on_refund(uow, "referred_1")
+
+        assert conversion.status == "pending"  # unchanged
+        assert repo.wallet.balance == 0
+
+    async def test_webhook_product_change_end_to_end_returns_success(self, mock_request):
+        """Full webhook path for PRODUCT_CHANGE: documents current 200/success semantics."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "PRODUCT_CHANGE",
+                "app_user_id": "user_123",
+                "product_id": "premium_yearly",
+                "store": "APP_STORE",
+                "environment": "PRODUCTION",
+            }
+        }
+        mock_user = MagicMock(id="user_123")
+        subscription = MagicMock()
+
+        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
+            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = mock_user
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+                mock_uow_class.return_value = mock_uow
+
+                with patch(
+                    "src.api.routes.v1.webhook_subscription_lifecycle.get_or_create_subscription",
+                    new_callable=AsyncMock,
+                    return_value=subscription,
+                ):
+                    result = await revenuecat_webhook(
+                        mock_request, authorization="test_secret"
+                    )
+
+        assert result == {"status": "success"}
+        assert subscription.product_id == "premium_yearly"
+
+    async def test_webhook_refund_end_to_end_returns_success(self, mock_request):
+        """Full webhook path for REFUND: documents current 200/success semantics
+        and confirms referral revocation runs inside the same webhook flow.
+        """
+        mock_request.json.return_value = {
+            "event": {
+                "type": "REFUND",
+                "app_user_id": "user_123",
+                "transaction_id": "tx_1",
+                "environment": "PRODUCTION",
+            }
+        }
+        mock_user = MagicMock(id="user_123")
+        subscription = MagicMock()
+
+        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
+            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = mock_user
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+                mock_uow.affiliate_outbox.enqueue = AsyncMock()
+                mock_uow_class.return_value = mock_uow
+
+                with (
+                    patch(
+                        "src.api.routes.v1.webhook_subscription_lifecycle.get_or_create_subscription",
+                        new_callable=AsyncMock,
+                        return_value=subscription,
+                    ),
+                    patch(
+                        "src.api.routes.v1.webhook_subscription_lifecycle.revoke_referral_on_refund",
+                        new_callable=AsyncMock,
+                    ) as revoke_mock,
+                ):
+                    result = await revenuecat_webhook(
+                        mock_request, authorization="test_secret"
+                    )
+
+        assert result == {"status": "success"}
+        assert subscription.status == "refunded"
+        revoke_mock.assert_awaited_once_with(mock_uow, "user_123")
+
+    async def test_webhook_product_change_user_not_found_is_ignored(self, mock_request):
+        """PRODUCT_CHANGE is in NON_RETRYABLE_USERLESS_EVENTS: ACK (not 404) when
+        no local user matches, so RevenueCat does not retry-storm on it.
+        """
+        mock_request.json.return_value = {
+            "event": {
+                "type": "PRODUCT_CHANGE",
+                "app_user_id": "$RCAnonymousID:missing",
+                "product_id": "premium_yearly",
+            }
+        }
+
+        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
+            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+                mock_uow_class.return_value = mock_uow
+
+                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+
+        assert result == {"status": "ignored", "reason": "user_not_found"}
+
+    async def test_webhook_refund_user_not_found_is_ignored(self, mock_request):
+        """REFUND is in NON_RETRYABLE_USERLESS_EVENTS: ACK (not 404) when no
+        local user matches.
+        """
+        mock_request.json.return_value = {
+            "event": {
+                "type": "REFUND",
+                "app_user_id": "$RCAnonymousID:missing",
+                "transaction_id": "tx_1",
+            }
+        }
+
+        with patch("src.api.routes.v1.webhooks.os.getenv", return_value="test_secret"):
+            with patch("src.api.routes.v1.webhooks.AsyncUnitOfWork") as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+                mock_uow_class.return_value = mock_uow
+
+                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+
+        assert result == {"status": "ignored", "reason": "user_not_found"}
