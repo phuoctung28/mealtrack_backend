@@ -35,9 +35,17 @@ from src.app.commands.meal.create_manual_meal_command import (
     ManualMealItem,
 )
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
+from src.app.services.durable_write_service import (
+    MANUAL_MEAL_CREATE_ACTION,
+    DurableWriteConflictError,
+    normalize_idempotency_key,
+    resolve_or_conflict,
+    save_durable_write,
+)
 from src.app.services.meal_value_insight_scheduler import (
     schedule_value_insight_generation,
 )
+from src.api.routes.v1.manual_meal_durable import manual_meal_fingerprint
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
@@ -56,13 +64,44 @@ async def create_manual_meal(
     cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
+    idempotency_key_header: str | None = Header(None, alias="Idempotency-Key"),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
 
-    Authentication required: User ID is automatically extracted from the Firebase token.
+    Optional Idempotency-Key enables exact response replay for the same logical
+    write. Omitting the header preserves legacy single-shot behavior.
     """
     try:
+        try:
+            idempotency_key = normalize_idempotency_key(idempotency_key_header)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+        fingerprint: str | None = None
+        if idempotency_key is not None:
+            fingerprint = manual_meal_fingerprint(payload)
+            try:
+                existing = await resolve_or_conflict(
+                    user_id=user_id,
+                    action=MANUAL_MEAL_CREATE_ACTION,
+                    idempotency_key=idempotency_key,
+                    request_fingerprint=fingerprint,
+                )
+            except DurableWriteConflictError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error_code": "IDEMPOTENCY_KEY_CONFLICT",
+                        "message": "Idempotency-Key reused with a different payload",
+                    },
+                ) from exc
+            if existing is not None:
+                return ManualMealCreationResponse.model_validate(existing.response_body)
+
         items = []
         for i in payload.items:
             custom_nutrition = None
@@ -124,7 +163,7 @@ async def create_manual_meal(
             user_id=user_id,
         )
 
-        return ManualMealCreationResponse(
+        response = ManualMealCreationResponse(
             meal_id=meal.meal_id,
             status="success",
             message=f"Meal '{payload.dish_name}' created successfully",
@@ -134,6 +173,28 @@ async def create_manual_meal(
                 target_language=get_request_language(request),
             ),
         )
+        if idempotency_key is not None and fingerprint is not None:
+            try:
+                await save_durable_write(
+                    user_id=user_id,
+                    action=MANUAL_MEAL_CREATE_ACTION,
+                    idempotency_key=idempotency_key,
+                    request_fingerprint=fingerprint,
+                    response_status_code=status.HTTP_200_OK,
+                    response_body=response.model_dump(mode="json"),
+                    resource_id=response.meal_id,
+                )
+            except DurableWriteConflictError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error_code": "IDEMPOTENCY_KEY_CONFLICT",
+                        "message": "Idempotency-Key reused with a different payload",
+                    },
+                ) from exc
+        return response
+    except HTTPException:
+        raise
     except Exception as e:
         raise handle_exception(e) from e
 
