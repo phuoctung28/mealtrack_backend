@@ -354,7 +354,7 @@ async def test_parse_text_does_not_retry_provider_outage():
 
 @pytest.mark.asyncio
 async def test_parse_text_rejects_fatsecret_using_backend_derived_calories(
-    monkeypatch,
+    monkeypatch, caplog
 ):
     meal_generation_service = _FakeMealGenerationService(
         responses=[
@@ -402,3 +402,12 @@ async def test_parse_text_rejects_fatsecret_using_backend_derived_calories(
     assert item.protein == 10
     assert item.carbs == 10
     assert item.fat == 0
+    parse_handler_logs = [
+        record
+        for record in caplog.records
+        if record.name == "src.app.handlers.command_handlers.parse_meal_text_handler"
+    ]
+    assert parse_handler_logs[-1].message == (
+        "fatsecret result rejected: calorie divergence exceeded threshold"
+    )
+    assert "1000" not in " ".join(record.message for record in parse_handler_logs)

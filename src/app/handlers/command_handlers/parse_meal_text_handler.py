@@ -19,9 +19,8 @@ from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextRespons
 from src.app.services.food_name_localizer import translate_food_texts
 from src.domain.exceptions.ai_exceptions import AIOutputValidationError
 from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
+from src.domain.model.nutrition.macros import Macros
 from src.domain.model.translation_result import TranslationOutcome
-from src.domain.model.nutrition.macros import Macros
-from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.ai_output_validation_service import (
     build_validation_retry_prompt,
@@ -301,9 +300,7 @@ class ParseMealTextHandler(
                         ratio = fs_calories / ai_calories
                         if ratio > self._FATSECRET_DIVERGENCE_THRESHOLD:
                             logger.warning(
-                                "fatsecret result rejected ratio=%.1fx threshold=%.1fx",
-                                ratio,
-                                self._FATSECRET_DIVERGENCE_THRESHOLD,
+                                "fatsecret result rejected: calorie divergence exceeded threshold"
                             )
                             item["data_source"] = "ai_estimate"
                             return item
