@@ -247,7 +247,6 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                     score=Decimal(str(alternative.score)),
                     selection_version=expected_version + 1,
                     seen_at=now if position == 0 else None,
-                    catalog_meal=alternative.catalog_meal,
                 )
                 self._session.add(row)
                 new_rows.append(row)
