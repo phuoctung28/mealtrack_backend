@@ -550,7 +550,7 @@ async def test_async_graph_translation_failure_still_returns_saved_meal_and_inva
         }
     )
     translation_service = AsyncMock()
-    translation_service.translate_meal = AsyncMock(side_effect=RuntimeError("deepl down"))
+    translation_service.translate_meal = AsyncMock(side_effect=RuntimeError("provider down"))
     cache = AsyncMock()
     cache.after_meal_write = AsyncMock()
     uow = _FakeGraphUow()

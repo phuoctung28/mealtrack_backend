@@ -6,6 +6,7 @@ from src.app.handlers.query_handlers.lookup_barcode_query_handler import (
     LookupBarcodeQueryHandler,
 )
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 
 
 class _FoodReferenceRepo:
@@ -64,6 +65,15 @@ def _query():
     )
 
 
+class _NeutralTranslator:
+    async def translate_texts(self, texts, source_language, target_language):
+        assert source_language == "en"
+        assert target_language == "vi"
+        return TranslationResult(
+            ("Cơm gạo lứt",), TranslationOutcome.TRANSLATED, "en", "vi"
+        )
+
+
 @pytest.mark.asyncio
 async def test_lookup_barcode_returns_cached_product_from_async_uow():
     repo = _FoodReferenceRepo(
@@ -104,6 +114,52 @@ async def test_lookup_barcode_caches_fatsecret_hit_with_async_uow():
     assert result["source"] == "fatsecret"
     assert repo.upserts[0]["barcode"] == "00036000291452"
     assert result["barcode"] == "036000291452"
+
+
+@pytest.mark.asyncio
+async def test_non_english_barcode_fetches_and_stores_english_then_localizes_response():
+    repo = _FoodReferenceRepo()
+    fat_secret = AsyncMock()
+    fat_secret.get_product.return_value = {
+        "barcode": "123",
+        "name": "Brown Rice",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(
+        repo,
+        fat_secret_service=fat_secret,
+        translation_service=_NeutralTranslator(),
+    )
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    fat_secret.get_product.assert_awaited_once_with("123", region="US", language="en")
+    assert repo.upserts[0]["name"] == "Brown Rice"
+    assert result["name"] == "Cơm gạo lứt"
+
+
+@pytest.mark.asyncio
+async def test_cached_barcode_without_source_provenance_stays_canonical():
+    repo = _FoodReferenceRepo(
+        {
+            "123": {
+                "barcode": "123",
+                "name": "Brown Rice",
+                "protein_100g": 2.7,
+                "carbs_100g": 28,
+                "fat_100g": 0.3,
+            }
+        }
+    )
+    translator = AsyncMock()
+    handler = _handler(repo, translation_service=translator)
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    assert result["name"] == "Brown Rice"
+    translator.translate_texts.assert_not_awaited()
 
 
 @pytest.mark.asyncio

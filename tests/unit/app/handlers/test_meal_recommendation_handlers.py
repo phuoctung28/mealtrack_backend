@@ -390,7 +390,7 @@ async def test_log_handler_does_not_fail_when_translation_raises():
     translation_service = type(
         "TranslationService",
         (),
-        {"translate_meal": AsyncMock(side_effect=RuntimeError("deepl down"))},
+        {"translate_meal": AsyncMock(side_effect=RuntimeError("provider down"))},
     )()
     handler = LogRecommendedMealCommandHandler(
         uow=_Uow(plans, _CatalogRepo()),

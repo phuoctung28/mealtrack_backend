@@ -346,6 +346,14 @@ async def persist_meal(
         saved_meal = await uow.meals.save(meal)
         await uow.commit()
 
+    # Invalidate immediately after the parent commit so translation latency
+    # cannot leave stale meal caches visible after a successful write.
+    if runtime.cache_invalidation and runtime.meal_date:
+        await runtime.cache_invalidation.after_meal_write(
+            runtime.command.user_id,
+            runtime.meal_date,
+        )
+
     await _translate_if_needed(runtime, saved_meal)
 
     async with runtime.uow as uow:
@@ -355,7 +363,11 @@ async def persist_meal(
         )
 
     runtime.saved_meal = final_meal
-    return {"meal_id": final_meal.meal_id, "result": final_meal}
+    return {
+        "meal_id": final_meal.meal_id,
+        "result": final_meal,
+        "cache_invalidated": True,
+    }
 
 
 async def invalidate_cache(
@@ -363,6 +375,8 @@ async def invalidate_cache(
     runtime: MealAnalyzeRuntime,
 ) -> MealAnalyzeGraphState:
     """Invalidate meal caches before returning READY response."""
+    if state.get("cache_invalidated"):
+        return {"cache_invalidated": True}
     if runtime.cache_invalidation and runtime.meal_date:
         await runtime.cache_invalidation.after_meal_write(
             runtime.command.user_id,
@@ -452,7 +466,7 @@ async def _translate_if_needed(runtime: MealAnalyzeRuntime, meal: Meal) -> None:
         )
     except Exception as exc:
         logger.warning(
-            "[MEAL-ANALYZE-GRAPH] translation failed meal=%s: %s",
+            "[MEAL-ANALYZE-GRAPH] translation failed meal=%s error_type=%s",
             meal.meal_id,
-            exc,
+            type(exc).__name__,
         )

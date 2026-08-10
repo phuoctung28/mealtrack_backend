@@ -14,8 +14,8 @@ from src.domain.model.meal import Meal
 from src.domain.model.meal_recommendation import (
     PersistedMealRecommendationSlotMutationResult,
 )
-from src.domain.services.meal_analysis.deepl_meal_translation_service import (
-    DeepLMealTranslationService,
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class LogRecommendedMealCommandHandler(
         self,
         uow,
         materializer: RecommendedMealMaterializationService | None = None,
-        meal_translation_service: DeepLMealTranslationService | None = None,
+        meal_translation_service: MealTranslationService | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
@@ -73,11 +73,11 @@ class LogRecommendedMealCommandHandler(
 
         # meal_translation uses its own DB session; parent meal must be committed first.
         if saved_meal is not None:
-            await self._persist_request_language_translation(command, saved_meal)
             if self.cache_invalidation is not None and meal_date is not None:
                 await self.cache_invalidation.after_meal_write(
                     command.user_id, meal_date
                 )
+            await self._persist_request_language_translation(command, saved_meal)
 
         return result
 
@@ -86,7 +86,7 @@ class LogRecommendedMealCommandHandler(
         command: LogRecommendedMealCommand,
         meal: Meal,
     ) -> None:
-        """Persist DeepL meal_translation so Today's Meals can show localized titles."""
+        """Persist localized meal translation so Today's Meals can show titles."""
 
         language = (command.language or "en").strip().lower()
         if language == "en" or self.meal_translation_service is None:
@@ -113,8 +113,8 @@ class LogRecommendedMealCommandHandler(
         except Exception as exc:
             # Logging must succeed even when translation is unavailable.
             logger.warning(
-                "recommended meal translation failed meal=%s language=%s error=%s",
+                "recommended meal translation failed meal=%s language=%s error_type=%s",
                 meal.meal_id,
                 language,
-                exc,
+                type(exc).__name__,
             )

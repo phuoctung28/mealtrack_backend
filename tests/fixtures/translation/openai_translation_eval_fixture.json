@@ -1,0 +1,58 @@
+{
+  "source_language": "en",
+  "locales": ["en", "vi", "es", "fr", "de", "ja", "zh"],
+  "cases": [
+    {
+      "id": "meal_name",
+      "source": "Grilled chicken rice bowl",
+      "translations": {
+        "en": "Grilled chicken rice bowl",
+        "vi": "Bát cơm gà nướng",
+        "es": "Bowl de arroz con pollo a la parrilla",
+        "fr": "Bol de riz au poulet grillé",
+        "de": "Reisschüssel mit gegrilltem Hähnchen",
+        "ja": "焼き鳥丼",
+        "zh": "烤鸡肉盖饭"
+      }
+    },
+    {
+      "id": "quantity_and_unit",
+      "source": "Use 120 grams of rice",
+      "translations": {
+        "en": "Use 120 grams of rice",
+        "vi": "Dùng 120 gam gạo",
+        "es": "Usa 120 gramos de arroz",
+        "fr": "Utilisez 120 grammes de riz",
+        "de": "Verwende 120 Gramm Reis",
+        "ja": "米を 120 グラム使う",
+        "zh": "使用 120 克米饭"
+      }
+    },
+    {
+      "id": "timed_instruction",
+      "source": "Cook for 15 minutes at 180°C",
+      "translations": {
+        "en": "Cook for 15 minutes at 180°C",
+        "vi": "Nấu trong 15 phút ở 180°C",
+        "es": "Cocina durante 15 minutos a 180°C",
+        "fr": "Faites cuire pendant 15 minutes à 180°C",
+        "de": "15 Minuten bei 180°C kochen",
+        "ja": "180°Cで 15 分間加熱する",
+        "zh": "在 180°C 下烹饪 15 分钟"
+      }
+    },
+    {
+      "id": "placeholder_and_decimal",
+      "source": "Add {amount} ml of sauce (0.5 cup)",
+      "translations": {
+        "en": "Add {amount} ml of sauce (0.5 cup)",
+        "vi": "Thêm {amount} ml nước sốt (0.5 cốc)",
+        "es": "Añade {amount} ml de salsa (0.5 taza)",
+        "fr": "Ajoutez {amount} ml de sauce (0.5 tasse)",
+        "de": "Füge {amount} ml Soße hinzu (0.5 Tasse)",
+        "ja": "ソースを {amount} ml（0.5カップ）加える",
+        "zh": "加入 {amount} 毫升酱汁（0.5杯）"
+      }
+    }
+  ]
+}

@@ -1,41 +1,31 @@
-"""
-DeepL-backed meal translation service.
-
-Translates dish_name, instructions, and ingredient names for a meal using DeepL.
-Uses the core DeepLTextTranslationService internally for actual API calls.
-Checks the meal_translation table first; only calls DeepL when a fully-
-cached translation does not yet exist.
-"""
+"""Persisted meal translation orchestration."""
 
 import asyncio
 import inspect
 import logging
+from typing import Any, cast
 
 from src.domain.model.meal import FoodItemTranslation, Meal, MealTranslation
 from src.domain.model.nutrition import FoodItem
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 from src.domain.ports.meal_translation_repository_port import (
     MealTranslationRepositoryPort,
 )
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
+from src.domain.services.translation.text_translation_service import (
+    TextTranslationService,
 )
 from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
 
-class DeepLMealTranslationService:
-    """
-    Translates meal content (name, instructions, ingredients) via DeepL.
-
-    Uses DeepLTextTranslationService for actual translation calls.
-    Adds meal-specific caching logic on top.
-    """
+class MealTranslationService:
+    """Translate meal content and persist only complete provider results."""
 
     def __init__(
         self,
         translation_repo: MealTranslationRepositoryPort,
-        text_translation_service: DeepLTextTranslationService,
+        text_translation_service: TextTranslationService,
     ) -> None:
         self._repo = translation_repo
         self._text_service = text_translation_service
@@ -69,7 +59,12 @@ class DeepLMealTranslationService:
             existing = await self._get_by_meal_and_language(
                 meal.meal_id, target_language
             )
-            if existing and existing.is_fully_cached():
+            if existing and existing.is_fully_cached(
+                expected_ingredient_count=len(
+                    [item for item in food_items if item.name]
+                ),
+                expected_instruction_count=len(instructions or []),
+            ):
                 logger.debug(
                     "Translation cache hit: meal=%s lang=%s",
                     meal.meal_id,
@@ -91,17 +86,16 @@ class DeepLMealTranslationService:
             ingredient_names = [item.name for item in food_items if item.name]
             instruction_texts = [s.get("instruction", "") for s in normalised_steps]
 
-            # Build a single flat list so we use ONE DeepL API call.
+            # Build a single flat list so we use one provider call.
             # Layout: [dish_name, *ingredient_names, *instruction_texts]
             strings_to_translate = [dish_name] + ingredient_names + instruction_texts
 
-            translated = await self._text_service.translate_texts(
-                strings_to_translate, target_language
+            result = await _translate_texts(
+                self._text_service, strings_to_translate, target_language
             )
-
-            # Pad result to the expected length in case DeepL returns fewer items.
-            while len(translated) < len(strings_to_translate):
-                translated.append(strings_to_translate[len(translated)])
+            translated = result.to_list()
+            if result.outcome is not TranslationOutcome.TRANSLATED:
+                translated.extend(strings_to_translate[len(translated) :])
 
             # --- Unpack results ---
             translated_dish_name = translated[0]
@@ -145,21 +139,20 @@ class DeepLMealTranslationService:
                 translated_at=utc_now(),
             )
 
+            if result.outcome is not TranslationOutcome.TRANSLATED:
+                return translation
             saved = await self._save(translation)
             logger.info(
-                "DeepL translation saved: meal=%s lang=%s dish='%s'",
-                meal.meal_id,
-                target_language,
-                translated_dish_name,
+                "Meal translation saved meal=%s lang=%s", meal.meal_id, target_language
             )
             return saved
 
         except Exception as exc:
             logger.warning(
-                "DeepL translation failed for meal=%s lang=%s: %s",
+                "Meal translation failed for meal=%s lang=%s error_type=%s",
                 meal.meal_id,
                 target_language,
-                exc,
+                type(exc).__name__,
             )
             return None
 
@@ -168,11 +161,18 @@ class DeepLMealTranslationService:
     ) -> MealTranslation | None:
         method = self._repo.get_by_meal_and_language
         if inspect.iscoroutinefunction(method):
-            return await method(meal_id, language)
-        return await asyncio.to_thread(method, meal_id, language)
+            return await cast(Any, method)(meal_id, language)
+        return await asyncio.to_thread(cast(Any, method), meal_id, language)
 
     async def _save(self, translation: MealTranslation) -> MealTranslation:
         method = self._repo.save
         if inspect.iscoroutinefunction(method):
-            return await method(translation)
-        return await asyncio.to_thread(method, translation)
+            return await cast(Any, method)(translation)
+        return await asyncio.to_thread(cast(Any, method), translation)
+
+
+async def _translate_texts(
+    service: TextTranslationService, texts: list[str], target_language: str
+) -> TranslationResult:
+    """Translate an ordered batch from the canonical English source."""
+    return await service.translate_texts(texts, "en", target_language)

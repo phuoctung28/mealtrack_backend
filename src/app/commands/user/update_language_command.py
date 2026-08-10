@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from src.app.events.base import Command
+from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
 
-SUPPORTED_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
+SUPPORTED_LANGUAGES = SUPPORTED_TRANSLATION_LANGUAGES
 
 
 @dataclass

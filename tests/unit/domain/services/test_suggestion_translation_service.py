@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from src.domain.model.meal_suggestion import (
     Ingredient,
@@ -8,22 +9,25 @@ from src.domain.model.meal_suggestion import (
     MealType,
     RecipeStep,
 )
-from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
-    DeepLSuggestionTranslationService,
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
+from src.domain.services.meal_suggestion.suggestion_translation_service import (
+    SuggestionTranslationService,
 )
-from src.domain.services.translation.deepl_text_translation_service import DeepLTextTranslationService
+from src.domain.services.translation.text_translation_service import (
+    TextTranslationService,
+)
 
 
 @pytest.fixture
 def text_translation_service():
-    svc = AsyncMock(spec=DeepLTextTranslationService)
+    svc = AsyncMock(spec=TextTranslationService)
     svc.translate_texts = AsyncMock()
     return svc
 
 
 @pytest.fixture
 def service(text_translation_service):
-    return DeepLSuggestionTranslationService(text_translation_service)
+    return SuggestionTranslationService(text_translation_service)
 
 
 @pytest.fixture
@@ -50,23 +54,32 @@ def suggestion():
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestion_skips_english(service, suggestion, text_translation_service):
+async def test_translate_meal_suggestion_skips_english(
+    service, suggestion, text_translation_service
+):
     result = await service.translate_meal_suggestion(suggestion, "en")
     assert result == suggestion
     text_translation_service.translate_texts.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestion_translates_all_fields(service, suggestion, text_translation_service):
+async def test_translate_meal_suggestion_translates_all_fields(
+    service, suggestion, text_translation_service
+):
     # Layout: [meal_name, description, *ingredient_names, *step_instructions]
-    text_translation_service.translate_texts.return_value = [
-        "Gà nướng",
-        "Ngon và đơn giản",
-        "ức gà",
-        "dầu ô liu",
-        "Làm nóng chảo",
-        "Nấu gà",
-    ]
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        (
+            "Gà nướng",
+            "Ngon và đơn giản",
+            "ức gà",
+            "dầu ô liu",
+            "Làm nóng chảo",
+            "Nấu gà",
+        ),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
 
     result = await service.translate_meal_suggestion(suggestion, "vi")
 
@@ -76,15 +89,22 @@ async def test_translate_meal_suggestion_translates_all_fields(service, suggesti
     assert [s.instruction for s in result.recipe_steps] == ["Làm nóng chảo", "Nấu gà"]
 
     text_translation_service.translate_texts.assert_awaited_once()
-    called_texts, called_lang = text_translation_service.translate_texts.call_args.args
+    called_texts, called_source, called_lang = (
+        text_translation_service.translate_texts.call_args.args
+    )
+    assert called_source == "en"
     assert called_lang == "vi"
     assert called_texts[0] == "Grilled Chicken"
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestion_pads_when_deepl_returns_short(service, suggestion, text_translation_service):
+async def test_translate_meal_suggestion_fills_canonical_when_provider_returns_partial(
+    service, suggestion, text_translation_service
+):
     # Return fewer items than requested to exercise padding behavior.
-    text_translation_service.translate_texts.return_value = ["Gà nướng"]
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng",), TranslationOutcome.PARTIAL, "en", "vi"
+    )
 
     result = await service.translate_meal_suggestion(suggestion, "vi")
 
@@ -95,34 +115,47 @@ async def test_translate_meal_suggestion_pads_when_deepl_returns_short(service, 
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestion_returns_original_on_exception(service, suggestion, text_translation_service):
-    text_translation_service.translate_texts.side_effect = Exception("DeepL down")
+async def test_translate_meal_suggestion_returns_original_on_exception(
+    service, suggestion, text_translation_service
+):
+    text_translation_service.translate_texts.side_effect = Exception("provider down")
     result = await service.translate_meal_suggestion(suggestion, "vi")
     assert result == suggestion
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestions_batch_skips_english(service, suggestion, text_translation_service):
+async def test_translate_meal_suggestions_batch_skips_english(
+    service, suggestion, text_translation_service
+):
     result = await service.translate_meal_suggestions_batch([suggestion], "en")
     assert result == [suggestion]
     text_translation_service.translate_texts.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestions_batch_translates_each_item(service, suggestion, text_translation_service):
+async def test_translate_meal_suggestions_batch_translates_each_item(
+    service, suggestion, text_translation_service
+):
     other = MealSuggestion(
         **{
             **suggestion.__dict__,
             "id": "sug_2",
             "meal_name": "Baked Salmon",
             "ingredients": [Ingredient(name="salmon", amount=100.0, unit="g")],
-            "recipe_steps": [RecipeStep(step=1, instruction="Bake", duration_minutes=10)],
+            "recipe_steps": [
+                RecipeStep(step=1, instruction="Bake", duration_minutes=10)
+            ],
         }
     )
 
-    async def translate_side_effect(texts, target_lang):
+    async def translate_side_effect(texts, source_lang, target_lang):
         # Return "translated:" prefix for determinism.
-        return [f"t:{t}" for t in texts]
+        return TranslationResult(
+            tuple(f"t:{t}" for t in texts),
+            TranslationOutcome.TRANSLATED,
+            "en",
+            target_lang,
+        )
 
     text_translation_service.translate_texts.side_effect = translate_side_effect
 
@@ -134,7 +167,9 @@ async def test_translate_meal_suggestions_batch_translates_each_item(service, su
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestions_batch_falls_back_per_item(service, suggestion, text_translation_service):
+async def test_translate_meal_suggestions_batch_falls_back_per_item(
+    service, suggestion, text_translation_service
+):
     other = MealSuggestion(
         **{
             **suggestion.__dict__,
@@ -143,10 +178,15 @@ async def test_translate_meal_suggestions_batch_falls_back_per_item(service, sug
         }
     )
 
-    async def translate_side_effect(texts, target_lang):
+    async def translate_side_effect(texts, source_lang, target_lang):
         if texts and texts[0] == "Grilled Chicken":
             raise Exception("fail one")
-        return [f"ok:{t}" for t in texts]
+        return TranslationResult(
+            tuple(f"ok:{t}" for t in texts),
+            TranslationOutcome.TRANSLATED,
+            "en",
+            target_lang,
+        )
 
     text_translation_service.translate_texts.side_effect = translate_side_effect
 
@@ -172,18 +212,23 @@ async def test_translate_names_skips_empty_list(service, text_translation_servic
 
 
 @pytest.mark.asyncio
-async def test_translate_names_translates_successfully(service, text_translation_service):
-    text_translation_service.translate_texts.return_value = ["Gà nướng", "Cá hồi nướng"]
+async def test_translate_names_translates_successfully(
+    service, text_translation_service
+):
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng", "Cá hồi nướng"), TranslationOutcome.TRANSLATED, "en", "vi"
+    )
     names = ["Grilled Chicken", "Baked Salmon"]
     result = await service.translate_names(names, "vi")
     assert result == ["Gà nướng", "Cá hồi nướng"]
-    text_translation_service.translate_texts.assert_awaited_once_with(names, "vi")
+    text_translation_service.translate_texts.assert_awaited_once_with(names, "en", "vi")
 
 
 @pytest.mark.asyncio
-async def test_translate_names_returns_originals_on_exception(service, text_translation_service):
-    text_translation_service.translate_texts.side_effect = Exception("DeepL error")
+async def test_translate_names_returns_originals_on_exception(
+    service, text_translation_service
+):
+    text_translation_service.translate_texts.side_effect = Exception("provider error")
     names = ["Grilled Chicken", "Baked Salmon"]
     result = await service.translate_names(names, "vi")
     assert result == names
-

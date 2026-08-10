@@ -87,6 +87,16 @@ Manual food search reads Redis cache when available, then searches verified
 translation failures degrade to bounded local results when possible. Local
 result calories are always derived from stored macros using the backend formula.
 
+### Translation boundary
+
+Read-path localization is presentation-only. The application layer owns the
+translation service used by catalog and suggestion responses; the infrastructure
+adapter uses the OpenAI Responses API with payload storage disabled. The domain
+translation service returns explicit outcomes, and only
+`TranslationOutcome.TRANSLATED` may be persisted or admitted to locale caches.
+`PARTIAL`, `PASSTHROUGH`, and `UNAVAILABLE` keep canonical text in the response
+path.
+
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 

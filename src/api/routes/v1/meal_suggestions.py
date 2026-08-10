@@ -108,19 +108,22 @@ async def discover_meals(
     translated_names = [m["name"] for m in meals]
     if language and language != "en":
         from src.api.base_dependencies import (
-            get_deepl_suggestion_translation_service,
+            get_suggestion_translation_service,
         )
 
         try:
-            translation_svc = get_deepl_suggestion_translation_service()
+            translation_svc = get_suggestion_translation_service()
             if translation_svc:
                 translated = await translation_svc.translate_names(
                     [m["name"] for m in meals], language
                 )
                 if translated and len(translated) == len(meals):
                     translated_names = translated
-        except Exception as e:
-            logger.warning("Name translation failed, using English: %s", e)
+        except Exception as exc:
+            logger.warning(
+                "Name translation failed, using English error_type=%s",
+                type(exc).__name__,
+            )
 
     def _as_image_fields(x):
         """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""

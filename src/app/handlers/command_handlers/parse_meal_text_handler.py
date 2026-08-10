@@ -16,8 +16,10 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     parse_fatsecret_nutrition,
 )
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
+from src.app.services.food_name_localizer import translate_food_texts
 from src.domain.exceptions.ai_exceptions import AIOutputValidationError
 from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
+from src.domain.model.translation_result import TranslationOutcome
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.ai_output_validation_service import (
     build_validation_retry_prompt,
@@ -30,9 +32,6 @@ from src.domain.services.nutrition_calculation_service import (
 )
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.domain.services.prompts.system_prompts import SystemPrompts
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
-)
 
 logger = logging.getLogger(__name__)
 PARSE_TEXT_VALIDATION_PURPOSE = "parse_text"
@@ -53,7 +52,7 @@ class ParseMealTextHandler(
         self,
         meal_generation_service: MealGenerationServicePort,
         fat_secret_service: Any | None = None,
-        translation_service: DeepLTextTranslationService | None = None,
+        translation_service: Any | None = None,
     ):
         self._meal_generation_service = meal_generation_service
         self._fat_secret_service = fat_secret_service
@@ -89,7 +88,7 @@ class ParseMealTextHandler(
         # Enhance items with USDA/fatsecret cascade lookup
         enhanced_items = []
         for item in parsed_items:
-            enhanced = await self._cascade_lookup(item)
+            enhanced = await self._cascade_lookup(item, command.language)
             enhanced_items.append(enhanced)
 
         # Clamp nutrition to physically plausible ranges
@@ -104,16 +103,13 @@ class ParseMealTextHandler(
 
         # Localize names for non-English users
         if command.language and command.language != "en":
-            # Step 1: Strip bilingual parentheses
             for item in enhanced_items:
                 item["name"] = self._extract_display_name(
                     item.get("name", "Unknown"), command.language
                 )
-            # Step 2: Translate any remaining English names using DeepL
-            if self._translation_service:
-                await self._translate_english_names_deepl(
-                    enhanced_items, command.language
-                )
+            await self._translate_structured_english_names(
+                enhanced_items, command.language
+            )
 
         # Build response items
         items = [
@@ -170,10 +166,10 @@ class ParseMealTextHandler(
                 return validated_payload, raw_payload
             except AIOutputValidationError as exc:
                 logger.warning(
-                    "[AI-OUTPUT-VALIDATION-FAILED] purpose=%s attempt=%s details=%s",
+                    "[AI-OUTPUT-VALIDATION-FAILED] purpose=%s attempt=%s detail_count=%s",
                     PARSE_TEXT_VALIDATION_PURPOSE,
                     attempt,
-                    exc.validation_details,
+                    len(exc.validation_details),
                 )
                 if attempt >= MAX_VALIDATION_ATTEMPTS:
                     raise AIOutputValidationError(
@@ -205,10 +201,11 @@ class ParseMealTextHandler(
         return payload
 
     def _to_flat_parse_text_items(
-        self, validated_payload: dict[str, Any], _raw_payload: dict[str, Any]
+        self, validated_payload: dict[str, Any], raw_payload: dict[str, Any]
     ) -> list[dict[str, Any]]:
         flat_items = []
-        for item in validated_payload.get("items", []):
+        raw_items = raw_payload.get("items", [])
+        for index, item in enumerate(validated_payload.get("items", [])):
             macros = item.get("macros", {})
             flat_item = {
                 "name": item.get("name"),
@@ -220,6 +217,16 @@ class ParseMealTextHandler(
                 "fat": macros.get("fat_g", 0.0),
                 "calories": self._derive_calories_from_macros(macros),
             }
+            raw_item = raw_items[index] if index < len(raw_items) else {}
+            if isinstance(raw_item, dict):
+                english_name = None
+                for key in ("english_name", "name_english", "canonical_name"):
+                    raw_value = raw_item.get(key)
+                    if isinstance(raw_value, str) and raw_value.strip():
+                        english_name = raw_value.strip()
+                        break
+                if english_name:
+                    flat_item["english_name"] = english_name
             if item.get("quantity_g") is not None:
                 flat_item["quantity_g"] = item["quantity_g"]
 
@@ -239,7 +246,9 @@ class ParseMealTextHandler(
     # Max ratio between FatSecret and AI estimate before rejecting FatSecret
     _FATSECRET_DIVERGENCE_THRESHOLD = 3.0
 
-    async def _cascade_lookup(self, item: dict[str, Any]) -> dict[str, Any]:
+    async def _cascade_lookup(
+        self, item: dict[str, Any], language: str = "en"
+    ) -> dict[str, Any]:
         """
         Cascade lookup: fatsecret -> AI estimate.
         fatsecret prioritized for precision, but rejected if result diverges
@@ -259,7 +268,9 @@ class ParseMealTextHandler(
         ai_calories = item.get("calories", 0)
 
         # Try fatsecret — use English name from parentheses for lookup accuracy
-        lookup_name = self._extract_english_name(name)
+        lookup_name = item.get("english_name") or (
+            self._extract_english_name(name) if language != "en" else name
+        )
         try:
             if not self._fat_secret_service:
                 item["data_source"] = "ai_estimate"
@@ -289,9 +300,9 @@ class ParseMealTextHandler(
                         ratio = fs_calories / ai_calories
                         if ratio > self._FATSECRET_DIVERGENCE_THRESHOLD:
                             logger.warning(
-                                f"fatsecret rejected for '{name}': "
-                                f"{fs_calories:.0f} kcal vs AI {ai_calories:.0f} kcal "
-                                f"(ratio {ratio:.1f}x > {self._FATSECRET_DIVERGENCE_THRESHOLD}x)"
+                                "fatsecret result rejected ratio=%.1fx threshold=%.1fx",
+                                ratio,
+                                self._FATSECRET_DIVERGENCE_THRESHOLD,
                             )
                             item["data_source"] = "ai_estimate"
                             return item
@@ -303,68 +314,50 @@ class ParseMealTextHandler(
                 item["data_source"] = "fatsecret"
                 return item
         except Exception as e:
-            logger.debug(f"fatsecret lookup failed for {name}: {e}")
+            logger.debug("fatsecret lookup failed error_type=%s", type(e).__name__)
 
         # Fallback to AI estimate (values from prompt, already per-serving)
         item["data_source"] = "ai_estimate"
         return item
 
-    @staticmethod
-    def _is_english(name: str) -> bool:
-        """Check if name is likely English (ASCII-only, ignoring digits/punct)."""
-        letters = [c for c in name if c.isalpha()]
-        return bool(letters) and all(ord(c) < 128 for c in letters)
-
-    async def _translate_english_names_deepl(
+    async def _translate_structured_english_names(
         self, items: list[dict[str, Any]], language: str
     ) -> None:
-        """Detect and batch-translate any remaining English food names using DeepL."""
+        """Translate only names explicitly identified as English by the payload."""
         if self._translation_service is None:
             return
-
-        english_indices = [
-            i for i, item in enumerate(items) if self._is_english(item.get("name", ""))
+        candidates = [
+            str(item["english_name"])
+            for item in items
+            if isinstance(item.get("english_name"), str)
+            and item["english_name"].strip()
+            and item.get("name") == item.get("english_name")
         ]
-        if not english_indices:
+        if not candidates:
             return
-
-        names_to_translate = [items[i]["name"] for i in english_indices]
-        logger.info(
-            f"Translating {len(names_to_translate)} English names to {language} via DeepL"
+        result = await translate_food_texts(
+            candidates,
+            target_language=language,
+            translation_service=self._translation_service,
         )
-
-        try:
-            translated = await self._translation_service.translate_texts(
-                names_to_translate, language
-            )
-
-            if len(translated) == len(english_indices):
-                for idx, name in zip(english_indices, translated, strict=False):
-                    if isinstance(name, str) and name.strip():
-                        items[idx]["name"] = name.strip()
-            else:
-                logger.warning("DeepL translation response length mismatch, skipping")
-        except Exception as e:
-            logger.warning(f"DeepL name translation failed, keeping English: {e}")
+        if result.outcome not in {
+            TranslationOutcome.TRANSLATED,
+            TranslationOutcome.PARTIAL,
+        }:
+            return
+        translated_by_source = dict(zip(candidates, result.texts, strict=False))
+        for item in items:
+            english_name = item.get("english_name")
+            if english_name and item.get("name") == english_name:
+                item["name"] = translated_by_source.get(english_name, english_name)
 
     @staticmethod
     def _extract_english_name(name: str) -> str:
-        """Extract English name for fatsecret lookup.
-
-        AI may return either format:
-        - 'English Name (Local Name)' → extract before parens
-        - 'Local Name (English Name)' → extract inside parens
-        Heuristic: if text inside parens is ASCII, it's English; otherwise
-        the text before parens is English.
-        """
+        """Extract the structurally required English suffix from parse output."""
         match = re.search(r"^(.+?)\s*\(([^)]+)\)$", name.strip())
         if not match:
             return name
-        before, inside = match.group(1), match.group(2)
-        # If inside parens is mostly ASCII → it's the English name
-        if all(ord(c) < 256 for c in inside.replace(" ", "")):
-            return inside
-        return before
+        return match.group(2).strip()
 
     @staticmethod
     def _extract_display_name(name: str, language: str) -> str:
@@ -377,9 +370,7 @@ class ParseMealTextHandler(
         match = re.search(r"^(.+?)\s*\(([^)]+)\)$", name.strip())
         if not match:
             return name
-        before, inside = match.group(1), match.group(2)
-        # Non-ASCII part is the local language name
-        before_ascii = all(ord(c) < 256 for c in before.replace(" ", ""))
-        if before_ascii:
-            return inside  # Local name is inside parens
-        return before  # Local name is before parens
+        before = match.group(1)
+        # The non-English prompt structurally defines local text first and
+        # English canonical text in the parenthesized suffix.
+        return before.strip()

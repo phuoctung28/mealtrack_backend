@@ -15,12 +15,13 @@ from src.domain.exceptions.meal_suggestion_exceptions import (
     MealSuggestionSessionStoreUnavailableError,
 )
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
+from src.domain.model.translation_result import TranslationOutcome
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
-from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
-    DeepLSuggestionTranslationService,
+from src.domain.services.meal_suggestion.suggestion_translation_service import (
+    SuggestionTranslationService,
 )
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
@@ -58,7 +59,7 @@ class SuggestionOrchestrationService:
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
         uow_factory: Optional[Callable[[], Any]] = None,
-        translation_service: Optional[DeepLSuggestionTranslationService] = None,
+        translation_service: Optional[SuggestionTranslationService] = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
@@ -242,7 +243,16 @@ class SuggestionOrchestrationService:
             await self._repo.update_session(session)
         else:
             await self._repo.save_session(session)
-        await self._repo.save_suggestions(suggestions)
+        persistable = (
+            suggestions
+            if session.language == "en"
+            else [
+                suggestion
+                for suggestion in suggestions
+                if suggestion.translation_outcome is TranslationOutcome.TRANSLATED
+            ]
+        )
+        await self._repo.save_suggestions(persistable)
 
     async def _load_existing_session(
         self, session_id: str, user_id: str, language: str

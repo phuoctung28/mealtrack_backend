@@ -1,7 +1,9 @@
-"""
-System prompts for AI services.
+"""System prompts for AI services.
+
 Centralizes prompt management for easy maintenance and versioning.
 """
+
+from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
 
 
 class SystemPrompts:
@@ -248,7 +250,7 @@ WORKED EXAMPLE 2 — Coca-Cola 330ml can:
 Return ONLY valid JSON matching the structure above."""
 
     # Supported language codes (ISO 639-1)
-    SUPPORTED_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
+    SUPPORTED_LANGUAGES = SUPPORTED_TRANSLATION_LANGUAGES
 
     # English-only JSON example for prompt
     _EXAMPLE_EN = """[
