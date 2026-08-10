@@ -181,6 +181,7 @@ class ThreeDayPlanOptimizer:
         *,
         target_calories: int,
         selected_ids: set[str],
+        min_count: int = 1,
     ) -> list[RecipeScore]:
         ranked = [
             item
@@ -194,7 +195,7 @@ class ThreeDayPlanOptimizer:
                 if abs(item.catalog_meal.calories - target_calories) / target_calories
                 <= tolerance
             ]
-            if within_tolerance:
+            if len(within_tolerance) >= min_count:
                 return within_tolerance
         return sorted(
             ranked,
@@ -224,6 +225,7 @@ class ThreeDayPlanOptimizer:
             ranked_pool,
             target_calories=target_calories,
             selected_ids=excluded,
+            min_count=count,
         )
         ranked = self._diversity.rerank_shortlist(
             ranked,
