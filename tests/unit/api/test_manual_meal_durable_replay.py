@@ -12,7 +12,7 @@ from src.api.schemas.request.meal_requests import (
     CreateManualMealFromFoodsRequest,
     ManualMealItemRequest,
 )
-from src.app.services.durable_write_service import DurableWriteRecord
+from src.infra.services.durable_write_service import DurableWriteRecord
 
 
 def _payload() -> CreateManualMealFromFoodsRequest:
@@ -71,7 +71,7 @@ async def test_manual_meal_replays_stored_response():
 
 @pytest.mark.asyncio
 async def test_manual_meal_conflict_returns_409():
-    from src.app.services.durable_write_service import DurableWriteConflictError
+    from src.infra.services.durable_write_service import DurableWriteConflictError
 
     with (
         patch(

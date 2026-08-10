@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from src.app.services.durable_write_service import RETENTION_DAYS
+from src.infra.services.durable_write_service import RETENTION_DAYS
 
 router = APIRouter(prefix="/v1/capabilities", tags=["Capabilities"])
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.app.services.durable_write_service import (
+from src.infra.services.durable_write_service import (
     canonicalize_fingerprint,
     normalize_idempotency_key,
 )

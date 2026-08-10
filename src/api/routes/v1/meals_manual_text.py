@@ -35,7 +35,7 @@ from src.app.commands.meal.create_manual_meal_command import (
     ManualMealItem,
 )
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
-from src.app.services.durable_write_service import (
+from src.infra.services.durable_write_service import (
     MANUAL_MEAL_CREATE_ACTION,
     DurableWriteConflictError,
     normalize_idempotency_key,
