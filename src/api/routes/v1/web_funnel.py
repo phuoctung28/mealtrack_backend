@@ -5,7 +5,7 @@ import json
 from hmac import compare_digest
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +39,7 @@ from src.app.services.web_funnel_redemption_verification import (
 )
 from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
+from src.infra.database.models.user.user import User
 from src.infra.database.models.web_funnel_claim import (
     WebFunnelClaim,
     WebFunnelLead,
@@ -56,6 +57,13 @@ def _hash(value: str) -> str:
 def _masked_email(email: str) -> str:
     local, domain = email.split("@", maxsplit=1)
     return f"{local[:1]}***@{domain}"
+
+
+def _registered_user_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="This email is already registered. Please sign in to continue.",
+    )
 
 
 def _projection(lead: WebFunnelLead) -> dict[str, str | int | None]:
@@ -153,6 +161,12 @@ async def create_lead(
         if compare_digest(existing.access_key_hash, access_key_hash):
             return _projection(existing)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    registered_user_id = await db.scalar(
+        select(User.id).where(func.lower(User.email) == str(payload.email).lower())
+    )
+    if registered_user_id is not None:
+        raise _registered_user_conflict()
 
     snapshot = payload.payload.model_dump(mode="json")
     lead = WebFunnelLead(
