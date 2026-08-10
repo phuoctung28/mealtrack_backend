@@ -45,6 +45,7 @@ FALLBACK_UNIT_CATEGORIES = {
 DEFAULT_ALLOWED_UNITS = [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
 
+from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
 
@@ -55,7 +56,7 @@ class FoodMappingService(FoodMappingServicePort):
             carbs = item.get("carbs_100g") or 0
             fat = item.get("fat_100g") or 0
             fiber = item.get("fiber_100g") or 0
-            calories = protein * 4 + max(carbs - fiber, 0) * 4 + fiber * 2 + fat * 9
+            calories = Macros.raw_total_calories(protein, carbs, fat, fiber)
             return {
                 "fdc_id": None,
                 "food_id": f"food_reference:{item.get('food_reference_id')}",

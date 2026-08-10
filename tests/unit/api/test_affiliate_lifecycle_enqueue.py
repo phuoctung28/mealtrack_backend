@@ -11,7 +11,7 @@ from src.api.routes.v1.webhooks import (
     handle_renewal,
 )
 
-MODULE = "src.api.routes.v1.webhooks"
+MODULE = "src.api.routes.v1.webhook_subscription_lifecycle"
 
 RC_EVENT = {
     "id": "rc-evt-001",
@@ -56,7 +56,7 @@ async def test_initial_purchase_enqueues_affiliate_event():
     user = _make_user()
 
     with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
-         patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
+         patch(f"{MODULE}.credit_referral_on_purchase", AsyncMock()):
         await handle_purchase(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -76,7 +76,7 @@ async def test_enqueue_failure_does_not_raise():
     uow.affiliate_outbox.enqueue = AsyncMock(return_value=None)  # None = duplicate, silently skipped
 
     with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
-         patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
+         patch(f"{MODULE}.credit_referral_on_purchase", AsyncMock()):
         await handle_purchase(uow, user, RC_EVENT)  # must not raise
 
 
@@ -131,7 +131,7 @@ async def test_refund_enqueues_subscription_refund():
 
     with patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()), \
-         patch(f"{MODULE}._revoke_referral_on_refund", AsyncMock()):
+         patch(f"{MODULE}.revoke_referral_on_refund", AsyncMock()):
         await handle_refund(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()

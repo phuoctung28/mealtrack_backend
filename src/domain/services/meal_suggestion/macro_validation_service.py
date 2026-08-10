@@ -9,6 +9,8 @@ Two roles:
 import logging
 from typing import TYPE_CHECKING
 
+from src.domain.model.nutrition.macros import Macros
+
 if TYPE_CHECKING:
     from src.domain.services.meal_suggestion.nutrition_lookup_service import MealMacros
 
@@ -67,8 +69,7 @@ class MacroValidationService:
         reported_cal = macros.get("calories", 0.0)
 
         # Fiber-aware: net_carb*4 + fiber*2 + P*4 + F*9
-        net_carbs = max(0.0, carbs - fiber)
-        derived_cal = round(protein * 4 + net_carbs * 4 + fiber * 2 + fat * 9, 1)
+        derived_cal = round(Macros.raw_total_calories(protein, carbs, fat, fiber), 1)
 
         # Clamp negatives
         macros["protein"] = protein
