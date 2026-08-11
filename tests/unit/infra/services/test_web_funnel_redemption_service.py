@@ -1,6 +1,7 @@
 """Focused safety tests for authenticated RevenueCat redemption."""
 
 import hashlib
+from datetime import date
 
 import pytest
 from fastapi import HTTPException
@@ -14,6 +15,8 @@ from src.infra.database.models.web_funnel_claim import (
     WebFunnelRedemption,
 )
 from src.infra.services.web_funnel_redemption_completion import (
+    _auth_provider,
+    _result,
     finalize_redemption,
     utcnow,
 )
@@ -69,6 +72,59 @@ def _binding(**values):
 
 def _link_hash(link="rc-example://redeem?token=opaque"):
     return hashlib.sha256(link.encode()).hexdigest()
+
+
+def _snapshot(**overrides):
+    return {
+        "gender": "female",
+        "height": 168,
+        "weight": 62,
+        "birth_year": 1995,
+        "birth_month": 4,
+        "birth_day": 20,
+        "job_type": "desk",
+        "training_days_per_week": 3,
+        "training_minutes_per_session": 45,
+        "goal": "recomp",
+        "training_level": None,
+        "custom_protein_g": None,
+        "custom_carbs_g": None,
+        "custom_fat_g": None,
+    } | overrides
+
+
+def test_result_derives_age_and_default_calories_from_tdee_macros():
+    snapshot = _snapshot()
+
+    result = _result(snapshot, "firebase-user")
+
+    expected_age = (
+        date.today().year - 1995 - ((date.today().month, date.today().day) < (4, 20))
+    )
+    macros = result["macros"]
+    assert result["age"] == expected_age
+    assert macros["calories"] == pytest.approx(
+        macros["protein"] * 4 + macros["carbs"] * 4 + macros["fat"] * 9
+    )
+    assert macros["calories"] != 2000
+
+
+def test_result_preserves_complete_custom_macro_override():
+    result = _result(
+        _snapshot(custom_protein_g=125, custom_carbs_g=210, custom_fat_g=70),
+        "firebase-user",
+    )
+
+    assert result["macros"] == {
+        "protein": 125.0,
+        "carbs": 210.0,
+        "fat": 70.0,
+        "calories": 1970.0,
+    }
+
+
+def test_password_firebase_provider_maps_to_email_link():
+    assert _auth_provider("password") is AuthProvider.EMAIL_LINK
 
 
 @pytest.mark.asyncio
@@ -322,9 +378,8 @@ async def test_finalization_attaches_purchase_to_authenticated_user():
     )
     assert subscription.platform == "web"
     assert result["access_status"] == "active"
-    assert result["macros"] == {
-        "calories": 2000,
-        "protein": 150,
-        "carbs": 200,
-        "fat": 65,
-    }
+    macros = result["macros"]
+    assert macros["calories"] == pytest.approx(
+        macros["protein"] * 4 + macros["carbs"] * 4 + macros["fat"] * 9
+    )
+    assert macros["calories"] != 2000
