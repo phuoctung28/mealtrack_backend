@@ -2,6 +2,12 @@
 
 import pytest
 
+from src.api.routes.v1.manual_meal_durable import manual_meal_fingerprint
+from src.api.schemas.request.meal_requests import (
+    CreateManualMealFromFoodsRequest,
+    ManualMealItemRequest,
+    ServingUnitRequest,
+)
 from src.infra.services.durable_write_service import (
     canonicalize_fingerprint,
     normalize_idempotency_key,
@@ -27,3 +33,29 @@ def test_normalize_idempotency_key_trims_and_rejects_blank():
 def test_normalize_idempotency_key_rejects_too_long():
     with pytest.raises(ValueError, match="160"):
         normalize_idempotency_key("k" * 161)
+
+
+def test_manual_meal_fingerprint_ignores_allowed_units():
+    base_item = dict(fdc_id=123, name="Oats", quantity=40, unit="g")
+    left = CreateManualMealFromFoodsRequest(
+        dish_name="Oats",
+        meal_type="breakfast",
+        target_date="2026-08-11",
+        source="manual",
+        items=[ManualMealItemRequest(**base_item)],
+    )
+    right = CreateManualMealFromFoodsRequest(
+        dish_name="Oats",
+        meal_type="breakfast",
+        target_date="2026-08-11",
+        source="manual",
+        items=[
+            ManualMealItemRequest(
+                **base_item,
+                allowed_units=[
+                    ServingUnitRequest(unit="g", gram_weight=1.0, description="gram")
+                ],
+            )
+        ],
+    )
+    assert manual_meal_fingerprint(left) == manual_meal_fingerprint(right)

@@ -16,12 +16,17 @@ create and weight sync still lack operation identity.
 2. **Identity:** unique `(user_id, action, idempotency_key)`.
 3. **Fingerprint:** SHA-256 of canonical JSON for the request body fields that
    define the logical write (sorted keys).
-4. **Replay:** same key + same fingerprint → exact prior HTTP status + body.
-5. **Conflict:** same key + different fingerprint → `409` with
-   `IDEMPOTENCY_KEY_CONFLICT`.
-6. **Retention:** 14 days (`expires_at`); expired rows may be pruned.
-7. **Discovery:** `GET /v1/capabilities/durable-writes`.
-8. **Backward compatibility:** omitting the header keeps legacy single-shot
+4. **Claim-before-create:** insert a pending durable row before the mutation.
+   Complete it with the exact response after success; abandon it on failure so
+   a retry can reclaim. Concurrent same-key claims → `409`
+   `IDEMPOTENCY_KEY_IN_PROGRESS` (no second mutation).
+5. **Replay:** same key + same fingerprint → exact prior HTTP status + body.
+6. **Conflict:** same key + different fingerprint → `409` with
+   `IDEMPOTENCY_KEY_CONFLICT` (raised at claim time, before mutation).
+7. **Retention:** 14 days (`expires_at`); expired rows may be pruned.
+   Stale pending claims (>120s) may be reclaimed.
+8. **Discovery:** `GET /v1/capabilities/durable-writes`.
+9. **Backward compatibility:** omitting the header keeps legacy single-shot
    behavior (no store write).
 
 ### Actions in this wave

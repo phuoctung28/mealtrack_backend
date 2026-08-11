@@ -48,7 +48,7 @@ async def test_manual_meal_replays_stored_response():
     )
     with (
         patch(
-            "src.api.routes.v1.meals_manual_text.resolve_or_conflict",
+            "src.api.routes.v1.meals_manual_text.begin_durable_write",
             new=AsyncMock(return_value=stored),
         ),
         patch(
@@ -75,7 +75,7 @@ async def test_manual_meal_conflict_returns_409():
 
     with (
         patch(
-            "src.api.routes.v1.meals_manual_text.resolve_or_conflict",
+            "src.api.routes.v1.meals_manual_text.begin_durable_write",
             new=AsyncMock(side_effect=DurableWriteConflictError),
         ),
         patch(
@@ -99,6 +99,37 @@ async def test_manual_meal_conflict_returns_409():
 
 
 @pytest.mark.asyncio
+async def test_manual_meal_in_progress_returns_409_without_create():
+    from src.infra.services.durable_write_service import DurableWriteInProgressError
+
+    event_bus = AsyncMock()
+    with (
+        patch(
+            "src.api.routes.v1.meals_manual_text.begin_durable_write",
+            new=AsyncMock(side_effect=DurableWriteInProgressError),
+        ),
+        patch(
+            "src.api.routes.v1.meals_manual_text.manual_meal_fingerprint",
+            return_value="abc",
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await create_manual_meal(
+                request=SimpleNamespace(),
+                payload=_payload(),
+                user_id="user-1",
+                event_bus=event_bus,
+                cache_service=None,
+                task_manager=None,
+                ai_manager=AsyncMock(),
+                idempotency_key_header="op-1",
+            )
+    assert exc.value.status_code == 409
+    assert exc.value.detail["error_code"] == "IDEMPOTENCY_KEY_IN_PROGRESS"
+    event_bus.send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_manual_meal_persists_durable_write_on_first_create():
     meal = SimpleNamespace(
         meal_id="meal-new",
@@ -106,10 +137,23 @@ async def test_manual_meal_persists_durable_write_on_first_create():
     )
     event_bus = AsyncMock()
     event_bus.send = AsyncMock(return_value=meal)
-    save = AsyncMock()
+    complete = AsyncMock(
+        return_value=DurableWriteRecord(
+            request_fingerprint="fp-1",
+            response_status_code=200,
+            response_body={
+                "meal_id": "meal-new",
+                "status": "success",
+                "message": "Meal 'Oats' created successfully",
+                "created_at": "2026-08-11T00:00:00+00:00",
+                "meal_detail": None,
+            },
+            resource_id="meal-new",
+        )
+    )
     with (
         patch(
-            "src.api.routes.v1.meals_manual_text.resolve_or_conflict",
+            "src.api.routes.v1.meals_manual_text.begin_durable_write",
             new=AsyncMock(return_value=None),
         ),
         patch(
@@ -117,8 +161,8 @@ async def test_manual_meal_persists_durable_write_on_first_create():
             return_value="fp-1",
         ),
         patch(
-            "src.api.routes.v1.meals_manual_text.save_durable_write",
-            new=save,
+            "src.api.routes.v1.meals_manual_text.complete_durable_write",
+            new=complete,
         ),
         patch(
             "src.api.routes.v1.meals_manual_text.schedule_value_insight_generation",
@@ -143,6 +187,39 @@ async def test_manual_meal_persists_durable_write_on_first_create():
             idempotency_key_header="op-2",
         )
     assert response.meal_id == "meal-new"
-    save.assert_awaited_once()
-    assert save.await_args.kwargs["idempotency_key"] == "op-2"
-    assert save.await_args.kwargs["request_fingerprint"] == "fp-1"
+    complete.assert_awaited_once()
+    assert complete.await_args.kwargs["idempotency_key"] == "op-2"
+    assert complete.await_args.kwargs["request_fingerprint"] == "fp-1"
+
+
+@pytest.mark.asyncio
+async def test_manual_meal_abandons_claim_when_create_fails():
+    event_bus = AsyncMock()
+    event_bus.send = AsyncMock(side_effect=RuntimeError("db down"))
+    abandon = AsyncMock()
+    with (
+        patch(
+            "src.api.routes.v1.meals_manual_text.begin_durable_write",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "src.api.routes.v1.meals_manual_text.manual_meal_fingerprint",
+            return_value="fp-1",
+        ),
+        patch(
+            "src.api.routes.v1.meals_manual_text.abandon_durable_write",
+            new=abandon,
+        ),
+    ):
+        with pytest.raises(Exception):
+            await create_manual_meal(
+                request=SimpleNamespace(),
+                payload=_payload(),
+                user_id="user-1",
+                event_bus=event_bus,
+                cache_service=None,
+                task_manager=None,
+                ai_manager=AsyncMock(),
+                idempotency_key_header="op-3",
+            )
+    abandon.assert_awaited_once()

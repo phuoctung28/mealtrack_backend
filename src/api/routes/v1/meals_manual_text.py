@@ -38,9 +38,11 @@ from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.infra.services.durable_write_service import (
     MANUAL_MEAL_CREATE_ACTION,
     DurableWriteConflictError,
+    DurableWriteInProgressError,
+    abandon_durable_write,
+    begin_durable_write,
+    complete_durable_write,
     normalize_idempotency_key,
-    resolve_or_conflict,
-    save_durable_write,
 )
 from src.app.services.meal_value_insight_scheduler import (
     schedule_value_insight_generation,
@@ -82,10 +84,11 @@ async def create_manual_meal(
             ) from exc
 
         fingerprint: str | None = None
+        claimed = False
         if idempotency_key is not None:
             fingerprint = manual_meal_fingerprint(payload)
             try:
-                existing = await resolve_or_conflict(
+                existing = await begin_durable_write(
                     user_id=user_id,
                     action=MANUAL_MEAL_CREATE_ACTION,
                     idempotency_key=idempotency_key,
@@ -99,83 +102,94 @@ async def create_manual_meal(
                         "message": "Idempotency-Key reused with a different payload",
                     },
                 ) from exc
+            except DurableWriteInProgressError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error_code": "IDEMPOTENCY_KEY_IN_PROGRESS",
+                        "message": "Idempotency-Key is already being processed",
+                    },
+                ) from exc
             if existing is not None:
                 return ManualMealCreationResponse.model_validate(existing.response_body)
+            claimed = True
 
-        items = []
-        for i in payload.items:
-            custom_nutrition = None
-            if i.custom_nutrition:
-                custom_nutrition = CustomNutrition(
-                    calories_per_100g=i.custom_nutrition.calories_per_100g,
-                    protein_per_100g=i.custom_nutrition.protein_per_100g,
-                    carbs_per_100g=i.custom_nutrition.carbs_per_100g,
-                    fat_per_100g=i.custom_nutrition.fat_per_100g,
-                    fiber_per_100g=i.custom_nutrition.fiber_per_100g,
-                    sugar_per_100g=i.custom_nutrition.sugar_per_100g,
+        try:
+            items = []
+            for i in payload.items:
+                custom_nutrition = None
+                if i.custom_nutrition:
+                    custom_nutrition = CustomNutrition(
+                        calories_per_100g=i.custom_nutrition.calories_per_100g,
+                        protein_per_100g=i.custom_nutrition.protein_per_100g,
+                        carbs_per_100g=i.custom_nutrition.carbs_per_100g,
+                        fat_per_100g=i.custom_nutrition.fat_per_100g,
+                        fiber_per_100g=i.custom_nutrition.fiber_per_100g,
+                        sugar_per_100g=i.custom_nutrition.sugar_per_100g,
+                    )
+                items.append(
+                    ManualMealItem(
+                        fdc_id=i.fdc_id,
+                        name=i.name,
+                        quantity=i.quantity,
+                        unit=i.unit,
+                        custom_nutrition=custom_nutrition,
+                        allowed_units=[unit.model_dump() for unit in i.allowed_units],
+                    )
                 )
-            items.append(
-                ManualMealItem(
-                    fdc_id=i.fdc_id,
-                    name=i.name,
-                    quantity=i.quantity,
-                    unit=i.unit,
-                    custom_nutrition=custom_nutrition,
-                    allowed_units=[unit.model_dump() for unit in i.allowed_units],
-                )
+
+            target_date = None
+            if payload.target_date:
+                try:
+                    target_date = datetime.strptime(
+                        payload.target_date, "%Y-%m-%d"
+                    ).date()
+                except ValueError as e:
+                    raise ValidationException(
+                        message="Invalid date format. Use YYYY-MM-DD",
+                        error_code="INVALID_DATE_FORMAT",
+                        details={"date": payload.target_date},
+                    ) from e
+
+            cmd = CreateManualMealCommand(
+                user_id=user_id,
+                items=items,
+                dish_name=payload.dish_name,
+                meal_type=payload.meal_type,
+                target_date=target_date,
+                source=payload.source,
+                emoji=payload.emoji,
+            )
+            _t0 = time.perf_counter()
+            meal = await event_bus.send(cmd)
+            _elapsed_ms = (time.perf_counter() - _t0) * 1000
+            logger.info(
+                "manual_save timing: user=%s total_handler_ms=%.1f",
+                user_id,
+                _elapsed_ms,
+            )
+            schedule_value_insight_generation(
+                task_manager,
+                meal,
+                language=get_request_language(request),
+                cache_service=cache_service,
+                ai_manager=ai_manager,
+                event_bus=event_bus,
+                user_id=user_id,
             )
 
-        target_date = None
-        if payload.target_date:
-            try:
-                target_date = datetime.strptime(payload.target_date, "%Y-%m-%d").date()
-            except ValueError as e:
-                raise ValidationException(
-                    message="Invalid date format. Use YYYY-MM-DD",
-                    error_code="INVALID_DATE_FORMAT",
-                    details={"date": payload.target_date},
-                ) from e
-
-        cmd = CreateManualMealCommand(
-            user_id=user_id,
-            items=items,
-            dish_name=payload.dish_name,
-            meal_type=payload.meal_type,
-            target_date=target_date,
-            source=payload.source,
-            emoji=payload.emoji,
-        )
-        _t0 = time.perf_counter()
-        meal = await event_bus.send(cmd)
-        _elapsed_ms = (time.perf_counter() - _t0) * 1000
-        logger.info(
-            "manual_save timing: user=%s total_handler_ms=%.1f",
-            user_id,
-            _elapsed_ms,
-        )
-        schedule_value_insight_generation(
-            task_manager,
-            meal,
-            language=get_request_language(request),
-            cache_service=cache_service,
-            ai_manager=ai_manager,
-            event_bus=event_bus,
-            user_id=user_id,
-        )
-
-        response = ManualMealCreationResponse(
-            meal_id=meal.meal_id,
-            status="success",
-            message=f"Meal '{payload.dish_name}' created successfully",
-            created_at=meal.created_at,
-            meal_detail=MealMapper.to_detailed_response(
-                meal,
-                target_language=get_request_language(request),
-            ),
-        )
-        if idempotency_key is not None and fingerprint is not None:
-            try:
-                await save_durable_write(
+            response = ManualMealCreationResponse(
+                meal_id=meal.meal_id,
+                status="success",
+                message=f"Meal '{payload.dish_name}' created successfully",
+                created_at=meal.created_at,
+                meal_detail=MealMapper.to_detailed_response(
+                    meal,
+                    target_language=get_request_language(request),
+                ),
+            )
+            if claimed and idempotency_key is not None and fingerprint is not None:
+                stored = await complete_durable_write(
                     user_id=user_id,
                     action=MANUAL_MEAL_CREATE_ACTION,
                     idempotency_key=idempotency_key,
@@ -184,15 +198,17 @@ async def create_manual_meal(
                     response_body=response.model_dump(mode="json"),
                     resource_id=response.meal_id,
                 )
-            except DurableWriteConflictError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail={
-                        "error_code": "IDEMPOTENCY_KEY_CONFLICT",
-                        "message": "Idempotency-Key reused with a different payload",
-                    },
-                ) from exc
-        return response
+                return ManualMealCreationResponse.model_validate(stored.response_body)
+            return response
+        except Exception:
+            if claimed and idempotency_key is not None and fingerprint is not None:
+                await abandon_durable_write(
+                    user_id=user_id,
+                    action=MANUAL_MEAL_CREATE_ACTION,
+                    idempotency_key=idempotency_key,
+                    request_fingerprint=fingerprint,
+                )
+            raise
     except HTTPException:
         raise
     except Exception as e:
