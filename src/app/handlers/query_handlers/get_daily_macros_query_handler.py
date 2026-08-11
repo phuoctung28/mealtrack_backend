@@ -87,6 +87,15 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
             user_tz = get_zone_info(user_tz_str)
             target_date = query.target_date or datetime.now(user_tz).date()
 
+            # Cache-aside BEFORE meal aggregation. Returning a Redis hit after
+            # computing fresh totals discarded those totals and could leave
+            # clients with stale consumed=0 while meals already existed.
+            cached_result = await self._try_get_cached_result(
+                query.user_id, target_date, target_revision
+            )
+            if cached_result is not None:
+                return cached_result
+
             meals = await uow.meals.find_by_date(
                 target_date,
                 user_id=query.user_id,
@@ -197,15 +206,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
 
             food_calories = total_calories
             net_calories = food_calories - movement_kcal_burned
-
-            # Cache check stays at the same relative point as before the
-            # reorder (after meal/hydration/budget/movement reads, before the
-            # weekly effective-adjusted call) — a hit still avoids that call.
-            cached_result = await self._try_get_cached_result(
-                query.user_id, target_date, target_revision
-            )
-            if cached_result is not None:
-                return cached_result
 
             if target_calories:
                 weekly_context = await self._get_weekly_context(
