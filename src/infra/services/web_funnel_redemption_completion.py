@@ -10,6 +10,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.model.auth import AuthProvider
+from src.domain.model.user import Goal, JobType, Sex, TdeeRequest, TrainingLevel
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
@@ -45,16 +47,13 @@ def claim_not_found():
 
 
 def _age(snapshot):
-    return snapshot.get("age", 30)
+    born = date(snapshot["birth_year"], snapshot["birth_month"], snapshot["birth_day"])
+    today = date.today()
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
 
 
 def _username(email):
     return email.split("@", 1)[0][:50]
-
-
-def _snapshot_value(snapshot, key, default):
-    value = snapshot.get(key)
-    return default if value is None else value
 
 
 def _normalize_email(email: str) -> str:
@@ -62,11 +61,11 @@ def _normalize_email(email: str) -> str:
 
 
 def _auth_provider(firebase_provider: str | None) -> AuthProvider:
-    return (
-        AuthProvider.APPLE
-        if firebase_provider == "apple.com"
-        else AuthProvider.GOOGLE
-    )
+    if firebase_provider == "apple.com":
+        return AuthProvider.APPLE
+    if firebase_provider == "password":
+        return AuthProvider.EMAIL_LINK
+    return AuthProvider.GOOGLE
 
 
 def _week_start(today):
@@ -74,15 +73,47 @@ def _week_start(today):
 
 
 def _result(snapshot, uid):
+    age = _age(snapshot)
+    request = TdeeRequest(
+        age=age,
+        sex=Sex(snapshot["gender"]),
+        height=snapshot["height"],
+        weight=snapshot["weight"],
+        body_fat_pct=snapshot.get("body_fat_percentage"),
+        job_type=JobType(snapshot["job_type"]),
+        training_days_per_week=snapshot["training_days_per_week"],
+        training_minutes_per_session=snapshot["training_minutes_per_session"],
+        goal=Goal(snapshot["goal"]),
+        training_level=(
+            TrainingLevel(snapshot["training_level"])
+            if snapshot.get("training_level")
+            else None
+        ),
+    )
+    calculation = TdeeCalculationService().calculate_tdee(request)
+    macros = calculation.macros
+    custom_macro_keys = ("custom_protein_g", "custom_carbs_g", "custom_fat_g")
+    if all(snapshot.get(key) is not None for key in custom_macro_keys):
+        protein, carbs, fat = (float(snapshot[key]) for key in custom_macro_keys)
+        macro_data = {
+            "protein": protein,
+            "carbs": carbs,
+            "fat": fat,
+            "calories": round(protein * 4 + carbs * 4 + fat * 9, 1),
+        }
+    else:
+        macro_data = {
+            "protein": macros.protein,
+            "carbs": macros.carbs,
+            "fat": macros.fat,
+            "calories": macros.calories,
+        }
     return {
         "firebase_uid": uid,
         "onboarding_completed": True,
-        "macros": {
-            "calories": _snapshot_value(snapshot, "target_calories", 2000),
-            "protein": _snapshot_value(snapshot, "custom_protein_g", 150),
-            "carbs": _snapshot_value(snapshot, "custom_carbs_g", 200),
-            "fat": _snapshot_value(snapshot, "custom_fat_g", 65),
-        },
+        "age": age,
+        "tdee": calculation.tdee,
+        "macros": macro_data,
     }
 
 
@@ -181,7 +212,9 @@ async def finalize_redemption(
                 weight_kg=snapshot["weight"],
                 body_fat_percentage=snapshot.get("body_fat_percentage"),
                 date_of_birth=date(
-                    snapshot["birth_year"], snapshot["birth_month"], snapshot["birth_day"]
+                    snapshot["birth_year"],
+                    snapshot["birth_month"],
+                    snapshot["birth_day"],
                 ),
                 job_type=snapshot["job_type"],
                 training_days_per_week=snapshot["training_days_per_week"],
