@@ -20,6 +20,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from src.domain.constants.food_density import get_density
+from src.domain.model.nutrition.macros import Macros
 from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
     normalize_food_name,
 )
@@ -607,5 +608,4 @@ class NutritionLookupService:
 
 def _derive_calories(protein: float, carbs: float, fat: float, fiber: float) -> float:
     """Fiber-aware calorie derivation: P×4 + (C−fiber)×4 + fiber×2 + F×9."""
-    net_carbs = max(carbs - fiber, 0.0)
-    return protein * 4.0 + net_carbs * 4.0 + fiber * 2.0 + fat * 9.0
+    return Macros.raw_total_calories(protein, carbs, fat, fiber)

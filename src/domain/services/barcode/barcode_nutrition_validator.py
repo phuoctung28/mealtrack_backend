@@ -1,5 +1,7 @@
 from typing import Any
 
+from src.domain.model.nutrition.macros import Macros
+
 
 def validate_barcode_nutrition(payload: dict[str, Any]) -> dict[str, Any]:
     """Clamp per-100g barcode nutrition without meal-level macro assumptions."""
@@ -27,6 +29,5 @@ def _non_negative(value: Any) -> float:
 
 
 def _derive_calories(protein: float, carbs: float, fat: float, fiber: float) -> float:
-    net_carbs = max(0.0, carbs - fiber)
-    return round(protein * 4 + net_carbs * 4 + fiber * 2 + fat * 9, 1)
+    return round(Macros.raw_total_calories(protein, carbs, fat, fiber), 1)
 

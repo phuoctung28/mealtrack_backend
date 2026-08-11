@@ -449,6 +449,12 @@ async def test_swap_slot_replenishes_exhausted_pool_and_marks_outcome():
     assert len(result.slot.alternatives) == 4
     assert rows[0].retired_at is not None
     assert len(repo._session.added_rows) == 6
+    # Domain CatalogMeal must never be assigned onto ORM relationship state.
+    for row in repo._session.added_rows:
+        if getattr(row, "catalog_meal_id", None) in {
+            f"catalog-{index}" for index in range(3, 8)
+        }:
+            assert not isinstance(getattr(row, "catalog_meal", None), CatalogMeal)
 
 
 @pytest.mark.asyncio

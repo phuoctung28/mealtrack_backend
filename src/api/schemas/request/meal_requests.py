@@ -8,6 +8,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.domain.model.nutrition.macros import Macros
+
 
 class ParseMealTextRequest(BaseModel):
     """Request DTO for parsing meal text descriptions."""
@@ -175,12 +177,13 @@ class ManualMealCustomNutritionRequest(BaseModel):
     @property
     def calories_per_100g(self) -> float:
         """Derive calories from macros using fiber-aware formula."""
-        net_carbs = max(0.0, self.carbs_per_100g - self.fiber_per_100g)
         return round(
-            self.protein_per_100g * 4
-            + net_carbs * 4
-            + self.fiber_per_100g * 2
-            + self.fat_per_100g * 9,
+            Macros.raw_total_calories(
+                self.protein_per_100g,
+                self.carbs_per_100g,
+                self.fat_per_100g,
+                self.fiber_per_100g,
+            ),
             2,
         )
 
@@ -325,12 +328,13 @@ class CustomNutritionRequest(BaseModel):
     @property
     def calories_per_100g(self) -> float:
         """Derive calories from macros using fiber-aware formula."""
-        net_carbs = max(0.0, self.carbs_per_100g - self.fiber_per_100g)
         return round(
-            self.protein_per_100g * 4
-            + net_carbs * 4
-            + self.fiber_per_100g * 2
-            + self.fat_per_100g * 9,
+            Macros.raw_total_calories(
+                self.protein_per_100g,
+                self.carbs_per_100g,
+                self.fat_per_100g,
+                self.fiber_per_100g,
+            ),
             2,
         )
 

@@ -18,6 +18,7 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
 from src.domain.exceptions.ai_exceptions import AIOutputValidationError
 from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
+from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.ai_output_validation_service import (
     build_validation_retry_prompt,
@@ -233,8 +234,7 @@ class ParseMealTextHandler(
         carbs = float(macros.get("carbs_g", 0.0) or 0.0)
         fiber = float(macros.get("fiber_g", 0.0) or 0.0)
         fat = float(macros.get("fat_g", 0.0) or 0.0)
-        digestible_carbs = max(carbs - fiber, 0.0)
-        return round(protein * 4 + digestible_carbs * 4 + fiber * 2 + fat * 9, 2)
+        return round(Macros.raw_total_calories(protein, carbs, fat, fiber), 2)
 
     # Max ratio between FatSecret and AI estimate before rejecting FatSecret
     _FATSECRET_DIVERGENCE_THRESHOLD = 3.0

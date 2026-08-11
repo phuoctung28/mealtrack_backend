@@ -1,8 +1,9 @@
 # Backend Code Standards — Python Style & Conventions
 
-**Last Updated:** July 29, 2026
-**Scope:** All code in `src/` (704 Python files, 65,423 LOC)
-**Applies To:** Typing, naming, imports, code organization, error handling
+**Status:** Evergreen code judgment  
+**Scope:** All code in `src/`  
+**Applies To:** Typing, naming, imports, code organization, error handling  
+**Schema judgment:** `standards/db-api.md` · **Tests:** `testing-standards.md`
 
 ---
 
@@ -216,7 +217,7 @@ environment, not alias lists or raw provider identifiers.
 - [ ] Pattern-based naming (command/query/event/handler/service/repo)
 - [ ] No `dynamic` types (always explicit)
 - [ ] Logs follow severity and privacy rules
-- [ ] Run before commit: `black src/ tests/ && ruff check src/ && mypy src/`
+- [ ] Run before commit: `ruff format src/ tests/ && ruff check src/ && mypy src/`
 - [ ] Run `lint-imports` when changing layer boundaries or imports between `src/api`, `src/app`, `src/domain`, and `src/infra`
 
 ---

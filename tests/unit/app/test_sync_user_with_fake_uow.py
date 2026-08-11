@@ -4,14 +4,12 @@ This proves the handlers are decoupled from infrastructure.
 """
 
 import pytest
-from uuid import uuid4
-from datetime import datetime
+from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
 
 from src.app.commands.user.sync_user_command import SyncUserCommand
 from src.app.handlers.command_handlers.sync_user_command_handler import (
     SyncUserCommandHandler,
 )
-from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
 from src.domain.model.auth.auth_provider import AuthProvider
 
 
@@ -79,3 +77,33 @@ async def test_sync_user_updates_existing_user_with_fake_uow():
     updated_user = await fake_uow.users.find_by_firebase_uid("firebase_123")
     assert updated_user.email == "new@example.com"
     assert fake_uow.committed is True
+
+
+@pytest.mark.asyncio
+async def test_sync_user_upgrades_anonymous_provider_with_same_firebase_uid():
+    fake_uow = FakeUnitOfWork()
+    from src.domain.model.user import UserDomainModel
+
+    anonymous_user = UserDomainModel(
+        firebase_uid="firebase_anonymous",
+        email=None,
+        username="anonymous_user",
+        password_hash="",
+        provider=AuthProvider.ANONYMOUS,
+        onboarding_completed=True,
+    )
+    await fake_uow.users.save(anonymous_user)
+
+    result = await SyncUserCommandHandler(uow=fake_uow).handle(
+        SyncUserCommand(
+            firebase_uid="firebase_anonymous",
+            email="owner@example.com",
+            display_name="Owner",
+            provider="google",
+        )
+    )
+
+    upgraded_user = await fake_uow.users.find_by_firebase_uid("firebase_anonymous")
+    assert result["updated"] is True
+    assert upgraded_user.provider is AuthProvider.GOOGLE
+    assert upgraded_user.email == "owner@example.com"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -29,6 +30,8 @@ from src.domain.model.meal_recommendation import (
 from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
     ThreeDayPlanOptimizer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @handles(CreateThreeDayMealRecommendationCommand)
@@ -95,6 +98,14 @@ class CreateThreeDayMealRecommendationCommandHandler(
                 ingredient_statistics=ingredient_statistics,
             )
             if isinstance(result, MealRecommendationInsufficiency):
+                logger.warning(
+                    "meal_recommendation_insufficient_catalog "
+                    "reason=%s required=%s available=%s message=%s",
+                    result.reason,
+                    result.required,
+                    result.available,
+                    result.message,
+                )
                 raise MealRecommendationInsufficientCatalogError(result.message)
 
             plan = _to_persisted_plan(command, fingerprint, result)

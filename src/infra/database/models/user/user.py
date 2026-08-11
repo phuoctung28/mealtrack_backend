@@ -2,7 +2,7 @@
 Core user model for authentication and account management.
 """
 
-from sqlalchemy import Column, String, Boolean, DateTime, Text, Index, Enum
+from sqlalchemy import Boolean, Column, DateTime, Enum, Index, String, Text
 from sqlalchemy.orm import relationship
 
 from src.api.schemas.common.auth_enums import AuthProviderEnum
@@ -18,6 +18,7 @@ class User(Base, BaseMixin):
 
     # Firebase Integration
     firebase_uid = Column(String(128), unique=True, nullable=False, index=True)
+    revenuecat_customer_id = Column(String(255), unique=True, nullable=True)
 
     # Basic Information
     email = Column(String(255), unique=True, nullable=False)

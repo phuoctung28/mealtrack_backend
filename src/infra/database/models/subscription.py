@@ -2,7 +2,7 @@
 Subscription model for tracking user subscriptions.
 """
 
-from sqlalchemy import Column, String, DateTime, Boolean, Enum, ForeignKey, Index
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, String
 from sqlalchemy.orm import relationship
 
 from src.domain.utils.timezone_utils import utc_now
@@ -47,7 +47,6 @@ class Subscription(Base, BaseMixin):
     purchased_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
-
 
     # Store metadata
     store_transaction_id = Column(String(255), nullable=True)

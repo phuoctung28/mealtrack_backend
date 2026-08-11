@@ -35,7 +35,7 @@ recommendation incidents.
    set affected additive catalog rows `is_active=false`. Include the selection
    criteria, expected row count, rollback SQL, and reviewer sign-off.
 5. If migration state blocks startup, follow
-   [Render CD Flow](../guides/render-cd.md#emergency-recovery).
+   [Render CD Flow](../archive/guides/render-cd.md#emergency-recovery).
 
 ## SQL Safety
 

@@ -1,6 +1,10 @@
 # Backend Troubleshooting Guide
 
-**Last Updated:** July 29, 2026
+**Status:** Evergreen common recovery  
+**Incidents / release ops:** `docs/runbooks/` (`provider-outage.md`,
+`meal-catalog-incident.md`, `meal-catalog-release.md`)  
+**DB connection policy:** `database-guide.md`  
+**Integration fail-fast vs degrade:** `external-services.md`
 
 ---
 
@@ -228,7 +232,8 @@ import pdb; pdb.set_trace()
 
 ---
 
-See related: `code-standards.md`, `testing-standards.md`, `system-architecture.md`
+See related: `code-standards.md`, `testing-standards.md`, `system-architecture.md`,
+`database-guide.md`, `runbooks/`
 
 ---
 

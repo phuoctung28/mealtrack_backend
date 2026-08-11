@@ -138,6 +138,40 @@ async def verify_firebase_token(
         ) from e
 
 
+async def verify_firebase_token_revocation_checked(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """Verify a high-value Firebase bearer and reject tokens revoked after minting."""
+    decoded_token = await verify_firebase_token(request, credentials)
+    if not credentials:
+        return decoded_token
+    try:
+        return await asyncio.to_thread(
+            firebase_auth.verify_id_token,
+            credentials.credentials,
+            check_revoked=True,
+        )
+    except firebase_auth.RevokedIdTokenError as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from error
+    except firebase_auth.ExpiredIdTokenError as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from error
+    except (firebase_auth.InvalidIdTokenError, firebase_auth.CertificateFetchError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from error
+
+
 async def verify_firebase_uid_ownership(
     firebase_uid: str,
     token: dict = Depends(verify_firebase_token),

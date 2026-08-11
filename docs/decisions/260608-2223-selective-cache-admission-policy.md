@@ -15,7 +15,10 @@ MealTrack has several cache-like mechanisms:
 
 The architectural risk is not "Redis is bad." The risk is using cache as the default answer for every repeated read. That creates stale-data bugs, hidden availability coupling, high Redis command volume, broad invalidation scans, and unclear source-of-truth ownership.
 
-The current policy in `docs/superpowers/specs/2026-05-21-redis-optimize-design.md` already points in the right direction: default to no cache unless the value earns the added complexity. This ADR accepts that direction as the backend rule.
+The historical design note in
+`docs/archive/superpowers/specs/2026-05-21-redis-optimize-design.md` already
+points in the right direction: default to no cache unless the value earns the
+added complexity. This decision accepts that direction as the backend rule.
 
 ## Decision
 

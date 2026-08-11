@@ -1,5 +1,10 @@
 # Database & API Conventions
 
+**Status:** Evergreen schema judgment satellite (only live file under `standards/`)  
+**Ops face:** [`../database-guide.md`](../database-guide.md)  
+**Code/test judgment:** [`../code-standards.md`](../code-standards.md),
+[`../testing-standards.md`](../testing-standards.md)
+
 ## Database Design Rules
 
 These rules are mandatory for new tables, migrations, and schema refactors.

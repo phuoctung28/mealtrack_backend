@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
     MealRecommendationAlternative,
@@ -32,6 +34,8 @@ from src.domain.services.meal_recommendation.slot_alternative_service import (
     SlotAlternativeService,
 )
 
+logger = logging.getLogger(__name__)
+
 PLAN_DAYS = 3
 
 
@@ -61,16 +65,28 @@ class ThreeDayPlanOptimizer:
         ingredient_statistics: CatalogIngredientStatistics | None = None,
     ) -> MealRecommendationPlan | MealRecommendationInsufficiency:
         candidates = _filter_supported_catalog_meals(catalog_meals, cuisines)
-        if len({catalog_meal.id for catalog_meal in candidates}) < PLAN_DAYS * len(MEAL_TYPE_ORDER):
+        unique_count = len({catalog_meal.id for catalog_meal in candidates})
+        required_slots = PLAN_DAYS * len(MEAL_TYPE_ORDER)
+        if unique_count < required_slots:
+            logger.warning(
+                "meal_recommendation_insufficient_catalog "
+                "meal_type=plan required=%s available=%s pool_size=%s",
+                required_slots,
+                unique_count,
+                len(catalog_meals),
+            )
             return MealRecommendationInsufficiency(
                 reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_CURRENT_RECIPES,
                 message="not enough unique catalog_meals for 3-day plan",
-                required=PLAN_DAYS * len(MEAL_TYPE_ORDER),
-                available=len({catalog_meal.id for catalog_meal in candidates}),
+                required=required_slots,
+                available=unique_count,
             )
 
         allocations = self._allocation.allocate(daily_calories)
-        statistics = ingredient_statistics or CatalogIngredientStatisticsService().build(candidates)
+        statistics = (
+            ingredient_statistics
+            or CatalogIngredientStatisticsService().build(candidates)
+        )
         ranked_pools = {
             meal_type: self._scoring.rank(
                 candidates,
@@ -98,6 +114,14 @@ class ThreeDayPlanOptimizer:
                     ingredient_statistics=statistics,
                 )
                 if not ranked:
+                    logger.warning(
+                        "meal_recommendation_insufficient_catalog "
+                        "meal_type=%s required=%s available=%s pool_size=%s",
+                        meal_type,
+                        1,
+                        0,
+                        len(ranked_pools[meal_type]),
+                    )
                     return MealRecommendationInsufficiency(
                         reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_CURRENT_RECIPES,
                         message=f"not enough unique candidates for {meal_type}",
@@ -149,7 +173,7 @@ class ThreeDayPlanOptimizer:
         target_calories: int,
         affinity: IngredientAffinityProfile,
         selected_ids: set[str],
-    ):
+    ) -> list[RecipeScore]:
         ranked = self._scoring.rank(
             catalog_meals,
             meal_type=meal_type,
@@ -157,22 +181,9 @@ class ThreeDayPlanOptimizer:
             affinity=affinity,
             excluded_catalog_meal_ids=selected_ids,
         )
-        for tolerance in (0.20, 0.30):
-            within_tolerance = [
-                item
-                for item in ranked
-                if abs(item.catalog_meal.calories - target_calories) / target_calories
-                <= tolerance
-            ]
-            if within_tolerance:
-                return within_tolerance
-        return sorted(
+        return self._select_ranked_candidates_with_fallback(
             ranked,
-            key=lambda item: (
-                abs(item.catalog_meal.calories - target_calories),
-                -item.score,
-                item.catalog_meal.id,
-            ),
+            target_calories=target_calories,
         )
 
     def _rank_pool_with_fallback(
@@ -181,13 +192,27 @@ class ThreeDayPlanOptimizer:
         *,
         target_calories: int,
         selected_ids: set[str],
-        min_count: int = 1,
+        minimum_count: int = 1,
     ) -> list[RecipeScore]:
         ranked = [
             item
             for item in ranked_pool
-            if item.catalog_meal.id not in selected_ids and item.catalog_meal.calories > 0
+            if item.catalog_meal.id not in selected_ids
+            and item.catalog_meal.calories > 0
         ]
+        return self._select_ranked_candidates_with_fallback(
+            ranked,
+            target_calories=target_calories,
+            minimum_count=minimum_count,
+        )
+
+    def _select_ranked_candidates_with_fallback(
+        self,
+        ranked: list[RecipeScore],
+        *,
+        target_calories: int,
+        minimum_count: int = 1,
+    ) -> list[RecipeScore]:
         for tolerance in (0.20, 0.30):
             within_tolerance = [
                 item
@@ -195,7 +220,7 @@ class ThreeDayPlanOptimizer:
                 if abs(item.catalog_meal.calories - target_calories) / target_calories
                 <= tolerance
             ]
-            if len(within_tolerance) >= min_count:
+            if len(within_tolerance) >= minimum_count:
                 return within_tolerance
         return sorted(
             ranked,
@@ -225,7 +250,7 @@ class ThreeDayPlanOptimizer:
             ranked_pool,
             target_calories=target_calories,
             selected_ids=excluded,
-            min_count=count,
+            minimum_count=count,
         )
         ranked = self._diversity.rerank_shortlist(
             ranked,
@@ -238,6 +263,14 @@ class ThreeDayPlanOptimizer:
             ),
         )
         if len(ranked) < count:
+            logger.warning(
+                "meal_recommendation_insufficient_alternatives "
+                "meal_type=%s required=%s available=%s pool_size=%s",
+                meal_type,
+                count,
+                len(ranked),
+                len(ranked_pool),
+            )
             return MealRecommendationInsufficiency(
                 reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_ALTERNATIVES,
                 message=f"not enough alternatives for {meal_type}",

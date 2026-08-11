@@ -40,7 +40,7 @@ async def test_cancellation_sends_email(mock_uow, mock_user, mock_email_service)
     event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
 
     with patch(
-        "src.api.routes.v1.webhooks._get_email_service",
+        "src.api.routes.v1.webhook_subscription_lifecycle._get_email_service",
         return_value=mock_email_service,
     ):
         await handle_cancellation(mock_uow, mock_user, event)
@@ -54,7 +54,7 @@ async def test_cancellation_skips_email_if_opted_out(mock_uow, mock_user, mock_e
     event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
 
     with patch(
-        "src.api.routes.v1.webhooks._get_email_service",
+        "src.api.routes.v1.webhook_subscription_lifecycle._get_email_service",
         return_value=mock_email_service,
     ):
         await handle_cancellation(mock_uow, mock_user, event)

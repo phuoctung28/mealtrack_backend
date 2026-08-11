@@ -234,3 +234,57 @@ async def test_precompute_applies_keto_policy_before_returning_adjusted_goal():
     )
     assert policy_macros.calories == 1899.9
     assert result == round(policy_macros.calories)
+
+
+@pytest.mark.asyncio
+async def test_calorie_goal_loop_isolates_failures_with_savepoint():
+    """One poisoned calorie-goal lookup must not block remaining users."""
+    from contextlib import asynccontextmanager
+
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
+
+    svc = DailyContextPrecomputeService()
+    nested_entries = []
+    processed: list[str] = []
+
+    class _Session:
+        @asynccontextmanager
+        async def begin_nested(self):
+            nested_entries.append("enter")
+            try:
+                yield
+            finally:
+                nested_entries.append("exit")
+
+    session = _Session()
+    user_ids = ["u-fail", "u-ok"]
+    profiles_by_user = {
+        "u-fail": SimpleNamespace(id="u-fail"),
+        "u-ok": SimpleNamespace(id="u-ok"),
+    }
+    calorie_goals: dict[str, int] = {}
+
+    async def fake_goal(uow, user_id, today, profile, tz_name):
+        if user_id == "u-fail":
+            raise RuntimeError("sql poisoned")
+        return 2100
+
+    with patch.object(svc, "_get_user_calorie_goal", side_effect=fake_goal):
+        for user_id in user_ids:
+            profile = profiles_by_user.get(user_id)
+            if profile is None:
+                continue
+            try:
+                async with session.begin_nested():
+                    calorie_goals[user_id] = await svc._get_user_calorie_goal(
+                        MagicMock(), user_id, date(2026, 4, 22), profile, "UTC"
+                    )
+                    processed.append(user_id)
+            except Exception:
+                processed.append(f"failed:{user_id}")
+
+    assert processed == ["failed:u-fail", "u-ok"]
+    assert calorie_goals == {"u-ok": 2100}
+    assert nested_entries == ["enter", "exit", "enter", "exit"]

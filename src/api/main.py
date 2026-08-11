@@ -49,7 +49,10 @@ from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.admin_meal_catalog import router as admin_meal_catalog_router
-from src.api.routes.v1.admin_meal_catalog_import import router as admin_meal_catalog_import_router
+from src.api.routes.v1.admin_meal_catalog_import import (
+    router as admin_meal_catalog_import_router,
+)
+from src.api.routes.v1.capabilities import router as capabilities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
@@ -73,6 +76,7 @@ from src.api.routes.v1.saved_suggestions import router as saved_suggestions_rout
 from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
+from src.api.routes.v1.web_funnel import router as web_funnel_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.api.routes.well_known import router as well_known_router
@@ -322,6 +326,7 @@ app.include_router(meals_router)
 app.include_router(meal_scan_by_url_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
+app.include_router(capabilities_router)
 app.include_router(meal_suggestions_router)
 app.include_router(meal_recommendations_router)
 app.include_router(user_profiles_router)
@@ -329,6 +334,7 @@ app.include_router(users_router)
 app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
+app.include_router(web_funnel_router)
 app.include_router(notifications_router)
 app.include_router(hydration_router)
 app.include_router(ingredients_router)

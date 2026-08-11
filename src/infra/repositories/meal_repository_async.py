@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload, noload, selectinload
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition import Nutrition
+from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.services.meal_recommendation.ingredient_affinity_service import (
     IngredientHistoryBucket,
@@ -533,13 +534,12 @@ class AsyncMealRepository(MealRepositoryPort):
             carbs = float(carbs or 0.0)
             fat = float(fat or 0.0)
             fiber = float(fiber or 0.0)
-            net_carbs = max(0.0, carbs - fiber)
             rows.append(
                 {
                     "logged_at": logged_at,
                     "label": label or "Meal",
                     "calories": round(
-                        protein * 4 + net_carbs * 4 + fiber * 2 + fat * 9, 1
+                        Macros.raw_total_calories(protein, carbs, fat, fiber), 1
                     ),
                     "protein_g": protein,
                 }
