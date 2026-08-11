@@ -16,7 +16,6 @@ from src.infra.database.models.durable_write_record import DurableWriteRecordORM
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 RETENTION_DAYS = 14
-PENDING_STALE_SECONDS = 120
 PENDING_RESPONSE_STATUS = 0
 MANUAL_MEAL_CREATE_ACTION = "manual_meal_create"
 
@@ -70,11 +69,6 @@ def _to_record(row: DurableWriteRecordORM) -> DurableWriteRecord:
         response_body=json.loads(row.response_body_json),
         resource_id=row.resource_id,
     )
-
-
-def _is_stale_pending(row: DurableWriteRecordORM, now) -> bool:
-    age = (now - row.created_at).total_seconds()
-    return age >= PENDING_STALE_SECONDS
 
 
 def _apply_pending(
@@ -165,13 +159,12 @@ def _begin_existing(
             _apply_pending(existing, request_fingerprint=request_fingerprint, now=now)
             return None
         raise DurableWriteConflictError
-    if existing.response_status_code != PENDING_RESPONSE_STATUS and not expired:
-        return _to_record(existing)
-    if (
-        existing.response_status_code == PENDING_RESPONSE_STATUS
-        and not _is_stale_pending(existing, now)
-    ):
+    # Same fingerprint + pending means another request owns the mutation (or
+    # completion failed after create). Never auto-reclaim — that would duplicate.
+    if existing.response_status_code == PENDING_RESPONSE_STATUS:
         raise DurableWriteInProgressError
+    if not expired:
+        return _to_record(existing)
     _apply_pending(existing, request_fingerprint=request_fingerprint, now=now)
     return None
 

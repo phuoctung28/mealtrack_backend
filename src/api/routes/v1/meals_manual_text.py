@@ -114,6 +114,7 @@ async def create_manual_meal(
                 return ManualMealCreationResponse.model_validate(existing.response_body)
             claimed = True
 
+        meal_created = False
         try:
             items = []
             for i in payload.items:
@@ -162,6 +163,7 @@ async def create_manual_meal(
             )
             _t0 = time.perf_counter()
             meal = await event_bus.send(cmd)
+            meal_created = True
             _elapsed_ms = (time.perf_counter() - _t0) * 1000
             logger.info(
                 "manual_save timing: user=%s total_handler_ms=%.1f",
@@ -201,7 +203,15 @@ async def create_manual_meal(
                 return ManualMealCreationResponse.model_validate(stored.response_body)
             return response
         except Exception:
-            if claimed and idempotency_key is not None and fingerprint is not None:
+            # Only drop the claim when the mutation itself did not land. If the
+            # meal exists but completion failed, keep the pending row so a
+            # retry cannot create a second meal under the same key.
+            if (
+                claimed
+                and not meal_created
+                and idempotency_key is not None
+                and fingerprint is not None
+            ):
                 await abandon_durable_write(
                     user_id=user_id,
                     action=MANUAL_MEAL_CREATE_ACTION,

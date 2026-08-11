@@ -24,7 +24,8 @@ create and weight sync still lack operation identity.
 6. **Conflict:** same key + different fingerprint → `409` with
    `IDEMPOTENCY_KEY_CONFLICT` (raised at claim time, before mutation).
 7. **Retention:** 14 days (`expires_at`); expired rows may be pruned.
-   Stale pending claims (>120s) may be reclaimed.
+   Pending same-fingerprint claims are never auto-reclaimed (avoids
+   duplicate creates after a post-mutation completion failure).
 8. **Discovery:** `GET /v1/capabilities/durable-writes`.
 9. **Backward compatibility:** omitting the header keeps legacy single-shot
    behavior (no store write).
