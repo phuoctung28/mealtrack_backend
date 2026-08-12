@@ -201,7 +201,7 @@ async def _analyze_uploaded_image(
 
     try:
         meal = await event_bus.send(command)
-    except (RuntimeError, ValueError) as e:
+    except (RuntimeError, ValueError, ValidationException) as e:
         error_msg = str(e)
         logger.warning("Meal image analysis failed: %s", error_msg)
         raise ValidationException(

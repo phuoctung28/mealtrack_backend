@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
@@ -136,7 +137,9 @@ async def test_non_food_upload_rejects_before_db_record():
         content_type="image/jpeg",
     )
 
-    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+    with pytest.raises(
+        ValidationException, match="Image does not appear to contain food"
+    ):
         await handler.handle(command)
 
     handler.gpt_parser.parse_to_nutrition.assert_not_called()

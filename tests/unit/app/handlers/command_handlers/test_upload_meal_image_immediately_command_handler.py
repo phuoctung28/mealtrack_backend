@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
+from src.api.exceptions import ValidationException
 from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 
 
@@ -152,7 +153,9 @@ class TestVisionRetryRouting:
         command = _make_command()
         command.scan_mode = "food_label"
 
-        with pytest.raises(ValueError, match="require the scan-by-url image flow"):
+        with pytest.raises(
+            ValidationException, match="require the scan-by-url image flow"
+        ):
             await handler.handle(command)
 
         analyze_mock.assert_not_called()

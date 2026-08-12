@@ -135,10 +135,11 @@ def test_meals_analyze_ai_unavailable_returns_503(client: TestClient):
 
 def test_meals_analyze_non_food_returns_not_food_image(client: TestClient):
     from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.api.exceptions import ValidationException
 
     class _NonFoodBus:
         async def send(self, msg):
-            raise ValueError("Image does not appear to contain food")
+            raise ValidationException("Image does not appear to contain food")
 
     client.app.dependency_overrides[get_configured_event_bus] = lambda: _NonFoodBus()
 

@@ -7,12 +7,12 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
-from src.api.exceptions import ValidationException
 from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
