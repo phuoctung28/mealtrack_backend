@@ -264,6 +264,18 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         selected.retired_at = selected_seen_at  # type: ignore[assignment]
         await self._flush_operations()
 
+        if outcome == "replenished_candidate":
+            target_id = cast(str, target.id)
+            batch_rows = await self._load_batch(user_id=user_id, batch_id=plan_id)
+            anchor = _anchor_row(batch_rows)
+            rows = [row for row in batch_rows if cast(str, row.slot_id) == slot_id]
+            target = next(
+                (row for row in rows if cast(str, row.id) == target_id),
+                None,
+            )
+            if anchor is None or target is None:
+                raise MealRecommendationNotFoundError
+
         for row in rows:
             if cast(str, row.slot_id) != slot_id:
                 continue

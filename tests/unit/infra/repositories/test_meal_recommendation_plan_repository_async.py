@@ -274,6 +274,78 @@ class _OrderedSwapFlushRepo(_SlotMutationRepo):
         return anchor, rows
 
 
+class _ReplenishmentReloadRepo(_SlotMutationRepo):
+    def __init__(self):
+        super().__init__()
+        self.loaded_rows = []
+        self.initial_rows = []
+        self.reloaded_batch = []
+
+    async def _load_slot_for_update(self, *, user_id, batch_id, slot_id):
+        anchor, rows = await super()._load_slot_for_update(
+            user_id=user_id,
+            batch_id=batch_id,
+            slot_id=slot_id,
+        )
+        for row in rows:
+            row.seen_at = datetime(2026, 7, 16)
+        self.loaded_rows = rows
+        self.initial_rows = list(rows)
+        return anchor, rows
+
+    async def _load_batch(self, *, user_id, batch_id):
+        catalog_meals = {
+            candidate.catalog_meal_id: candidate.catalog_meal
+            for candidate in (*_plan().slots[0].alternatives, _plan().slots[0].selected)
+        }
+        for row in self._session.added_rows:
+            catalog_meal_id = getattr(row, "catalog_meal_id", None)
+            if catalog_meal_id is not None:
+                catalog_meals[catalog_meal_id] = _catalog_meal(
+                    catalog_meal_id, f"Reloaded {catalog_meal_id}"
+                )
+
+        competing_slot = SimpleNamespace(
+            **{
+                **self.initial_rows[0].__dict__,
+                "id": "other-selected",
+                "slot_id": "other-slot",
+                "candidate_rank": 0,
+                "is_selected": True,
+                "retired_at": None,
+                "seen_at": None,
+                "catalog_meal_id": "catalog-other",
+                "catalog_meal": _catalog_meal("catalog-other", "Other slot selected"),
+            }
+        )
+        self.reloaded_batch = [
+            competing_slot,
+            *[
+                SimpleNamespace(
+                    **{
+                        "logged_at": None,
+                        "logged_meal_id": None,
+                        "shown_at": None,
+                        "skipped_at": None,
+                        "retired_at": None,
+                        "seen_at": None,
+                        **row.__dict__,
+                        "catalog_meal": catalog_meals[row.catalog_meal_id],
+                    }
+                )
+                for row in [
+                    *self.initial_rows,
+                    *[
+                        row
+                        for row in self._session.added_rows
+                        if getattr(row, "catalog_meal_id", None) is not None
+                    ],
+                ]
+            ],
+        ]
+        return self.reloaded_batch
+
+
 @pytest.mark.asyncio
 async def test_claim_slot_log_rejects_reused_request_id_for_different_slot():
     repo = _LogReplayRepo(
@@ -417,11 +489,7 @@ async def test_swap_slot_flushes_deselection_before_selecting_alternative():
 
 @pytest.mark.asyncio
 async def test_swap_slot_replenishes_exhausted_pool_and_marks_outcome():
-    repo = _SlotMutationRepo()
-    rows = _plan_to_candidate_rows(_plan())
-    for row in rows:
-        row.seen_at = datetime(2026, 7, 16)
-    repo._load_slot_for_update = AsyncMock(return_value=(rows[0], rows))  # type: ignore[method-assign]
+    repo = _ReplenishmentReloadRepo()
     fresh = tuple(
         MealRecommendationAlternative(
             day_index=0,
@@ -447,7 +515,7 @@ async def test_swap_slot_replenishes_exhausted_pool_and_marks_outcome():
     assert result.outcome == "replenished_candidate"
     assert result.slot.catalog_meal_id == "catalog-3"
     assert len(result.slot.alternatives) == 4
-    assert rows[0].retired_at is not None
+    assert repo.loaded_rows[0].retired_at is not None
     assert len(repo._session.added_rows) == 6
     # Domain CatalogMeal must never be assigned onto ORM relationship state.
     for row in repo._session.added_rows:
@@ -455,6 +523,43 @@ async def test_swap_slot_replenishes_exhausted_pool_and_marks_outcome():
             f"catalog-{index}" for index in range(3, 8)
         }:
             assert not isinstance(getattr(row, "catalog_meal", None), CatalogMeal)
+
+
+@pytest.mark.asyncio
+async def test_swap_slot_reloads_replenished_rows_before_projecting_catalog_meals():
+    repo = _ReplenishmentReloadRepo()
+    fresh = tuple(
+        MealRecommendationAlternative(
+            day_index=0,
+            meal_type="breakfast",
+            target_calories=500,
+            catalog_meal=_catalog_meal(f"catalog-{index}", f"Fresh {index}"),
+            score=0.8,
+        )
+        for index in range(3, 8)
+    )
+    result = await repo.swap_slot(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="swap-reload-1",
+        expected_version=1,
+        alternative_catalog_meal_id=None,
+        reason="user_requested",
+        replenishment_alternatives=fresh,
+    )
+
+    assert repo.reloaded_batch
+    assert result.outcome == "replenished_candidate"
+    assert result.slot.id == "slot-1"
+    assert result.slot.selected is not None
+    assert result.slot.selected.catalog_meal == _catalog_meal(
+        "catalog-3", "Reloaded catalog-3"
+    )
+    assert all(
+        candidate.slot_id == "slot-1"
+        for candidate in (result.slot.selected, *result.slot.alternatives)
+    )
 
 
 @pytest.mark.asyncio
