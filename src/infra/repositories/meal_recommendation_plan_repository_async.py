@@ -911,15 +911,12 @@ def _candidate_to_domain(
 
 
 def _candidate_catalog_meal(row: MealRecommendationORM) -> CatalogMeal | None:
-    domain_catalog_meal = getattr(row, "_domain_catalog_meal", None)
-    if domain_catalog_meal is not None:
-        return domain_catalog_meal
     catalog_meal = row.catalog_meal
-    if catalog_meal is None:
-        return None
-    if isinstance(catalog_meal, CatalogMeal):
-        return catalog_meal
-    return _meal_to_domain(catalog_meal)
+    if catalog_meal is not None:
+        if isinstance(catalog_meal, CatalogMeal):
+            return catalog_meal
+        return _meal_to_domain(catalog_meal)
+    return getattr(row, "_domain_catalog_meal", None)
 
 
 def _anchor_row(rows: list[MealRecommendationORM]) -> MealRecommendationORM | None:

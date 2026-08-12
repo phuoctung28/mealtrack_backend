@@ -19,6 +19,7 @@ from src.domain.model.meal_recommendation import (
 )
 from src.infra.repositories.meal_recommendation_plan_repository_async import (
     AsyncMealRecommendationPlanRepository,
+    _candidate_catalog_meal,
     _operation_fingerprint,
 )
 
@@ -139,6 +140,13 @@ def _catalog_meal(catalog_meal_id: str, name: str) -> CatalogMeal:
             ),
         ),
     )
+
+
+def test_candidate_catalog_meal_falls_back_to_transient_domain_value():
+    cached = _catalog_meal("catalog-cached", "Cached meal")
+    row = SimpleNamespace(catalog_meal=None, _domain_catalog_meal=cached)
+
+    assert _candidate_catalog_meal(row) == cached
 
 
 @pytest.mark.asyncio
