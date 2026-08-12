@@ -2,10 +2,11 @@
 TDEE calculation response DTOs.
 """
 
-
 from pydantic import BaseModel, Field
 
 from src.api.schemas.request.tdee_requests import GoalEnum
+
+TDEE_PREVIEW_CALCULATION_CONTRACT = "onboarding_preview_v2"
 
 
 class MacroTargetsResponse(BaseModel):
@@ -52,7 +53,13 @@ class TdeeCalculationResponse(BaseModel):
         description="True when macros are user-customized (not algorithm-calculated)",
     )
     macro_preset: str | None = Field(
-        None, description="Resolved backend macro policy (standard or keto)"
+        None, description="Macro preset used for cache validation"
+    )
+    target_revision: int | None = Field(
+        None, description="Target revision for cache validation"
+    )
+    profile_target_revision: int | None = Field(
+        None, description="Profile target revision for cache validation"
     )
 
     class Config:
@@ -69,6 +76,10 @@ class TdeeCalculationResponse(BaseModel):
                 "goal": "recomp",
                 "activity_multiplier": 1.4,
                 "formula_used": "Mifflin-St Jeor",
+                "is_custom": False,
+                "macro_preset": "standard",
+                "calculation_contract": TDEE_PREVIEW_CALCULATION_CONTRACT,
+                "target_revision": 0,
             }
         }
 

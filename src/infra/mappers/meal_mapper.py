@@ -17,6 +17,7 @@ from src.domain.model.nutrition import (
 )
 from src.domain.model.nutrition import (
     Macros,
+    NutritionOverride,
 )
 from src.domain.model.nutrition import (
     Nutrition as DomainNutrition,
@@ -39,6 +40,17 @@ _UNHYDRATABLE_READY_MEAL_ERRORS = {
     "Meal with READY status must have nutrition data",
     "Meal with READY status must have ready_at timestamp",
 }
+
+
+def _nutrition_override_from_orm(value: dict | None) -> NutritionOverride | None:
+    if not value:
+        return None
+    return NutritionOverride(
+        calories=float(value["calories"]),
+        protein=float(value["protein"]),
+        carbs=float(value["carbs"]),
+        fat=float(value["fat"]),
+    )
 
 
 def _to_naive_utc(dt: datetime | None) -> datetime | None:
@@ -74,6 +86,7 @@ def food_item_orm_to_domain(orm: FoodItemORM) -> DomainFoodItem:
         food_reference_id=orm.food_reference_id,
         is_custom=orm.is_custom,
         allowed_units=orm.allowed_units,
+        nutrition_override=_nutrition_override_from_orm(orm.nutrition_override),
     )
 
 
@@ -94,6 +107,7 @@ def nutrition_orm_to_domain(orm: NutritionORM) -> DomainNutrition:
         micros=None,
         food_items=food_items,
         confidence_score=orm.confidence_score,
+        nutrition_override=_nutrition_override_from_orm(orm.nutrition_override),
     )
 
 
@@ -211,6 +225,11 @@ def food_item_domain_to_orm(domain: DomainFoodItem, nutrition_id=None) -> FoodIt
         food_reference_id=getattr(domain, "food_reference_id", None),
         is_custom=getattr(domain, "is_custom", False),
         allowed_units=getattr(domain, "allowed_units", None),
+        nutrition_override=(
+            domain.nutrition_override.to_dict()
+            if domain.nutrition_override
+            else None
+        ),
     )
     if hasattr(domain, "id") and domain.id:
         item.id = str(domain.id)
@@ -226,6 +245,9 @@ def food_item_domain_to_orm(domain: DomainFoodItem, nutrition_id=None) -> FoodIt
 def nutrition_domain_to_orm(domain: DomainNutrition, meal_id: str) -> NutritionORM:
     meal_id_str = str(meal_id) if meal_id else None
     orm = NutritionORM(confidence_score=domain.confidence_score, meal_id=meal_id_str)
+    orm.nutrition_override = (
+        domain.nutrition_override.to_dict() if domain.nutrition_override else None
+    )
     if domain.macros:
         orm.protein = domain.macros.protein
         orm.carbs = domain.macros.carbs

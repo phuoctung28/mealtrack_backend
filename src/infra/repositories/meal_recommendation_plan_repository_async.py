@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -247,8 +247,8 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                     score=Decimal(str(alternative.score)),
                     selection_version=expected_version + 1,
                     seen_at=now if position == 0 else None,
-                    catalog_meal=alternative.catalog_meal,
                 )
+                row._domain_catalog_meal = alternative.catalog_meal
                 self._session.add(row)
                 new_rows.append(row)
             target = new_rows[0]
@@ -264,6 +264,18 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         selected.seen_at = selected_seen_at  # type: ignore[assignment]
         selected.retired_at = selected_seen_at  # type: ignore[assignment]
         await self._flush_operations()
+
+        if outcome == "replenished_candidate":
+            target_id = cast(str, target.id)
+            batch_rows = await self._load_batch(user_id=user_id, batch_id=plan_id)
+            anchor = _anchor_row(batch_rows)
+            rows = [row for row in batch_rows if cast(str, row.slot_id) == slot_id]
+            target = next(
+                (row for row in rows if cast(str, row.id) == target_id),
+                None,
+            )
+            if anchor is None or target is None:
+                raise MealRecommendationNotFoundError
 
         for row in rows:
             if cast(str, row.slot_id) != slot_id:
@@ -505,6 +517,29 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             user_id=user_id,
             slot=_rows_to_slot_detail(anchor, rows),
         )
+
+    async def clear_links_for_deleted_meal(self, *, meal_id: str) -> None:
+        """Detach recommendation state from a meal about to be hard-deleted.
+
+        ``logged_meal_id`` FKs use ON DELETE SET NULL. That leaves ``logged_at``
+        set and breaks ``ck_meal_recommendations_logged_coherent``. Log operation
+        rows also require ``result_logged_meal_id`` non-null, so SET NULL there
+        violates ``ck_meal_recommendation_operations_payload``. Clear both sides
+        before the meal row is removed.
+        """
+        await self._session.execute(
+            update(MealRecommendationORM)
+            .where(MealRecommendationORM.logged_meal_id == meal_id)
+            .values(logged_meal_id=None, logged_at=None)
+        )
+        await self._session.execute(
+            delete(MealRecommendationOperationORM).where(
+                MealRecommendationOperationORM.result_logged_meal_id == meal_id
+            )
+        )
+        # Plain flush — do not use _flush_operations(), which remaps IntegrityError
+        # into meal-recommendation swap/idempotency domain errors (wrong for delete).
+        await self._session.flush()
 
     async def _load_batch(
         self, *, user_id: str, batch_id: str
@@ -876,6 +911,9 @@ def _candidate_to_domain(
 
 
 def _candidate_catalog_meal(row: MealRecommendationORM) -> CatalogMeal | None:
+    domain_catalog_meal = getattr(row, "_domain_catalog_meal", None)
+    if domain_catalog_meal is not None:
+        return domain_catalog_meal
     catalog_meal = row.catalog_meal
     if catalog_meal is None:
         return None

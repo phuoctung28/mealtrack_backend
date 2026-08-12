@@ -55,7 +55,7 @@ class UnitSystemEnum(StrEnum):
 class TdeeCalculationRequest(BaseModel):
     """Request DTO for TDEE calculation matching Flutter OnboardingData."""
 
-    age: int = Field(..., ge=13, le=120, description="User age")
+    age: int = Field(..., ge=12, le=120, description="User age")
     sex: SexEnum = Field(..., description="User biological sex")
     height: float = Field(..., gt=0, description="Height in user's preferred units")
     weight: float = Field(..., gt=0, description="Weight in user's preferred units")
@@ -149,6 +149,7 @@ class TdeeCalculationRequest(BaseModel):
                 "training_minutes_per_session": 60,
                 "goal": "recomp",
                 "unit_system": "metric",
+                "diet_type": "classic",
             }
         }
 

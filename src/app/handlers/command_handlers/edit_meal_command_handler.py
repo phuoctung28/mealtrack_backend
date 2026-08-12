@@ -16,6 +16,7 @@ from src.app.events.meal import MealEditedEvent
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import FoodItemTranslation, MealStatus
 from src.domain.model.meal_projection import MealProjection
+from src.domain.model.nutrition import Macros, NutritionOverride
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
@@ -61,13 +62,52 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 updated_food_items = await self._apply_food_item_changes(
                     meal.nutrition.food_items if meal.nutrition else [],
                     command.food_item_changes,
+                    food_reference_repository=getattr(uow, "food_references", None),
                 )
                 self._realign_translations_after_food_item_changes(
                     meal, updated_food_items
                 )
 
-                # 3. Recalculate nutrition
+                # 3. Recalculate nutrition from current ingredients.
                 updated_nutrition = self._calculate_total_nutrition(updated_food_items)
+                existing_override = (
+                    meal.nutrition.nutrition_override if meal.nutrition else None
+                )
+                # Meal-level override is only for intentional whole-meal edits.
+                # Ingredient composition changes must clear it so totals follow
+                # the ingredient sum (unless this request sets a new override).
+                if command.nutrition_override is not None:
+                    nutrition_override = NutritionOverride(
+                        calories=command.nutrition_override.calories,
+                        protein=command.nutrition_override.protein,
+                        carbs=command.nutrition_override.carbs,
+                        fat=command.nutrition_override.fat,
+                    )
+                    updated_nutrition.nutrition_override = nutrition_override
+                    updated_nutrition.macros = Macros(
+                        protein=nutrition_override.protein,
+                        carbs=nutrition_override.carbs,
+                        fat=nutrition_override.fat,
+                        fiber=updated_nutrition.macros.fiber,
+                        sugar=updated_nutrition.macros.sugar,
+                    )
+                elif command.food_item_changes:
+                    updated_nutrition.nutrition_override = None
+                elif existing_override is not None:
+                    nutrition_override = NutritionOverride(
+                        calories=existing_override.calories,
+                        protein=existing_override.protein,
+                        carbs=existing_override.carbs,
+                        fat=existing_override.fat,
+                    )
+                    updated_nutrition.nutrition_override = nutrition_override
+                    updated_nutrition.macros = Macros(
+                        protein=nutrition_override.protein,
+                        carbs=nutrition_override.carbs,
+                        fat=nutrition_override.fat,
+                        fiber=updated_nutrition.macros.fiber,
+                        sugar=updated_nutrition.macros.sugar,
+                    )
 
                 updated_created_at = command.created_at or meal.created_at
                 if command.meal_type is not None:
@@ -156,7 +196,12 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 await uow.rollback()
                 raise
 
-    async def _apply_food_item_changes(self, current_food_items, changes):
+    async def _apply_food_item_changes(
+        self,
+        current_food_items,
+        changes,
+        food_reference_repository=None,
+    ):
         """Apply food item changes to current list using strategy pattern."""
         from src.domain.services import NutritionCalculationService
         from src.domain.strategies.meal_edit_strategies import (
@@ -173,6 +218,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         nutrition_service = NutritionCalculationService()
         strategies = FoodItemChangeStrategyFactory.create_strategies(
             nutrition_service,
+            food_reference_repository=food_reference_repository,
         )
 
         # Apply each change using the appropriate strategy

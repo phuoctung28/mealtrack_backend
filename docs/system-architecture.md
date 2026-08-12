@@ -1,9 +1,10 @@
 # Backend System Architecture Overview
 
-**Last Updated:** July 29, 2026
-**Architecture:** 4-Layer Clean + CQRS + Event-Driven
-**Event Bus:** PyMediator (singleton registry pattern)
-**Codebase:** 704 Python files, 65,423 LOC in `src/`
+**Status:** Evergreen architecture authority  
+**Architecture:** 4-Layer Clean + CQRS + Event-Driven  
+**Event Bus:** PyMediator (singleton registry pattern)  
+**Inventory:** discover live layout under `src/` (`api/`, `app/`, `domain/`,
+`infra/`, plus root/bootstrap/cron); do not hand-maintain file or LOC counts here
 
 ---
 
@@ -24,37 +25,25 @@ device, and purchase gates remain open.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (97 files)                    │
+│                         API Layer                            │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (244 files)                   │
+│                    Application Layer                         │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (192 files)                      │
+│                      Domain Layer                            │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
 ┌────────────────────────▼────────────────────────────────────┐
-│            Infrastructure Layer (162 files)                  │
+│                 Infrastructure Layer                         │
 │  DB │ Cache │ External APIs │ Event Bus │ Config             │
 └─────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Layer Statistics
-
-| Layer | Files | LOC | Key Contents |
-|-------|-------|-----|-------------|
-| API | 97 | 12,709 | Routes, middleware, schemas, dependencies, and API mappers |
-| App | 244 | 14,684 | CQRS commands, queries, handlers, and orchestration services |
-| Domain | 192 | 19,522 | Meal, nutrition, user, hydration, movement, progress, notification, planning, referral-facing policies |
-| Infra | 162 | 17,762 | PostgreSQL/pgvector, Redis, PyMediator, external adapters, observability, push/email services |
-| **Total** | **695** | **64,677** | Layer directories only; `src/` also has root/bootstrap/cron modules outside the four layers |
 
 **Layer rule:** Domain has no outer-layer or external I/O dependencies. See `cqrs-guide.md` for handler patterns.
 
@@ -124,7 +113,7 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 | Context | Key Entities |
 |---------|-------------|
 | Meal | Meal (state machine), MealImage, Ingredient, image cache projection |
-| Nutrition | Nutrition, FoodItem, Macros, Micros |
+| Nutrition | Nutrition, FoodItem, Macros, Micros, optional meal/item `NutritionOverride` |
 | User | User, UserProfile, Activity, TdeeRequest, weight history |
 | Hydration | Hydration entries, drink catalog, caloric drink logging |
 | Movement | Movement entries, activity catalog, daily movement summaries |
@@ -132,7 +121,26 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 | Meal Planning | Weekly budget, meal planning, meal suggestion, saved suggestion models |
 | Notification | UserFcmToken, NotificationPreferences, PushNotification, queued notification rows |
 | AI | GPTAnalysisResponse, GPTFoodItem, GPTResponseError |
-| Commerce | Subscription state, referral code application, promo code redemption |
+| Commerce | Subscription state, RevenueCat web-funnel redemption, referral codes, promo codes |
+
+### Calories and nutrition overrides
+
+Default rule: meal calories are derived from macros with the fiber-aware formula
+owned by the backend (AGENTS MUST-Follow). Exception: when a meal-level or
+ingredient-level `NutritionOverride` is set, the backend presents the absolute
+override values (including calories) until cleared. Source macros remain
+available for restore. HTTP shape: `api-endpoints.md`.
+
+### Meal scan vs hydration
+
+Meal image analyze and scan-by-url treat visible edible or drinkable intake as
+normal meal nutrition (`Meal`, typically `source="scanner"`). They must **not**
+create `hydration_entries`. Caloric drinks are foods; water and zero-cal
+hydration drinks are logged only through `/v1/hydration/*`. Food-label scan is a
+separate path (`source="food_label"`) with validated label contracts. Non-null
+`beverage_metadata` on meal-scan output fails validation. Legacy
+`source="scan_beverage"` hydration rows may still exist for compatibility reads;
+new scans must not create them.
 
 ---
 
@@ -141,7 +149,7 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 1. `POST /v1/meals/image/analyze` receives image bytes.
 2. Route creates `UploadMealImageImmediatelyCommand`.
 3. `EventBus.send()` calls `UploadMealImageImmediatelyHandler`.
-4. Handler uploads to Cloudinary, runs `VisionAIService`, parses nutrition, and persists a READY `Meal(source="scanner")`.
+4. Handler uploads to Cloudinary, runs `VisionAIService`, parses nutrition, and persists a READY `Meal(source="scanner")` with **no hydration side effects**.
 5. If `AI_MEAL_ANALYZE_GRAPH_ENABLED=true`, the handler enters `MealAnalyzeWorkflow`; the app-layer graph owns image acquisition, vision parsing, persistence, cache invalidation, and meal value insight scheduling.
 6. If `AI_MEAL_ANALYZE_FATSECRET_VALIDATION_ENABLED=true`, optional reference validation may run after meal creation. Provider timeout or mismatch keeps the original meal result.
 7. Meal value insight scheduling is best-effort after persistence and cache invalidation. It stores only safe state fields such as `meal_value_insight_scheduled` and never blocks the READY meal response.
@@ -164,7 +172,7 @@ downloading Cloudinary bytes. Graph nodes must not import provider SDKs,
 ## Data Flow Example: Meal Recommendation Plan
 
 1. `POST /v1/meal-recommendations/three-day` resolves timezone and daily calories, then builds or replays a durable recommendation plan.
-2. The plan-level response is compact: it includes only the selected slots. Slot ingredients, alternatives, and scores stay out of the summary payload.
+2. The plan-level response is compact: it includes only the selected slots, with ingredients for each selected meal. Alternatives, scores, and full meal-detail fields stay out of the summary payload.
 3. `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` hydrates one selected slot and its alternatives when the client needs drill-down data.
 4. `swap`, `log`, and `skip` return the changed-slot detail shape so the mobile client can patch its cached plan without reloading everything.
 5. Recommendation analytics are scheduled through `BackgroundTaskManager` when available. Catalog meals are read from the process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback. Meal-history affinity is projected from aggregate linked ingredient buckets instead of loading the full meal graph, and logging a recommended meal reuses the already loaded selected catalog projection without fabricating image data.
@@ -200,7 +208,8 @@ Nutree mobile ──→ MealTrack (validate/apply code)
 | Ledger credits/reversals, payout state | nutree-affiliate |
 | `affiliate_event_outbox` retry queue | MealTrack (infrastructure only) |
 
-**Integration:** See `docs/external-services.md` → nutree-affiliate section.
+**Integration:** See `external-services.md` (nutree-affiliate boundary) and
+`src/infra/adapters/affiliate_service_adapter.py`.
 
 ---
 

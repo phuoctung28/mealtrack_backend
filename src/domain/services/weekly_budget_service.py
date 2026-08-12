@@ -13,6 +13,7 @@ from typing import Any
 
 from src.domain.constants import WeeklyBudgetConstants
 from src.domain.model.meal import MealStatus
+from src.domain.model.nutrition.macros import Macros
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.services.meal_calorie_service import effective_meal_calories
 from src.domain.utils.timezone_utils import ensure_utc, get_zone_info
@@ -44,74 +45,18 @@ class EffectiveAdjustedResult:
     show_logging_prompt: bool
 
 
+@dataclass
+class WeeklyEffectivePreload:
+    """Preloaded weekly-consumed inputs for batch callers (e.g. precompute cron)."""
+
+    logged_past_days: int
+    consumed_total: dict[str, float]
+    consumed_before_today: dict[str, float]
+    consumed_for_redistribution: dict[str, float]
+
+
 class WeeklyBudgetService:
     """Service for weekly budget calculations."""
-
-    @staticmethod
-    def calculate_weekly_consumed(
-        uow: Any,
-        user_id: str,
-        week_start: date,
-        end_date: date | None = None,
-        exclude_date: date | None = None,
-        exclude_dates: list[date] | None = None,
-        user_timezone: str | None = None,
-    ) -> dict[str, float]:
-        """Calculate consumed macros from actual meals this week.
-
-        Recalculates from meal records (not stale DB budget values).
-
-        Args:
-            uow: Unit of work with meals repository
-            user_id: User ID
-            week_start: Monday of the week
-            end_date: Last local date to include. Defaults to week end.
-            exclude_date: Skip meals on this user-local date (today lock)
-            exclude_dates: Skip meals on these user-local dates (cheat days)
-            user_timezone: IANA timezone for correct date boundary
-        """
-        week_end = end_date or week_start + timedelta(days=6)
-        tz = get_zone_info(user_timezone) if user_timezone else None
-
-        meals = uow.meals.find_by_date_range(
-            user_id,
-            week_start,
-            week_end,
-            user_timezone=user_timezone,
-        )
-
-        total_calories = 0.0
-        total_protein = 0.0
-        total_carbs = 0.0
-        total_fat = 0.0
-
-        exclude_dates_set = set(exclude_dates) if exclude_dates else set()
-        for meal in meals:
-            if meal.status == MealStatus.READY and meal.nutrition:
-                # Skip meals outside/excluded local dates.
-                if (end_date or exclude_date or exclude_dates_set) and meal.created_at:
-                    aware_dt = ensure_utc(meal.created_at)
-                    meal_local_date = (
-                        aware_dt.astimezone(tz).date() if tz else aware_dt.date()
-                    )
-                    if end_date and meal_local_date > end_date:
-                        continue
-                    if exclude_date and meal_local_date == exclude_date:
-                        continue
-                    if meal_local_date in exclude_dates_set:
-                        continue
-                macros = meal.nutrition.macros
-                total_protein += macros.protein or 0
-                total_carbs += macros.carbs or 0
-                total_fat += macros.fat or 0
-                total_calories += effective_meal_calories(meal)
-
-        return {
-            "calories": total_calories,
-            "protein": total_protein,
-            "carbs": total_carbs,
-            "fat": total_fat,
-        }
 
     @staticmethod
     async def calculate_weekly_consumed_async(
@@ -235,114 +180,189 @@ class WeeklyBudgetService:
         )
 
     @staticmethod
-    def get_effective_adjusted_daily(
-        uow: Any,
-        user_id: str,
+    def _sum_movement_from_daily_map(
+        movement_by_date: dict[date, float],
+        week_start: date,
+        end_date: date,
+        exclude_date: date | None = None,
+        exclude_dates: list[date] | None = None,
+    ) -> float:
+        excluded = set(exclude_dates) if exclude_dates else set()
+        if exclude_date:
+            excluded.add(exclude_date)
+        total = 0.0
+        current = week_start
+        while current <= end_date:
+            if current not in excluded:
+                total += movement_by_date.get(current, 0.0)
+            current += timedelta(days=1)
+        return total
+
+    @staticmethod
+    def aggregate_weekly_consumed_from_meal_rows(
+        meal_rows: list[tuple[datetime, float, float, float, float]],
+        *,
+        week_start: date,
+        end_date: date | None = None,
+        exclude_date: date | None = None,
+        exclude_dates: list[date] | None = None,
+        movement_by_date: dict[date, float] | None = None,
+        user_timezone: str | None = None,
+    ) -> dict[str, float]:
+        """Sum READY-meal macros for a user from preloaded rows (batch precompute path)."""
+        tz = get_zone_info(user_timezone) if user_timezone else None
+        week_end = end_date or week_start + timedelta(days=6)
+        exclude_dates_set = set(exclude_dates) if exclude_dates else set()
+
+        total_calories = 0.0
+        total_protein = 0.0
+        total_carbs = 0.0
+        total_fat = 0.0
+
+        for created_at, protein, carbs, fat, fiber in meal_rows:
+            aware_dt = ensure_utc(created_at)
+            meal_local_date = (
+                aware_dt.astimezone(tz).date() if tz else aware_dt.date()
+            )
+            if meal_local_date < week_start:
+                continue
+            if end_date and meal_local_date > end_date:
+                continue
+            if exclude_date and meal_local_date == exclude_date:
+                continue
+            if meal_local_date in exclude_dates_set:
+                continue
+
+            protein_val = protein or 0.0
+            carbs_val = carbs or 0.0
+            fat_val = fat or 0.0
+            fiber_val = fiber or 0.0
+            total_protein += protein_val
+            total_carbs += carbs_val
+            total_fat += fat_val
+            total_calories += Macros(
+                protein=protein_val,
+                carbs=carbs_val,
+                fat=fat_val,
+                fiber=fiber_val,
+            ).total_calories
+
+        movement_kcal = WeeklyBudgetService._sum_movement_from_daily_map(
+            movement_by_date or {},
+            week_start,
+            week_end,
+            exclude_date=exclude_date,
+            exclude_dates=exclude_dates,
+        )
+        total_calories -= movement_kcal
+
+        return {
+            "calories": total_calories,
+            "protein": total_protein,
+            "carbs": total_carbs,
+            "fat": total_fat,
+        }
+
+    @staticmethod
+    def build_weekly_effective_preload(
+        *,
+        meal_rows: list[tuple[datetime, float, float, float, float]],
+        hydratable_dates: set[date],
+        movement_by_date: dict[date, float],
+        cheat_dates: list[date],
         week_start: date,
         target_date: date,
+        user_timezone: str,
+    ) -> WeeklyEffectivePreload:
+        """Build per-user preload maps from batch-fetched rows (one timezone group)."""
+        past_end = target_date - timedelta(days=1)
+        past_days_count = (target_date - week_start).days
+        past_cheat_dates = [d for d in cheat_dates if d < target_date]
+
+        logged_past_days = 0
+        if past_days_count > 0:
+            logged_past_days = len(
+                {
+                    d
+                    for d in hydratable_dates
+                    if week_start <= d <= past_end
+                }
+            )
+
+        consumed_total = WeeklyBudgetService.aggregate_weekly_consumed_from_meal_rows(
+            meal_rows,
+            week_start=week_start,
+            movement_by_date=movement_by_date,
+            user_timezone=user_timezone,
+        )
+        consumed_before_today = (
+            WeeklyBudgetService.aggregate_weekly_consumed_from_meal_rows(
+                meal_rows,
+                week_start=week_start,
+                end_date=past_end,
+                movement_by_date=movement_by_date,
+                user_timezone=user_timezone,
+            )
+        )
+        if past_cheat_dates:
+            consumed_for_redistribution = (
+                WeeklyBudgetService.aggregate_weekly_consumed_from_meal_rows(
+                    meal_rows,
+                    week_start=week_start,
+                    end_date=past_end,
+                    exclude_dates=past_cheat_dates,
+                    movement_by_date=movement_by_date,
+                    user_timezone=user_timezone,
+                )
+            )
+        else:
+            consumed_for_redistribution = consumed_before_today
+
+        return WeeklyEffectivePreload(
+            logged_past_days=logged_past_days,
+            consumed_total=consumed_total,
+            consumed_before_today=consumed_before_today,
+            consumed_for_redistribution=consumed_for_redistribution,
+        )
+
+    @staticmethod
+    def _apply_effective_adjusted_policy(
+        *,
         weekly_budget: Any,
+        week_start: date,
+        target_date: date,
         base_daily_cal: float,
         base_daily_protein: float,
         base_daily_carbs: float,
         base_daily_fat: float,
         bmr: float,
-        user_timezone: str = "UTC",
-        cheat_dates: list[date] | None = None,
+        cheat_dates: list[date],
+        logged_past_days: int,
+        consumed_total: dict[str, float],
+        consumed_before_today: dict[str, float],
+        consumed_for_redistribution: dict[str, float],
     ) -> EffectiveAdjustedResult:
-        """Single source of truth for adjusted daily target with Skip & Redistribute.
-
-        Recalculates consumed from actual meals, applies skip/redistribute logic,
-        and returns rich result with context for UI callers.
-
-        Args:
-            uow: Unit of work with meals + cheat_days repos
-            user_id: User ID
-            week_start: Monday of the week
-            target_date: The date to compute adjusted target for
-            weekly_budget: WeeklyMacroBudget entity (pre-fetched by caller)
-            base_daily_cal/protein/carbs/fat: Standard daily targets (weekly / 7)
-            bmr: Basal metabolic rate for floor calculation
-            user_timezone: IANA timezone string
-            cheat_dates: Past cheat dates to exclude from redistribution.
-                - Handler: passes pre-loaded past-only dates (avoids double query)
-                - Notification/suggestion: passes None → auto-loads all-week dates,
-                  then filters to past-only internally
-        """
+        """Shared effective-adjusted policy for async and batch-preloaded callers."""
         calc = WeeklyBudgetService
-
-        # --- Resolve cheat days ---
-        if cheat_dates is None:
-            cheat_day_records = uow.cheat_days.find_by_user_and_date_range(
-                user_id, week_start, week_start + timedelta(days=6)
-            )
-            all_cheat_dates = [cd.date for cd in cheat_day_records]
-        else:
-            all_cheat_dates = cheat_dates
-
-        past_cheat_dates = [d for d in all_cheat_dates if d < target_date]
+        past_cheat_dates = [d for d in cheat_dates if d < target_date]
         past_cheat_count = len(past_cheat_dates)
-
-        # --- Remaining days ---
         remaining_days = calc.calculate_remaining_days(week_start, target_date)
 
-        # --- Count logged past days ---
-        past_end = target_date - timedelta(days=1)
+        past_days_count = (target_date - week_start).days
         skipped_days = 0
         show_logging_prompt = False
-        logged_past_days = 0
-
-        past_days_count = (target_date - week_start).days
         if past_days_count > 0:
-            daily_counts = uow.meals.get_daily_meal_counts(
-                user_id,
-                week_start,
-                past_end,
-                user_timezone=user_timezone,
-            )
-            logged_past_days = len(daily_counts)
             skipped_days = past_days_count - logged_past_days
-
-            total_logged = logged_past_days + 1  # +1 for today
+            total_logged = logged_past_days + 1
             if (
                 total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
                 and past_days_count >= 3
             ):
                 show_logging_prompt = True
 
-        # Cheat days don't count as logged for redistribution
         redistribution_logged_days = max(0, logged_past_days - past_cheat_count)
 
-        # --- Calculate consumed totals from actual meals ---
-        consumed_total = calc.calculate_weekly_consumed(
-            uow,
-            user_id,
-            week_start,
-            user_timezone=user_timezone,
-        )
-        consumed_before_today = calc.calculate_weekly_consumed(
-            uow,
-            user_id,
-            week_start,
-            end_date=past_end,
-            user_timezone=user_timezone,
-        )
-
-        # For redistribution: exclude cheat day consumption too
-        if past_cheat_dates:
-            consumed_for_redistribution = calc.calculate_weekly_consumed(
-                uow,
-                user_id,
-                week_start,
-                end_date=past_end,
-                exclude_dates=past_cheat_dates,
-                user_timezone=user_timezone,
-            )
-        else:
-            consumed_for_redistribution = consumed_before_today
-
-        # --- Calculate adjusted daily ---
         if show_logging_prompt:
-            # Insufficient logging data → return base targets
             adjusted = calc.calculate_adjusted_daily(
                 replace(
                     weekly_budget,
@@ -359,19 +379,13 @@ class WeeklyBudgetService:
                 remaining_days=7,
             )
         else:
-            # Skip & Redistribute: shrink effective week (excludes cheat days)
             effective_week_days = redistribution_logged_days + remaining_days
-            prorated_target_cal = base_daily_cal * effective_week_days
-            prorated_target_carbs = base_daily_carbs * effective_week_days
-            prorated_target_fat = base_daily_fat * effective_week_days
-            prorated_target_protein = base_daily_protein * effective_week_days
-
             budget_for_adjustment = replace(
                 weekly_budget,
-                target_calories=prorated_target_cal,
-                target_protein=prorated_target_protein,
-                target_carbs=prorated_target_carbs,
-                target_fat=prorated_target_fat,
+                target_calories=base_daily_cal * effective_week_days,
+                target_protein=base_daily_protein * effective_week_days,
+                target_carbs=base_daily_carbs * effective_week_days,
+                target_fat=base_daily_fat * effective_week_days,
                 consumed_calories=consumed_for_redistribution["calories"],
                 consumed_protein=consumed_for_redistribution["protein"],
                 consumed_carbs=consumed_for_redistribution["carbs"],
@@ -387,13 +401,6 @@ class WeeklyBudgetService:
                 remaining_days=remaining_days,
             )
 
-        # --- Budget cap: adjusted daily must not exceed actual remaining per day ---
-        # Skip & Redistribute can inflate adjusted daily above what the real
-        # remaining budget allows (e.g. cheat day consumption excluded from
-        # redistribution but still counts toward weekly total). Cap to prevent
-        # promising more than the budget can deliver.
-        # Uses consumed_before_today (not consumed_total) so today's eating
-        # doesn't change today's target mid-day.
         remaining_before_today = (
             weekly_budget.target_calories - consumed_before_today["calories"]
         )
@@ -405,7 +412,7 @@ class WeeklyBudgetService:
                     calories=round(max_daily, 1),
                     carbs=round(adjusted.carbs * scale, 1),
                     fat=round(adjusted.fat * scale, 1),
-                    protein=adjusted.protein,  # protein stays fixed
+                    protein=adjusted.protein,
                     bmr_floor_active=adjusted.bmr_floor_active,
                     remaining_days=adjusted.remaining_days,
                 )
@@ -433,11 +440,11 @@ class WeeklyBudgetService:
         bmr: float,
         user_timezone: str = "UTC",
         cheat_dates: list[date] | None = None,
+        weekly_preload: WeeklyEffectivePreload | None = None,
     ) -> EffectiveAdjustedResult:
         """Async version of get_effective_adjusted_daily for AsyncUnitOfWork."""
         calc = WeeklyBudgetService
 
-        # --- Resolve cheat days ---
         if cheat_dates is None:
             cheat_day_records = await uow.cheat_days.find_by_user_and_date_range(
                 user_id, week_start, week_start + timedelta(days=6)
@@ -446,19 +453,26 @@ class WeeklyBudgetService:
         else:
             all_cheat_dates = cheat_dates
 
-        past_cheat_dates = [d for d in all_cheat_dates if d < target_date]
-        past_cheat_count = len(past_cheat_dates)
+        if weekly_preload is not None:
+            return calc._apply_effective_adjusted_policy(
+                weekly_budget=weekly_budget,
+                week_start=week_start,
+                target_date=target_date,
+                base_daily_cal=base_daily_cal,
+                base_daily_protein=base_daily_protein,
+                base_daily_carbs=base_daily_carbs,
+                base_daily_fat=base_daily_fat,
+                bmr=bmr,
+                cheat_dates=all_cheat_dates,
+                logged_past_days=weekly_preload.logged_past_days,
+                consumed_total=weekly_preload.consumed_total,
+                consumed_before_today=weekly_preload.consumed_before_today,
+                consumed_for_redistribution=weekly_preload.consumed_for_redistribution,
+            )
 
-        # --- Remaining days ---
-        remaining_days = calc.calculate_remaining_days(week_start, target_date)
-
-        # --- Count logged past days ---
         past_end = target_date - timedelta(days=1)
-        skipped_days = 0
-        show_logging_prompt = False
-        logged_past_days = 0
-
         past_days_count = (target_date - week_start).days
+        logged_past_days = 0
         if past_days_count > 0:
             daily_counts = await uow.meals.get_daily_meal_counts(
                 user_id,
@@ -467,18 +481,7 @@ class WeeklyBudgetService:
                 user_timezone=user_timezone,
             )
             logged_past_days = len(daily_counts)
-            skipped_days = past_days_count - logged_past_days
 
-            total_logged = logged_past_days + 1
-            if (
-                total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
-                and past_days_count >= 3
-            ):
-                show_logging_prompt = True
-
-        redistribution_logged_days = max(0, logged_past_days - past_cheat_count)
-
-        # --- Calculate consumed totals from actual meals ---
         consumed_total = await calc.calculate_weekly_consumed_async(
             uow,
             user_id,
@@ -492,7 +495,7 @@ class WeeklyBudgetService:
             end_date=past_end,
             user_timezone=user_timezone,
         )
-
+        past_cheat_dates = [d for d in all_cheat_dates if d < target_date]
         if past_cheat_dates:
             consumed_for_redistribution = await calc.calculate_weekly_consumed_async(
                 uow,
@@ -505,75 +508,20 @@ class WeeklyBudgetService:
         else:
             consumed_for_redistribution = consumed_before_today
 
-        # --- Calculate adjusted daily ---
-        if show_logging_prompt:
-            adjusted = calc.calculate_adjusted_daily(
-                replace(
-                    weekly_budget,
-                    consumed_calories=0,
-                    consumed_protein=0,
-                    consumed_carbs=0,
-                    consumed_fat=0,
-                ),
-                standard_daily_calories=base_daily_cal,
-                standard_daily_carbs=base_daily_carbs,
-                standard_daily_fat=base_daily_fat,
-                standard_daily_protein=base_daily_protein,
-                bmr=bmr,
-                remaining_days=7,
-            )
-        else:
-            effective_week_days = redistribution_logged_days + remaining_days
-            prorated_target_cal = base_daily_cal * effective_week_days
-            prorated_target_carbs = base_daily_carbs * effective_week_days
-            prorated_target_fat = base_daily_fat * effective_week_days
-            prorated_target_protein = base_daily_protein * effective_week_days
-
-            budget_for_adjustment = replace(
-                weekly_budget,
-                target_calories=prorated_target_cal,
-                target_protein=prorated_target_protein,
-                target_carbs=prorated_target_carbs,
-                target_fat=prorated_target_fat,
-                consumed_calories=consumed_for_redistribution["calories"],
-                consumed_protein=consumed_for_redistribution["protein"],
-                consumed_carbs=consumed_for_redistribution["carbs"],
-                consumed_fat=consumed_for_redistribution["fat"],
-            )
-            adjusted = calc.calculate_adjusted_daily(
-                budget_for_adjustment,
-                standard_daily_calories=base_daily_cal,
-                standard_daily_carbs=base_daily_carbs,
-                standard_daily_fat=base_daily_fat,
-                standard_daily_protein=base_daily_protein,
-                bmr=bmr,
-                remaining_days=remaining_days,
-            )
-
-        # --- Budget cap ---
-        remaining_before_today = (
-            weekly_budget.target_calories - consumed_before_today["calories"]
-        )
-        if remaining_days > 0 and remaining_before_today > 0:
-            max_daily = remaining_before_today / remaining_days
-            if adjusted.calories > max_daily:
-                scale = max_daily / adjusted.calories
-                adjusted = AdjustedDailyTargets(
-                    calories=round(max_daily, 1),
-                    carbs=round(adjusted.carbs * scale, 1),
-                    fat=round(adjusted.fat * scale, 1),
-                    protein=adjusted.protein,
-                    bmr_floor_active=adjusted.bmr_floor_active,
-                    remaining_days=adjusted.remaining_days,
-                )
-
-        return EffectiveAdjustedResult(
-            adjusted=adjusted,
-            consumed_before_today=consumed_before_today,
-            consumed_total=consumed_total,
+        return calc._apply_effective_adjusted_policy(
+            weekly_budget=weekly_budget,
+            week_start=week_start,
+            target_date=target_date,
+            base_daily_cal=base_daily_cal,
+            base_daily_protein=base_daily_protein,
+            base_daily_carbs=base_daily_carbs,
+            base_daily_fat=base_daily_fat,
+            bmr=bmr,
+            cheat_dates=all_cheat_dates,
             logged_past_days=logged_past_days,
-            skipped_days=skipped_days,
-            show_logging_prompt=show_logging_prompt,
+            consumed_total=consumed_total,
+            consumed_before_today=consumed_before_today,
+            consumed_for_redistribution=consumed_for_redistribution,
         )
 
     @staticmethod
@@ -708,20 +656,6 @@ class WeeklyBudgetService:
     @staticmethod
     def _clamp_macro(value: float, *, minimum: float, maximum: float) -> float:
         return round(max(minimum, min(value, maximum)), 1)
-
-    @staticmethod
-    def _derive_macro_calories(macros: Any) -> float:
-        """Derive calories from macros using the canonical fiber-aware formula."""
-        protein = WeeklyBudgetService._safe_macro_value(getattr(macros, "protein", 0.0))
-        carbs = WeeklyBudgetService._safe_macro_value(getattr(macros, "carbs", 0.0))
-        fat = WeeklyBudgetService._safe_macro_value(getattr(macros, "fat", 0.0))
-        fiber = WeeklyBudgetService._safe_macro_value(getattr(macros, "fiber", 0.0))
-        net_carbs = max(0.0, carbs - fiber)
-        return protein * 4 + net_carbs * 4 + fiber * 2 + fat * 9
-
-    @staticmethod
-    def _safe_macro_value(value: Any) -> float:
-        return float(value) if isinstance(value, (int, float)) else 0.0
 
     @staticmethod
     def should_suggest_cheat_day(

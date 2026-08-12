@@ -89,9 +89,19 @@ from .movement_entry import MovementEntryORM
 # Promo codes (email marketing)
 from .promo_code import PromoCode, PromoCodeRedemption
 from .referral import PayoutRequest, ReferralCode, ReferralConversion, ReferralWallet
+from .web_funnel_claim import (
+    WebFunnelClaim,
+    WebFunnelLead,
+    WebFunnelOutbox,
+    WebFunnelProviderEvent,
+    WebFunnelRedemption,
+)
 
 # Weight tracking
 from .weight_entry import WeightEntryORM
+
+# Durable mutation replay
+from .durable_write_record import DurableWriteRecordORM
 
 __all__ = [
     # Base
@@ -158,6 +168,8 @@ __all__ = [
     "PayoutRequest",
     # Weight tracking
     "WeightEntryORM",
+    # Durable mutation replay
+    "DurableWriteRecordORM",
     # Movement tracking
     "MovementEntryORM",
     # Email log
@@ -169,4 +181,9 @@ __all__ = [
     "AffiliateEventOutbox",
     # AI Handshake guest trial quota
     "AiHandshakeGuestTrialQuota",
+    "WebFunnelLead",
+    "WebFunnelClaim",
+    "WebFunnelOutbox",
+    "WebFunnelProviderEvent",
+    "WebFunnelRedemption",
 ]

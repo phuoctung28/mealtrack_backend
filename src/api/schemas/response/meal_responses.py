@@ -106,23 +106,30 @@ class MealTranslationResponse(BaseModel):
 class MacrosResponse(BaseModel):
     """Response DTO for macronutrient information."""
 
-    protein: float = Field(..., ge=0, description="Protein in grams")
-    carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
-    fat: float = Field(..., ge=0, description="Fat in grams")
-    fiber: float = Field(0, ge=0, description="Fiber in grams")
-    sugar: float = Field(0, ge=0, description="Sugar in grams")
+    protein: float = Field(..., description="Protein in grams")
+    carbs: float = Field(..., description="Carbohydrates in grams")
+    fat: float = Field(..., description="Fat in grams")
+    fiber: float = Field(0, description="Fiber in grams")
+    sugar: float = Field(0, description="Sugar in grams")
 
 
 class NutritionResponse(BaseModel):
     """Response DTO for nutrition information."""
 
     nutrition_id: str = Field(..., description="Nutrition record ID")
-    calories: float = Field(..., ge=0, description="Calories")
-    protein_g: float = Field(..., ge=0, description="Protein in grams")
-    carbs_g: float = Field(..., ge=0, description="Carbohydrates in grams")
-    fat_g: float = Field(..., ge=0, description="Fat in grams")
-    fiber_g: float = Field(0, ge=0, description="Fiber in grams")
-    sugar_g: float = Field(0, ge=0, description="Sugar in grams")
+    calories: float = Field(..., description="Calories")
+    protein_g: float = Field(..., description="Protein in grams")
+    carbs_g: float = Field(..., description="Carbohydrates in grams")
+    fat_g: float = Field(..., description="Fat in grams")
+    fiber_g: float = Field(0, description="Fiber in grams")
+    sugar_g: float = Field(0, description="Sugar in grams")
+
+
+class NutritionOverrideResponse(BaseModel):
+    calories: float
+    protein: float
+    carbs: float
+    fat: float
 
 
 class CustomNutritionResponse(BaseModel):
@@ -225,6 +232,13 @@ class FoodItemResponse(BaseModel):
     custom_nutrition: CustomNutritionResponse | None = Field(
         None, description="Custom nutrition per 100g for custom ingredients"
     )
+    source_nutrition: CustomNutritionResponse | None = Field(
+        None,
+        description="Canonical source nutrition per 100g for source-backed ingredients",
+    )
+    nutrition_override: NutritionOverrideResponse | None = Field(
+        None, description="Independent nutrition values entered by the user"
+    )
     fdc_id: int | None = Field(None, description="USDA FDC ID if available")
     food_reference_id: int | None = Field(
         None, description="Canonical food reference ID if available"
@@ -262,9 +276,12 @@ class DetailedMealResponse(SimpleMealResponse):
         default_factory=list, description="Food items in the meal"
     )
     image_url: str | None = Field(None, description="Meal image URL")
-    total_calories: float | None = Field(None, ge=0, description="Total calories")
+    total_calories: float | None = Field(None, description="Total calories")
     total_weight_grams: float | None = Field(None, gt=0, description="Total weight")
     total_nutrition: MacrosResponse | None = Field(None, description="Total macros")
+    nutrition_override: NutritionOverrideResponse | None = Field(
+        None, description="Independent meal-level nutrition values"
+    )
     translations: dict[str, MealTranslationResponse] | None = Field(
         None, description="Translations keyed by language code"
     )

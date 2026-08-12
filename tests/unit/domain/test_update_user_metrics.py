@@ -12,6 +12,7 @@ from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsC
 from src.app.handlers.command_handlers.update_user_metrics_command_handler import (
     UpdateUserMetricsCommandHandler,
 )
+from src.domain.model.user.body_fat_visual import BodyFatVisualProfileSelection
 from src.domain.model.user.core_user import UserProfileDomainModel
 
 
@@ -40,6 +41,8 @@ def _make_mock_uow(profile=None):
     mock_uow = MagicMock()
     mock_uow.users.get_profile = AsyncMock(return_value=profile)
     mock_uow.users.update_profile = AsyncMock(side_effect=lambda p: p)
+    mock_uow.body_fat_visual_profiles.find_history_by_user = AsyncMock(return_value=[])
+    mock_uow.body_fat_visual_profiles.append = AsyncMock()
     mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
     mock_uow.__aexit__ = AsyncMock(return_value=False)
     return mock_uow
@@ -109,7 +112,9 @@ class TestUpdateUserMetricsCommandHandler:
         assert profile.is_current is True
         mock_uow.users.update_profile.assert_called_once_with(profile)
 
-    async def test_target_change_increments_revision_once_and_cache_failure_is_non_fatal(self):
+    async def test_target_change_increments_revision_once_and_cache_failure_is_non_fatal(
+        self,
+    ):
         profile = _make_profile(profile_target_revision=1)
         mock_uow = _make_mock_uow(profile)
         cache = MagicMock()
@@ -166,8 +171,27 @@ class TestUpdateUserMetricsCommandHandler:
         await handler.handle(command)
 
         assert profile.training_days_per_week == 0
+        assert profile.training_minutes_per_session == 0
         assert profile.is_current is True
         mock_uow.users.update_profile.assert_called_once_with(profile)
+
+    async def test_no_training_normalizes_a_supplied_session_duration(self):
+        profile = _make_profile(
+            training_days_per_week=4, training_minutes_per_session=60
+        )
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(
+            user_id="test_user",
+            training_days_per_week=0,
+            training_minutes_per_session=60,
+        )
+
+        await handler.handle(command)
+
+        assert profile.training_days_per_week == 0
+        assert profile.training_minutes_per_session == 0
 
     async def test_update_fitness_goal_unlimited(self):
         """Test updating fitness goal succeeds without cooldown."""
@@ -214,6 +238,53 @@ class TestUpdateUserMetricsCommandHandler:
         assert profile.body_fat_percentage == 15.0
         assert profile.fitness_goal == "cut"
         assert profile.is_current is True
+
+    async def test_sex_change_appends_latest_visual_profile_remapped_by_ordinal(self):
+        profile = _make_profile(gender="male")
+        visual_profile = BodyFatVisualProfileSelection(
+            user_id="test_user",
+            schema_version=1,
+            range_catalog_version=1,
+            sex_at_selection="male",
+            start_range_id="male_13_16",
+            current_range_id="male_17_20",
+            target_range_id=None,
+        )
+        mock_uow = _make_mock_uow(profile)
+        mock_uow.body_fat_visual_profiles.find_history_by_user = AsyncMock(
+            return_value=[visual_profile]
+        )
+
+        await UpdateUserMetricsCommandHandler(mock_uow).handle(
+            UpdateUserMetricsCommand(user_id="test_user", biological_sex="female")
+        )
+
+        remapped = mock_uow.body_fat_visual_profiles.append.await_args.args[0]
+        assert profile.gender == "female"
+        assert remapped.sex_at_selection == "female"
+        assert remapped.start_range_id == "female_22_25"
+        assert remapped.current_range_id == "female_26_30"
+        assert remapped.target_range_id is None
+        mock_uow.users.update_profile.assert_awaited_once_with(profile)
+
+    async def test_unchanged_sex_or_missing_visual_history_does_not_append(self):
+        profile = _make_profile(gender="male")
+        mock_uow = _make_mock_uow(profile)
+        handler = UpdateUserMetricsCommandHandler(mock_uow)
+
+        await handler.handle(
+            UpdateUserMetricsCommand(user_id="test_user", biological_sex="male")
+        )
+        mock_uow.body_fat_visual_profiles.find_history_by_user.assert_not_awaited()
+        mock_uow.body_fat_visual_profiles.append.assert_not_awaited()
+
+        await handler.handle(
+            UpdateUserMetricsCommand(user_id="test_user", biological_sex="female")
+        )
+        mock_uow.body_fat_visual_profiles.find_history_by_user.assert_awaited_once_with(
+            "test_user"
+        )
+        mock_uow.body_fat_visual_profiles.append.assert_not_awaited()
 
     async def test_clear_body_fat_when_explicitly_requested(self):
         """Test clearing body fat requires an explicit clear signal."""
@@ -275,12 +346,12 @@ class TestUpdateUserMetricsCommandHandler:
         mock_uow = _make_mock_uow(profile)
 
         handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
-        command = UpdateUserMetricsCommand(user_id="test_user", age=12)
+        command = UpdateUserMetricsCommand(user_id="test_user", age=11)
 
         with pytest.raises(ValidationException) as exc_info:
             await handler.handle(command)
 
-        assert "Age must be between 13 and 120" in str(exc_info.value)
+        assert "Age must be between 12 and 120" in str(exc_info.value)
 
     async def test_invalid_height(self):
         """Test validation for invalid height."""

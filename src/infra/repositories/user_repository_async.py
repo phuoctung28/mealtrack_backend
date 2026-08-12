@@ -8,6 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.domain.exceptions.firebase_identity_exceptions import (
+    FirebaseIdentityConflictError,
+)
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.utils.timezone_utils import utc_now
@@ -116,9 +119,13 @@ class AsyncUserRepository(UserRepositoryPort):
             # Do NOT call session.rollback() — UoW.__aexit__ handles rollback
             error_msg = str(e.orig).lower() if e.orig else str(e).lower()
             if "email" in error_msg:
-                raise ValueError("User with this email already exists") from e
+                raise FirebaseIdentityConflictError(
+                    "A Firebase identity conflicts with an existing account"
+                ) from e
             elif "firebase_uid" in error_msg:
-                raise ValueError("Firebase UID already registered") from e
+                raise FirebaseIdentityConflictError(
+                    "A Firebase identity conflicts with an existing account"
+                ) from e
             else:
                 raise ValueError(
                     "User with this email or username already exists"

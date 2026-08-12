@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import cast
 
+from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
     FoodReferenceServingProjection,
@@ -135,7 +136,7 @@ class IngredientQuantityConversionService:
         fat = fat_100g * factor
         fiber = (reference.fiber_100g or 0.0) * factor
         sugar = (reference.sugar_100g or 0.0) * factor
-        calories = protein * 4 + max(carbs - fiber, 0.0) * 4 + fiber * 2 + fat * 9
+        calories = Macros.raw_total_calories(protein, carbs, fat, fiber)
         return ResolvedIngredientQuantity(
             food_reference_id=reference.id,
             display_name=display_name or reference.name,

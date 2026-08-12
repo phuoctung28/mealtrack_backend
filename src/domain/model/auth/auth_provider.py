@@ -2,14 +2,16 @@
 Authentication provider domain model.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AuthProvider(str, Enum):
+class AuthProvider(StrEnum):
     """Authentication provider enumeration."""
 
     GOOGLE = "google"
     APPLE = "apple"
+    EMAIL_LINK = "email_link"
+    ANONYMOUS = "anonymous"
 
     @classmethod
     def from_string(cls, value: str) -> "AuthProvider":

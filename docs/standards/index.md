@@ -1,12 +1,14 @@
-# Code Standards
+# Database schema judgment
 
-Development conventions for the MealTrack Backend.
+**Status:** Satellite under the primary docs route  
+**Style/testing authority:** [`../code-standards.md`](../code-standards.md) and
+[`../testing-standards.md`](../testing-standards.md)  
+**Connection and migration ops:** [`../database-guide.md`](../database-guide.md)
 
 ## Contents
-- [Python Style](./python-style.md) - Linting, formatting, and types
-- [Project Patterns](./patterns.md) - DI, Async, and Error Handling
-- [Database & API](./db-api.md) - ORM patterns and API conventions
-- [Testing & QA](./testing.md) - Testing standards and coverage
 
-## Quick Start
-Adhere to the [Python Style](./python-style.md) for all code contributions.
+- [Database & API schema rules](./db-api.md) — 3NF, JSON limits, ownership,
+  expand-migrate-contract
+
+Superseded style/testing stubs live in
+[`../archive/standards-stubs/`](../archive/standards-stubs/).

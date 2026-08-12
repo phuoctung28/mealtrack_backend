@@ -41,13 +41,60 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
 
     async def handle(self, query: GetDailyMacrosQuery) -> dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
-        # One UoW for all DB reads: timezone, meals, weekly budget
+        # TDEE lookup FIRST — behind Redis cache, rarely opens its own DB
+        # connection. Resolving it before the UoW below lets that single UoW
+        # also run the weekly effective-adjusted call (previously a second,
+        # separate AsyncUnitOfWork opened later in _get_weekly_context).
+        target_calories = None
+        target_macros = None
+        bmr = 1800
+        target_revision = None
+        macro_preset = MacroPreset.STANDARD
+        is_custom = False
+
+        try:
+            from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
+                GetUserTdeeQueryHandler,
+            )
+            from src.app.queries.tdee import GetUserTdeeQuery
+
+            tdee_handler = GetUserTdeeQueryHandler(cache_service=self.cache_service)
+            tdee_result = await tdee_handler.handle(
+                GetUserTdeeQuery(user_id=query.user_id)
+            )
+            target_calories = tdee_result.get("target_calories")
+            target_macros = tdee_result.get("macros", {})
+            bmr = tdee_result.get("bmr", 1800)
+            target_revision = tdee_result.get("profile_target_revision")
+            macro_preset = MacroPreset(tdee_result.get("macro_preset", "standard"))
+            is_custom = bool(tdee_result.get("is_custom"))
+
+            if target_calories is None:
+                logger.warning(f"TDEE data missing for user {query.user_id}.")
+        except Exception as e:
+            logger.warning(
+                f"Could not fetch TDEE data for user {query.user_id}: {e}",
+                exc_info=True,
+            )
+
+        # One UoW for all DB reads: timezone, meals, weekly budget, and (when
+        # a calorie target resolved above) the weekly effective-adjusted call.
+        weekly_context: dict[str, Any] | None = None
         async with AsyncUnitOfWork() as uow:
             user_tz_str = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
             )
             user_tz = get_zone_info(user_tz_str)
             target_date = query.target_date or datetime.now(user_tz).date()
+
+            # Cache-aside BEFORE meal aggregation. Returning a Redis hit after
+            # computing fresh totals discarded those totals and could leave
+            # clients with stale consumed=0 while meals already existed.
+            cached_result = await self._try_get_cached_result(
+                query.user_id, target_date, target_revision
+            )
+            if cached_result is not None:
+                return cached_result
 
             meals = await uow.meals.find_by_date(
                 target_date,
@@ -157,47 +204,24 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                     "Failed to fetch movement data for user %s: %s", query.user_id, exc
                 )
 
-        # TDEE lookup — behind Redis cache, rarely opens DB
-        target_calories = None
-        target_macros = None
-        bmr = 1800
-        target_revision = None
-        macro_preset = MacroPreset.STANDARD
-        is_custom = False
+            food_calories = total_calories
+            net_calories = food_calories - movement_kcal_burned
 
-        try:
-            from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
-                GetUserTdeeQueryHandler,
-            )
-            from src.app.queries.tdee import GetUserTdeeQuery
-
-            tdee_handler = GetUserTdeeQueryHandler(cache_service=self.cache_service)
-            tdee_result = await tdee_handler.handle(
-                GetUserTdeeQuery(user_id=query.user_id)
-            )
-            target_calories = tdee_result.get("target_calories")
-            target_macros = tdee_result.get("macros", {})
-            bmr = tdee_result.get("bmr", 1800)
-            target_revision = tdee_result.get("profile_target_revision")
-            macro_preset = MacroPreset(tdee_result.get("macro_preset", "standard"))
-            is_custom = bool(tdee_result.get("is_custom"))
-
-            if target_calories is None:
-                logger.warning(f"TDEE data missing for user {query.user_id}.")
-        except Exception as e:
-            logger.warning(
-                f"Could not fetch TDEE data for user {query.user_id}: {e}",
-                exc_info=True,
-            )
-
-        cached_result = await self._try_get_cached_result(
-            query.user_id, target_date, target_revision
-        )
-        if cached_result is not None:
-            return cached_result
-
-        food_calories = total_calories
-        net_calories = food_calories - movement_kcal_burned
+            if target_calories:
+                weekly_context = await self._get_weekly_context(
+                    uow,
+                    query.user_id,
+                    target_date,
+                    weekly_budget,  # pre-fetched above
+                    target_calories,
+                    target_macros,
+                    net_calories,
+                    bmr,
+                    user_tz_str,
+                    macro_preset,
+                    is_custom,
+                    target_revision,
+                )
 
         result = {
             "date": target_date.isoformat(),
@@ -226,22 +250,8 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                 "calories": target_macros.get("calories", target_calories or 0.0),
             }
 
-        if target_calories:
-            weekly_context = await self._get_weekly_context(
-                query.user_id,
-                target_date,
-                weekly_budget,  # pre-fetched above
-                target_calories,
-                target_macros,
-                net_calories,
-                bmr,
-                user_tz_str,
-                macro_preset,
-                is_custom,
-                target_revision,
-            )
-            if weekly_context:
-                result["weekly_context"] = weekly_context
+        if weekly_context:
+            result["weekly_context"] = weekly_context
 
         result["hydration"] = {
             "consumed_ml": consumed_water_ml,
@@ -258,6 +268,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
 
     async def _get_weekly_context(
         self,
+        uow,  # caller's open AsyncUnitOfWork — this method never opens its own
         user_id: str,
         target_date: date,
         weekly_budget,  # pre-fetched by caller; None → returns None
@@ -270,7 +281,11 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
         is_custom: bool = False,
         target_revision: int | None = None,
     ) -> dict[str, Any] | None:
-        """Get weekly budget context using the weekly-budget adjustment path."""
+        """Get weekly budget context using the weekly-budget adjustment path.
+
+        Uses the caller's meal-aggregation UoW so the whole handler opens a
+        single AsyncUnitOfWork per request.
+        """
         if not weekly_budget:
             return None
         if target_revision is None or weekly_budget.target_revision != target_revision:
@@ -288,22 +303,19 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
             )
             standard_daily_fat = target_macros.get("fat", 70) if target_macros else 70
 
-            async with AsyncUnitOfWork() as uow:
-                effective = (
-                    await WeeklyBudgetService.get_effective_adjusted_daily_async(
-                        uow=uow,
-                        user_id=user_id,
-                        week_start=week_start,
-                        target_date=target_date,
-                        weekly_budget=weekly_budget,
-                        base_daily_cal=standard_daily_calories,
-                        base_daily_protein=standard_daily_protein,
-                        base_daily_carbs=standard_daily_carbs,
-                        base_daily_fat=standard_daily_fat,
-                        bmr=bmr,
-                        user_timezone=user_timezone,
-                    )
-                )
+            effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
+                uow=uow,
+                user_id=user_id,
+                week_start=week_start,
+                target_date=target_date,
+                weekly_budget=weekly_budget,
+                base_daily_cal=standard_daily_calories,
+                base_daily_protein=standard_daily_protein,
+                base_daily_carbs=standard_daily_carbs,
+                base_daily_fat=standard_daily_fat,
+                bmr=bmr,
+                user_timezone=user_timezone,
+            )
             adjusted = effective.adjusted
             policy_targets = TdeeCalculationService.apply_adjusted_macro_policy(
                 adjusted.calories,
