@@ -24,7 +24,11 @@ from src.app.handlers.query_handlers.get_body_fat_visual_profile_query_handler i
 from src.app.queries.user.get_body_fat_visual_profile_query import (
     GetBodyFatVisualProfileQuery,
 )
-from src.domain.model.user.body_fat_visual import BodyFatVisualProfileSelection
+from src.domain.model.user.body_fat_visual import (
+    BODY_FAT_VISUAL_RANGES_BY_SEX,
+    BodyFatVisualProfileSelection,
+    remap_visual_profile_selection,
+)
 from src.infra.database.models.user.body_fat_visual_profile import BodyFatVisualProfile
 
 
@@ -45,6 +49,37 @@ def test_visual_body_fat_request_accepts_exact_catalog_values():
     request = BodyFatVisualProfileRequest(**valid_payload())
 
     assert request.current_range_id == "male_17_20"
+
+
+@pytest.mark.parametrize(
+    ("source_sex", "target_sex", "current_range_id", "expected_range_id"),
+    [
+        ("male", "female", "male_21_24", "female_31_35"),
+        ("female", "male", "female_36_39", "male_25_29"),
+    ],
+)
+def test_visual_profile_remaps_ranges_by_stable_catalog_ordinal(
+    source_sex, target_sex, current_range_id, expected_range_id
+):
+    selection = BodyFatVisualProfileSelection(
+        user_id="user-1",
+        schema_version=1,
+        range_catalog_version=1,
+        sex_at_selection=source_sex,
+        start_range_id=None,
+        current_range_id=current_range_id,
+        target_range_id=None,
+    )
+
+    remapped = remap_visual_profile_selection(selection, target_sex=target_sex)
+
+    assert len(BODY_FAT_VISUAL_RANGES_BY_SEX["male"]) == len(
+        BODY_FAT_VISUAL_RANGES_BY_SEX["female"]
+    )
+    assert remapped.sex_at_selection == target_sex
+    assert remapped.start_range_id is None
+    assert remapped.current_range_id == expected_range_id
+    assert remapped.target_range_id is None
 
 
 def test_visual_body_fat_request_allows_omitting_target_range():
