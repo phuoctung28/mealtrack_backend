@@ -303,10 +303,10 @@ def clamp_nutrition_values(item: dict) -> dict:
     if weight_g <= 0:
         return item
 
-    calories = item.get("calories", 0.0)
-    protein = item.get("protein", 0.0)
-    carbs = item.get("carbs", 0.0)
-    fat = item.get("fat", 0.0)
+    calories = item.get("calories") or 0.0
+    protein = item.get("protein") or 0.0
+    carbs = item.get("carbs") or 0.0
+    fat = item.get("fat") or 0.0
 
     # Each macro can't exceed total weight; calories max ~9 kcal/g (pure fat)
     max_cal = weight_g * 9.0
