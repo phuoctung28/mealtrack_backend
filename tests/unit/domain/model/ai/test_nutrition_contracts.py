@@ -5,7 +5,6 @@ from pydantic import ValidationError
 
 from src.domain.model.ai.nutrition_contracts import (
     AINutritionMacros,
-    BeverageMetadata,
     FoodLabelNutritionResponse,
     MealTextNutritionResponse,
     VisionNutritionResponse,
@@ -204,7 +203,7 @@ class TestVisionNutritionResponse:
             VisionNutritionResponse.model_validate({"dish_name": "Unknown meal"})
 
     def test_rejects_beverage_metadata_for_meal_scan_output(self):
-        with pytest.raises(ValidationError, match="beverage_metadata is not accepted"):
+        with pytest.raises(ValidationError) as exc_info:
             VisionNutritionResponse.model_validate(
                 {
                     "is_food": True,
@@ -229,9 +228,14 @@ class TestVisionNutritionResponse:
                     },
                 }
             )
+        assert any(
+            error["loc"] == ("beverage_metadata",)
+            and error["type"] == "extra_forbidden"
+            for error in exc_info.value.errors()
+        )
 
     def test_rejects_metadata_only_packaged_beverage_output(self):
-        with pytest.raises(ValidationError, match="beverage_metadata is not accepted"):
+        with pytest.raises(ValidationError) as exc_info:
             VisionNutritionResponse.model_validate(
                 {
                     "is_food": True,
@@ -249,6 +253,11 @@ class TestVisionNutritionResponse:
                     },
                 }
             )
+        assert any(
+            error["loc"] == ("beverage_metadata",)
+            and error["type"] == "extra_forbidden"
+            for error in exc_info.value.errors()
+        )
 
     def test_rejects_extra_beverage_metadata_fields(self):
         with pytest.raises(ValidationError):
@@ -263,16 +272,6 @@ class TestVisionNutritionResponse:
                     },
                 }
             )
-
-    def test_brand_max_length_100_enforced(self):
-        with pytest.raises(ValidationError):
-            BeverageMetadata.model_validate(
-                {
-                    "is_packaged_beverage": True,
-                    "brand": "X" * 101,
-                }
-            )
-
 
 class TestFoodLabelNutritionResponse:
     def test_accepts_food_label_serving_contract(self):

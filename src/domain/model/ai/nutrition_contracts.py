@@ -5,7 +5,7 @@ models. Text-parse contracts ignore advisory AI calories for compatibility;
 provider-facing vision contracts reject them so calories stay backend-derived.
 """
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import (
     AliasChoices,
@@ -97,21 +97,6 @@ class VisionFoodEstimate(BaseModel):
     @classmethod
     def validate_name(cls, value: str) -> str:
         return _strip_required_text(value)
-
-
-class BeverageMetadata(BaseModel):
-    """Metadata for packaged beverage images detected by AI."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    is_packaged_beverage: bool
-    brand: str | None = Field(None, max_length=100)
-    product_name: str | None = Field(None, max_length=100)
-    container_type: Literal["can", "bottle", "cup", "carton", "unknown"] = "unknown"
-    volume_ml: int | None = None
-    sugar_per_100ml: float | None = Field(None, ge=0)
-    kcal_per_100ml: float | None = Field(None, ge=0)
-    label_source: Literal["nutrition_panel", "front_label", "estimate"] = "estimate"
 
 
 class FoodLabelServingSize(BaseModel):

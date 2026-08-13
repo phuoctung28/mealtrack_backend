@@ -130,7 +130,7 @@ class TestBasicAnalysisPromptConstraints:
 
         assert "edible or drinkable items" in prompt
         assert "caloric drinks" in prompt
-        assert "drinks should be represented as normal `foods` entries" in prompt
+        assert "must be represented as normal `foods` entries" in prompt
         assert "if the image shows a packaged drink" not in prompt
         assert '"is_food": false,\n  "dish_name": "coca-cola' not in prompt
 

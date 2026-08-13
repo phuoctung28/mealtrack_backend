@@ -102,7 +102,6 @@ async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
                         },
                     }
                 ],
-                "beverage_metadata": None,
             }
         }
     )

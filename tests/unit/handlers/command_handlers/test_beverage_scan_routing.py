@@ -89,7 +89,6 @@ async def test_packaged_beverage_scan_creates_standard_meal_not_hydration_entry(
                 }
             ],
             "confidence": 0.9,
-            "beverage_metadata": None,
         }
     }
     handler.vision_service = MagicMock()
@@ -165,8 +164,8 @@ async def test_food_scan_unchanged_path():
 
 
 @pytest.mark.asyncio
-async def test_food_scan_with_beverage_metadata_false_follows_food_path():
-    """is_packaged_beverage=False on beverage_metadata still routes to food path."""
+async def test_smoothie_bowl_follows_food_path():
+    """Drinkable food represented in foods still routes to the meal path."""
     mock_uow = _make_uow()
     mock_uow.meals.find_by_id = AsyncMock(
         side_effect=lambda mid, **kw: mock_uow._saved_meals[-1]
@@ -189,9 +188,6 @@ async def test_food_scan_with_beverage_metadata_false_follows_food_path():
             "dish_name": "Smoothie bowl",
             "foods": [{"name": "Smoothie bowl", "quantity_g": 300}],
             "confidence": 0.85,
-            "beverage_metadata": {
-                "is_packaged_beverage": False,  # not packaged
-            },
         }
     }
     handler.vision_service = MagicMock()
@@ -251,7 +247,6 @@ async def test_zero_calorie_drink_does_not_create_hydration_entry_from_meal_scan
                     }
                 ],
                 "confidence": 0.9,
-                "beverage_metadata": None,
             }
         }
     )

@@ -228,18 +228,6 @@ def _validate_parsed(schema: type, parsed: Any) -> BaseModel:
     return schema.model_validate(parsed)
 
 
-def _is_nullable_any_of(prop: Any) -> bool:
-    """Return True if a JSON-schema property is nullable (anyOf includes {type: null})."""
-    if not isinstance(prop, dict):
-        return False
-    any_of = prop.get("anyOf")
-    if isinstance(any_of, list):
-        return any(
-            isinstance(item, dict) and item.get("type") == "null" for item in any_of
-        )
-    return False
-
-
 def _normalize_for_openai_structured_outputs(value: Any) -> Any:
     if isinstance(value, list):
         return [_normalize_for_openai_structured_outputs(item) for item in value]
@@ -255,16 +243,7 @@ def _normalize_for_openai_structured_outputs(value: Any) -> Any:
     if normalized.get("type") == "object":
         properties = normalized.get("properties")
         if isinstance(properties, dict):
-            # Only mark a property as required if it is not a nullable anyOf
-            # (i.e. anyOf containing {"type": "null"}).  Forcing nullable fields
-            # into "required" causes strict-mode models to always populate them,
-            # which then breaks Pydantic validators that expect None.
-            required = [
-                name
-                for name, prop in properties.items()
-                if not _is_nullable_any_of(prop)
-            ]
-            normalized["required"] = required
+            normalized["required"] = list(properties.keys())
         normalized["additionalProperties"] = False
 
     return normalized
