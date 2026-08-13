@@ -1,7 +1,7 @@
 ---
 title: "Resolve PR 506 CI Failures"
 description: "Align PR #506 with the meal-scan and OpenAI strict-schema contracts, then fix the unrelated recommendation projection failure blocking CI."
-status: in-progress
+status: completed
 priority: P1
 effort: "2h"
 issue: 506
@@ -32,7 +32,7 @@ on `main` and requires a small stale-state projection fix.
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | [Resolve and Verify CI Failures](./phase-01-start.md) | In Progress |
+| 1 | [Resolve and Verify CI Failures](./phase-01-start.md) | Completed |
 
 ## Dependencies
 
@@ -42,10 +42,18 @@ on `main` and requires a small stale-state projection fix.
 
 ## Success Criteria
 
-- [ ] All seven failed test nodes pass locally.
-- [ ] `pytest tests/unit --cov=src --cov-fail-under=65` passes.
-- [ ] Ruff and Python compilation pass for touched files.
-- [ ] PR #506 head is updated and required checks become green.
+- [x] All seven failed test nodes pass locally.
+- [x] `pytest tests/unit --cov=src --cov-fail-under=65` passes.
+- [x] Ruff and Python compilation pass for touched files.
+- [x] PR #506 head is updated and required checks become green.
+
+## Verification
+
+- Focused: 70 passed.
+- Unit suite: 2,273 passed; 79.43% coverage.
+- Architecture contracts: 4 kept, 0 broken.
+- GitHub Actions run `31689660315`: successful.
+- Independent code review: passed with no blockers.
 
 ## Docs Impact
 

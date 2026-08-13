@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Resolve and Verify CI Failures"
-status: in-progress
+status: completed
 priority: P1
 effort: "2h"
 dependencies: []
@@ -61,11 +61,11 @@ authority after reload.
 
 ## Todo
 
-- [ ] AI contract and fixtures aligned
-- [ ] OpenAI strict schema valid
-- [ ] Recommendation projection failure fixed
-- [ ] Focused and full validation green
-- [ ] Review complete and PR checks green
+- [x] AI contract and fixtures aligned
+- [x] OpenAI strict schema valid
+- [x] Recommendation projection failure fixed
+- [x] Focused and full validation green
+- [x] Review complete and PR checks green
 
 ## Success Criteria
 
