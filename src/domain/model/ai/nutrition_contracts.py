@@ -208,18 +208,12 @@ class VisionNutritionResponse(BaseModel):
     foods: list[VisionFoodEstimate] = Field(
         default_factory=list,
         max_length=MAX_AI_FOOD_ITEMS,
-        description="Foods visible in the image",
+        description="Foods visible in the image. Beverages must be represented here as regular food items.",
     )
     confidence: float = Field(0.5, ge=0, le=1)
-    beverage_metadata: BeverageMetadata | None = None
 
     @model_validator(mode="after")
     def require_foods_for_food_images(self) -> "VisionNutritionResponse":
-        if self.beverage_metadata is not None:
-            raise ValueError(
-                "beverage_metadata is not accepted for meal scan output; "
-                "drinks must be represented as normal foods"
-            )
         if self.is_food and not self.foods:
             raise ValueError(
                 "foods must contain at least one item when is_food is true"

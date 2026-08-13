@@ -171,17 +171,16 @@ RESPONSE FORMAT — return exactly this structure:
       "confidence": 0.92
     }
   ],
-  "confidence": 0.85,
-  "beverage_metadata": null
+  "confidence": 0.85
 }
 
 FOOD GUARD:
 - Treat visible edible or drinkable items intended for intake as food, including meals, snacks, desserts, pastries, caloric drinks, smoothies, milk tea, juice, soda, and packaged drinks.
 - Treat visually plausible edible items as food even when they are bakery pastries, desserts, donuts, display-case items, partially cropped, behind glass, or decorative-looking. If uncertain but likely edible or drinkable, set `is_food=true` with lower confidence instead of rejecting.
 - If the image contains no visible edible or drinkable item intended for intake, return:
-  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "confidence": 0.95, "beverage_metadata": null}
+  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "confidence": 0.95}
 - Do not invent food, ingredients, portions, or nutrition for non-food images.
-- For meal scan, keep `beverage_metadata` null. Drinks should be represented as normal `foods` entries.
+- Drinks and beverages must be represented as normal `foods` entries (estimate volume in grams).
 
 IDENTIFICATION RULES:
 - Identify every visible distinct food component in the image.
@@ -229,8 +228,7 @@ WORKED EXAMPLE 1 — Chicken rice bowl image:
     {"name": "steamed broccoli", "quantity_g": 80.0, "macros": {"protein_g": 2.8, "carbs_g": 5.6, "fat_g": 0.3, "fiber_g": 2.6, "sugar_g": 1.4}, "confidence": 0.9},
     {"name": "soy sauce", "quantity_g": 10.0, "macros": {"protein_g": 1.0, "carbs_g": 0.8, "fat_g": 0.0, "fiber_g": 0.0, "sugar_g": 0.1}, "confidence": 0.74}
   ],
-  "confidence": 0.88,
-  "beverage_metadata": null
+  "confidence": 0.88
 }
 
 WORKED EXAMPLE 2 — Coca-Cola 330ml can:
@@ -241,8 +239,7 @@ WORKED EXAMPLE 2 — Coca-Cola 330ml can:
   "foods": [
     {"name": "Coca-Cola", "quantity_g": 330.0, "macros": {"protein_g": 0.0, "carbs_g": 35.0, "fat_g": 0.0, "fiber_g": 0.0, "sugar_g": 35.0}, "confidence": 0.9}
   ],
-  "confidence": 0.9,
-  "beverage_metadata": null
+  "confidence": 0.9
 }
 
 Return ONLY valid JSON matching the structure above."""
