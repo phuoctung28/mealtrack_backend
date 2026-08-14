@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from src.api.exceptions import ValidationException
 
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
@@ -441,7 +442,7 @@ async def test_async_graph_runner_no_food_does_not_persist():
         image_id_factory=lambda: image_id,
     )
 
-    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+    with pytest.raises(ValidationException, match="Image does not appear to contain food"):
         await run_meal_analyze_graph_async(
             {
                 "scan_mode": "meal_scan",

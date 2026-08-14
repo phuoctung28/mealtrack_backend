@@ -7,6 +7,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
@@ -240,9 +241,12 @@ class UploadMealImageImmediatelyHandler(
                 image_url=image_url,
                 reason="parser_not_food",
             )
-            raise ValueError(
-                "Image does not appear to contain food. "
-                "Please take a photo of food and try again."
+            raise ValidationException(
+                message=(
+                    "Image does not appear to contain food. "
+                    "Please take a photo of food and try again."
+                ),
+                error_code="NOT_FOOD_IMAGE",
             )
 
         nutrition = self.gpt_parser.parse_to_nutrition(analysis_result)
@@ -260,9 +264,12 @@ class UploadMealImageImmediatelyHandler(
                 image_url=image_url,
                 reason="nutrition_empty_or_zero_calorie",
             )
-            raise ValueError(
-                "No edible food detected in the image. "
-                "Please take a photo of food and try again."
+            raise ValidationException(
+                message=(
+                    "No edible food detected in the image. "
+                    "Please take a photo of food and try again."
+                ),
+                error_code="NOT_FOOD_IMAGE",
             )
 
         # Step 6: NOW create meal record with verified image URL
@@ -349,9 +356,13 @@ class UploadMealImageImmediatelyHandler(
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
         if command.scan_mode == "food_label":
-            raise ValueError(
-                "Food-label scans require the scan-by-url image flow. "
-                "Use /v1/meals/food-label/scan-by-url."
+            raise ValidationException(
+                message=(
+                    "Food-label scans require the scan-by-url image flow. "
+                    "Use /v1/meals/food-label/scan-by-url."
+                ),
+                error_code="INVALID_SCAN_MODE",
+                details={"scan_mode": command.scan_mode},
             )
 
         if not all([self.image_store, self.vision_service, self.gpt_parser]):

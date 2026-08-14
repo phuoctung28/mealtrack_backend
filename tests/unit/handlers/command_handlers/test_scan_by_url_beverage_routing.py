@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from src.api.exceptions import ValidationException
 
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.handlers.command_handlers.scan_by_url_command_handler import (
@@ -265,7 +266,7 @@ async def test_scan_by_url_food_label_image_ai_failure_does_not_save(monkeypatch
         gpt_parser=MagicMock(),
     )
 
-    with pytest.raises(ValueError, match="could not be read"):
+    with pytest.raises(ValidationException, match="could not be read"):
         await handler.handle(
             ScanByUrlCommand(
                 user_id=_USER_ID,
