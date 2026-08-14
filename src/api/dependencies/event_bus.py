@@ -349,6 +349,7 @@ def get_configured_event_bus() -> EventBus:
         get_gpt_parser,
         get_image_store,
         get_meal_analyze_graph_settings,
+        get_parse_text_settings,
         get_suggestion_orchestration_service,
         get_vision_service,
     )
@@ -381,7 +382,6 @@ def get_configured_event_bus() -> EventBus:
     from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
         ThreeDayPlanOptimizer,
     )
-    from src.infra.config.settings import get_settings
     from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Synchronous invalidation service — handlers await this before returning,
@@ -411,6 +411,7 @@ def get_configured_event_bus() -> EventBus:
         fatsecret_validation_enabled=graph_settings["fatsecret_validation_enabled"],
         graph_version=graph_settings["graph_version"],
     )
+    parse_text_settings = get_parse_text_settings()
 
     # Register meal command handlers
     # Handlers receive AsyncUnitOfWork (concrete) and event_bus at the composition root
@@ -511,9 +512,9 @@ def get_configured_event_bus() -> EventBus:
             fat_secret_service=fat_secret_service,
             translation_service=text_translation_service,
             food_reference_batch_lookup=find_food_references_by_normalized_names,
-            structured_reference_enabled=getattr(
-                get_settings(), "PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED", False
-            ),
+            structured_reference_enabled=parse_text_settings[
+                "structured_reference_enabled"
+            ],
         ),
     )
 
