@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from src.api.exceptions import ValidationException
 
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
@@ -266,7 +267,7 @@ async def test_zero_calorie_drink_does_not_create_hydration_entry_from_meal_scan
     handler.gpt_parser.parse_to_nutrition.return_value = nutrition
     handler.gpt_parser.parse_dish_name.return_value = "Water bottle"
 
-    with pytest.raises(ValueError, match="No edible food detected"):
+    with pytest.raises(ValidationException, match="No edible food detected"):
         await handler.handle(_make_command())
 
     mock_uow.hydration_entries.add.assert_not_called()
@@ -299,7 +300,7 @@ async def test_upload_scan_captures_rejected_image_for_review(monkeypatch):
     handler.gpt_parser = MagicMock()
     handler.gpt_parser.parse_is_food.return_value = False
 
-    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+    with pytest.raises(ValidationException, match="Image does not appear to contain food"):
         await handler.handle(_make_command())
 
     capture_message.assert_called_once()

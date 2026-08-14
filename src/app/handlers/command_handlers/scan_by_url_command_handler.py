@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import httpx
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
@@ -134,9 +135,15 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             )
             structured_data = vision_result.get("structured_data")
             if not isinstance(structured_data, dict):
-                raise ValueError("Nutrition Facts label could not be read.")
+                raise ValidationException(
+                    message="Nutrition Facts label could not be read.",
+                    error_code="NOT_FOOD_LABEL_IMAGE",
+                )
             if not structured_data.get("is_food_label", True):
-                raise ValueError("Nutrition Facts label could not be read.")
+                raise ValidationException(
+                    message="Nutrition Facts label could not be read.",
+                    error_code="NOT_FOOD_LABEL_IMAGE",
+                )
             self._record_food_label_metric("food_label.image_ai_success")
             return {"structured_data": structured_data}
         except Exception as exc:
@@ -228,9 +235,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     vision_result
                 )
                 if not label_metadata.get("is_food_label", True):
-                    raise ValueError(
-                        "Nutrition Facts label could not be read. "
-                        "Please retake the label photo and try again."
+                    raise ValidationException(
+                        message=(
+                            "Nutrition Facts label could not be read. "
+                            "Please retake the label photo and try again."
+                        ),
+                        error_code="NOT_FOOD_LABEL_IMAGE",
                     )
 
                 meal = Meal(
@@ -277,9 +287,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     image_url=command.image_url,
                     reason="parser_not_food",
                 )
-                raise ValueError(
-                    "Image does not appear to contain food. "
-                    "Please take a photo of food and try again."
+                raise ValidationException(
+                    message=(
+                        "Image does not appear to contain food. "
+                        "Please take a photo of food and try again."
+                    ),
+                    error_code="NOT_FOOD_IMAGE",
                 )
 
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
@@ -297,9 +310,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     image_url=command.image_url,
                     reason="nutrition_empty_or_zero_calorie",
                 )
-                raise ValueError(
-                    "No edible food detected in the image. "
-                    "Please take a photo of food and try again."
+                raise ValidationException(
+                    message=(
+                        "No edible food detected in the image. "
+                        "Please take a photo of food and try again."
+                    ),
+                    error_code="NOT_FOOD_IMAGE",
                 )
 
             meal = Meal(
