@@ -21,6 +21,7 @@ from src.domain.model.nutrition import MAX_FOOD_ITEM_QUANTITY
 MAX_AI_FOOD_ITEMS = 8
 MAX_TEXT_PARSE_ITEMS = 20
 MAX_AI_MACRO_GRAMS = 5000.0
+PARSE_TEXT_PREPARATIONS = ("raw", "boiled", "baked", "fried", "mashed", "unknown")
 
 
 def _strip_required_text(value: str) -> str:
@@ -233,6 +234,8 @@ class MealTextFoodEstimate(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str = Field(..., min_length=1, max_length=200)
+    lookup_name: str | None = Field(None, max_length=200)
+    preparation: str = Field("unknown", max_length=20)
     quantity: float = Field(..., gt=0, le=MAX_FOOD_ITEM_QUANTITY)
     unit: str = Field(..., min_length=1, max_length=50)
     english_unit: str | None = Field(None, max_length=50)
@@ -273,6 +276,17 @@ class MealTextFoodEstimate(BaseModel):
         if value is None:
             return None
         return _strip_required_text(value)
+
+    @field_validator("lookup_name")
+    @classmethod
+    def validate_lookup_name(cls, value: str | None) -> str | None:
+        return _strip_required_text(value) if value is not None else None
+
+    @field_validator("preparation", mode="before")
+    @classmethod
+    def normalize_preparation(cls, value: Any) -> str:
+        normalized = str(value or "unknown").strip().lower()
+        return normalized if normalized in PARSE_TEXT_PREPARATIONS else "unknown"
 
 
 class MealTextNutritionResponse(BaseModel):

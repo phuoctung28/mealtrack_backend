@@ -381,6 +381,7 @@ def get_configured_event_bus() -> EventBus:
     from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
         ThreeDayPlanOptimizer,
     )
+    from src.infra.config.settings import get_settings
     from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Synchronous invalidation service — handlers await this before returning,
@@ -509,6 +510,10 @@ def get_configured_event_bus() -> EventBus:
             meal_generation_service=meal_generation_service,
             fat_secret_service=fat_secret_service,
             translation_service=text_translation_service,
+            food_reference_batch_lookup=find_food_references_by_normalized_names,
+            structured_reference_enabled=getattr(
+                get_settings(), "PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED", False
+            ),
         ),
     )
 

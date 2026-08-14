@@ -9,6 +9,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.domain.model.nutrition.macros import Macros
+from src.domain.services.prompts.input_sanitizer import validate_refinement_items
 
 
 class ParseMealTextRequest(BaseModel):
@@ -24,6 +25,11 @@ class ParseMealTextRequest(BaseModel):
         None,
         description="Current meal items for refinement (when user is editing an existing meal)",
     )
+
+    @model_validator(mode="after")
+    def validate_refinement_context(self) -> "ParseMealTextRequest":
+        self.current_items = validate_refinement_items(self.current_items)
+        return self
 
 
 class MacrosRequest(BaseModel):

@@ -33,7 +33,8 @@ class _Item:
     protein = 12.0
     carbs = 1.0
     fat = 10.0
-    fiber = 0.0
+    fiber = 2.0
+    sugar = 1.0
     data_source = "ai_estimate"
     fdc_id = None
     allowed_units = [
@@ -89,7 +90,9 @@ def client(monkeypatch) -> TestClient:
         lambda firebase_uid="firebase_1": firebase_uid
     )
     main.app.dependency_overrides[get_image_store] = lambda: _DummyImageStore()
-    main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(_default_send)
+    main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(
+        _default_send
+    )
 
     yield TestClient(main.app)
 
@@ -97,7 +100,10 @@ def client(monkeypatch) -> TestClient:
 
 
 def test_guest_parse_success(monkeypatch, client: TestClient):
-    """POST with valid install-id and text → 200 with ParseMealTextResponse shape."""
+    """POST with valid install-id and text → 200 with ParseMealTextResponse shape.
+
+    Expected red for fiber/sugar propagation until the shared mapper is updated.
+    """
     import src.api.main as main
     from src.api.dependencies.event_bus import get_configured_event_bus
     from src.api.dependencies.guest_quota import get_guest_quota_service
@@ -133,6 +139,9 @@ def test_guest_parse_success(monkeypatch, client: TestClient):
         {"unit": "piece", "gram_weight": 50.0, "description": "1 piece"},
         {"unit": "g", "gram_weight": 100.0, "description": "100 g"},
     ]
+    assert body["items"][0]["fiber"] == 2.0
+    assert body["items"][0]["sugar"] == 1.0
+    assert body["items"][0]["calories"] == pytest.approx(142.0)
 
     quota_svc.reserve.assert_awaited_once_with("install-abc123")
     quota_svc.mark_completed.assert_awaited_once_with("abc123hash")
