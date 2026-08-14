@@ -2,6 +2,7 @@
 
 import logging
 
+from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.hydration.delete_hydration_entry_command import (
     DeleteHydrationEntryCommand,
 )
@@ -54,9 +55,9 @@ class DeleteHydrationEntryCommandHandler(
             else:
                 meal = await uow.meals.find_by_id(cmd.entry_id)
                 if meal is None or meal.user_id != cmd.user_id:
-                    raise ValueError("Hydration entry not found")
+                    raise ResourceNotFoundException("Hydration entry not found")
                 if meal.meal_type != "hydration":
-                    raise ValueError("Hydration entry not found")
+                    raise ResourceNotFoundException("Hydration entry not found")
 
                 if meal.status != MealStatus.INACTIVE:
                     await uow.meals.save(meal.mark_inactive())

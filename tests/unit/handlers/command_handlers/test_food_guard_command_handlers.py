@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.handlers.command_handlers.scan_by_url_command_handler import (
     ScanByUrlCommandHandler,
@@ -62,7 +63,7 @@ async def test_scan_by_url_rejects_non_food_before_meal_creation(monkeypatch):
         public_id="mealtrack/abc",
     )
 
-    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+    with pytest.raises(ValidationException, match="Image does not appear to contain food"):
         await handler.handle(command)
 
     handler.gpt_parser.parse_to_nutrition.assert_not_called()
@@ -111,7 +112,7 @@ async def test_scan_by_url_captures_rejected_image_for_review(monkeypatch):
         public_id="mealtrack/abc",
     )
 
-    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+    with pytest.raises(ValidationException, match="Image does not appear to contain food"):
         await handler.handle(command)
 
     capture_message.assert_called_once_with(

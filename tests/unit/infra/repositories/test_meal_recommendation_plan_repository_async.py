@@ -329,7 +329,12 @@ class _ReplenishmentReloadRepo(_SlotMutationRepo):
                         "skipped_at": None,
                         "retired_at": None,
                         "seen_at": None,
-                        **row.__dict__,
+                        **{
+                            key: value
+                            for key, value in row.__dict__.items()
+                            # Simulate a DB reload: in-memory domain cache is gone.
+                            if key != "_domain_catalog_meal"
+                        },
                         "catalog_meal": catalog_meals[row.catalog_meal_id],
                     }
                 )

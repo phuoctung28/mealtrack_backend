@@ -2,6 +2,7 @@
 
 import logging
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
@@ -266,16 +267,22 @@ async def parse_nutrition(
             runtime.vision_result
         )
         if not runtime.label_metadata.get("is_food_label", True):
-            raise ValueError(
-                "Nutrition Facts label could not be read. "
-                "Please retake the label photo and try again."
+            raise ValidationException(
+                message=(
+                    "Nutrition Facts label could not be read. "
+                    "Please retake the label photo and try again."
+                ),
+                error_code="NOT_FOOD_LABEL_IMAGE",
             )
         return {"nutrition_parsed": True}
 
     if not runtime.gpt_parser.parse_is_food(runtime.vision_result):
-        raise ValueError(
-            "Image does not appear to contain food. "
-            "Please take a photo of food and try again."
+        raise ValidationException(
+            message=(
+                "Image does not appear to contain food. "
+                "Please take a photo of food and try again."
+            ),
+            error_code="NOT_FOOD_IMAGE",
         )
 
     nutrition = runtime.gpt_parser.parse_to_nutrition(runtime.vision_result)
@@ -286,9 +293,12 @@ async def parse_nutrition(
         and nutrition.calories > 0
     )
     if not has_food:
-        raise ValueError(
-            "No edible food detected in the image. "
-            "Please take a photo of food and try again."
+        raise ValidationException(
+            message=(
+                "No edible food detected in the image. "
+                "Please take a photo of food and try again."
+            ),
+            error_code="NOT_FOOD_IMAGE",
         )
     runtime.nutrition = nutrition
     return {"nutrition_parsed": True}
