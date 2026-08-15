@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
 
 from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.services.durable_write_service import RETENTION_DAYS
 
 router = APIRouter(prefix="/v1/capabilities", tags=["capabilities"])
 
@@ -83,4 +84,19 @@ async def durable_write_capabilities() -> dict[str, object]:
         "durable_writes": True,
         "nutrition_contract_version": 2,
         "operations": ["create_manual_meal", "edit_meal"],
+        # Keep the legacy capability shape for clients that still use the
+        # claim-before-create replay store while v2 clients use the fields
+        # above and the meal_write_operation table.
+        "retention_days": RETENTION_DAYS,
+        "actions": {
+            "manual_meal_create": {
+                "supported": True,
+                "header": "Idempotency-Key",
+                "exact_replay": True,
+            },
+            "weight_sync": {
+                "supported": False,
+                "reason": "client_entry_id_mapping_pending",
+            },
+        },
     }

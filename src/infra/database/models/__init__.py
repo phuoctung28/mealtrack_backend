@@ -101,6 +101,9 @@ from .web_funnel_claim import (
 # Weight tracking
 from .weight_entry import WeightEntryORM
 
+# Durable mutation replay
+from .durable_write_record import DurableWriteRecordORM
+
 __all__ = [
     # Base
     "BaseMixin",
@@ -167,6 +170,8 @@ __all__ = [
     "PayoutRequest",
     # Weight tracking
     "WeightEntryORM",
+    # Durable mutation replay
+    "DurableWriteRecordORM",
     # Movement tracking
     "MovementEntryORM",
     # Email log

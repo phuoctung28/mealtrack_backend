@@ -117,6 +117,27 @@ def test_fatsecret_nutrition_rejects_missing_metric_basis():
 
 
 @pytest.mark.unit
+def test_fatsecret_nutrition_rejects_missing_metric_basis():
+    service = FatSecretService("client", "secret")
+    nutrition = service._extract_nutrition_from_details(
+        {
+            "servings": {
+                "serving": {
+                    "measurement_description": "serving",
+                    "calories": "100",
+                    "protein": "3",
+                    "carbohydrate": "20",
+                    "fat": "2",
+                }
+            }
+        }
+    )
+
+    assert nutrition["metric_serving_amount"] is None
+    assert nutrition["protein_100g"] is None
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_fatsecret_api_request_posts_form_params():
     service = FatSecretService("client", "secret")

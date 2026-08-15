@@ -17,6 +17,7 @@ from src.api.exceptions import ValidationException, handle_exception
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
+from src.api.routes.v1.manual_meal_durable import manual_meal_fingerprint
 from src.api.routes.v1.meals_route_helpers import parsed_food_item_to_response
 from src.api.schemas.request.meal_requests import (
     CreateManualMealFromFoodsRequest,
@@ -44,6 +45,15 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.event_bus import BackgroundTaskManager, EventBus
+from src.infra.services.durable_write_service import (
+    MANUAL_MEAL_CREATE_ACTION,
+    DurableWriteConflictError,
+    DurableWriteInProgressError,
+    abandon_durable_write,
+    begin_durable_write,
+    complete_durable_write,
+    normalize_idempotency_key,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -64,13 +74,24 @@ async def create_manual_meal(
     ),
     x_app_version: str | None = Header(default=None, alias="X-App-Version"),
     x_platform: str | None = Header(default=None, alias="X-Platform"),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key_header: str | None = Header(
+        default=None, alias="Idempotency-Key"
+    ),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
 
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
+    x_nutrition_contract_version = _unwrap_direct_header(
+        x_nutrition_contract_version
+    )
+    x_app_version = _unwrap_direct_header(x_app_version)
+    x_platform = _unwrap_direct_header(x_platform)
+    idempotency_key = _unwrap_direct_header(idempotency_key_header)
+    legacy_fingerprint: str | None = None
+    legacy_claimed = False
+    legacy_meal_created = False
     try:
         _validate_manual_contract_headers(
             payload.nutrition_contract_version,
@@ -85,6 +106,44 @@ async def create_manual_meal(
                 message="Idempotency-Key must be present and at most 255 characters",
                 error_code="IDEMPOTENCY_KEY_INVALID",
             )
+        if payload.nutrition_contract_version is None and idempotency_key is not None:
+            try:
+                idempotency_key = normalize_idempotency_key(idempotency_key)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(exc),
+                ) from exc
+            if idempotency_key is not None:
+                legacy_fingerprint = manual_meal_fingerprint(payload)
+                try:
+                    existing = await begin_durable_write(
+                        user_id=user_id,
+                        action=MANUAL_MEAL_CREATE_ACTION,
+                        idempotency_key=idempotency_key,
+                        request_fingerprint=legacy_fingerprint,
+                    )
+                except DurableWriteConflictError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            "error_code": "IDEMPOTENCY_KEY_CONFLICT",
+                            "message": "Idempotency-Key reused with a different payload",
+                        },
+                    ) from exc
+                except DurableWriteInProgressError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            "error_code": "IDEMPOTENCY_KEY_IN_PROGRESS",
+                            "message": "Idempotency-Key is already being processed",
+                        },
+                    ) from exc
+                if existing is not None:
+                    return ManualMealCreationResponse.model_validate(
+                        existing.response_body
+                    )
+                legacy_claimed = True
         items = []
         for i in payload.items:
             custom_nutrition = None
@@ -137,6 +196,7 @@ async def create_manual_meal(
         )
         _t0 = time.perf_counter()
         meal = await event_bus.send(cmd)
+        legacy_meal_created = True
         _elapsed_ms = (time.perf_counter() - _t0) * 1000
         logger.info(
             "manual_save timing: user=%s total_handler_ms=%.1f",
@@ -153,7 +213,7 @@ async def create_manual_meal(
             user_id=user_id,
         )
 
-        return ManualMealCreationResponse(
+        response = ManualMealCreationResponse(
             meal_id=meal.meal_id,
             status="success",
             message=f"Meal '{payload.dish_name}' created successfully",
@@ -163,7 +223,33 @@ async def create_manual_meal(
                 target_language=get_request_language(request),
             ),
         )
+        if legacy_claimed and idempotency_key and legacy_fingerprint:
+            stored = await complete_durable_write(
+                user_id=user_id,
+                action=MANUAL_MEAL_CREATE_ACTION,
+                idempotency_key=idempotency_key,
+                request_fingerprint=legacy_fingerprint,
+                response_status_code=status.HTTP_200_OK,
+                response_body=response.model_dump(mode="json"),
+                resource_id=response.meal_id,
+            )
+            return ManualMealCreationResponse.model_validate(stored.response_body)
+        return response
+    except HTTPException:
+        raise
     except Exception as e:
+        if (
+            legacy_claimed
+            and not legacy_meal_created
+            and idempotency_key
+            and legacy_fingerprint
+        ):
+            await abandon_durable_write(
+                user_id=user_id,
+                action=MANUAL_MEAL_CREATE_ACTION,
+                idempotency_key=idempotency_key,
+                request_fingerprint=legacy_fingerprint,
+            )
         raise handle_exception(e) from e
 
 
@@ -190,6 +276,11 @@ def _validate_manual_contract_headers(
             message="X-App-Version and X-Platform are required for v2",
             error_code="NUTRITION_CONTRACT_HEADERS_REQUIRED",
         )
+
+
+def _unwrap_direct_header(value):
+    """Accept direct unit-test calls that bypass FastAPI dependency injection."""
+    return getattr(value, "default", value)
 
 
 def _manual_request_fingerprint(payload: CreateManualMealFromFoodsRequest) -> str:
