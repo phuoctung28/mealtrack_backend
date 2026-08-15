@@ -1,8 +1,9 @@
 """Capability discovery for durable writes."""
 
-import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from src.api.routes.v1.capabilities import durable_write_capabilities
 
