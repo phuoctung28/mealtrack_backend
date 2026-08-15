@@ -11,6 +11,7 @@ from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
 from src.domain.services.food_mapping_service import FoodMappingService
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
 )
@@ -29,9 +30,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         mapping_service: FoodMappingService,
         fat_secret_service: Any | None = None,
         translation_service: DeepLTextTranslationService | None = None,
-        local_search: Callable[
-            [str, str, int], Any
-        ] | None = None,
+        local_search: Callable[[str, str, int], Any] | None = None,
     ):
         self.cache_service = cache_service
         self.mapping_service = mapping_service
@@ -66,7 +65,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
             for item in processed_cached:
                 if "source" not in item:
                     item["source"] = "fatsecret"
-            mapped = [self.mapping_service.map_search_item(i) for i in processed_cached]
+            mapped = self._map_search_items(processed_cached)
             self._record_search_metrics(
                 started,
                 source="cache",
@@ -104,7 +103,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
                 except Exception:
                     logger.warning("fatsecret search failed", exc_info=True)
 
-        mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
+        mapped = self._map_search_items(processed_raw)
         self._record_search_metrics(
             started,
             source=self._source_label(local_count, len(processed_raw)),
@@ -116,6 +115,18 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
             ),
         )
         return {"results": mapped, "query": event.query, "total": len(mapped)}
+
+    def _map_search_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        mapped: list[dict[str, Any]] = []
+        for item in items:
+            try:
+                mapped.append(self.mapping_service.map_search_item(item))
+            except NutritionIntegrityError as exc:
+                logger.info(
+                    "food search item rejected by nutrition integrity policy: %s",
+                    exc.result.reason_code,
+                )
+        return mapped
 
     async def _search_localized(
         self,
@@ -142,7 +153,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
                 logger.debug(
                     f"fatsecret region={region} returned {len(results)} results"
                 )
-                merged = self._merge_search_results(local_raw, results, len(local_raw) + limit)
+                merged = self._merge_search_results(
+                    local_raw, results, len(local_raw) + limit
+                )
                 await self._cache_search(cache_key, merged)
                 return merged
         except Exception:
@@ -193,7 +206,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         await self._cache_search(cache_key, merged)
         return merged
 
-    async def _cache_search(self, cache_key: str, results: list[dict[str, Any]]) -> None:
+    async def _cache_search(
+        self, cache_key: str, results: list[dict[str, Any]]
+    ) -> None:
         try:
             await self.cache_service.cache_search(cache_key, results)
         except Exception:

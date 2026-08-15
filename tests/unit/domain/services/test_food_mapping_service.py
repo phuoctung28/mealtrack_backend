@@ -1,4 +1,7 @@
+import pytest
+
 from src.domain.services.food_mapping_service import FoodMappingService
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 
 
 def test_map_fdc_barcode_product_returns_flat_barcode_shape():
@@ -36,3 +39,20 @@ def test_map_fdc_barcode_product_returns_flat_barcode_shape():
         {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
         {"unit": "serving", "gram_weight": 30.0, "description": "1 serving (30 g)"},
     ]
+
+
+def test_map_search_item_rejects_catastrophic_provider_nutrition():
+    with pytest.raises(NutritionIntegrityError, match="macro_mass_out_of_range"):
+        FoodMappingService().map_search_item(
+            {
+                "source": "fatsecret",
+                "food_id": "potato-bad",
+                "description": "Potato",
+                "protein_100g": 100,
+                "carbs_100g": 100,
+                "fat_100g": 100,
+                "fiber_100g": 0,
+                "sugar_100g": 0,
+                "calories_100g": 1500,
+            }
+        )

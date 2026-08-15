@@ -87,6 +87,18 @@ Manual food search reads Redis cache when available, then searches verified
 translation failures degrade to bounded local results when possible. Local
 result calories are always derived from stored macros using the backend formula.
 
+### Nutrition Integrity Policy
+Structured nutrition crosses one versioned domain policy,
+`nutrition_integrity_v1`, before it is trusted by parse finalization, search
+output, provider mapping, catalog approval, or verified reference upsert. The
+policy rejects non-finite or out-of-range macros, impossible macro mass,
+out-of-range or mismatched energy, and invalid serving conversions. The
+canonical `g` conversion is exactly one gram; a provider's 100g basis is a
+labelled serving and never the base `g` unit. Search and editorial trust
+boundaries fail closed, while the best-effort reference validator reports a
+failure and returns the original nutrition unchanged. Logical source identity
+is normalized separately from semantic preparation matching.
+
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 

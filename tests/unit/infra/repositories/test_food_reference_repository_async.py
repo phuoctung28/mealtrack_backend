@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 from src.infra.repositories.food_reference_repository_async import (
     AsyncFoodReferenceRepository,
 )
@@ -167,6 +168,54 @@ async def test_search_local_deduplicates_by_normalized_name_after_ordering():
     result = await repo.search_local("rice", "US", 10)
 
     assert [item.id for item in result] == [7, 9]
+
+
+@pytest.mark.asyncio
+async def test_search_local_filters_catastrophic_rows_before_projection():
+    invalid = _food_row(verified=True, food_id=7, name="Potato")
+    invalid.protein_100g = 100.0
+    invalid.carbs_100g = 100.0
+    invalid.fat_100g = 100.0
+    valid = _food_row(verified=True, food_id=8, name="Potato, boiled")
+    session = _AsyncSession([_Result(rows=[invalid, valid])])
+    repo = AsyncFoodReferenceRepository(session)
+
+    result = await repo.search_local("potato", "US", 10)
+
+    assert [item.id for item in result] == [8]
+
+
+@pytest.mark.asyncio
+async def test_catalog_approval_rejects_invalid_reference_before_flag_write():
+    row = _food_row(verified=False)
+    row.protein_100g = 100.0
+    row.carbs_100g = 100.0
+    row.fat_100g = 100.0
+    session = _AsyncSession([_Result(one=row)])
+    repo = AsyncFoodReferenceRepository(session)
+
+    with pytest.raises(NutritionIntegrityError, match="macro_mass_out_of_range"):
+        await repo.approve_for_catalog_seed(7)
+
+    assert row.is_verified is False
+    session.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_verified_normalized_upsert_rejects_invalid_reference():
+    session = _AsyncSession([_Result(rows=[])])
+    repo = AsyncFoodReferenceRepository(session)
+
+    with pytest.raises(NutritionIntegrityError, match="macro_mass_out_of_range"):
+        await _upsert_default(
+            repo,
+            protein_100g=100,
+            carbs_100g=100,
+            fat_100g=100,
+            is_verified=True,
+        )
+
+    session.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio

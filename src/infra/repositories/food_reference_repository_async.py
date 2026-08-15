@@ -17,12 +17,14 @@ from src.domain.ports.food_reference_repository_port import (
 from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
     normalize_food_name,
 )
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityPolicy
 from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.repositories.food_reference_projection import (
     FOOD_REFERENCE_SEED_COLUMNS,
     build_food_reference_nutrient_rows,
     build_food_reference_serving_rows,
     food_reference_model_to_dict,
+    food_reference_model_to_integrity_data,
     food_reference_model_to_nutrition_projection,
 )
 
@@ -39,8 +41,13 @@ class AsyncFoodReferenceRepository:
 
     _SEED_COLUMNS = FOOD_REFERENCE_SEED_COLUMNS
 
-    def __init__(self, session: AsyncSession):
+    def __init__(
+        self,
+        session: AsyncSession,
+        integrity_policy: NutritionIntegrityPolicy | None = None,
+    ):
         self._session = session
+        self._integrity_policy = integrity_policy or NutritionIntegrityPolicy()
 
     async def get_by_barcode(self, barcode: str) -> dict[str, Any] | None:
         stmt = (
@@ -96,7 +103,12 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.id.asc(),
             )
         )
-        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+        return [
+            projection
+            for row in result.all()
+            if (projection := _catalog_seed_candidate_projection(row))
+            and _projection_is_integrity_valid(projection, self._integrity_policy)
+        ]
 
     async def find_catalog_seed_candidates_by_normalized_name(
         self,
@@ -121,7 +133,12 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc()
             )
         )
-        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+        return [
+            projection
+            for row in result.all()
+            if (projection := _catalog_seed_candidate_projection(row))
+            and _projection_is_integrity_valid(projection, self._integrity_policy)
+        ]
 
     async def approve_for_catalog_seed(
         self,
@@ -137,6 +154,11 @@ class AsyncFoodReferenceRepository:
         model = result.scalar_one_or_none()
         if model is None:
             return None
+        self._integrity_policy.require_valid(
+            food_reference_model_to_integrity_data(model),
+            require_energy=False,
+            require_metric_basis=False,
+        )
         model.is_verified = True
         await self._session.flush()
         return food_reference_model_to_nutrition_projection(model)
@@ -198,10 +220,20 @@ class AsyncFoodReferenceRepository:
             .limit(bounded_limit * 3)
         )
         result = await self._session.execute(stmt)
-        return _dedupe_search_projections(result.scalars().all(), bounded_limit)
+        return _dedupe_search_projections(
+            result.scalars().all(),
+            bounded_limit,
+            integrity_policy=self._integrity_policy,
+        )
 
     async def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update a food reference by barcode without owning commit."""
+        if data.get("is_verified", False):
+            self._integrity_policy.require_valid(
+                data,
+                require_energy=False,
+                require_metric_basis=False,
+            )
         if data.get("barcode") and not data.get("is_verified", False):
             existing = await self._find_model_by_barcode(data["barcode"])
             if existing is not None and existing.is_verified:
@@ -256,6 +288,12 @@ class AsyncFoodReferenceRepository:
         ).strip()
         if not name_normalized:
             raise ValueError("seed food requires a normalized name")
+        if data.get("is_verified", False):
+            self._integrity_policy.require_valid(
+                data,
+                require_energy=False,
+                require_metric_basis=False,
+            )
 
         values = {
             "name": name,
@@ -340,6 +378,18 @@ class AsyncFoodReferenceRepository:
         existing = await self._find_model_by_normalized_name(name_normalized)
         if existing is not None and existing.is_verified and not is_verified:
             return food_reference_model_to_dict(existing)
+        if is_verified:
+            self._integrity_policy.require_valid(
+                {
+                    "protein_100g": protein_100g,
+                    "carbs_100g": carbs_100g,
+                    "fat_100g": fat_100g,
+                    "fiber_100g": fiber_100g,
+                    "sugar_100g": sugar_100g,
+                },
+                require_energy=False,
+                require_metric_basis=False,
+            )
 
         values = {
             "name": name,
@@ -434,6 +484,23 @@ def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjec
     )
 
 
+def _projection_is_integrity_valid(
+    projection: FoodReferenceNutritionProjection,
+    policy: NutritionIntegrityPolicy,
+) -> bool:
+    return policy.evaluate(
+        {
+            "protein_100g": projection.protein_100g,
+            "carbs_100g": projection.carbs_100g,
+            "fat_100g": projection.fat_100g,
+            "fiber_100g": projection.fiber_100g,
+            "sugar_100g": projection.sugar_100g,
+        },
+        require_energy=False,
+        require_metric_basis=False,
+    ).accepted
+
+
 def _truncate_category(value: Any) -> str | None:
     if value is None:
         return None
@@ -444,10 +511,21 @@ def _truncate_category(value: Any) -> str | None:
 def _dedupe_search_projections(
     models: list[FoodReferenceModel],
     limit: int,
+    *,
+    integrity_policy: NutritionIntegrityPolicy | None = None,
 ) -> list[FoodReferenceSearchProjection]:
     seen: set[str] = set()
     projections: list[FoodReferenceSearchProjection] = []
     for model in models:
+        if (
+            integrity_policy is not None
+            and not integrity_policy.evaluate(
+                food_reference_model_to_integrity_data(model),
+                require_energy=False,
+                require_metric_basis=False,
+            ).accepted
+        ):
+            continue
         normalized_name = model.name_normalized or normalize_food_name(model.name)
         if normalized_name in seen:
             continue

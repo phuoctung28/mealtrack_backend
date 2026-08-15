@@ -6,6 +6,7 @@ from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
     FoodReferenceServingProjection,
 )
+from src.domain.services.nutrition_integrity_policy import normalize_serving_options
 from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.database.models.food_reference_nutrient import FoodReferenceNutrientModel
 from src.infra.database.models.food_reference_serving_size import (
@@ -59,6 +60,19 @@ def food_reference_model_to_dict(model: FoodReferenceModel) -> dict[str, Any]:
         "source": model.source,
         "is_verified": model.is_verified,
         "image_url": model.image_url,
+    }
+
+
+def food_reference_model_to_integrity_data(model: FoodReferenceModel) -> dict[str, Any]:
+    """Return raw reference fields for a fail-closed integrity decision."""
+    return {
+        "protein_100g": model.protein_100g,
+        "carbs_100g": model.carbs_100g,
+        "fat_100g": model.fat_100g,
+        "fiber_100g": model.fiber_100g,
+        "sugar_100g": model.sugar_100g,
+        "allowed_units": _raw_allowed_units(model),
+        "source": model.source,
     }
 
 
@@ -183,7 +197,9 @@ def _serving_sizes_for_projection(model: FoodReferenceModel) -> list[dict[str, A
         servings.append(
             {
                 "name": name,
-                "grams": as_optional_float(item.get("grams") or item.get("gram_weight")),
+                "grams": as_optional_float(
+                    item.get("grams") or item.get("gram_weight")
+                ),
                 "milliliters": as_optional_float(
                     item.get("milliliters") or item.get("ml")
                 ),
@@ -209,9 +225,7 @@ def food_reference_allowed_units_to_dict(
         ]
     else:
         units = _legacy_serving_sizes_to_allowed_units(model.serving_sizes)
-    if not any(unit["unit"].lower() == "g" for unit in units):
-        units.insert(0, {"unit": "g", "gram_weight": 1.0, "description": "1 g"})
-    return units
+    return normalize_serving_options(units) or []
 
 
 def _legacy_serving_sizes_to_allowed_units(raw: Any) -> list[dict[str, Any]]:
@@ -234,6 +248,20 @@ def _legacy_serving_sizes_to_allowed_units(raw: Any) -> list[dict[str, Any]]:
                 }
             )
     return units
+
+
+def _raw_allowed_units(model: FoodReferenceModel) -> list[dict[str, Any]]:
+    rows = getattr(model, "serving_size_rows", None)
+    if rows:
+        return [
+            {
+                "unit": row.name,
+                "gram_weight": row.grams,
+                "description": row.name,
+            }
+            for row in rows
+        ]
+    return _legacy_serving_sizes_to_allowed_units(model.serving_sizes)
 
 
 def food_reference_nutrients_to_dict(model: FoodReferenceModel) -> Any:

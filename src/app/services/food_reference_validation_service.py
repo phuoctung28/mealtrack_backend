@@ -9,11 +9,10 @@ from src.domain.model.meal import Meal
 from src.domain.ports.nutrition_reference_provider_port import (
     NutritionReferenceProviderPort,
 )
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityPolicy
 
 FoodReferenceLookup = Callable[[str], Awaitable[dict[str, Any] | None]]
-FoodReferenceBatchLookup = Callable[
-    [list[str]], Awaitable[dict[str, dict[str, Any]]]
-]
+FoodReferenceBatchLookup = Callable[[list[str]], Awaitable[dict[str, dict[str, Any]]]]
 MACRO_DIVERGENCE_TOLERANCE = 0.35
 
 
@@ -28,12 +27,14 @@ class FoodReferenceValidationService:
         food_reference_batch_lookup: FoodReferenceBatchLookup | None = None,
         nutrition_reference_provider: NutritionReferenceProviderPort | None = None,
         timeout_seconds: float = 5.0,
+        integrity_policy: NutritionIntegrityPolicy | None = None,
     ):
         self._food_reference_repository = food_reference_repository
         self._food_reference_lookup = food_reference_lookup
         self._food_reference_batch_lookup = food_reference_batch_lookup
         self._nutrition_reference_provider = nutrition_reference_provider
         self._timeout_seconds = timeout_seconds
+        self._integrity_policy = integrity_policy or NutritionIntegrityPolicy()
 
     async def validate_meal(self, meal: Meal) -> Meal:
         """Best-effort validation that never blocks a valid meal from returning."""
@@ -71,9 +72,11 @@ class FoodReferenceValidationService:
             if self._nutrition_reference_provider is None:
                 continue
 
-            candidates = await self._nutrition_reference_provider.search_food_candidates(
-                item.name,
-                max_results=3,
+            candidates = (
+                await self._nutrition_reference_provider.search_food_candidates(
+                    item.name,
+                    max_results=3,
+                )
             )
             selected = self._select_candidate(candidates, item.name)
             if selected and selected.get("food_id"):
@@ -118,9 +121,8 @@ class FoodReferenceValidationService:
         unique_names = sorted(set(normalized_names))
         if self._food_reference_batch_lookup is not None:
             return await self._food_reference_batch_lookup(unique_names)
-        if (
-            self._food_reference_repository is not None
-            and hasattr(self._food_reference_repository, "find_batch_by_normalized_names")
+        if self._food_reference_repository is not None and hasattr(
+            self._food_reference_repository, "find_batch_by_normalized_names"
         ):
             return await self._food_reference_repository.find_batch_by_normalized_names(
                 unique_names
@@ -134,12 +136,20 @@ class FoodReferenceValidationService:
         return references
 
     def _apply_reference_if_close(self, item: Any, reference: dict[str, Any]) -> bool:
+        source = str(reference.get("source") or "").lower()
+        integrity = self._integrity_policy.evaluate(
+            reference,
+            require_energy=False,
+            require_metric_basis=False,
+            provider_100g_label=source in {"fatsecret", "openfoodfacts", "provider"},
+        )
+        if not integrity.accepted:
+            return False
         if not self._is_macro_close(item, reference):
             return False
 
-        allowed_units = reference.get("allowed_units") or reference.get("serving_sizes")
-        if allowed_units:
-            item.allowed_units = allowed_units
+        if integrity.serving_options:
+            item.allowed_units = list(integrity.serving_options)
         return True
 
     def _is_macro_close(self, item: Any, reference: dict[str, Any]) -> bool:
@@ -159,7 +169,10 @@ class FoodReferenceValidationService:
             item_per_100g = (float(total_value) / quantity) * 100
             reference_value = float(reference_per_100g)
             denominator = max(reference_value, 1.0)
-            if abs(item_per_100g - reference_value) / denominator > MACRO_DIVERGENCE_TOLERANCE:
+            if (
+                abs(item_per_100g - reference_value) / denominator
+                > MACRO_DIVERGENCE_TOLERANCE
+            ):
                 return False
         return True
 

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.domain.model.nutrition import MAX_FOOD_ITEM_QUANTITY, Macros
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityPolicy
 
 
 @dataclass(frozen=True)
@@ -172,57 +173,29 @@ def validate_reference_candidate(
     require_metric_basis: bool = True,
 ) -> NutritionCandidate | None:
     """Validate structured per-100g data before it can replace AI estimates."""
-    values: dict[str, float] = {}
-    for field in ("protein_100g", "carbs_100g", "fat_100g"):
-        raw = data.get(field)
-        if raw is None:
-            return None
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if not math.isfinite(value) or value < 0:
-            return None
-        values[field] = value
-
-    fiber = _optional_nonnegative(data.get("fiber_100g", data.get("fiber")))
-    sugar = _optional_nonnegative(data.get("sugar_100g", data.get("sugar")))
-    if fiber is None or sugar is None or sum(values.values()) > 110.0:
-        return None
-
-    raw_energy = data.get("calories_100g", data.get("calories"))
-    energy = None if raw_energy is None else _optional_nonnegative(raw_energy)
-    if require_energy and energy is None:
-        return None
-    derived = Macros.raw_total_calories(
-        values["protein_100g"], values["carbs_100g"], values["fat_100g"], fiber
+    source = str(data.get("source") or "fatsecret").lower()
+    result = NutritionIntegrityPolicy().evaluate(
+        data,
+        require_energy=require_energy,
+        require_metric_basis=require_metric_basis,
+        provider_100g_label=source in {"fatsecret", "openfoodfacts", "provider"},
     )
-    if energy is not None and abs(energy - derived) > max(20.0, derived * 0.2):
-        return None
-
-    basis = data.get("metric_serving_amount", data.get("metric_basis_g"))
-    if basis is None and require_metric_basis:
-        return None
-    basis = 100.0 if basis is None else basis
-    try:
-        if not math.isfinite(float(basis)) or float(basis) <= 0:
-            return None
-    except (TypeError, ValueError):
+    if not result.accepted:
         return None
 
     return NutritionCandidate(
         name=str(
             data.get("food_name") or data.get("description") or data.get("name") or ""
         ),
-        protein_per_100g=values["protein_100g"],
-        carbs_per_100g=values["carbs_100g"],
-        fat_per_100g=values["fat_100g"],
-        fiber_per_100g=fiber,
-        sugar_per_100g=sugar,
-        source=str(data.get("source") or "fatsecret"),
-        calories_per_100g=energy,
+        protein_per_100g=result.protein_100g or 0.0,
+        carbs_per_100g=result.carbs_100g or 0.0,
+        fat_per_100g=result.fat_100g or 0.0,
+        fiber_per_100g=result.fiber_100g or 0.0,
+        sugar_per_100g=result.sugar_100g or 0.0,
+        source=source,
+        calories_per_100g=result.calories_100g,
         food_id=str(data["food_id"]) if data.get("food_id") is not None else None,
-        allowed_units=data.get("allowed_units"),
+        allowed_units=list(result.serving_options),
     )
 
 
