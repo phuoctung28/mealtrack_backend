@@ -208,6 +208,7 @@ class AsyncFoodReferenceRepository:
         base_stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized.isnot(None))
+            .where(FoodReferenceModel.is_verified.is_(True))
             .where(FoodReferenceModel.region.in_([region, "global"]))
             .where(
                 or_(
@@ -248,6 +249,13 @@ class AsyncFoodReferenceRepository:
 
     async def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update a food reference by barcode without owning commit."""
+        source_namespace, source_food_id = _source_identity_from_data(data)
+        if source_namespace and source_food_id:
+            await self._ensure_source_identity_collision_safe(
+                normalize_food_name(str(data.get("name") or "")),
+                source_namespace,
+                source_food_id,
+            )
         if data.get("is_verified", False):
             self._integrity_policy.require_valid(
                 data,
@@ -284,6 +292,9 @@ class AsyncFoodReferenceRepository:
         }
         stmt = pg_insert(FoodReferenceModel).values(**values)
         update_fields = {k: v for k, v in values.items() if k != "barcode"}
+        if values["source_namespace"] is None or values["source_food_id"] is None:
+            update_fields.pop("source_namespace", None)
+            update_fields.pop("source_food_id", None)
         if not values["is_verified"]:
             update_fields.pop("is_verified", None)
         on_conflict_kwargs: dict[str, Any] = {
@@ -310,6 +321,11 @@ class AsyncFoodReferenceRepository:
         ).strip()
         if not name_normalized:
             raise ValueError("seed food requires a normalized name")
+        source_namespace, source_food_id = _source_identity_from_data(data)
+        if source_namespace and source_food_id:
+            await self._ensure_source_identity_collision_safe(
+                name_normalized, source_namespace, source_food_id
+            )
         if data.get("is_verified", False):
             self._integrity_policy.require_valid(
                 data,
@@ -342,6 +358,9 @@ class AsyncFoodReferenceRepository:
         update_fields = {
             key: value for key, value in values.items() if key != "name_normalized"
         }
+        if values["source_namespace"] is None or values["source_food_id"] is None:
+            update_fields.pop("source_namespace", None)
+            update_fields.pop("source_food_id", None)
         stmt = pg_insert(FoodReferenceModel).values(**values)
         on_conflict_kwargs: dict[str, Any] = {
             "index_elements": ["name_normalized"],
@@ -449,7 +468,18 @@ class AsyncFoodReferenceRepository:
             "source_namespace": identity_namespace if identity_id else None,
             "source_food_id": identity_id,
         }
-        update_fields = {k: v for k, v in values.items() if k != "name_normalized"}
+        update_fields = {
+            k: v
+            for k, v in values.items()
+            if k not in {"name_normalized", "source_namespace", "source_food_id"}
+        }
+        if identity_id:
+            update_fields.update(
+                {
+                    "source_namespace": identity_namespace,
+                    "source_food_id": identity_id,
+                }
+            )
         stmt = pg_insert(FoodReferenceModel).values(**values)
         on_conflict_kwargs: dict[str, Any] = {
             "index_elements": ["name_normalized"],
@@ -485,6 +515,25 @@ class AsyncFoodReferenceRepository:
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         return result.scalars().first()
+
+    async def _ensure_source_identity_collision_safe(
+        self,
+        name_normalized: str,
+        source_namespace: str,
+        source_food_id: str,
+    ) -> None:
+        existing = await self._find_model_by_source_identity(
+            source_namespace, source_food_id
+        )
+        name_match = await self._find_model_by_normalized_name(name_normalized)
+        if existing is not None and name_match is None:
+            raise ValueError("source identity/name collision requires review")
+        if existing is not None and name_match is not None and name_match.id != existing.id:
+            raise ValueError("source identity/name collision requires review")
+        if name_match is not None and _identity_conflicts(
+            name_match, source_namespace, source_food_id
+        ):
+            raise ValueError("source identity/name collision requires review")
 
     async def _find_model_by_barcode(self, barcode: str) -> FoodReferenceModel | None:
         result = await self._session.execute(
@@ -581,6 +630,8 @@ def _dedupe_search_projections(
     seen = seen if seen is not None else set()
     projections: list[FoodReferenceSearchProjection] = []
     for model in models:
+        if not model.is_verified:
+            continue
         if (
             integrity_policy is not None
             and not integrity_policy.evaluate(
@@ -634,6 +685,20 @@ def _source_namespace(source: str | None) -> str | None:
     if normalized in {"usda", "usda_fdc", "fooddata_central"}:
         return "usda_fdc"
     return None
+
+
+def _source_identity_from_data(data: dict[str, Any]) -> tuple[str | None, str | None]:
+    namespace = data.get("source_namespace")
+    source_id = data.get("source_food_id")
+    if namespace is None and source_id is None:
+        return None, None
+    if namespace is None or source_id is None:
+        raise ValueError("source identity requires namespace and id")
+    normalized_namespace = str(namespace).strip().lower()
+    normalized_id = str(source_id).strip()
+    if not normalized_namespace or not normalized_id:
+        raise ValueError("source identity requires namespace and id")
+    return normalized_namespace, normalized_id
 
 
 def _identity_conflicts(

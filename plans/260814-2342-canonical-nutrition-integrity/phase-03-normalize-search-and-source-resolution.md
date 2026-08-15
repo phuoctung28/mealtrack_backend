@@ -86,7 +86,9 @@ Create:
 - Added `food_reference.source_namespace` and `food_reference.source_food_id` with a partial unique identity index; repository upserts check source identity before normalized-name conflict and leave legacy rows nullable.
 - Local search applies the shared integrity policy before namespace-aware dedupe and limit, continuing candidate batches until valid results fill the limit or candidates are exhausted; cache keys include both the response schema and active integrity-policy version.
 - Provider parse results without a durable opaque source ID now degrade to the AI path instead of claiming provider authority; source-identity renames remain review collisions.
-- Focused Phase 3 and compatibility verification: `71 passed` across identity, search, repository, adapter, parse, and food API tests; filtered unit gate: `2327 passed, 1 deselected`, coverage `79.55%`; offline evaluator: `10` synthetic cases passed.
+- Local search and mapping now require `is_verified=true`; normalized provider serving output converts a provider-labelled `100 g` entry into `g=1` plus a labelled serving; generic upserts preserve existing source identity and reject source/name collisions.
+- Focused Phase 3 and compatibility verification: `100 passed` across identity, mapping, search, repository, adapter, parse, and food API tests; filtered unit gate: `2332 passed`, coverage `79.51%`; offline evaluator: `10` synthetic cases passed.
+- Phase 3 review follow-up regression set: `100 passed`; compileall and Ruff passed.
 - Full unit gate still has one unrelated failure in `tests/unit/cron/test_push_cron.py::test_push_cron_phase_failure_does_not_abort_subsequent_phases` caused by local onboarding claim-promotion WIP; no Phase 3 test fails.
 
 ## Risks, Security, And Rollout Gate

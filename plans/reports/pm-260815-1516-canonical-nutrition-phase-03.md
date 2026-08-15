@@ -30,9 +30,10 @@ Phase 3 is complete in the current checkout. Search, parse, repository, and manu
 ## Verification Evidence
 
 - Focused Phase 3 suite: `64 passed`
-- Filtered unit gate: `2330 passed`, coverage `79.55%`
+- Filtered unit gate: `2332 passed`, coverage `79.51%`
 - Offline evaluator: `10` synthetic cases passed
 - Closeout follow-up: search fetches candidate batches until the valid limit is filled or candidates are exhausted; provider results without durable IDs degrade instead of claiming provider authority; cache keys include `nutrition_integrity_v1`.
+- Review follow-up: verified-only local results, normalized provider serving labels, and source-identity preservation/collision checks across generic upserts; regression set `100 passed`.
 - Phase 3 plan already records the same completion status and evidence in `plans/260814-2342-canonical-nutrition-integrity/phase-03-normalize-search-and-source-resolution.md`
 
 ## Unrelated WIP Failure

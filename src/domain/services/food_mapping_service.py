@@ -80,6 +80,10 @@ class FoodMappingService(FoodMappingServicePort):
 
     def map_search_item(self, item: dict[str, Any]) -> dict[str, Any]:
         if item.get("source") == "food_reference":
+            if item.get("is_verified") is not True:
+                raise NutritionIntegrityError(
+                    self._integrity_policy.rejection("unverified_reference")
+                )
             food_reference_id = item.get("food_reference_id")
             expected_alias = f"food_reference:{food_reference_id}"
             supplied_alias = item.get("food_id")

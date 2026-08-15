@@ -88,6 +88,7 @@ class TestCalorieFormulaParityDirectCall:
         item = {
             "source": "food_reference",
             "food_reference_id": "fr-1",
+            "is_verified": True,
             "protein_100g": protein,
             "carbs_100g": carbs,
             "fat_100g": fat,

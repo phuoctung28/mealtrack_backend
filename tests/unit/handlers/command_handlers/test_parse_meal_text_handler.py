@@ -270,7 +270,8 @@ async def test_parse_text_preserves_fatsecret_allowed_units(monkeypatch):
 
     assert item.data_source == "fatsecret"
     assert item.allowed_units == [
-        {"unit": "g", "gram_weight": 100.0, "description": "100 g"},
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {"unit": "serving", "gram_weight": 100.0, "description": "100 g"},
         {
             "unit": "cup, cooked, diced",
             "gram_weight": 135.0,

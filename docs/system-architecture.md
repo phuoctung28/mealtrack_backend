@@ -103,9 +103,10 @@ with `food_reference:<id>` retained only as a matching local alias. Provider
 identity is persisted as nullable `source_namespace` and `source_food_id`; a
 partial unique identity index prevents duplicate source rows while leaving
 legacy rows explicitly unknown. Local search filters through this policy before
-dedupe and limit, continuing candidate batches until the valid-result limit is
-filled or candidates are exhausted. Versioned cache keys include the active
-policy version to prevent stale serving contracts.
+dedupe and limit, requiring verified references and continuing candidate batches
+until the valid-result limit is filled or candidates are exhausted. Provider
+serving labels are normalized through the same policy. Versioned cache keys
+include the active policy version to prevent stale serving contracts.
 
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.

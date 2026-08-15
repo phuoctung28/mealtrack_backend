@@ -56,3 +56,20 @@ def test_map_search_item_rejects_catastrophic_provider_nutrition():
                 "calories_100g": 1500,
             }
         )
+
+
+def test_map_search_item_rejects_unverified_local_reference():
+    with pytest.raises(NutritionIntegrityError, match="unverified_reference"):
+        FoodMappingService().map_search_item(
+            {
+                "source": "food_reference",
+                "food_reference_id": 7,
+                "is_verified": False,
+                "description": "Rice",
+                "protein_100g": 2.7,
+                "carbs_100g": 28.0,
+                "fat_100g": 0.3,
+                "fiber_100g": 0.4,
+                "sugar_100g": 0.1,
+            }
+        )

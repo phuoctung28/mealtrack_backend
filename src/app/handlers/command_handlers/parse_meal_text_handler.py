@@ -35,6 +35,7 @@ from src.domain.services.nutrition_calculation_service import (
 )
 from src.domain.services.nutrition_integrity_policy import (
     NUTRITION_INTEGRITY_POLICY_VERSION,
+    normalize_serving_options,
 )
 from src.domain.services.nutrition_resolver import (
     normalize_food_lookup_name,
@@ -755,7 +756,7 @@ class ParseMealTextHandler(
                     "description": description,
                 }
             )
-        return units
+        return normalize_serving_options(units, provider_100g_label=True) or []
 
     @staticmethod
     def _is_english(name: str) -> bool:

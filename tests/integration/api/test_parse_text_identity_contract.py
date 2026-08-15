@@ -24,6 +24,7 @@ def test_local_search_result_emits_one_canonical_origin_and_alias():
         {
             "source": "food_reference",
             "food_reference_id": 42,
+            "is_verified": True,
             "description": "Rice",
             "protein_100g": 2.7,
             "carbs_100g": 28.0,
@@ -47,6 +48,7 @@ def test_mismatching_local_alias_is_rejected():
     item = {
         "source": "food_reference",
         "food_reference_id": 42,
+        "is_verified": True,
         "food_id": "food_reference:99",
         "description": "Rice",
         "protein_100g": 2.7,

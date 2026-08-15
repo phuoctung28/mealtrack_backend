@@ -77,6 +77,18 @@ def test_projection_preserves_source_identity_and_filters_before_limit():
     assert result[0].source_food_id == "good"
 
 
+def test_unverified_local_projection_is_excluded_before_limit():
+    unverified = _row(1, source_namespace="food_reference", source_food_id="1")
+    unverified.is_verified = False
+    valid = _row(2, source_namespace="food_reference", source_food_id="2")
+
+    result = _dedupe_search_projections(
+        [unverified, valid], 1, integrity_policy=NutritionIntegrityPolicy()
+    )
+
+    assert [item.id for item in result] == [2]
+
+
 def test_model_dictionary_round_trips_legacy_unknown_and_provider_identity():
     row = _row(7, source_namespace="fatsecret", source_food_id="fs-7")
     projected = food_reference_model_to_dict(row)

@@ -19,8 +19,9 @@ This was overdue cleanup of a broken trust boundary. The system had been losing 
 - `food_reference.source_namespace` and `food_reference.source_food_id` round-trip through the repository and dedupe independently of display name.
 - Local search applies `nutrition_integrity_v1` before final dedupe/limit, continuing candidate batches until valid results fill the limit or candidates are exhausted so invalid high-ranked rows do not crowd out valid ones.
 - Provider results without an opaque source ID degrade to the AI path instead of claiming provider authority; source-identity renames remain explicit review collisions.
+- Local search and mapping require verified references; provider `100 g` labels normalize to `g=1` plus a labelled serving; generic upserts preserve existing source identity and reject source/name collisions.
 - Search cache keys include both the response schema version and `nutrition_integrity_v1`.
-- Validation evidence: `64 passed` focused Phase 3 tests, `2330 passed` in the filtered unit gate, coverage `79.55%`, and `10/10` offline synthetic evaluator cases passed.
+- Validation evidence: `100 passed` in the review follow-up regression set, `2332 passed` in the filtered unit gate, coverage `79.51%`, and `10/10` offline synthetic evaluator cases passed.
 
 ## What We Tried
 
