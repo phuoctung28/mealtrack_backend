@@ -180,3 +180,34 @@ def test_recovery_stamp_rejects_schema_missing_model_columns(monkeypatch) -> Non
             FakeInspector({"meal_recommendations": {"id"}}),
             metadata,
         )
+
+
+def test_bootstrap_seeds_integrity_control_row_idempotently(monkeypatch) -> None:
+    init_postgres_db = load_init_postgres_db(monkeypatch)
+    engine = sa.create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                """
+                CREATE TABLE food_reference_integrity_control (
+                    id INTEGER PRIMARY KEY,
+                    active_policy_version VARCHAR(64) NOT NULL,
+                    catalog_integrity_generation BIGINT NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        init_postgres_db.ensure_integrity_control_row(connection)
+        init_postgres_db.ensure_integrity_control_row(connection)
+        row = connection.execute(
+            sa.text(
+                """
+                SELECT id, active_policy_version, catalog_integrity_generation
+                FROM food_reference_integrity_control
+                """
+            )
+        ).one()
+
+    assert row == (1, "nutrition_integrity_v1", 0)
