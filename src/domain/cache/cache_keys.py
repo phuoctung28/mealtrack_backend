@@ -95,10 +95,21 @@ class CacheKeys:
         )
 
     @staticmethod
-    def food_search(query: str) -> tuple[str, int]:
+    def food_search(
+        query: str,
+        *,
+        policy_version: str | None = None,
+        generation: int | None = None,
+    ) -> tuple[str, int]:
         normalized = query.lower().strip()[:64]
+        policy = policy_version or NUTRITION_INTEGRITY_POLICY_VERSION
+        if generation is None:
+            return (
+                f"food:search:v2:{policy}:{normalized}",
+                CacheKeys.TTL_7_DAYS,
+            )
         return (
-            f"food:search:v2:{NUTRITION_INTEGRITY_POLICY_VERSION}:{normalized}",
+            f"food:search:v3:{policy}:generation:{generation}:{normalized}",
             CacheKeys.TTL_7_DAYS,
         )
 

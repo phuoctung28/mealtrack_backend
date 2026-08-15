@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class FoodCacheServicePort(ABC):
@@ -11,7 +11,13 @@ class FoodCacheServicePort(ABC):
     """
 
     @abstractmethod
-    async def get_cached_search(self, query: str) -> Optional[List[Dict[str, Any]]]:
+    async def get_cached_search(
+        self,
+        query: str,
+        *,
+        policy_version: str | None = None,
+        generation: int | None = None,
+    ) -> list[dict[str, Any]] | None:
         """
         Retrieve cached search results for the given query if available and valid.
 
@@ -25,7 +31,13 @@ class FoodCacheServicePort(ABC):
 
     @abstractmethod
     async def cache_search(
-        self, query: str, results: List[Dict[str, Any]], ttl: int = 3600
+        self,
+        query: str,
+        results: list[dict[str, Any]],
+        ttl: int = 3600,
+        *,
+        policy_version: str | None = None,
+        generation: int | None = None,
     ):
         """
         Store search results for a given query with a time-to-live.
@@ -38,7 +50,7 @@ class FoodCacheServicePort(ABC):
         pass
 
     @abstractmethod
-    async def get_cached_food(self, fdc_id: int) -> Optional[Dict[str, Any]]:
+    async def get_cached_food(self, fdc_id: int) -> dict[str, Any] | None:
         """
         Retrieve cached food details by provider ID if available and valid.
 
@@ -52,7 +64,7 @@ class FoodCacheServicePort(ABC):
 
     @abstractmethod
     async def cache_food(
-        self, fdc_id: int, food_data: Dict[str, Any], ttl: int = 86400
+        self, fdc_id: int, food_data: dict[str, Any], ttl: int = 86400
     ):
         """
         Store food details payload for a given ID with a time-to-live.

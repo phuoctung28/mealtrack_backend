@@ -37,7 +37,6 @@ from .meal.food_item_translation_model import FoodItemTranslationORM
 from .meal.meal import MealORM
 from .meal.meal_image import MealImageORM
 from .meal.meal_instruction_step import MealInstructionStepORM
-from .meal_write_operation import MealWriteOperationORM
 
 # Translation models (meals + food items)
 from .meal.meal_translation_model import MealTranslationORM
@@ -48,6 +47,7 @@ from .meal_recommendation import (
     MealRecommendationOperationORM,
     MealRecommendationORM,
 )
+from .meal_write_operation import MealWriteOperationORM
 
 # Notification models
 from .notification import NotificationORM, NotificationPreferencesORM, UserFcmTokenORM
@@ -55,6 +55,10 @@ from .nutrition.food_item import FoodItemORM
 
 # Nutrition models
 from .nutrition.nutrition import NutritionORM
+from .nutrition_integrity import (
+    FoodReferenceIntegrityControlModel,
+    FoodReferenceIntegrityEventModel,
+)
 from .pending_meal_image_resolution import PendingMealImageResolutionModel
 
 # Saved suggestions
@@ -80,6 +84,9 @@ BarcodeProductModel = FoodReferenceModel
 from .affiliate_event_outbox import AffiliateEventOutbox
 from .ai_handshake_guest_trial_quota import AiHandshakeGuestTrialQuota
 
+# Durable mutation replay
+from .durable_write_record import DurableWriteRecordORM
+
 # Referral system
 # Email log
 from .email_log import EmailLog
@@ -100,9 +107,6 @@ from .web_funnel_claim import (
 
 # Weight tracking
 from .weight_entry import WeightEntryORM
-
-# Durable mutation replay
-from .durable_write_record import DurableWriteRecordORM
 
 __all__ = [
     # Base
@@ -154,6 +158,8 @@ __all__ = [
     "FoodReferenceModel",
     "FoodReferenceNutrientModel",
     "FoodReferenceServingSizeModel",
+    "FoodReferenceIntegrityControlModel",
+    "FoodReferenceIntegrityEventModel",
     "BarcodeProductModel",  # backward-compatible alias
     "HydrationEntryORM",
     "MealImageCacheModel",

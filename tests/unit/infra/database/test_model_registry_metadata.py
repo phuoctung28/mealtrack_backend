@@ -20,6 +20,8 @@ def test_model_registry_imports_expected_tables() -> None:
         "food_reference",
         "food_reference_serving_sizes",
         "food_reference_nutrients",
+        "food_reference_integrity_control",
+        "food_reference_integrity_events",
         "hydration_entries",
         "meal_instruction_steps",
         "meal_image_cache",
