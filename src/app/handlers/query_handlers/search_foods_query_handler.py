@@ -11,6 +11,7 @@ from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
 from src.domain.services.food_mapping_service import FoodMappingService
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
 )
@@ -29,9 +30,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         mapping_service: FoodMappingService,
         fat_secret_service: Any | None = None,
         translation_service: DeepLTextTranslationService | None = None,
-        local_search: Callable[
-            [str, str, int], Any
-        ] | None = None,
+        local_search: Callable[[str, str, int], Any] | None = None,
     ):
         self.cache_service = cache_service
         self.mapping_service = mapping_service
@@ -66,7 +65,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
             for item in processed_cached:
                 if "source" not in item:
                     item["source"] = "fatsecret"
-            mapped = [self.mapping_service.map_search_item(i) for i in processed_cached]
+            mapped = self._map_search_items(processed_cached)
             self._record_search_metrics(
                 started,
                 source="cache",
@@ -104,7 +103,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
                 except Exception:
                     logger.warning("fatsecret search failed", exc_info=True)
 
-        mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
+        mapped = self._map_search_items(processed_raw)
         self._record_search_metrics(
             started,
             source=self._source_label(local_count, len(processed_raw)),
@@ -116,6 +115,18 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
             ),
         )
         return {"results": mapped, "query": event.query, "total": len(mapped)}
+
+    def _map_search_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        mapped: list[dict[str, Any]] = []
+        for item in items:
+            try:
+                mapped.append(self.mapping_service.map_search_item(item))
+            except NutritionIntegrityError as exc:
+                logger.info(
+                    "food search item rejected by nutrition integrity policy: %s",
+                    exc.result.reason_code,
+                )
+        return mapped
 
     async def _search_localized(
         self,
@@ -142,7 +153,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
                 logger.debug(
                     f"fatsecret region={region} returned {len(results)} results"
                 )
-                merged = self._merge_search_results(local_raw, results, len(local_raw) + limit)
+                merged = self._merge_search_results(
+                    local_raw, results, len(local_raw) + limit
+                )
                 await self._cache_search(cache_key, merged)
                 return merged
         except Exception:
@@ -193,7 +206,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         await self._cache_search(cache_key, merged)
         return merged
 
-    async def _cache_search(self, cache_key: str, results: list[dict[str, Any]]) -> None:
+    async def _cache_search(
+        self, cache_key: str, results: list[dict[str, Any]]
+    ) -> None:
         try:
             await self.cache_service.cache_search(cache_key, results)
         except Exception:
@@ -220,6 +235,10 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         return {
             "source": "food_reference",
             "food_reference_id": item.id,
+            "origin": "local",
+            "source_namespace": item.source_namespace or "food_reference",
+            "source_food_id": item.source_food_id or str(item.id),
+            "food_id": f"food_reference:{item.id}",
             "description": item.name,
             "name_normalized": item.name_normalized,
             "brand": item.brand,
@@ -242,8 +261,22 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
     ) -> list[dict[str, Any]]:
         merged = list(local_raw)
         seen = {self._search_result_key(item) for item in merged}
+        local_names = {
+            str(item.get("name_normalized") or item.get("description") or "")
+            .strip()
+            .lower()
+            for item in local_raw
+        }
         for item in provider_raw:
             item.setdefault("source", "fatsecret")
+            if not item.get("source_food_id") and not item.get("food_id"):
+                provider_name = (
+                    str(item.get("name_normalized") or item.get("description") or "")
+                    .strip()
+                    .lower()
+                )
+                if provider_name in local_names:
+                    continue
             key = self._search_result_key(item)
             if key in seen:
                 continue
@@ -254,6 +287,18 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         return merged[:limit]
 
     def _search_result_key(self, item: dict[str, Any]) -> str:
+        namespace = item.get("source_namespace")
+        source_id = item.get("source_food_id")
+        if namespace and source_id is not None:
+            return f"identity:{str(namespace).strip().lower()}:{str(source_id).strip()}"
+        if item.get("food_reference_id") is not None:
+            return f"identity:food_reference:{item['food_reference_id']}"
+        food_id = item.get("food_id")
+        if food_id and ":" in str(food_id):
+            return f"identity:{str(food_id).strip().lower()}"
+        source = str(item.get("source") or "").strip().lower()
+        if source in {"fatsecret", "openfoodfacts", "provider"} and food_id:
+            return f"identity:{source}:{str(food_id).strip()}"
         normalized = item.get("name_normalized")
         if normalized:
             return str(normalized).strip().lower()
@@ -319,7 +364,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         for item in raw_results:
             original_name = item.get("description", "")
             capitalized_name = self._capitalize_food_name(original_name)
-            name_key = capitalized_name.lower().strip()
+            name_key = self._search_result_key(
+                {**item, "description": capitalized_name}
+            )
 
             if name_key not in seen_names:
                 seen_names.add(name_key)

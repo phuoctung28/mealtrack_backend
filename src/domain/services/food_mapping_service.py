@@ -45,22 +45,69 @@ FALLBACK_UNIT_CATEGORIES = {
 DEFAULT_ALLOWED_UNITS = [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
 
-from src.domain.model.nutrition.macros import Macros
+def _namespaced_id(namespace: Any, source_id: Any) -> str:
+    """Return the stable display alias while keeping the source id opaque."""
+    normalized_namespace = str(namespace).strip()
+    normalized_id = str(source_id).strip()
+    prefix = f"{normalized_namespace}:"
+    if normalized_id.startswith(prefix):
+        normalized_id = normalized_id[len(prefix) :]
+    return f"{normalized_namespace}:{normalized_id}"
+
+
+def _opaque_source_id(namespace: Any, source_id: Any) -> str:
+    normalized_namespace = str(namespace).strip()
+    normalized_id = str(source_id).strip()
+    prefix = f"{normalized_namespace}:"
+    return (
+        normalized_id[len(prefix) :]
+        if normalized_id.startswith(prefix)
+        else normalized_id
+    )
+
+
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
+from src.domain.services.nutrition_integrity_policy import (
+    NutritionIntegrityError,
+    NutritionIntegrityPolicy,
+    normalize_serving_options,
+)
 
 
 class FoodMappingService(FoodMappingServicePort):
+    def __init__(self, integrity_policy: NutritionIntegrityPolicy | None = None):
+        self._integrity_policy = integrity_policy or NutritionIntegrityPolicy()
+
     def map_search_item(self, item: dict[str, Any]) -> dict[str, Any]:
         if item.get("source") == "food_reference":
-            protein = item.get("protein_100g") or 0
-            carbs = item.get("carbs_100g") or 0
-            fat = item.get("fat_100g") or 0
-            fiber = item.get("fiber_100g") or 0
-            calories = Macros.raw_total_calories(protein, carbs, fat, fiber)
+            if item.get("is_verified") is not True:
+                raise NutritionIntegrityError(
+                    self._integrity_policy.rejection("unverified_reference")
+                )
+            food_reference_id = item.get("food_reference_id")
+            expected_alias = f"food_reference:{food_reference_id}"
+            supplied_alias = item.get("food_id")
+            if supplied_alias is not None and str(supplied_alias) != expected_alias:
+                raise NutritionIntegrityError(
+                    self._integrity_policy.rejection("origin_alias_mismatch")
+                )
+            result = self._require_search_integrity(
+                item,
+                require_energy=False,
+                require_origin=True,
+            )
+            protein = result.protein_100g
+            carbs = result.carbs_100g
+            fat = result.fat_100g
+            fiber = result.fiber_100g
+            calories = result.derived_calories_100g
             return {
                 "fdc_id": None,
-                "food_id": f"food_reference:{item.get('food_reference_id')}",
-                "food_reference_id": item.get("food_reference_id"),
+                "food_id": expected_alias,
+                "food_reference_id": food_reference_id,
+                "origin": "local",
+                "source_namespace": "food_reference",
+                "source_food_id": str(food_reference_id),
                 "name": item.get("description"),
                 "brand": item.get("brand"),
                 "data_type": "food_reference",
@@ -68,53 +115,75 @@ class FoodMappingService(FoodMappingServicePort):
                 "serving_unit": "g",
                 "calories": calories,
                 "nutrients": {
-                    "protein": item.get("protein_100g"),
-                    "fat": item.get("fat_100g"),
-                    "carbs": item.get("carbs_100g"),
-                    "fiber": item.get("fiber_100g"),
-                    "sugar": item.get("sugar_100g"),
+                    "protein": protein,
+                    "fat": fat,
+                    "carbs": carbs,
+                    "fiber": fiber,
+                    "sugar": result.sugar_100g,
                 },
                 "source": "food_reference",
                 "provider_source": item.get("provider_source"),
                 "is_verified": item.get("is_verified"),
-                "allowed_units": item.get("allowed_units") or DEFAULT_ALLOWED_UNITS,
+                "allowed_units": list(result.serving_options),
                 "custom_nutrition": {
                     "calories_per_100g": calories,
                     "protein_per_100g": protein,
                     "carbs_per_100g": carbs,
                     "fat_per_100g": fat,
                 },
+                "nutrition_basis": "100g",
+                "nutrition_contract_version": result.policy_version,
+                "calories_per_100g": calories,
             }
 
         # Handle fatsecret results with embedded nutrition
         if item.get("source") == "fatsecret":
+            result = self._require_search_integrity(
+                item,
+                provider=True,
+                require_origin=True,
+            )
             return {
                 "fdc_id": None,  # fatsecret doesn't use FDC IDs
-                "food_id": item.get("food_id"),
+                "food_id": _namespaced_id(
+                    item.get("source_namespace") or "fatsecret",
+                    item.get("source_food_id") or item.get("food_id"),
+                ),
+                "origin": "provider",
+                "source_namespace": item.get("source_namespace") or "fatsecret",
+                "source_food_id": _opaque_source_id(
+                    item.get("source_namespace") or "fatsecret",
+                    item.get("source_food_id") or item.get("food_id"),
+                ),
                 "name": item.get("description"),
                 "brand": item.get("brand"),
                 "data_type": "fatsecret",
                 "serving_size": item.get("serving_description"),
                 "serving_unit": "g",
-                "calories": item.get("calories_100g"),
+                "calories": result.derived_calories_100g,
                 "nutrients": {
-                    "protein": item.get("protein_100g"),
-                    "fat": item.get("fat_100g"),
-                    "carbs": item.get("carbs_100g"),
+                    "protein": result.protein_100g,
+                    "fat": result.fat_100g,
+                    "carbs": result.carbs_100g,
+                    "fiber": result.fiber_100g,
+                    "sugar": result.sugar_100g,
                 },
                 "source": "fatsecret",
-                "allowed_units": item.get("allowed_units") or DEFAULT_ALLOWED_UNITS,
+                "allowed_units": list(result.serving_options),
                 # Include custom nutrition for manual meal creation
                 "custom_nutrition": (
                     {
-                        "calories_per_100g": item.get("calories_100g") or 0,
-                        "protein_per_100g": item.get("protein_100g") or 0,
-                        "carbs_per_100g": item.get("carbs_100g") or 0,
-                        "fat_per_100g": item.get("fat_100g") or 0,
+                        "calories_per_100g": result.derived_calories_100g,
+                        "protein_per_100g": result.protein_100g,
+                        "carbs_per_100g": result.carbs_100g,
+                        "fat_per_100g": result.fat_100g,
                     }
-                    if item.get("calories_100g")
+                    if result.calories_100g is not None
                     else None
                 ),
+                "nutrition_basis": "100g",
+                "nutrition_contract_version": result.policy_version,
+                "calories_per_100g": result.derived_calories_100g,
             }
 
         # USDA results
@@ -142,6 +211,30 @@ class FoodMappingService(FoodMappingServicePort):
                 else DEFAULT_ALLOWED_UNITS
             ),
         }
+        integrity = self._require_search_integrity(
+            {
+                "protein_100g": nutrients.get("protein"),
+                "carbs_100g": nutrients.get("carbs"),
+                "fat_100g": nutrients.get("fat"),
+                "fiber_100g": nutrients.get("fiber"),
+                "sugar_100g": nutrients.get("sugar"),
+                "calories_100g": nutrients.get("calories"),
+                "allowed_units": result["allowed_units"],
+                "source": item.get("source", "usda"),
+                "fdc_id": item.get("fdcId"),
+            },
+            provider=True,
+            require_origin=True,
+        )
+        result["calories"] = integrity.derived_calories_100g
+        result["allowed_units"] = list(integrity.serving_options)
+        result["origin"] = "usda"
+        result["source_namespace"] = "usda_fdc"
+        result["source_food_id"] = str(item.get("fdcId"))
+        result["food_id"] = _namespaced_id("usda_fdc", item.get("fdcId"))
+        result["nutrition_basis"] = "100g"
+        result["nutrition_contract_version"] = integrity.policy_version
+        result["calories_per_100g"] = integrity.derived_calories_100g
         if "source" in item:
             result["source"] = item["source"]
         return result
@@ -172,11 +265,29 @@ class FoodMappingService(FoodMappingServicePort):
         if not units:
             return DEFAULT_ALLOWED_UNITS
 
-        # Ensure "g" is always present
-        if not any(u["unit"].lower() == "g" for u in units):
-            units.insert(0, {"unit": "g", "gram_weight": 1.0, "description": "1 g"})
+        return (
+            normalize_serving_options(units, provider_100g_label=True)
+            or DEFAULT_ALLOWED_UNITS
+        )
 
-        return units
+    def _require_search_integrity(
+        self,
+        item: dict[str, Any],
+        *,
+        provider: bool = False,
+        require_energy: bool = True,
+        require_origin: bool = False,
+    ):
+        result = self._integrity_policy.evaluate(
+            item,
+            require_energy=require_energy,
+            require_metric_basis=False,
+            provider_100g_label=provider,
+            origin_fields=item if require_origin else None,
+        )
+        if not result.accepted:
+            raise NutritionIntegrityError(result)
+        return result
 
     def _extract_macros(self, nutrients: list[dict[str, Any]]) -> dict[str, float]:
         values: dict[str, float] = {

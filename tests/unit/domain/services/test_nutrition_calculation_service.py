@@ -72,6 +72,59 @@ def test_manual_custom_nutrition_uses_density_for_oil_ml():
     assert food_items[0].macros.fat == pytest.approx(4.232)
 
 
+def test_authoritative_snapshot_serving_weight_is_used_for_manual_save():
+    service = NutritionCalculationService()
+
+    nutrition, food_items = service.aggregate_from_command_items(
+        [
+            ManualMealItem(
+                name="Rice",
+                quantity=1.0,
+                unit="cup",
+                origin="local",
+                food_reference_id=42,
+                nutrition_contract_version="2",
+                allowed_units=[
+                    {"unit": "g", "gram_weight": 1.0},
+                    {"unit": "cup", "gram_weight": 158.0},
+                ],
+                custom_nutrition=CustomNutrition(
+                    calories_per_100g=124.7,
+                    protein_per_100g=2.7,
+                    carbs_per_100g=28.0,
+                    fat_per_100g=0.3,
+                ),
+            )
+        ]
+    )
+
+    assert food_items[0].macros.protein == pytest.approx(2.7 * 1.58)
+    assert nutrition.macros.protein == pytest.approx(4.3)
+
+
+def test_authoritative_snapshot_rejects_unknown_serving_unit():
+    with pytest.raises(ValueError, match="authoritative source snapshot"):
+        NutritionCalculationService().aggregate_from_command_items(
+            [
+                ManualMealItem(
+                    name="Rice",
+                    quantity=1.0,
+                    unit="bowl",
+                    origin="local",
+                    food_reference_id=42,
+                    nutrition_contract_version="2",
+                    allowed_units=[{"unit": "g", "gram_weight": 1.0}],
+                    custom_nutrition=CustomNutrition(
+                        calories_per_100g=124.7,
+                        protein_per_100g=2.7,
+                        carbs_per_100g=28.0,
+                        fat_per_100g=0.3,
+                    ),
+                )
+            ]
+        )
+
+
 def test_meal_service_add_custom_nutrition_uses_unit_grams():
     meal = _new_processing_meal()
 

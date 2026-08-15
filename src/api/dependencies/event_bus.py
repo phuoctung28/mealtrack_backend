@@ -212,6 +212,9 @@ from src.app.services.meal_recommendation_history_projector import (
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityPolicy
+from src.infra.cache.provider_budget import RedisProviderBudget
+from src.infra.config.settings import settings
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.event_bus import EventBus, PyMediatorEventBus
 
@@ -259,7 +262,6 @@ def get_food_search_event_bus() -> EventBus:
     from src.infra.adapters.brave_search_nutrition_service import (
         get_brave_search_nutrition_service,
     )
-    from src.infra.database.uow_async import AsyncUnitOfWork
 
     event_bus = PyMediatorEventBus()
 
@@ -387,6 +389,14 @@ def get_configured_event_bus() -> EventBus:
     # Synchronous invalidation service — handlers await this before returning,
     # eliminating the fire-and-forget race condition.
     cache_invalidation_service = CacheInvalidationService(cache_service)
+    provider_budget = (
+        RedisProviderBudget(cache_service.redis)
+        if cache_service is not None
+        and settings.CACHE_ENABLED
+        and settings.NUTRITION_PROVIDER_GLOBAL_RPM is not None
+        else None
+    )
+    nutrition_integrity_policy = NutritionIntegrityPolicy()
 
     event_bus = PyMediatorEventBus()
     recommendation_snapshot = CatalogMealSnapshotService()
@@ -405,6 +415,7 @@ def get_configured_event_bus() -> EventBus:
         food_reference_batch_lookup=find_food_references_by_normalized_names,
         nutrition_reference_provider=fat_secret_service,
         timeout_seconds=graph_settings["external_provider_timeout_seconds"],
+        integrity_policy=nutrition_integrity_policy,
     )
     meal_analyze_workflow = MealAnalyzeWorkflow(
         food_reference_validation_service=food_reference_validation_service,
@@ -460,7 +471,11 @@ def get_configured_event_bus() -> EventBus:
         EditMealCommand,
         EditMealCommandHandler(
             uow=AsyncUnitOfWork(),
+            uow_factory=AsyncUnitOfWork,
             cache_invalidation=cache_invalidation_service,
+            provider=fat_secret_service,
+            provider_budget=provider_budget,
+            provider_rpm=settings.NUTRITION_PROVIDER_GLOBAL_RPM,
         ),
     )
 
@@ -500,7 +515,11 @@ def get_configured_event_bus() -> EventBus:
         CreateManualMealCommand,
         CreateManualMealCommandHandler(
             uow=AsyncUnitOfWork(),
+            uow_factory=AsyncUnitOfWork,
             cache_invalidation=cache_invalidation_service,
+            provider=fat_secret_service,
+            provider_budget=provider_budget,
+            provider_rpm=settings.NUTRITION_PROVIDER_GLOBAL_RPM,
         ),
     )
 

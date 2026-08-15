@@ -14,11 +14,11 @@ from src.infra.database.config_async import AsyncSessionLocal
 from src.infra.repositories.affiliate_event_outbox_repository import (
     AffiliateEventOutboxRepository,
 )
-from src.infra.repositories.catalog_recipe_repository_async import (
-    AsyncCatalogMealRepository,
-)
 from src.infra.repositories.body_fat_visual_profile_repository_async import (
     AsyncBodyFatVisualProfileRepository,
+)
+from src.infra.repositories.catalog_recipe_repository_async import (
+    AsyncCatalogMealRepository,
 )
 from src.infra.repositories.cheat_day_repository_async import AsyncCheatDayRepository
 from src.infra.repositories.food_reference_repository_async import (
@@ -31,6 +31,9 @@ from src.infra.repositories.meal_recommendation_plan_repository_async import (
 from src.infra.repositories.meal_repository_async import AsyncMealRepository
 from src.infra.repositories.meal_translation_repository_async import (
     AsyncMealTranslationRepository,
+)
+from src.infra.repositories.meal_write_operation_repository_async import (
+    AsyncMealWriteOperationRepository,
 )
 from src.infra.repositories.movement_repository_async import AsyncMovementRepository
 from src.infra.repositories.notification_repository_async import (
@@ -134,6 +137,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.promo_codes = PromoCodeRepository(session)
         self.referrals = ReferralRepository(session)
         self.affiliate_outbox = AffiliateEventOutboxRepository(session)
+        self.meal_write_operations = AsyncMealWriteOperationRepository(session)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         session = self.session

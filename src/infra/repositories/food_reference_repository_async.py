@@ -17,12 +17,14 @@ from src.domain.ports.food_reference_repository_port import (
 from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
     normalize_food_name,
 )
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityPolicy
 from src.infra.database.models.food_reference_model import FoodReferenceModel
 from src.infra.repositories.food_reference_projection import (
     FOOD_REFERENCE_SEED_COLUMNS,
     build_food_reference_nutrient_rows,
     build_food_reference_serving_rows,
     food_reference_model_to_dict,
+    food_reference_model_to_integrity_data,
     food_reference_model_to_nutrition_projection,
 )
 
@@ -39,8 +41,13 @@ class AsyncFoodReferenceRepository:
 
     _SEED_COLUMNS = FOOD_REFERENCE_SEED_COLUMNS
 
-    def __init__(self, session: AsyncSession):
+    def __init__(
+        self,
+        session: AsyncSession,
+        integrity_policy: NutritionIntegrityPolicy | None = None,
+    ):
         self._session = session
+        self._integrity_policy = integrity_policy or NutritionIntegrityPolicy()
 
     async def get_by_barcode(self, barcode: str) -> dict[str, Any] | None:
         stmt = (
@@ -75,6 +82,25 @@ class AsyncFoodReferenceRepository:
         model = result.scalar_one_or_none()
         return food_reference_model_to_nutrition_projection(model) if model else None
 
+    async def get_nutrition_projections(
+        self, food_reference_ids: list[int], *, for_update: bool = False
+    ) -> dict[int, FoodReferenceNutritionProjection]:
+        ids = sorted({int(value) for value in food_reference_ids})
+        if not ids:
+            return {}
+        statement = (
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.id.in_(ids))
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self._session.execute(statement)
+        return {
+            model.id: food_reference_model_to_nutrition_projection(model)
+            for model in result.scalars().all()
+        }
+
     async def list_catalog_seed_candidates(
         self,
     ) -> list[FoodReferenceNutritionProjection]:
@@ -84,6 +110,8 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.name,
                 FoodReferenceModel.name_normalized,
                 FoodReferenceModel.source,
+                FoodReferenceModel.source_namespace,
+                FoodReferenceModel.source_food_id,
                 FoodReferenceModel.is_verified,
                 FoodReferenceModel.protein_100g,
                 FoodReferenceModel.carbs_100g,
@@ -96,7 +124,12 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.id.asc(),
             )
         )
-        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+        return [
+            projection
+            for row in result.all()
+            if (projection := _catalog_seed_candidate_projection(row))
+            and _projection_is_integrity_valid(projection, self._integrity_policy)
+        ]
 
     async def find_catalog_seed_candidates_by_normalized_name(
         self,
@@ -108,6 +141,8 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.name,
                 FoodReferenceModel.name_normalized,
                 FoodReferenceModel.source,
+                FoodReferenceModel.source_namespace,
+                FoodReferenceModel.source_food_id,
                 FoodReferenceModel.is_verified,
                 FoodReferenceModel.protein_100g,
                 FoodReferenceModel.carbs_100g,
@@ -121,7 +156,12 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc()
             )
         )
-        return [_catalog_seed_candidate_projection(row) for row in result.all()]
+        return [
+            projection
+            for row in result.all()
+            if (projection := _catalog_seed_candidate_projection(row))
+            and _projection_is_integrity_valid(projection, self._integrity_policy)
+        ]
 
     async def approve_for_catalog_seed(
         self,
@@ -137,6 +177,11 @@ class AsyncFoodReferenceRepository:
         model = result.scalar_one_or_none()
         if model is None:
             return None
+        self._integrity_policy.require_valid(
+            food_reference_model_to_integrity_data(model),
+            require_energy=False,
+            require_metric_basis=False,
+        )
         model.is_verified = True
         await self._session.flush()
         return food_reference_model_to_nutrition_projection(model)
@@ -150,6 +195,21 @@ class AsyncFoodReferenceRepository:
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return food_reference_model_to_dict(model) if model else None
+
+    async def get_by_fdc_ids(self, fdc_ids: list[int]) -> dict[int, dict[str, Any]]:
+        ids = sorted({int(value) for value in fdc_ids})
+        if not ids:
+            return {}
+        result = await self._session.execute(
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.fdc_id.in_(ids))
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        return {
+            model.fdc_id: food_reference_model_to_dict(model)
+            for model in result.scalars().all()
+            if model.fdc_id is not None
+        }
 
     async def search_by_name(
         self, query: str, region: str = "global", limit: int = 10
@@ -179,9 +239,10 @@ class AsyncFoodReferenceRepository:
             FoodReferenceModel.name_normalized,
             normalized_query,
         )
-        stmt = (
+        base_stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized.isnot(None))
+            .where(FoodReferenceModel.is_verified.is_(True))
             .where(FoodReferenceModel.region.in_([region, "global"]))
             .where(
                 or_(
@@ -195,13 +256,46 @@ class AsyncFoodReferenceRepository:
                 similarity_score.desc(),
                 FoodReferenceModel.id.asc(),
             )
-            .limit(bounded_limit * 3)
         )
-        result = await self._session.execute(stmt)
-        return _dedupe_search_projections(result.scalars().all(), bounded_limit)
+        fetch_size = max(bounded_limit * 3, 10)
+        offset = 0
+        projections: list[FoodReferenceSearchProjection] = []
+        seen: set[str] = set()
+        while True:
+            result = await self._session.execute(
+                base_stmt.limit(fetch_size).offset(offset)
+            )
+            batch = result.scalars().all()
+            projections.extend(
+                _dedupe_search_projections(
+                    batch,
+                    bounded_limit - len(projections),
+                    integrity_policy=self._integrity_policy,
+                    seen=seen,
+                )
+            )
+            if len(projections) >= bounded_limit:
+                break
+            offset += len(batch)
+            if len(batch) < fetch_size:
+                break
+        return projections
 
     async def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update a food reference by barcode without owning commit."""
+        source_namespace, source_food_id = _source_identity_from_data(data)
+        if source_namespace and source_food_id:
+            await self._ensure_source_identity_collision_safe(
+                normalize_food_name(str(data.get("name") or "")),
+                source_namespace,
+                source_food_id,
+            )
+        if data.get("is_verified", False):
+            self._integrity_policy.require_valid(
+                data,
+                require_energy=False,
+                require_metric_basis=False,
+            )
         if data.get("barcode") and not data.get("is_verified", False):
             existing = await self._find_model_by_barcode(data["barcode"])
             if existing is not None and existing.is_verified:
@@ -223,6 +317,8 @@ class AsyncFoodReferenceRepository:
             "source": data.get("source", "fatsecret"),
             "is_verified": data.get("is_verified", False),
             "fdc_id": data.get("fdc_id"),
+            "source_namespace": data.get("source_namespace"),
+            "source_food_id": data.get("source_food_id"),
             "category": data.get("category"),
             "region": data.get("region", "global"),
             "density": data.get("density", 1.0),
@@ -230,6 +326,9 @@ class AsyncFoodReferenceRepository:
         }
         stmt = pg_insert(FoodReferenceModel).values(**values)
         update_fields = {k: v for k, v in values.items() if k != "barcode"}
+        if values["source_namespace"] is None or values["source_food_id"] is None:
+            update_fields.pop("source_namespace", None)
+            update_fields.pop("source_food_id", None)
         if not values["is_verified"]:
             update_fields.pop("is_verified", None)
         on_conflict_kwargs: dict[str, Any] = {
@@ -256,6 +355,17 @@ class AsyncFoodReferenceRepository:
         ).strip()
         if not name_normalized:
             raise ValueError("seed food requires a normalized name")
+        source_namespace, source_food_id = _source_identity_from_data(data)
+        if source_namespace and source_food_id:
+            await self._ensure_source_identity_collision_safe(
+                name_normalized, source_namespace, source_food_id
+            )
+        if data.get("is_verified", False):
+            self._integrity_policy.require_valid(
+                data,
+                require_energy=False,
+                require_metric_basis=False,
+            )
 
         values = {
             "name": name,
@@ -273,6 +383,8 @@ class AsyncFoodReferenceRepository:
             "serving_sizes": data.get("serving_sizes") or data.get("allowed_units"),
             "image_url": data.get("image_url"),
             "source": data.get("source", "seed"),
+            "source_namespace": data.get("source_namespace"),
+            "source_food_id": data.get("source_food_id"),
             "is_verified": data.get("is_verified", False),
             "density": data.get("density", 1.0),
             "extra_nutrients": data.get("extra_nutrients"),
@@ -280,6 +392,9 @@ class AsyncFoodReferenceRepository:
         update_fields = {
             key: value for key, value in values.items() if key != "name_normalized"
         }
+        if values["source_namespace"] is None or values["source_food_id"] is None:
+            update_fields.pop("source_namespace", None)
+            update_fields.pop("source_food_id", None)
         stmt = pg_insert(FoodReferenceModel).values(**values)
         on_conflict_kwargs: dict[str, Any] = {
             "index_elements": ["name_normalized"],
@@ -336,10 +451,42 @@ class AsyncFoodReferenceRepository:
         source: str,
         is_verified: bool,
         external_id: str | None = None,
+        source_namespace: str | None = None,
     ) -> dict[str, Any] | None:
-        existing = await self._find_model_by_normalized_name(name_normalized)
+        identity_namespace = source_namespace or _source_namespace(source)
+        identity_id = str(external_id) if external_id is not None else None
+        existing = await self._find_model_by_source_identity(
+            identity_namespace, identity_id
+        )
+        name_match = await self._find_model_by_normalized_name(name_normalized)
+        if existing is not None and name_match is None:
+            raise ValueError("source identity/name collision requires review")
+        if (
+            existing is not None
+            and name_match is not None
+            and name_match.id != existing.id
+        ):
+            raise ValueError("source identity/name collision requires review")
+        if existing is None:
+            existing = name_match
+        if existing is not None and _identity_conflicts(
+            existing, identity_namespace, identity_id
+        ):
+            raise ValueError("source identity/name collision requires review")
         if existing is not None and existing.is_verified and not is_verified:
             return food_reference_model_to_dict(existing)
+        if is_verified:
+            self._integrity_policy.require_valid(
+                {
+                    "protein_100g": protein_100g,
+                    "carbs_100g": carbs_100g,
+                    "fat_100g": fat_100g,
+                    "fiber_100g": fiber_100g,
+                    "sugar_100g": sugar_100g,
+                },
+                require_energy=False,
+                require_metric_basis=False,
+            )
 
         values = {
             "name": name,
@@ -352,8 +499,21 @@ class AsyncFoodReferenceRepository:
             "source": source,
             "is_verified": is_verified,
             "region": "global",
+            "source_namespace": identity_namespace if identity_id else None,
+            "source_food_id": identity_id,
         }
-        update_fields = {k: v for k, v in values.items() if k != "name_normalized"}
+        update_fields = {
+            k: v
+            for k, v in values.items()
+            if k not in {"name_normalized", "source_namespace", "source_food_id"}
+        }
+        if identity_id:
+            update_fields.update(
+                {
+                    "source_namespace": identity_namespace,
+                    "source_food_id": identity_id,
+                }
+            )
         stmt = pg_insert(FoodReferenceModel).values(**values)
         on_conflict_kwargs: dict[str, Any] = {
             "index_elements": ["name_normalized"],
@@ -376,6 +536,42 @@ class AsyncFoodReferenceRepository:
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         return result.scalars().first()
+
+    async def _find_model_by_source_identity(
+        self, source_namespace: str | None, source_food_id: str | None
+    ) -> FoodReferenceModel | None:
+        if not source_namespace or not source_food_id:
+            return None
+        result = await self._session.execute(
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.source_namespace == source_namespace)
+            .where(FoodReferenceModel.source_food_id == source_food_id)
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        return result.scalars().first()
+
+    async def _ensure_source_identity_collision_safe(
+        self,
+        name_normalized: str,
+        source_namespace: str,
+        source_food_id: str,
+    ) -> None:
+        existing = await self._find_model_by_source_identity(
+            source_namespace, source_food_id
+        )
+        name_match = await self._find_model_by_normalized_name(name_normalized)
+        if existing is not None and name_match is None:
+            raise ValueError("source identity/name collision requires review")
+        if (
+            existing is not None
+            and name_match is not None
+            and name_match.id != existing.id
+        ):
+            raise ValueError("source identity/name collision requires review")
+        if name_match is not None and _identity_conflicts(
+            name_match, source_namespace, source_food_id
+        ):
+            raise ValueError("source identity/name collision requires review")
 
     async def _find_model_by_barcode(self, barcode: str) -> FoodReferenceModel | None:
         result = await self._session.execute(
@@ -423,6 +619,8 @@ def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjec
         id=int(row.id),
         name=str(row.name),
         source=str(row.source),
+        source_namespace=getattr(row, "source_namespace", None),
+        source_food_id=getattr(row, "source_food_id", None),
         is_verified=bool(row.is_verified),
         protein_100g=row.protein_100g,
         carbs_100g=row.carbs_100g,
@@ -432,6 +630,23 @@ def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjec
         density_g_ml=row.density,
         name_normalized=row.name_normalized,
     )
+
+
+def _projection_is_integrity_valid(
+    projection: FoodReferenceNutritionProjection,
+    policy: NutritionIntegrityPolicy,
+) -> bool:
+    return policy.evaluate(
+        {
+            "protein_100g": projection.protein_100g,
+            "carbs_100g": projection.carbs_100g,
+            "fat_100g": projection.fat_100g,
+            "fiber_100g": projection.fiber_100g,
+            "sugar_100g": projection.sugar_100g,
+        },
+        require_energy=False,
+        require_metric_basis=False,
+    ).accepted
 
 
 def _truncate_category(value: Any) -> str | None:
@@ -444,14 +659,39 @@ def _truncate_category(value: Any) -> str | None:
 def _dedupe_search_projections(
     models: list[FoodReferenceModel],
     limit: int,
+    *,
+    integrity_policy: NutritionIntegrityPolicy | None = None,
+    seen: set[str] | None = None,
 ) -> list[FoodReferenceSearchProjection]:
-    seen: set[str] = set()
+    if limit <= 0:
+        return []
+    seen = seen if seen is not None else set()
     projections: list[FoodReferenceSearchProjection] = []
     for model in models:
-        normalized_name = model.name_normalized or normalize_food_name(model.name)
-        if normalized_name in seen:
+        if not model.is_verified:
             continue
-        seen.add(normalized_name)
+        if (
+            integrity_policy is not None
+            and not integrity_policy.evaluate(
+                food_reference_model_to_integrity_data(model),
+                require_energy=False,
+                require_metric_basis=False,
+            ).accepted
+        ):
+            continue
+        normalized_name = model.name_normalized or normalize_food_name(model.name)
+        identity_namespace = getattr(model, "source_namespace", None)
+        identity_id = getattr(model, "source_food_id", None)
+        if (
+            identity_namespace in {"fatsecret", "openfoodfacts", "usda_fdc"}
+            and identity_id
+        ):
+            dedupe_key = f"{identity_namespace}:{identity_id}"
+        else:
+            dedupe_key = normalized_name
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
         projections.append(
             FoodReferenceSearchProjection(
                 id=model.id,
@@ -459,6 +699,8 @@ def _dedupe_search_projections(
                 name_normalized=model.name_normalized,
                 brand=model.brand,
                 source=model.source,
+                source_namespace=getattr(model, "source_namespace", None),
+                source_food_id=getattr(model, "source_food_id", None),
                 is_verified=model.is_verified,
                 protein_100g=model.protein_100g,
                 carbs_100g=model.carbs_100g,
@@ -472,3 +714,38 @@ def _dedupe_search_projections(
         if len(projections) >= limit:
             break
     return projections
+
+
+def _source_namespace(source: str | None) -> str | None:
+    normalized = str(source or "").strip().lower()
+    if normalized in {"fatsecret", "openfoodfacts", "provider"}:
+        return normalized if normalized != "provider" else None
+    if normalized in {"usda", "usda_fdc", "fooddata_central"}:
+        return "usda_fdc"
+    return None
+
+
+def _source_identity_from_data(data: dict[str, Any]) -> tuple[str | None, str | None]:
+    namespace = data.get("source_namespace")
+    source_id = data.get("source_food_id")
+    if namespace is None and source_id is None:
+        return None, None
+    if namespace is None or source_id is None:
+        raise ValueError("source identity requires namespace and id")
+    normalized_namespace = str(namespace).strip().lower()
+    normalized_id = str(source_id).strip()
+    if not normalized_namespace or not normalized_id:
+        raise ValueError("source identity requires namespace and id")
+    return normalized_namespace, normalized_id
+
+
+def _identity_conflicts(
+    model: FoodReferenceModel,
+    source_namespace: str | None,
+    source_food_id: str | None,
+) -> bool:
+    existing_namespace = getattr(model, "source_namespace", None)
+    existing_id = getattr(model, "source_food_id", None)
+    if not source_namespace or not source_food_id:
+        return False
+    return (existing_namespace, existing_id) != (source_namespace, source_food_id)

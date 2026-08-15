@@ -41,6 +41,10 @@ class FoodItem:
     is_custom: bool = False  # Whether this is a custom ingredient
     allowed_units: list[dict[str, Any]] | None = None
     nutrition_override: NutritionOverride | None = None
+    source_kind: str | None = None
+    source_food_id: str | None = None
+    nutrition_contract_version: str | None = None
+    source_snapshot: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -102,6 +106,14 @@ class FoodItem:
             result["allowed_units"] = self.allowed_units
         if self.nutrition_override:
             result["nutrition_override"] = self.nutrition_override.to_dict()
+        if self.source_kind:
+            result["origin"] = self.source_kind
+        if self.source_food_id:
+            result["source_food_id"] = self.source_food_id
+        if self.nutrition_contract_version:
+            result["nutrition_contract_version"] = self.nutrition_contract_version
+        if self.source_snapshot:
+            result["source_snapshot"] = self.source_snapshot
         return result
 
 

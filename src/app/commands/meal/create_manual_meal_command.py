@@ -31,6 +31,13 @@ class ManualMealItem:
     unit: str = "g"  # unit name, e.g., "g"
     custom_nutrition: Optional[CustomNutrition] = None
     allowed_units: Optional[List[dict[str, Any]]] = None
+    origin: Optional[str] = None
+    food_reference_id: Optional[int] = None
+    source_namespace: Optional[str] = None
+    source_food_id: Optional[str] = None
+    source_kind: Optional[str] = None
+    nutrition_contract_version: Optional[str] = None
+    source_snapshot: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -42,3 +49,6 @@ class CreateManualMealCommand(Command):
     target_date: Optional[date] = None
     source: Optional[str] = None  # scanner, prompt, food_search, manual
     emoji: Optional[str] = None  # AI-assigned dish emoji
+    nutrition_contract_version: Optional[int] = None
+    idempotency_key: Optional[str] = None
+    request_fingerprint: Optional[str] = None

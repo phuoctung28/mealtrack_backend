@@ -183,6 +183,7 @@ def scale_per_100g_nutrition(
     base_serving: float = 100.0,
     allowed_units: list[dict[str, Any]] | None = None,
     food_name: str = "",
+    strict_allowed_units: bool = False,
 ) -> dict:
     """Scale per-100g nutrition values for a given quantity and unit.
 
@@ -200,7 +201,11 @@ def scale_per_100g_nutrition(
     # Use food-specific allowed_units if available, otherwise fallback to global mapping
     if allowed_units:
         quantity_in_grams = _convert_with_allowed_units(
-            quantity, unit, allowed_units, food_name
+            quantity,
+            unit,
+            allowed_units,
+            food_name,
+            strict=strict_allowed_units,
         )
     else:
         quantity_in_grams = convert_quantity_to_grams(quantity, unit, food_name)
@@ -221,6 +226,8 @@ def _convert_with_allowed_units(
     unit: str,
     allowed_units: list[dict[str, Any]],
     food_name: str = "",
+    *,
+    strict: bool = False,
 ) -> float:
     """Convert quantity to grams using food-specific allowed_units.
 
@@ -258,7 +265,10 @@ def _convert_with_allowed_units(
             logger.info("Unit keyword matched an allowed-unit description")
             return quantity * au.get("gram_weight", 1.0)
 
-    # 4. Global UNIT_TO_GRAMS mapping
+    if strict:
+        raise ValueError("unit is not present in the authoritative source snapshot")
+
+    # 4. Global UNIT_TO_GRAMS mapping for legacy, non-authoritative writes.
     grams = UNIT_TO_GRAMS.get(translated)
     if grams is not None:
         logger.warning(
@@ -410,8 +420,19 @@ class NutritionCalculationService:
                 continue
             item_name = item.name or "Food Item"
             quantity_grams = convert_quantity_to_grams(
-                item.quantity, item.unit, item_name
+                item.quantity,
+                item.unit,
+                item_name,
             )
+            if getattr(item, "nutrition_contract_version", None) == "2":
+                allowed_units = getattr(item, "allowed_units", None) or []
+                quantity_grams = _convert_with_allowed_units(
+                    item.quantity,
+                    item.unit,
+                    allowed_units,
+                    item_name,
+                    strict=True,
+                )
             factor = quantity_grams / 100.0
             protein = item.custom_nutrition.protein_per_100g * factor
             carbs = item.custom_nutrition.carbs_per_100g * factor
@@ -439,7 +460,15 @@ class NutritionCalculationService:
                     micros=None,
                     confidence=1.0,
                     fdc_id=getattr(item, "fdc_id", None),
+                    food_reference_id=getattr(item, "food_reference_id", None),
+                    is_custom=getattr(item, "origin", None) == "custom",
                     allowed_units=getattr(item, "allowed_units", None),
+                    source_kind=getattr(item, "source_kind", None),
+                    source_food_id=getattr(item, "source_food_id", None),
+                    nutrition_contract_version=getattr(
+                        item, "nutrition_contract_version", None
+                    ),
+                    source_snapshot=getattr(item, "source_snapshot", None),
                 )
             )
 

@@ -34,6 +34,8 @@ class FoodReferenceModel(Base):
     category = Column(String(100), nullable=True, index=True)
     region = Column(String(10), nullable=False, default="global")
     fdc_id = Column(Integer, nullable=True, index=True)
+    source_namespace = Column(String(64), nullable=True)
+    source_food_id = Column(String(255), nullable=True)
 
     # Nutrition per 100g — calories always derived from macros
     protein_100g = Column(Float, nullable=True)

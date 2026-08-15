@@ -135,10 +135,13 @@ async def test_provider_details_only_selected_candidate():
     result = await service.validate_meal(meal)
 
     assert result is meal
-    provider.search_food_candidates.assert_awaited_once_with("White Rice", max_results=3)
+    provider.search_food_candidates.assert_awaited_once_with(
+        "White Rice", max_results=3
+    )
     provider.get_food_details.assert_awaited_once_with("selected")
     assert meal.nutrition.food_items[0].allowed_units == [
-        {"unit": "serving", "gram_weight": 150, "description": "1 bowl"}
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {"unit": "serving", "gram_weight": 150.0, "description": "1 bowl"},
     ]
 
 

@@ -202,3 +202,14 @@ class RedisClient:
         if raw == "__nx_unavail__":
             return None
         return raw == "set"
+
+    async def incr_with_expiry(self, key: str, ttl: int) -> int | None:
+        """Atomically increment a bounded counter, returning None if unavailable."""
+
+        async def operation(client: redis.Redis) -> int:
+            count = await client.incr(key)
+            if count == 1:
+                await client.expire(key, ttl)
+            return count
+
+        return await self._with_client("INCR", operation, None, key)
