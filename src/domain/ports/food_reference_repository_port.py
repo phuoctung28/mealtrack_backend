@@ -64,6 +64,14 @@ class FoodReferenceRepositoryPort(Protocol):
     ) -> FoodReferenceNutritionProjection | None:
         """Return one canonical food-reference nutrition projection."""
 
+    async def get_nutrition_projections(
+        self,
+        food_reference_ids: list[int],
+        *,
+        for_update: bool = False,
+    ) -> dict[int, FoodReferenceNutritionProjection]:
+        """Return canonical projections for a deduplicated ID batch."""
+
     async def list_catalog_seed_candidates(
         self,
     ) -> list[FoodReferenceNutritionProjection]:

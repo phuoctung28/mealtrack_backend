@@ -87,6 +87,10 @@ def food_item_orm_to_domain(orm: FoodItemORM) -> DomainFoodItem:
         is_custom=orm.is_custom,
         allowed_units=orm.allowed_units,
         nutrition_override=_nutrition_override_from_orm(orm.nutrition_override),
+        source_kind=getattr(orm, "source_kind", None),
+        source_food_id=getattr(orm, "source_food_id", None),
+        nutrition_contract_version=getattr(orm, "nutrition_contract_version", None),
+        source_snapshot=getattr(orm, "source_snapshot", None),
     )
 
 
@@ -226,10 +230,12 @@ def food_item_domain_to_orm(domain: DomainFoodItem, nutrition_id=None) -> FoodIt
         is_custom=getattr(domain, "is_custom", False),
         allowed_units=getattr(domain, "allowed_units", None),
         nutrition_override=(
-            domain.nutrition_override.to_dict()
-            if domain.nutrition_override
-            else None
+            domain.nutrition_override.to_dict() if domain.nutrition_override else None
         ),
+        source_kind=getattr(domain, "source_kind", None),
+        source_food_id=getattr(domain, "source_food_id", None),
+        nutrition_contract_version=getattr(domain, "nutrition_contract_version", None),
+        source_snapshot=getattr(domain, "source_snapshot", None),
     )
     if hasattr(domain, "id") and domain.id:
         item.id = str(domain.id)

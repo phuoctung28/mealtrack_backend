@@ -104,14 +104,14 @@ class TestFoodItemChangeRequest:
             id="test-food-item-id",
             nutrition_override=NutritionOverrideRequest(
                 calories=123.4,
-                protein=-5.0,
+                protein=5.0,
                 carbs=999.0,
                 fat=1.0,
             ),
         )
 
         assert request.nutrition_override.calories == 123.4
-        assert request.nutrition_override.protein == -5.0
+        assert request.nutrition_override.protein == 5.0
 
     def test_invalid_action(self):
         """Test invalid action value."""

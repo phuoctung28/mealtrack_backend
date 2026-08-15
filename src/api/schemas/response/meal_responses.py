@@ -258,6 +258,15 @@ class FoodItemResponse(BaseModel):
         None, description="Canonical food reference ID if available"
     )
     is_custom: bool = Field(False, description="Whether this is a custom ingredient")
+    origin: str | None = Field(None, description="Canonical nutrition origin")
+    source_namespace: str | None = Field(None, description="Opaque source namespace")
+    source_food_id: str | None = Field(None, description="Opaque source food id")
+    nutrition_contract_version: str | None = Field(
+        None, description="Backend nutrition contract version"
+    )
+    source_snapshot: dict | None = Field(
+        None, description="Immutable nutrition source snapshot used for this save"
+    )
     allowed_units: list[ServingUnitResponse] = Field(
         default_factory=list,
         description="Allowed unit options for this food item",

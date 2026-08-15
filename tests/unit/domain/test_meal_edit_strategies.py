@@ -310,6 +310,40 @@ class TestUpdateFoodItemStrategy:
         mock_nutrition_service.get_nutrition_for_ingredient.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_v2_update_unit_uses_snapshot_serving_weight(self):
+        strategy = UpdateFoodItemStrategy(Mock())
+        snapshot = {
+            "protein_per_100g": 2.7,
+            "carbs_per_100g": 28.0,
+            "fat_per_100g": 0.3,
+            "fiber_per_100g": 0.4,
+            "sugar_per_100g": 0.1,
+            "allowed_units": [
+                {"unit": "g", "gram_weight": 1.0},
+                {"unit": "cup", "gram_weight": 158.0},
+            ],
+        }
+        food_items_dict = {
+            "item-1": FoodItem(
+                id="item-1",
+                name="Rice",
+                quantity=100.0,
+                unit="g",
+                macros=Macros(protein=2.7, carbs=28.0, fat=0.3),
+                nutrition_contract_version="2",
+                source_snapshot=snapshot,
+                allowed_units=snapshot["allowed_units"],
+            )
+        }
+
+        await strategy.apply(
+            food_items_dict,
+            FoodItemChange(action="update", id="item-1", quantity=1, unit="cup"),
+        )
+
+        assert food_items_dict["item-1"].macros.protein == pytest.approx(4.27)
+
+    @pytest.mark.asyncio
     async def test_update_custom_nutrition_preserves_food_reference_id(self):
         """Custom nutrition updates preserve canonical food reference identity."""
         mock_nutrition_service = Mock()

@@ -1,5 +1,7 @@
 """Manual meal creation and text parsing routes (authenticated + guest trial)."""
 
+import hashlib
+import json
 import logging
 import time
 from datetime import datetime
@@ -48,6 +50,7 @@ router = APIRouter()
 
 
 @router.post("/manual", response_model=ManualMealCreationResponse)
+@limiter.limit("10/minute")
 async def create_manual_meal(
     request: Request,
     payload: CreateManualMealFromFoodsRequest,
@@ -56,6 +59,12 @@ async def create_manual_meal(
     cache_service: CachePort | None = Depends(get_cache_service),
     task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
+    x_nutrition_contract_version: int | None = Header(
+        default=None, alias="X-Nutrition-Contract-Version"
+    ),
+    x_app_version: str | None = Header(default=None, alias="X-App-Version"),
+    x_platform: str | None = Header(default=None, alias="X-Platform"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
@@ -63,6 +72,19 @@ async def create_manual_meal(
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
+        _validate_manual_contract_headers(
+            payload.nutrition_contract_version,
+            x_nutrition_contract_version,
+            x_app_version,
+            x_platform,
+        )
+        if payload.nutrition_contract_version == 2 and (
+            not idempotency_key or len(idempotency_key) > 255
+        ):
+            raise ValidationException(
+                message="Idempotency-Key must be present and at most 255 characters",
+                error_code="IDEMPOTENCY_KEY_INVALID",
+            )
         items = []
         for i in payload.items:
             custom_nutrition = None
@@ -83,6 +105,10 @@ async def create_manual_meal(
                     unit=i.unit,
                     custom_nutrition=custom_nutrition,
                     allowed_units=[unit.model_dump() for unit in i.allowed_units],
+                    origin=i.origin,
+                    food_reference_id=i.food_reference_id,
+                    source_namespace=i.source_namespace,
+                    source_food_id=i.source_food_id,
                 )
             )
 
@@ -105,6 +131,9 @@ async def create_manual_meal(
             target_date=target_date,
             source=payload.source,
             emoji=payload.emoji,
+            nutrition_contract_version=payload.nutrition_contract_version,
+            idempotency_key=idempotency_key,
+            request_fingerprint=_manual_request_fingerprint(payload),
         )
         _t0 = time.perf_counter()
         meal = await event_bus.send(cmd)
@@ -136,6 +165,40 @@ async def create_manual_meal(
         )
     except Exception as e:
         raise handle_exception(e) from e
+
+
+def _validate_manual_contract_headers(
+    body_version: int | None,
+    header_version: int | None,
+    app_version: str | None,
+    platform: str | None,
+) -> None:
+    if body_version is None:
+        if any(value is not None for value in (header_version, app_version, platform)):
+            raise ValidationException(
+                message="Nutrition contract headers require a versioned body",
+                error_code="NUTRITION_CONTRACT_VERSION_MISMATCH",
+            )
+        return
+    if body_version != 2 or header_version != body_version:
+        raise ValidationException(
+            message="Nutrition contract header and body version must match",
+            error_code="NUTRITION_CONTRACT_VERSION_MISMATCH",
+        )
+    if not app_version or not platform:
+        raise ValidationException(
+            message="X-App-Version and X-Platform are required for v2",
+            error_code="NUTRITION_CONTRACT_HEADERS_REQUIRED",
+        )
+
+
+def _manual_request_fingerprint(payload: CreateManualMealFromFoodsRequest) -> str:
+    canonical = json.dumps(
+        payload.model_dump(mode="json", exclude_none=True),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(canonical).hexdigest()
 
 
 @router.post("/parse-text", response_model=ParseMealTextResponse)

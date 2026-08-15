@@ -37,6 +37,7 @@ from .meal.food_item_translation_model import FoodItemTranslationORM
 from .meal.meal import MealORM
 from .meal.meal_image import MealImageORM
 from .meal.meal_instruction_step import MealInstructionStepORM
+from .meal_write_operation import MealWriteOperationORM
 
 # Translation models (meals + food items)
 from .meal.meal_translation_model import MealTranslationORM
@@ -128,6 +129,7 @@ __all__ = [
     "MealORM",
     "MealImageORM",
     "MealInstructionStepORM",
+    "MealWriteOperationORM",
     "MealTranslationORM",
     "FoodItemTranslationORM",
     # Test models

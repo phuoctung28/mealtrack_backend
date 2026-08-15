@@ -82,6 +82,25 @@ class AsyncFoodReferenceRepository:
         model = result.scalar_one_or_none()
         return food_reference_model_to_nutrition_projection(model) if model else None
 
+    async def get_nutrition_projections(
+        self, food_reference_ids: list[int], *, for_update: bool = False
+    ) -> dict[int, FoodReferenceNutritionProjection]:
+        ids = sorted({int(value) for value in food_reference_ids})
+        if not ids:
+            return {}
+        statement = (
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.id.in_(ids))
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self._session.execute(statement)
+        return {
+            model.id: food_reference_model_to_nutrition_projection(model)
+            for model in result.scalars().all()
+        }
+
     async def list_catalog_seed_candidates(
         self,
     ) -> list[FoodReferenceNutritionProjection]:
@@ -176,6 +195,21 @@ class AsyncFoodReferenceRepository:
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return food_reference_model_to_dict(model) if model else None
+
+    async def get_by_fdc_ids(self, fdc_ids: list[int]) -> dict[int, dict[str, Any]]:
+        ids = sorted({int(value) for value in fdc_ids})
+        if not ids:
+            return {}
+        result = await self._session.execute(
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.fdc_id.in_(ids))
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        return {
+            model.fdc_id: food_reference_model_to_dict(model)
+            for model in result.scalars().all()
+            if model.fdc_id is not None
+        }
 
     async def search_by_name(
         self, query: str, region: str = "global", limit: int = 10
@@ -528,7 +562,11 @@ class AsyncFoodReferenceRepository:
         name_match = await self._find_model_by_normalized_name(name_normalized)
         if existing is not None and name_match is None:
             raise ValueError("source identity/name collision requires review")
-        if existing is not None and name_match is not None and name_match.id != existing.id:
+        if (
+            existing is not None
+            and name_match is not None
+            and name_match.id != existing.id
+        ):
             raise ValueError("source identity/name collision requires review")
         if name_match is not None and _identity_conflicts(
             name_match, source_namespace, source_food_id

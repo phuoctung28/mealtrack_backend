@@ -52,6 +52,7 @@ from src.api.routes.v1.admin_meal_catalog import router as admin_meal_catalog_ro
 from src.api.routes.v1.admin_meal_catalog_import import (
     router as admin_meal_catalog_import_router,
 )
+from src.api.routes.v1.capabilities import router as capabilities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
@@ -339,6 +340,7 @@ app.include_router(ingredients_router)
 app.include_router(tdee_router)
 app.include_router(saved_suggestions_router)
 app.include_router(cheat_days_router)
+app.include_router(capabilities_router)
 app.include_router(referrals_router)
 app.include_router(promo_codes_router)
 app.include_router(codes_router)

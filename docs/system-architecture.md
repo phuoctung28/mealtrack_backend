@@ -108,6 +108,17 @@ until the valid-result limit is filled or candidates are exhausted. Provider
 serving labels are normalized through the same policy. Versioned cache keys
 include the active policy version to prevent stale serving contracts.
 
+### Authoritative manual meal writes
+V2 manual create and edit requests carry an explicit nutrition contract, source
+identity, and idempotency key. `ManualMealNutritionResolver` resolves local,
+USDA, provider, and custom items server-side; client macros, gram weights, and
+serving lists do not replace reference nutrition. Each successful v2 item stores
+an immutable source snapshot on `food_item`, and meal detail reads use that
+snapshot before consulting legacy references. User-scoped write-operation leases
+make retries replayable and fence stale workers before a meal mutation commits.
+The additive contract is advertised only through
+`/v1/capabilities/durable-writes` after the persistence migration is available.
+
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 

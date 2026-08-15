@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     FATSECRET_CLIENT_SECRET: str | None = Field(
         default=None, description="fatsecret OAuth 2.0 client secret"
     )
+    NUTRITION_PROVIDER_GLOBAL_RPM: int | None = Field(
+        default=None,
+        ge=1,
+        description="Required shared per-minute budget for authoritative provider saves",
+    )
     BRAVE_SEARCH_API_KEY: str | None = Field(
         default=None, description="Brave Search API key (free tier: 2K/mo)"
     )
