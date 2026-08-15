@@ -113,6 +113,7 @@ Modify:
 - Filtered CI-aligned unit gate passed: 2,384 tests, 78.44% coverage, excluding the unrelated pre-existing `tests/unit/cron/test_push_cron.py` WIP failure. The complete unit run remains 2,386 passed and one unrelated cron failure.
 - `lint-imports` passed for 826 files and 3,752 dependencies; targeted Ruff and compile checks passed.
 - Disposable PostgreSQL smoke applied migration `20260815000004`, exercised valid/quarantine/restore/child-invalidation/stale-CAS/constraint paths, and was dropped afterward. No production or shared database was mutated.
+- Fresh-schema bootstrap now idempotently seeds the DB-owned control singleton after `Base.metadata.create_all()`; the regression suite and disposable PostgreSQL bootstrap smoke confirmed exactly one active-policy row.
 - `scripts/nutrition_integrity.py audit` is read-only; quarantine and restore default to dry-run and require an expected digest plus review reference for mutation.
 - Staging, Neon, deployed-revision, physical-device, telemetry adoption, and the separately approved legacy-sunset gate remain release-operations evidence, not production actions performed by this cook run.
 
