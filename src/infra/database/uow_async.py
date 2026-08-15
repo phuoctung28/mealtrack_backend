@@ -21,6 +21,9 @@ from src.infra.repositories.catalog_recipe_repository_async import (
     AsyncCatalogMealRepository,
 )
 from src.infra.repositories.cheat_day_repository_async import AsyncCheatDayRepository
+from src.infra.repositories.food_reference_integrity_repository import (
+    FoodReferenceIntegrityRepository,
+)
 from src.infra.repositories.food_reference_repository_async import (
     AsyncFoodReferenceRepository,
 )
@@ -132,6 +135,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.weight_entries = AsyncWeightRepository(session)
         self.movement_entries = AsyncMovementRepository(session)
         self.food_references = AsyncFoodReferenceRepository(session)
+        self.food_reference_integrity = FoodReferenceIntegrityRepository(session)
         self.catalog_recipes = AsyncCatalogMealRepository(session)
         self.meal_translations = AsyncMealTranslationRepository(session)
         self.promo_codes = PromoCodeRepository(session)

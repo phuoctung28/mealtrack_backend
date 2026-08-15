@@ -37,6 +37,17 @@ class FoodReferenceModel(Base):
     source_namespace = Column(String(64), nullable=True)
     source_food_id = Column(String(255), nullable=True)
 
+    # Materialized, versioned eligibility. Editorial verification remains
+    # separate so quarantine never silently rewrites reviewer intent.
+    integrity_status = Column(
+        String(16), nullable=False, default="unknown", server_default="unknown"
+    )
+    integrity_policy_version = Column(String(64), nullable=True)
+    integrity_checked_at = Column(DateTime(timezone=True), nullable=True)
+    integrity_reason = Column(String(128), nullable=True)
+    integrity_input_digest = Column(String(64), nullable=True)
+    integrity_review_reference = Column(String(255), nullable=True)
+
     # Nutrition per 100g — calories always derived from macros
     protein_100g = Column(Float, nullable=True)
     carbs_100g = Column(Float, nullable=True)

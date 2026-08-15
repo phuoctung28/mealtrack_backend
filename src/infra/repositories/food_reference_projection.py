@@ -63,6 +63,14 @@ def food_reference_model_to_dict(model: FoodReferenceModel) -> dict[str, Any]:
         "extra_nutrients": food_reference_nutrients_to_dict(model),
         "source": model.source,
         "is_verified": model.is_verified,
+        "integrity_status": getattr(model, "integrity_status", "unknown"),
+        "integrity_policy_version": getattr(model, "integrity_policy_version", None),
+        "integrity_checked_at": getattr(model, "integrity_checked_at", None),
+        "integrity_reason": getattr(model, "integrity_reason", None),
+        "integrity_input_digest": getattr(model, "integrity_input_digest", None),
+        "integrity_review_reference": getattr(
+            model, "integrity_review_reference", None
+        ),
         "image_url": model.image_url,
     }
 

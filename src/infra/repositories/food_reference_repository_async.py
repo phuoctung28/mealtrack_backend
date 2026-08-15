@@ -19,6 +19,9 @@ from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
 )
 from src.domain.services.nutrition_integrity_policy import NutritionIntegrityPolicy
 from src.infra.database.models.food_reference_model import FoodReferenceModel
+from src.infra.repositories.food_reference_integrity_repository import (
+    FoodReferenceIntegrityRepository,
+)
 from src.infra.repositories.food_reference_projection import (
     FOOD_REFERENCE_SEED_COLUMNS,
     build_food_reference_nutrient_rows,
@@ -48,11 +51,13 @@ class AsyncFoodReferenceRepository:
     ):
         self._session = session
         self._integrity_policy = integrity_policy or NutritionIntegrityPolicy()
+        self._integrity_repository = FoodReferenceIntegrityRepository(session)
 
     async def get_by_barcode(self, barcode: str) -> dict[str, Any] | None:
         stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.barcode == barcode)
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         result = await self._session.execute(stmt)
@@ -63,6 +68,7 @@ class AsyncFoodReferenceRepository:
         stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.id == ref_id)
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         result = await self._session.execute(stmt)
@@ -76,6 +82,7 @@ class AsyncFoodReferenceRepository:
         stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.id == food_reference_id)
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         result = await self._session.execute(stmt)
@@ -91,6 +98,7 @@ class AsyncFoodReferenceRepository:
         statement = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.id.in_(ids))
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         if for_update:
@@ -119,7 +127,9 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.fiber_100g,
                 FoodReferenceModel.sugar_100g,
                 FoodReferenceModel.density,
-            ).order_by(
+            )
+            .where(self._integrity_repository.public_eligibility_clause())
+            .order_by(
                 FoodReferenceModel.is_verified.desc(),
                 FoodReferenceModel.id.asc(),
             )
@@ -152,6 +162,7 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.density,
             )
             .where(FoodReferenceModel.name_normalized == name_normalized)
+            .where(self._integrity_repository.public_eligibility_clause())
             .order_by(
                 FoodReferenceModel.is_verified.desc(), FoodReferenceModel.id.asc()
             )
@@ -183,6 +194,12 @@ class AsyncFoodReferenceRepository:
             require_metric_basis=False,
         )
         model.is_verified = True
+        await self._sync_normalized_children(model, {})
+        await self._integrity_repository.materialize_reference(
+            model,
+            actor_kind="reviewer",
+            reason_code="catalog_approval",
+        )
         await self._session.flush()
         return food_reference_model_to_nutrition_projection(model)
 
@@ -190,6 +207,7 @@ class AsyncFoodReferenceRepository:
         stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.fdc_id == fdc_id)
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         result = await self._session.execute(stmt)
@@ -203,6 +221,7 @@ class AsyncFoodReferenceRepository:
         result = await self._session.execute(
             select(FoodReferenceModel)
             .where(FoodReferenceModel.fdc_id.in_(ids))
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         return {
@@ -218,6 +237,7 @@ class AsyncFoodReferenceRepository:
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name.ilike(f"%{query}%"))
             .where(FoodReferenceModel.region.in_([region, "global"]))
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
             .limit(limit)
         )
@@ -242,7 +262,7 @@ class AsyncFoodReferenceRepository:
         base_stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized.isnot(None))
-            .where(FoodReferenceModel.is_verified.is_(True))
+            .where(self._integrity_repository.public_eligibility_clause())
             .where(FoodReferenceModel.region.in_([region, "global"]))
             .where(
                 or_(
@@ -343,6 +363,8 @@ class AsyncFoodReferenceRepository:
         refreshed = await self._find_after_upsert(values)
         if refreshed:
             await self._sync_normalized_children(refreshed, data)
+        if isinstance(refreshed, FoodReferenceModel):
+            await self._integrity_repository.materialize_reference(refreshed)
 
     async def upsert_seed(self, data: dict[str, Any]) -> None:
         """Upsert a canonical, non-barcoded seed without owning commit."""
@@ -408,6 +430,8 @@ class AsyncFoodReferenceRepository:
         refreshed = await self._find_model_by_normalized_name(name_normalized)
         if refreshed:
             await self._sync_normalized_children(refreshed, data)
+        if isinstance(refreshed, FoodReferenceModel):
+            await self._integrity_repository.materialize_reference(refreshed)
 
     async def find_batch_by_normalized_names(
         self, names_normalized: list[str]
@@ -418,6 +442,7 @@ class AsyncFoodReferenceRepository:
         stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized.in_(names_normalized))
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         result = await self._session.execute(stmt)
@@ -433,6 +458,7 @@ class AsyncFoodReferenceRepository:
         stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized == name_normalized)
+            .where(self._integrity_repository.public_eligibility_clause())
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         result = await self._session.execute(stmt)
@@ -525,6 +551,10 @@ class AsyncFoodReferenceRepository:
         await self._session.flush()
 
         refreshed = await self._find_model_by_normalized_name(name_normalized)
+        if isinstance(refreshed, FoodReferenceModel):
+            await self._sync_normalized_children(refreshed, {})
+        if isinstance(refreshed, FoodReferenceModel):
+            await self._integrity_repository.materialize_reference(refreshed)
         return food_reference_model_to_dict(refreshed) if refreshed else None
 
     async def _find_model_by_normalized_name(
@@ -609,6 +639,10 @@ class AsyncFoodReferenceRepository:
         extra_nutrients = data.get("extra_nutrients")
         if serving_sizes is not None:
             model.serving_size_rows = build_food_reference_serving_rows(serving_sizes)
+        elif not getattr(model, "serving_size_rows", None):
+            model.serving_size_rows = build_food_reference_serving_rows(
+                [{"name": "g", "grams": 1.0}]
+            )
         if extra_nutrients is not None:
             model.nutrient_rows = build_food_reference_nutrient_rows(extra_nutrients)
         await self._session.flush()
@@ -669,6 +703,9 @@ def _dedupe_search_projections(
     projections: list[FoodReferenceSearchProjection] = []
     for model in models:
         if not model.is_verified:
+            continue
+        materialized_status = getattr(model, "integrity_status", None)
+        if isinstance(materialized_status, str) and materialized_status != "valid":
             continue
         if (
             integrity_policy is not None

@@ -234,6 +234,16 @@ async def _search_local_food_references(
         return await uow.food_references.search_local(query, region, limit)
 
 
+async def _food_integrity_cache_context() -> dict[str, int | str]:
+    """Read DB-owned cache namespace before any food-search cache access."""
+    async with AsyncUnitOfWork() as uow:
+        control = await uow.food_reference_integrity.get_active_control()
+        return {
+            "policy_version": control.active_policy_version,
+            "generation": control.catalog_integrity_generation,
+        }
+
+
 def get_food_search_event_bus() -> EventBus:
     """
     Get a lightweight event bus for food search operations (singleton).
@@ -293,6 +303,7 @@ def get_food_search_event_bus() -> EventBus:
             fat_secret_service=fat_secret_service,
             translation_service=text_translation_service,
             local_search=_search_local_food_references,
+            integrity_context=_food_integrity_cache_context,
         ),
     )
     event_bus.register_handler(
@@ -546,6 +557,7 @@ def get_configured_event_bus() -> EventBus:
             fat_secret_service=fat_secret_service,
             translation_service=text_translation_service,
             local_search=_search_local_food_references,
+            integrity_context=_food_integrity_cache_context,
         ),
     )
     event_bus.register_handler(

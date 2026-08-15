@@ -277,12 +277,13 @@ async def test_upsert_by_normalized_name_uses_on_conflict_do_update():
 
     statement.values.assert_called_once()
     statement.on_conflict_do_update.assert_called_once()
-    assert "source_namespace" not in statement.on_conflict_do_update.call_args.kwargs[
-        "set_"
-    ]
-    assert "source_food_id" not in statement.on_conflict_do_update.call_args.kwargs[
-        "set_"
-    ]
+    assert (
+        "source_namespace"
+        not in statement.on_conflict_do_update.call_args.kwargs["set_"]
+    )
+    assert (
+        "source_food_id" not in statement.on_conflict_do_update.call_args.kwargs["set_"]
+    )
     session.flush.assert_awaited_once()
 
 
@@ -340,12 +341,13 @@ async def test_upsert_seed_uses_normalized_name_and_preserves_seed_metadata():
         "name_normalized"
     ]
     assert session.flush.await_count == 2
-    assert "source_namespace" not in statement.on_conflict_do_update.call_args.kwargs[
-        "set_"
-    ]
-    assert "source_food_id" not in statement.on_conflict_do_update.call_args.kwargs[
-        "set_"
-    ]
+    assert (
+        "source_namespace"
+        not in statement.on_conflict_do_update.call_args.kwargs["set_"]
+    )
+    assert (
+        "source_food_id" not in statement.on_conflict_do_update.call_args.kwargs["set_"]
+    )
 
 
 @pytest.mark.asyncio
@@ -376,12 +378,13 @@ async def test_upsert_by_barcode_uses_on_conflict_and_flushes_children():
 
     statement.values.assert_called_once()
     statement.on_conflict_do_update.assert_called_once()
-    assert "source_namespace" not in statement.on_conflict_do_update.call_args.kwargs[
-        "set_"
-    ]
-    assert "source_food_id" not in statement.on_conflict_do_update.call_args.kwargs[
-        "set_"
-    ]
+    assert (
+        "source_namespace"
+        not in statement.on_conflict_do_update.call_args.kwargs["set_"]
+    )
+    assert (
+        "source_food_id" not in statement.on_conflict_do_update.call_args.kwargs["set_"]
+    )
     assert session.flush.await_count == 2
     assert row.serving_size_rows
     assert row.nutrient_rows

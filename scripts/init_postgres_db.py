@@ -53,6 +53,9 @@ engine = create_engine(_sync_url, pool_pre_ping=True)
 
 # Import every model so they register themselves on Base.metadata
 import src.infra.database.models  # noqa: F401, E402
+from src.domain.services.nutrition_integrity_policy import (  # noqa: E402
+    NUTRITION_INTEGRITY_POLICY_VERSION,
+)
 from src.infra.database.base import Base  # noqa: E402
 
 
@@ -147,6 +150,24 @@ def stamp_alembic_head(cfg: Config) -> None:
         )
 
 
+def ensure_integrity_control_row(connection) -> None:
+    """Keep the DB-owned integrity control singleton present after bootstrap."""
+    if not inspect(connection).has_table("food_reference_integrity_control"):
+        return
+
+    connection.execute(
+        text(
+            """
+            INSERT INTO food_reference_integrity_control
+                (id, active_policy_version, catalog_integrity_generation, updated_at)
+            VALUES (1, :policy, 0, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO NOTHING
+            """
+        ),
+        {"policy": NUTRITION_INTEGRITY_POLICY_VERSION},
+    )
+
+
 def main():
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", migration_url)
@@ -160,6 +181,8 @@ def main():
             )
             validate_schema_matches_metadata()
             stamp_alembic_head(cfg)
+            with engine.begin() as conn:
+                ensure_integrity_control_row(conn)
             print("Done.")
             return
 
@@ -167,6 +190,8 @@ def main():
             "Database already initialised — running alembic upgrade head for any new migrations."
         )
         command.upgrade(cfg, "head")
+        with engine.begin() as conn:
+            ensure_integrity_control_row(conn)
         print("Done.")
         return
 
@@ -181,6 +206,9 @@ def main():
     # 2. Create all tables from current SQLAlchemy models
     Base.metadata.create_all(engine)
     print("  All tables created.")
+
+    with engine.begin() as conn:
+        ensure_integrity_control_row(conn)
 
     # 3. Stamp Alembic at head so future migrations apply correctly
     stamp_alembic_head(cfg)
