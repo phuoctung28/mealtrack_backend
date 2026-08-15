@@ -47,7 +47,7 @@ Every item resolves to exactly one logical origin: `food_reference_id`, `fdc_id`
 - Completed prerequisite: [parse-text FatSecret validation harness](../260814-1035-parse-text-fatsecret-validation-harness/plan.md) merged and deployed to SIT from `delivery` SHA `5415897c55173f446229441afbc0a79ed80c3f2f`.
 - Blocks [preparation-aware catalog ingredient resolution](../260729-1930-preparation-aware-catalog-resolution/plan.md) until shared integrity and provenance gates land.
 - Backend additive API must be live before the Flutter cutover.
-- The user chose not to use additional worktrees. Every backend implementation session must fetch latest `origin/delivery`, verify its selected base SHA, preserve unrelated WIP, and stage only phase-owned files. Flutter must likewise start from freshly fetched remote `main`, never stale local `main`.
+- The user chose not to use additional worktrees for backend implementation. Every backend implementation session must fetch latest `origin/delivery`, verify its selected base SHA, preserve unrelated WIP, and stage only phase-owned files. Flutter Phase 5 must likewise start from freshly fetched remote `delivery`, never Flutter `main` or a stale local branch, so mobile tracks the backend delivery line.
 - Production quarantine requires read-only audit, reviewed versioned manifest, dry-run diff, row lock/compare-and-swap guard, and separate operations approval.
 
 ## Evidence
