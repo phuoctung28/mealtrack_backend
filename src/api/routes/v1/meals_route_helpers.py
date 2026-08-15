@@ -34,6 +34,8 @@ def parsed_food_item_to_response(item) -> ParsedFoodItem:
         protein=item.protein,
         carbs=item.carbs,
         fat=item.fat,
+        fiber=getattr(item, "fiber", 0.0) or 0.0,
+        sugar=getattr(item, "sugar", 0.0) or 0.0,
         data_source=item.data_source,
         fdc_id=item.fdc_id,
         allowed_units=getattr(item, "allowed_units", None) or [],

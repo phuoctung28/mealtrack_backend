@@ -92,6 +92,27 @@ def test_fatsecret_nutrition_prefers_100g_serving():
 
 
 @pytest.mark.unit
+def test_fatsecret_nutrition_rejects_missing_metric_basis():
+    service = FatSecretService("client", "secret")
+    nutrition = service._extract_nutrition_from_details(
+        {
+            "servings": {
+                "serving": {
+                    "measurement_description": "serving",
+                    "calories": "100",
+                    "protein": "3",
+                    "carbohydrate": "20",
+                    "fat": "2",
+                }
+            }
+        }
+    )
+
+    assert nutrition["metric_serving_amount"] is None
+    assert nutrition["protein_100g"] is None
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_fatsecret_api_request_posts_form_params():
     service = FatSecretService("client", "secret")
@@ -187,7 +208,9 @@ async def test_fatsecret_search_candidates_does_not_fetch_details():
     results = await service.search_food_candidates("cheerios", max_results=1)
 
     service._api_request.assert_awaited_once()
-    assert service._api_request.await_args.kwargs["params"]["method"] == "foods.search.v5"
+    assert (
+        service._api_request.await_args.kwargs["params"]["method"] == "foods.search.v5"
+    )
     assert results == [
         {
             "description": "Whole Grain Cheerios",

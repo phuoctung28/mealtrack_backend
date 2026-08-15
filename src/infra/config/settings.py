@@ -296,6 +296,15 @@ class Settings(BaseSettings):
         default="v1",
         description="Meal analysis graph version emitted in workflow state.",
     )
+    PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED: bool = Field(
+        default=False,
+        description="Enable structured local/FatSecret resolution for parse-text.",
+    )
+    PARSE_TEXT_FATSECRET_TIMEOUT_SECONDS: float = Field(
+        default=3.0,
+        gt=0,
+        description="Request-wide parse-text FatSecret deadline in seconds.",
+    )
 
     # Catalog meal recommendations analytics
     MEAL_RECOMMENDATIONS_ANALYTICS_SALT: str = Field(
