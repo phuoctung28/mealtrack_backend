@@ -7,6 +7,9 @@ does not authorize production data mutation.
 
 - Confirm `origin/delivery` contains the required delivery merge SHA and record
   the deployed backend revision separately from the source branch.
+- The migration-created control row is intentionally pending while
+  `activation_run_id` is NULL. During this window, verified legacy references
+  remain readable so the additive migration cannot cause a catalog outage.
 - Apply the additive migration with bounded `lock_timeout` and
   `statement_timeout`; capture migration output and `EXPLAIN` evidence for the
   public eligibility query.
@@ -15,6 +18,12 @@ does not authorize production data mutation.
   nutrition payloads, query text, provider IDs, credentials, or database URLs.
 - Produce a versioned manifest of IDs and digests. Keep the manifest outside
   the repository and require an operator approval reference for every apply.
+- Reclassify the complete verified cohort in bounded, reviewed batches. Set
+  valid rows to the active policy version and quarantine reviewed invalid rows;
+  preserve the editorial `is_verified` decision and append transition events.
+- Call the atomic policy activation only after the cohort is complete. It sets
+  `activation_run_id`, advances the generation, and switches public reads to
+  materialized eligibility. Never set the activation marker by hand.
 
 ## Transition and cache gate
 

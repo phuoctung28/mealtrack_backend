@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import and_, func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -88,6 +88,27 @@ class FoodReferenceIntegrityRepository:
         return ordered_ids
 
     def public_eligibility_clause(self):
+        control_exists = (
+            select(FoodReferenceIntegrityControlModel.id)
+            .where(FoodReferenceIntegrityControlModel.id == 1)
+            .exists()
+        )
+        control_pending = (
+            select(FoodReferenceIntegrityControlModel.id)
+            .where(
+                FoodReferenceIntegrityControlModel.id == 1,
+                FoodReferenceIntegrityControlModel.activation_run_id.is_(None),
+            )
+            .exists()
+        )
+        control_activated = (
+            select(FoodReferenceIntegrityControlModel.id)
+            .where(
+                FoodReferenceIntegrityControlModel.id == 1,
+                FoodReferenceIntegrityControlModel.activation_run_id.is_not(None),
+            )
+            .exists()
+        )
         active_policy = (
             select(FoodReferenceIntegrityControlModel.active_policy_version)
             .where(FoodReferenceIntegrityControlModel.id == 1)
@@ -95,8 +116,17 @@ class FoodReferenceIntegrityRepository:
         )
         return and_(
             FoodReferenceModel.is_verified.is_(True),
-            FoodReferenceModel.integrity_status == "valid",
-            FoodReferenceModel.integrity_policy_version == active_policy,
+            or_(
+                # Migration creates a pending control row. Preserve the
+                # pre-cutover verified read contract until the cohort has
+                # been classified and activate_policy() commits the gate.
+                and_(control_exists, control_pending),
+                and_(
+                    control_activated,
+                    FoodReferenceModel.integrity_status == "valid",
+                    FoodReferenceModel.integrity_policy_version == active_policy,
+                ),
+            ),
         )
 
     async def eligible_reference_ids(self, ids: list[int] | None = None) -> set[int]:
@@ -285,7 +315,7 @@ class FoodReferenceIntegrityRepository:
             select(func.count(FoodReferenceModel.id)).where(
                 FoodReferenceModel.is_verified.is_(True),
                 ~and_(
-                    FoodReferenceModel.integrity_status == "valid",
+                    FoodReferenceModel.integrity_status.in_(("valid", "quarantined")),
                     FoodReferenceModel.integrity_policy_version == policy_version,
                 ),
             )

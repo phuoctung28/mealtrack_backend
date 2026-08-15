@@ -99,7 +99,7 @@ Modify:
 
 ## Success Criteria
 
-- [x] Eligibility always matches active policy version; stale policy/cache entries cannot surface.
+- [x] Pending control rows preserve legacy verified reads; after atomic activation, eligibility matches the active policy version and stale policy/cache entries cannot surface.
 - [x] Parent and serving races invalidate or block stale valid state.
 - [x] Quarantine/restore is attributable, append-only, reversible by forward transition, and CAS-safe.
 - [x] Every verification writer and direct save uses active versioned eligibility.
@@ -114,6 +114,7 @@ Modify:
 - `lint-imports` passed for 826 files and 3,752 dependencies; targeted Ruff and compile checks passed.
 - Disposable PostgreSQL smoke applied migration `20260815000004`, exercised valid/quarantine/restore/child-invalidation/stale-CAS/constraint paths, and was dropped afterward. No production or shared database was mutated.
 - Fresh-schema bootstrap now idempotently seeds the DB-owned control singleton after `Base.metadata.create_all()`; the regression suite and disposable PostgreSQL bootstrap smoke confirmed exactly one active-policy row.
+- Public reads now remain compatible while `activation_run_id` is NULL and switch to strict materialized eligibility only after atomic cohort activation; verified/quarantined rows count as classified for activation completeness.
 - `scripts/nutrition_integrity.py audit` is read-only; quarantine and restore default to dry-run and require an expected digest plus review reference for mutation.
 - Staging, Neon, deployed-revision, physical-device, telemetry adoption, and the separately approved legacy-sunset gate remain release-operations evidence, not production actions performed by this cook run.
 
