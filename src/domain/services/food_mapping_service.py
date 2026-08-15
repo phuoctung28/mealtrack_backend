@@ -45,6 +45,27 @@ FALLBACK_UNIT_CATEGORIES = {
 DEFAULT_ALLOWED_UNITS = [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
 
+def _namespaced_id(namespace: Any, source_id: Any) -> str:
+    """Return the stable display alias while keeping the source id opaque."""
+    normalized_namespace = str(namespace).strip()
+    normalized_id = str(source_id).strip()
+    prefix = f"{normalized_namespace}:"
+    if normalized_id.startswith(prefix):
+        normalized_id = normalized_id[len(prefix) :]
+    return f"{normalized_namespace}:{normalized_id}"
+
+
+def _opaque_source_id(namespace: Any, source_id: Any) -> str:
+    normalized_namespace = str(namespace).strip()
+    normalized_id = str(source_id).strip()
+    prefix = f"{normalized_namespace}:"
+    return (
+        normalized_id[len(prefix) :]
+        if normalized_id.startswith(prefix)
+        else normalized_id
+    )
+
+
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.services.nutrition_integrity_policy import (
     NutritionIntegrityError,
@@ -59,6 +80,13 @@ class FoodMappingService(FoodMappingServicePort):
 
     def map_search_item(self, item: dict[str, Any]) -> dict[str, Any]:
         if item.get("source") == "food_reference":
+            food_reference_id = item.get("food_reference_id")
+            expected_alias = f"food_reference:{food_reference_id}"
+            supplied_alias = item.get("food_id")
+            if supplied_alias is not None and str(supplied_alias) != expected_alias:
+                raise NutritionIntegrityError(
+                    self._integrity_policy.rejection("origin_alias_mismatch")
+                )
             result = self._require_search_integrity(
                 item,
                 require_energy=False,
@@ -71,8 +99,11 @@ class FoodMappingService(FoodMappingServicePort):
             calories = result.derived_calories_100g
             return {
                 "fdc_id": None,
-                "food_id": f"food_reference:{item.get('food_reference_id')}",
-                "food_reference_id": item.get("food_reference_id"),
+                "food_id": expected_alias,
+                "food_reference_id": food_reference_id,
+                "origin": "local",
+                "source_namespace": "food_reference",
+                "source_food_id": str(food_reference_id),
                 "name": item.get("description"),
                 "brand": item.get("brand"),
                 "data_type": "food_reference",
@@ -96,6 +127,9 @@ class FoodMappingService(FoodMappingServicePort):
                     "carbs_per_100g": carbs,
                     "fat_per_100g": fat,
                 },
+                "nutrition_basis": "100g",
+                "nutrition_contract_version": result.policy_version,
+                "calories_per_100g": calories,
             }
 
         # Handle fatsecret results with embedded nutrition
@@ -107,7 +141,16 @@ class FoodMappingService(FoodMappingServicePort):
             )
             return {
                 "fdc_id": None,  # fatsecret doesn't use FDC IDs
-                "food_id": item.get("food_id"),
+                "food_id": _namespaced_id(
+                    item.get("source_namespace") or "fatsecret",
+                    item.get("source_food_id") or item.get("food_id"),
+                ),
+                "origin": "provider",
+                "source_namespace": item.get("source_namespace") or "fatsecret",
+                "source_food_id": _opaque_source_id(
+                    item.get("source_namespace") or "fatsecret",
+                    item.get("source_food_id") or item.get("food_id"),
+                ),
                 "name": item.get("description"),
                 "brand": item.get("brand"),
                 "data_type": "fatsecret",
@@ -134,6 +177,9 @@ class FoodMappingService(FoodMappingServicePort):
                     if result.calories_100g is not None
                     else None
                 ),
+                "nutrition_basis": "100g",
+                "nutrition_contract_version": result.policy_version,
+                "calories_per_100g": result.derived_calories_100g,
             }
 
         # USDA results
@@ -178,6 +224,13 @@ class FoodMappingService(FoodMappingServicePort):
         )
         result["calories"] = integrity.derived_calories_100g
         result["allowed_units"] = list(integrity.serving_options)
+        result["origin"] = "usda"
+        result["source_namespace"] = "usda_fdc"
+        result["source_food_id"] = str(item.get("fdcId"))
+        result["food_id"] = _namespaced_id("usda_fdc", item.get("fdcId"))
+        result["nutrition_basis"] = "100g"
+        result["nutrition_contract_version"] = integrity.policy_version
+        result["calories_per_100g"] = integrity.derived_calories_100g
         if "source" in item:
             result["source"] = item["source"]
         return result

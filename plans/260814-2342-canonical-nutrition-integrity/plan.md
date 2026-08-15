@@ -3,7 +3,7 @@ title: "Canonical Nutrition Integrity"
 description: "Deep TDD cutover to backend-authoritative nutrition identity, persistence, Flutter preview, and reversible production quarantine."
 status: in-progress
 priority: P1
-branch: "feature/canonical-nutrition-integrity"
+branch: "feature/canonical-nutrition-integrity-phase-03"
 effort: 16d
 tags: [backend, mobile, api, nutrition, tdd, critical]
 blockedBy: []
@@ -37,7 +37,7 @@ Every item resolves to exactly one logical origin: `food_reference_id`, `fdc_id`
 |-------|------|--------|
 | 1 | [Lock Contracts and Contain Production](./phase-01-lock-contracts-and-contain-production.md) | Completed |
 | 2 | [Build Nutrition Integrity Policy](./phase-02-build-nutrition-integrity-policy.md) | Completed |
-| 3 | [Normalize Search and Source Resolution](./phase-03-normalize-search-and-source-resolution.md) | Pending |
+| 3 | [Normalize Search and Source Resolution](./phase-03-normalize-search-and-source-resolution.md) | Completed |
 | 4 | [Make Create And Edit Reference Authoritative](./phase-04-make-manual-save-reference-authoritative.md) | Pending |
 | 5 | [Cut Over Flutter Nutrition Authority](./phase-05-cut-over-flutter-nutrition-authority.md) | Pending |
 | 6 | [Quarantine Data and Release Safely](./phase-06-quarantine-data-and-release-safely.md) | Pending |
@@ -77,4 +77,4 @@ Every item resolves to exactly one logical origin: `food_reference_id`, `fdc_id`
 
 ## Validation Log
 
-Validated after seven independent code-backed reviews: all 32 accepted findings are represented and both final reviewers report zero remaining blockers. Phase 1 closed on 2026-08-15 after PR #509 merged at `5415897c55173f446229441afbc0a79ed80c3f2f`, its SIT image built successfully, and the live potato sentinel returned 85.3 kcal. Phase 2 closed after the shared integrity policy, canonical serving normalization, fail-closed trust-boundary gates, and focused suites passed; the broad unit gate retains one unrelated cron/onboarding WIP failure documented in the Phase 2 verification evidence.
+Validated after seven independent code-backed reviews: all 32 accepted findings are represented and both final reviewers report zero remaining blockers. Phase 1 closed on 2026-08-15 after PR #509 merged at `5415897c55173f446229441afbc0a79ed80c3f2f`, its SIT image built successfully, and the live potato sentinel returned 85.3 kcal. Phase 2 closed after the shared integrity policy, canonical serving normalization, fail-closed trust-boundary gates, and focused suites passed; the broad unit gate retains one unrelated cron/onboarding WIP failure documented in the Phase 2 verification evidence. Phase 3 closed on 2026-08-15 on `feature/canonical-nutrition-integrity-phase-03`: focused identity/search/parse/repository suites passed, offline evaluation passed 10 synthetic cases, and 2330 unit tests passed with the unrelated cron WIP test excluded. Phase 3 closeout also made local search batch fetching exhaustive until the valid limit is filled, made provider identity absence degrade instead of claim provider authority, and versioned search cache keys with `nutrition_integrity_v1`.

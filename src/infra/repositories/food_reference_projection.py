@@ -21,6 +21,8 @@ FOOD_REFERENCE_SEED_COLUMNS = {
     "category",
     "region",
     "fdc_id",
+    "source_namespace",
+    "source_food_id",
     "protein_100g",
     "carbs_100g",
     "fat_100g",
@@ -47,6 +49,8 @@ def food_reference_model_to_dict(model: FoodReferenceModel) -> dict[str, Any]:
         "category": model.category,
         "region": model.region,
         "fdc_id": model.fdc_id,
+        "source_namespace": getattr(model, "source_namespace", None),
+        "source_food_id": getattr(model, "source_food_id", None),
         "protein_100g": model.protein_100g,
         "carbs_100g": model.carbs_100g,
         "fat_100g": model.fat_100g,
@@ -92,6 +96,8 @@ def food_reference_model_to_nutrition_projection(
         sugar_100g=model.sugar_100g or 0.0,
         density_g_ml=model.density,
         name_normalized=model.name_normalized,
+        source_namespace=getattr(model, "source_namespace", None),
+        source_food_id=getattr(model, "source_food_id", None),
         servings=[
             FoodReferenceServingProjection(
                 name=item["name"],

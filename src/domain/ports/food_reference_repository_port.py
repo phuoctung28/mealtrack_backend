@@ -30,6 +30,8 @@ class FoodReferenceNutritionProjection:
     density_g_ml: float | None = None
     servings: list[FoodReferenceServingProjection] = field(default_factory=list)
     name_normalized: str | None = None
+    source_namespace: str | None = None
+    source_food_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,8 @@ class FoodReferenceSearchProjection:
     sugar_100g: float = 0.0
     serving_size: str | None = None
     allowed_units: list[dict] = field(default_factory=list)
+    source_namespace: str | None = None
+    source_food_id: str | None = None
 
 
 class FoodReferenceRepositoryPort(Protocol):

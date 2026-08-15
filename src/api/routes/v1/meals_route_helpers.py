@@ -39,4 +39,12 @@ def parsed_food_item_to_response(item) -> ParsedFoodItem:
         data_source=item.data_source,
         fdc_id=item.fdc_id,
         allowed_units=getattr(item, "allowed_units", None) or [],
+        food_id=getattr(item, "food_id", None),
+        food_reference_id=getattr(item, "food_reference_id", None),
+        origin=getattr(item, "origin", None),
+        source_namespace=getattr(item, "source_namespace", None),
+        source_food_id=getattr(item, "source_food_id", None),
+        nutrition_basis=getattr(item, "nutrition_basis", None),
+        nutrition_contract_version=getattr(item, "nutrition_contract_version", None),
+        calories_per_100g=getattr(item, "calories_per_100g", None),
     )

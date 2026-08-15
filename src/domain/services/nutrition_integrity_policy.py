@@ -283,6 +283,11 @@ class NutritionIntegrityPolicy:
         return result
 
     @staticmethod
+    def rejection(reason_code: str) -> NutritionIntegrityResult:
+        """Build a stable rejection for non-numeric identity checks."""
+        return NutritionIntegrityResult(accepted=False, reason_code=reason_code)
+
+    @staticmethod
     def _reject(reason_code: str) -> NutritionIntegrityResult:
         return NutritionIntegrityResult(accepted=False, reason_code=reason_code)
 

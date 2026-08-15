@@ -58,10 +58,26 @@ class _HighCalorieFatSecretService:
         return [{"food_name": "Pho concentrate"}]
 
 
+class _LegacyProviderWithoutIdentity:
+    async def search_foods(self, *args, **kwargs):
+        return [
+            {
+                "food_name": "Rice",
+                "protein_100g": 2.7,
+                "carbs_100g": 28.0,
+                "fat_100g": 0.3,
+                "fiber_100g": 0.4,
+                "sugar_100g": 0.1,
+                "calories_100g": 126.1,
+            }
+        ]
+
+
 class _AllowedUnitsFatSecretService:
     async def search_foods(self, *args, **kwargs):
         return [
             {
+                "food_id": "chicken-breast",
                 "food_name": "Chicken Breast",
                 "allowed_units": [
                     {
@@ -451,6 +467,32 @@ async def test_parse_text_does_not_claim_fatsecret_for_invalid_structured_nutrit
 
     response = await handler.handle(
         ParseMealTextCommand(text="100g potato", user_id="user-1", language="en")
+    )
+
+    assert response.items[0].data_source != "fatsecret"
+
+
+@pytest.mark.asyncio
+async def test_parse_text_does_not_claim_provider_without_durable_identity():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    _parse_item(
+                        name="Rice", macros={"protein": 2.7, "carbs": 28.0, "fat": 0.3}
+                    )
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_LegacyProviderWithoutIdentity(),
+        structured_reference_enabled=False,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="100g rice", user_id="user-1", language="en")
     )
 
     assert response.items[0].data_source != "fatsecret"

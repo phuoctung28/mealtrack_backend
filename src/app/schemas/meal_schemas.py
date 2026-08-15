@@ -22,6 +22,14 @@ class ParsedFoodItemDto:
     data_source: str | None = None
     fdc_id: int | None = None
     allowed_units: list[dict[str, Any]] | None = None
+    food_id: str | None = None
+    food_reference_id: int | None = None
+    origin: str | None = None
+    source_namespace: str | None = None
+    source_food_id: str | None = None
+    nutrition_basis: str | None = None
+    nutrition_contract_version: str | None = None
+    calories_per_100g: float | None = None
 
 
 @dataclass

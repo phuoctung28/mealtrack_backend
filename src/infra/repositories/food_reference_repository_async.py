@@ -91,6 +91,8 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.name,
                 FoodReferenceModel.name_normalized,
                 FoodReferenceModel.source,
+                FoodReferenceModel.source_namespace,
+                FoodReferenceModel.source_food_id,
                 FoodReferenceModel.is_verified,
                 FoodReferenceModel.protein_100g,
                 FoodReferenceModel.carbs_100g,
@@ -120,6 +122,8 @@ class AsyncFoodReferenceRepository:
                 FoodReferenceModel.name,
                 FoodReferenceModel.name_normalized,
                 FoodReferenceModel.source,
+                FoodReferenceModel.source_namespace,
+                FoodReferenceModel.source_food_id,
                 FoodReferenceModel.is_verified,
                 FoodReferenceModel.protein_100g,
                 FoodReferenceModel.carbs_100g,
@@ -201,7 +205,7 @@ class AsyncFoodReferenceRepository:
             FoodReferenceModel.name_normalized,
             normalized_query,
         )
-        stmt = (
+        base_stmt = (
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized.isnot(None))
             .where(FoodReferenceModel.region.in_([region, "global"]))
@@ -217,14 +221,30 @@ class AsyncFoodReferenceRepository:
                 similarity_score.desc(),
                 FoodReferenceModel.id.asc(),
             )
-            .limit(bounded_limit * 3)
         )
-        result = await self._session.execute(stmt)
-        return _dedupe_search_projections(
-            result.scalars().all(),
-            bounded_limit,
-            integrity_policy=self._integrity_policy,
-        )
+        fetch_size = max(bounded_limit * 3, 10)
+        offset = 0
+        projections: list[FoodReferenceSearchProjection] = []
+        seen: set[str] = set()
+        while True:
+            result = await self._session.execute(
+                base_stmt.limit(fetch_size).offset(offset)
+            )
+            batch = result.scalars().all()
+            projections.extend(
+                _dedupe_search_projections(
+                    batch,
+                    bounded_limit - len(projections),
+                    integrity_policy=self._integrity_policy,
+                    seen=seen,
+                )
+            )
+            if len(projections) >= bounded_limit:
+                break
+            offset += len(batch)
+            if len(batch) < fetch_size:
+                break
+        return projections
 
     async def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update a food reference by barcode without owning commit."""
@@ -255,6 +275,8 @@ class AsyncFoodReferenceRepository:
             "source": data.get("source", "fatsecret"),
             "is_verified": data.get("is_verified", False),
             "fdc_id": data.get("fdc_id"),
+            "source_namespace": data.get("source_namespace"),
+            "source_food_id": data.get("source_food_id"),
             "category": data.get("category"),
             "region": data.get("region", "global"),
             "density": data.get("density", 1.0),
@@ -311,6 +333,8 @@ class AsyncFoodReferenceRepository:
             "serving_sizes": data.get("serving_sizes") or data.get("allowed_units"),
             "image_url": data.get("image_url"),
             "source": data.get("source", "seed"),
+            "source_namespace": data.get("source_namespace"),
+            "source_food_id": data.get("source_food_id"),
             "is_verified": data.get("is_verified", False),
             "density": data.get("density", 1.0),
             "extra_nutrients": data.get("extra_nutrients"),
@@ -374,8 +398,28 @@ class AsyncFoodReferenceRepository:
         source: str,
         is_verified: bool,
         external_id: str | None = None,
+        source_namespace: str | None = None,
     ) -> dict[str, Any] | None:
-        existing = await self._find_model_by_normalized_name(name_normalized)
+        identity_namespace = source_namespace or _source_namespace(source)
+        identity_id = str(external_id) if external_id is not None else None
+        existing = await self._find_model_by_source_identity(
+            identity_namespace, identity_id
+        )
+        name_match = await self._find_model_by_normalized_name(name_normalized)
+        if existing is not None and name_match is None:
+            raise ValueError("source identity/name collision requires review")
+        if (
+            existing is not None
+            and name_match is not None
+            and name_match.id != existing.id
+        ):
+            raise ValueError("source identity/name collision requires review")
+        if existing is None:
+            existing = name_match
+        if existing is not None and _identity_conflicts(
+            existing, identity_namespace, identity_id
+        ):
+            raise ValueError("source identity/name collision requires review")
         if existing is not None and existing.is_verified and not is_verified:
             return food_reference_model_to_dict(existing)
         if is_verified:
@@ -402,6 +446,8 @@ class AsyncFoodReferenceRepository:
             "source": source,
             "is_verified": is_verified,
             "region": "global",
+            "source_namespace": identity_namespace if identity_id else None,
+            "source_food_id": identity_id,
         }
         update_fields = {k: v for k, v in values.items() if k != "name_normalized"}
         stmt = pg_insert(FoodReferenceModel).values(**values)
@@ -423,6 +469,19 @@ class AsyncFoodReferenceRepository:
         result = await self._session.execute(
             select(FoodReferenceModel)
             .where(FoodReferenceModel.name_normalized == name_normalized)
+            .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+        )
+        return result.scalars().first()
+
+    async def _find_model_by_source_identity(
+        self, source_namespace: str | None, source_food_id: str | None
+    ) -> FoodReferenceModel | None:
+        if not source_namespace or not source_food_id:
+            return None
+        result = await self._session.execute(
+            select(FoodReferenceModel)
+            .where(FoodReferenceModel.source_namespace == source_namespace)
+            .where(FoodReferenceModel.source_food_id == source_food_id)
             .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
         )
         return result.scalars().first()
@@ -473,6 +532,8 @@ def _catalog_seed_candidate_projection(row: Any) -> FoodReferenceNutritionProjec
         id=int(row.id),
         name=str(row.name),
         source=str(row.source),
+        source_namespace=getattr(row, "source_namespace", None),
+        source_food_id=getattr(row, "source_food_id", None),
         is_verified=bool(row.is_verified),
         protein_100g=row.protein_100g,
         carbs_100g=row.carbs_100g,
@@ -513,8 +574,11 @@ def _dedupe_search_projections(
     limit: int,
     *,
     integrity_policy: NutritionIntegrityPolicy | None = None,
+    seen: set[str] | None = None,
 ) -> list[FoodReferenceSearchProjection]:
-    seen: set[str] = set()
+    if limit <= 0:
+        return []
+    seen = seen if seen is not None else set()
     projections: list[FoodReferenceSearchProjection] = []
     for model in models:
         if (
@@ -527,9 +591,18 @@ def _dedupe_search_projections(
         ):
             continue
         normalized_name = model.name_normalized or normalize_food_name(model.name)
-        if normalized_name in seen:
+        identity_namespace = getattr(model, "source_namespace", None)
+        identity_id = getattr(model, "source_food_id", None)
+        if (
+            identity_namespace in {"fatsecret", "openfoodfacts", "usda_fdc"}
+            and identity_id
+        ):
+            dedupe_key = f"{identity_namespace}:{identity_id}"
+        else:
+            dedupe_key = normalized_name
+        if dedupe_key in seen:
             continue
-        seen.add(normalized_name)
+        seen.add(dedupe_key)
         projections.append(
             FoodReferenceSearchProjection(
                 id=model.id,
@@ -537,6 +610,8 @@ def _dedupe_search_projections(
                 name_normalized=model.name_normalized,
                 brand=model.brand,
                 source=model.source,
+                source_namespace=getattr(model, "source_namespace", None),
+                source_food_id=getattr(model, "source_food_id", None),
                 is_verified=model.is_verified,
                 protein_100g=model.protein_100g,
                 carbs_100g=model.carbs_100g,
@@ -550,3 +625,24 @@ def _dedupe_search_projections(
         if len(projections) >= limit:
             break
     return projections
+
+
+def _source_namespace(source: str | None) -> str | None:
+    normalized = str(source or "").strip().lower()
+    if normalized in {"fatsecret", "openfoodfacts", "provider"}:
+        return normalized if normalized != "provider" else None
+    if normalized in {"usda", "usda_fdc", "fooddata_central"}:
+        return "usda_fdc"
+    return None
+
+
+def _identity_conflicts(
+    model: FoodReferenceModel,
+    source_namespace: str | None,
+    source_food_id: str | None,
+) -> bool:
+    existing_namespace = getattr(model, "source_namespace", None)
+    existing_id = getattr(model, "source_food_id", None)
+    if not source_namespace or not source_food_id:
+        return False
+    return (existing_namespace, existing_id) != (source_namespace, source_food_id)

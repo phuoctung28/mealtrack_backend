@@ -116,7 +116,7 @@ async def test_search_foods_query_handler_returns_mapped_results(monkeypatch):
     assert len(result["results"]) == 1
     item = result["results"][0]
     assert item["fdc_id"] is None
-    assert item["food_id"] == "12345"
+    assert item["food_id"] == "fatsecret:12345"
     assert item["name"].lower().startswith("chicken")
     assert item["data_type"] == "fatsecret"
     assert item["source"] == "fatsecret"

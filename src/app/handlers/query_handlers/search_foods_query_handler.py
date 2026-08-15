@@ -235,6 +235,10 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         return {
             "source": "food_reference",
             "food_reference_id": item.id,
+            "origin": "local",
+            "source_namespace": item.source_namespace or "food_reference",
+            "source_food_id": item.source_food_id or str(item.id),
+            "food_id": f"food_reference:{item.id}",
             "description": item.name,
             "name_normalized": item.name_normalized,
             "brand": item.brand,
@@ -257,8 +261,22 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
     ) -> list[dict[str, Any]]:
         merged = list(local_raw)
         seen = {self._search_result_key(item) for item in merged}
+        local_names = {
+            str(item.get("name_normalized") or item.get("description") or "")
+            .strip()
+            .lower()
+            for item in local_raw
+        }
         for item in provider_raw:
             item.setdefault("source", "fatsecret")
+            if not item.get("source_food_id") and not item.get("food_id"):
+                provider_name = (
+                    str(item.get("name_normalized") or item.get("description") or "")
+                    .strip()
+                    .lower()
+                )
+                if provider_name in local_names:
+                    continue
             key = self._search_result_key(item)
             if key in seen:
                 continue
@@ -269,6 +287,18 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         return merged[:limit]
 
     def _search_result_key(self, item: dict[str, Any]) -> str:
+        namespace = item.get("source_namespace")
+        source_id = item.get("source_food_id")
+        if namespace and source_id is not None:
+            return f"identity:{str(namespace).strip().lower()}:{str(source_id).strip()}"
+        if item.get("food_reference_id") is not None:
+            return f"identity:food_reference:{item['food_reference_id']}"
+        food_id = item.get("food_id")
+        if food_id and ":" in str(food_id):
+            return f"identity:{str(food_id).strip().lower()}"
+        source = str(item.get("source") or "").strip().lower()
+        if source in {"fatsecret", "openfoodfacts", "provider"} and food_id:
+            return f"identity:{source}:{str(food_id).strip()}"
         normalized = item.get("name_normalized")
         if normalized:
             return str(normalized).strip().lower()
@@ -334,7 +364,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         for item in raw_results:
             original_name = item.get("description", "")
             capitalized_name = self._capitalize_food_name(original_name)
-            name_key = capitalized_name.lower().strip()
+            name_key = self._search_result_key(
+                {**item, "description": capitalized_name}
+            )
 
             if name_key not in seen_names:
                 seen_names.add(name_key)

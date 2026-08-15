@@ -33,6 +33,9 @@ from src.domain.services.nutrition_calculation_service import (
     normalize_unit_for_manual_save,
     scale_per_100g_nutrition,
 )
+from src.domain.services.nutrition_integrity_policy import (
+    NUTRITION_INTEGRITY_POLICY_VERSION,
+)
 from src.domain.services.nutrition_resolver import (
     normalize_food_lookup_name,
     preparation_matches,
@@ -231,6 +234,14 @@ class ParseMealTextHandler(
                 data_source=item.get("data_source"),
                 fdc_id=item.get("fdc_id"),
                 allowed_units=item.get("allowed_units") or [],
+                food_id=item.get("food_id"),
+                food_reference_id=item.get("food_reference_id"),
+                origin=item.get("origin"),
+                source_namespace=item.get("source_namespace"),
+                source_food_id=item.get("source_food_id"),
+                nutrition_basis=item.get("nutrition_basis"),
+                nutrition_contract_version=item.get("nutrition_contract_version"),
+                calories_per_100g=item.get("calories_per_100g"),
             )
             for item in enhanced_items
         ]
@@ -516,6 +527,8 @@ class ParseMealTextHandler(
         selected = select_nutrition_candidate(results, lookup_name)
         if selected is None:
             return None
+        if not self._reference_identity(selected, "fatsecret")["source_food_id"]:
+            return None
         structured = validate_reference_candidate(selected, require_energy=False)
         per_100g = (
             {
@@ -558,6 +571,17 @@ class ParseMealTextHandler(
         item["calories"] = self._derive_calories_from_macros(item)
         item["allowed_units"] = self._safe_allowed_units(selected.get("allowed_units"))
         item["data_source"] = "fatsecret"
+        item.update(self._reference_identity(selected, "fatsecret"))
+        item["nutrition_basis"] = "100g"
+        item["nutrition_contract_version"] = NUTRITION_INTEGRITY_POLICY_VERSION
+        item["calories_per_100g"] = self._derive_calories_from_macros(
+            {
+                "protein_g": per_100g.get("protein_100g", per_100g.get("protein", 0)),
+                "carbs_g": per_100g.get("carbs_100g", per_100g.get("carbs", 0)),
+                "fat_g": per_100g.get("fat_100g", per_100g.get("fat", 0)),
+                "fiber_g": per_100g.get("fiber_100g", per_100g.get("fiber", 0)),
+            }
+        )
         return item
 
     async def _provider_call(
@@ -600,7 +624,16 @@ class ParseMealTextHandler(
         if not reference.get("is_verified"):
             return False
         source = str(reference.get("source") or "").lower()
-        if source not in {"usda", "usda_fdc", "fooddata_central", "fatsecret"}:
+        if source not in {
+            "usda",
+            "usda_fdc",
+            "fooddata_central",
+            "fatsecret",
+            "food_reference",
+            "seed",
+            "catalog_seed",
+            "nin",
+        }:
             return False
         return preparation_matches(
             str(reference.get("name") or lookup_name), preparation
@@ -632,10 +665,63 @@ class ParseMealTextHandler(
             else "usda"
         )
         item["fdc_id"] = raw.get("fdc_id")
+        item.update(self._reference_identity(raw, source))
+        item["nutrition_basis"] = "100g"
+        item["nutrition_contract_version"] = NUTRITION_INTEGRITY_POLICY_VERSION
+        item["calories_per_100g"] = self._derive_calories_from_macros(
+            {
+                "protein_g": candidate.protein_per_100g,
+                "carbs_g": candidate.carbs_per_100g,
+                "fat_g": candidate.fat_per_100g,
+                "fiber_g": candidate.fiber_per_100g,
+            }
+        )
         item["allowed_units"] = self._safe_allowed_units(
             raw.get("allowed_units") or raw.get("serving_sizes")
         )
         return item
+
+    @staticmethod
+    def _reference_identity(raw: dict[str, Any], source: str) -> dict[str, Any]:
+        raw_source = str(raw.get("source") or source or "").lower()
+        if (
+            source == "local_reference"
+            or raw_source == "food_reference"
+            or raw.get("food_reference_id") is not None
+        ):
+            reference_id = raw.get("food_reference_id") or raw.get("id")
+            return {
+                "origin": "local",
+                "food_reference_id": reference_id,
+                "food_id": f"food_reference:{reference_id}",
+                "source_namespace": "food_reference",
+                "source_food_id": str(reference_id),
+            }
+        if raw.get("fdc_id") is not None or raw.get("fdcId") is not None:
+            fdc_id = raw.get("fdc_id") or raw.get("fdcId")
+            return {
+                "origin": "usda",
+                "food_id": f"usda_fdc:{fdc_id}",
+                "source_namespace": "usda_fdc",
+                "source_food_id": str(fdc_id),
+            }
+        namespace = str(raw.get("source_namespace") or raw_source or "fatsecret")
+        source_id = str(raw.get("source_food_id") or raw.get("food_id") or "")
+        if source_id.startswith(f"{namespace}:"):
+            source_id = source_id[len(namespace) + 1 :]
+        if not source_id:
+            return {
+                "origin": "provider",
+                "food_id": None,
+                "source_namespace": namespace,
+                "source_food_id": None,
+            }
+        return {
+            "origin": "provider",
+            "food_id": f"{namespace}:{source_id}",
+            "source_namespace": namespace,
+            "source_food_id": source_id,
+        }
 
     @staticmethod
     def _safe_allowed_units(raw: Any) -> list[dict[str, Any]]:

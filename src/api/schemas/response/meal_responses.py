@@ -63,6 +63,20 @@ class ParsedFoodItem(BaseModel):
         default_factory=list,
         description="Allowed unit options for this food item",
     )
+    food_id: str | None = Field(None, description="Namespaced source food identity")
+    food_reference_id: int | None = Field(
+        None, description="Canonical local food-reference id"
+    )
+    origin: str | None = Field(None, description="Logical nutrition origin")
+    source_namespace: str | None = Field(None, description="Opaque source namespace")
+    source_food_id: str | None = Field(None, description="Opaque source food id")
+    nutrition_basis: str | None = Field(None, description="Nutrition metric basis")
+    nutrition_contract_version: str | None = Field(
+        None, description="Backend nutrition contract version"
+    )
+    calories_per_100g: float | None = Field(
+        None, ge=0, description="Backend-derived calories per 100g"
+    )
 
 
 class ParseMealTextResponse(BaseModel):
