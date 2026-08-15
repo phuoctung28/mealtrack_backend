@@ -1,6 +1,5 @@
 """Capability discovery for durable writes."""
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,36 +9,9 @@ from src.api.routes.v1.capabilities import durable_write_capabilities
 
 @pytest.mark.asyncio
 async def test_durable_write_capabilities_advertise_legacy_and_v2_contracts():
-    rows = [
-        (table, column)
-        for table, columns in {
-            "food_item": {
-                "source_kind",
-                "source_food_id",
-                "nutrition_contract_version",
-                "source_snapshot",
-            },
-            "meal_write_operation": {
-                "user_id",
-                "operation",
-                "idempotency_key",
-                "request_fingerprint",
-                "status",
-                "lease_owner",
-                "lease_generation",
-                "lease_expires_at",
-                "target_meal_id",
-                "response",
-            },
-        }.items()
-        for column in columns
-    ]
-    session = AsyncMock()
-    session.execute.return_value = SimpleNamespace(all=lambda: rows)
-    uow = AsyncMock()
-    uow.__aenter__.return_value = SimpleNamespace(session=session)
     with patch(
-        "src.api.routes.v1.capabilities.AsyncUnitOfWork", return_value=uow
+        "src.api.routes.v1.capabilities.durable_write_schema_is_ready",
+        new=AsyncMock(return_value=True),
     ):
         body = await durable_write_capabilities()
 

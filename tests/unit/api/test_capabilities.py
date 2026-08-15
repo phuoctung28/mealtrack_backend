@@ -1,4 +1,4 @@
-from src.api.routes.v1.capabilities import _durable_write_schema_is_ready
+from src.infra.services.durable_write_service import _durable_write_schema_is_ready
 
 
 def test_durable_write_capability_requires_all_storage_columns():
