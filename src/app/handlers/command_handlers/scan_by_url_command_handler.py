@@ -24,8 +24,8 @@ from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.deepl_meal_translation_service import (
-    DeepLMealTranslationService,
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
 )
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
@@ -55,7 +55,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         event_bus: Any,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        meal_translation_service: DeepLMealTranslationService | None = None,
+        meal_translation_service: MealTranslationService | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
         meal_value_insight_task_manager: Any | None = None,
         meal_value_insight_cache: CachePort | None = None,
@@ -342,6 +342,11 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 saved_meal = await uow.meals.save(meal)
                 await uow.commit()
 
+            if self.cache_invalidation:
+                await self.cache_invalidation.after_meal_write(
+                    command.user_id, meal_date
+                )
+
             logger.info(
                 "[SCAN-BY-URL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",
                 saved_meal.meal_id,
@@ -365,19 +370,14 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     )
                 except Exception as exc:
                     logger.warning(
-                        "[SCAN-BY-URL] translation failed meal=%s: %s",
+                        "[SCAN-BY-URL] translation failed meal=%s error_type=%s",
                         saved_meal.meal_id,
-                        exc,
+                        type(exc).__name__,
                     )
 
             async with self.uow as uow:
                 final_meal = await uow.meals.find_by_id(
                     meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
-                )
-
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(
-                    command.user_id, meal_date
                 )
 
             return final_meal

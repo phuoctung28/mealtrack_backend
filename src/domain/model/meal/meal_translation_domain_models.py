@@ -66,13 +66,22 @@ class MealTranslation:
     meal_instruction: Optional[list] = None
     meal_ingredients: Optional[list] = None
 
-    def is_fully_cached(self) -> bool:
-        """Return True when all three translatable fields have been populated by DeepL."""
-        return (
-            self.dish_name is not None
-            and self.meal_instruction is not None
-            and self.meal_ingredients is not None
-        )
+    def is_fully_cached(
+        self,
+        *,
+        expected_ingredient_count: int | None = None,
+        expected_instruction_count: int | None = None,
+    ) -> bool:
+        """Return whether the row covers the available source manifest."""
+        if self.dish_name is None or self.meal_ingredients is None:
+            return False
+        if expected_ingredient_count is not None and len(self.meal_ingredients) != expected_ingredient_count:
+            return False
+        if expected_instruction_count is None:
+            return self.meal_instruction is not None
+        if expected_instruction_count == 0:
+            return self.meal_instruction in (None, [])
+        return self.meal_instruction is not None and len(self.meal_instruction) == expected_instruction_count
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""

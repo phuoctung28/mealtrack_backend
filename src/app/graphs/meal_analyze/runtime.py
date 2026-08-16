@@ -24,6 +24,9 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
+)
 from src.domain.utils.image_compression import compress_image as default_compress_image
 
 
@@ -60,7 +63,7 @@ class MealAnalyzeRuntime:
     meal_value_insight_ai_manager: MealInsightAIPort | None = None
     event_bus: MealInsightEventBus | None = None
     meal_value_insight_scheduler: Callable[..., bool] = schedule_value_insight_generation
-    meal_translation_service: Any | None = None
+    meal_translation_service: MealTranslationService | None = None
     food_reference_validation_service: FoodReferenceValidationService | None = None
     fatsecret_validation_enabled: bool = False
     max_vision_attempts: int = 1

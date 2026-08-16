@@ -16,6 +16,7 @@ from src.domain.exceptions.ai_exceptions import (
 )
 from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
 from src.domain.model.nutrition.macros import Macros
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 from src.domain.services.nutrition_calculation_service import (
     _convert_with_allowed_units,
     convert_quantity_to_grams,
@@ -101,6 +102,21 @@ class _AllowedUnitsFatSecretService:
                 ],
             }
         ]
+
+
+class _NeutralTranslator:
+    def __init__(self, value="Gà"):
+        self.value = value
+        self.calls = []
+
+    async def translate_texts(self, texts, source_language, target_language):
+        self.calls.append((list(texts), source_language, target_language))
+        return TranslationResult(
+            (self.value,),
+            TranslationOutcome.TRANSLATED,
+            source_language,
+            target_language,
+        )
 
 
 class _StructuredFatSecretService:
@@ -343,6 +359,73 @@ async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
     }
 
     assert CreateManualMealFromFoodsRequest.model_validate(payload)
+
+
+@pytest.mark.asyncio
+async def test_parse_text_translates_only_structurally_identified_english_name():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Chicken",
+                        "english_name": "Chicken",
+                        "quantity": 1,
+                        "unit": "serving",
+                        "protein": 20,
+                        "carbs": 0,
+                        "fat": 5,
+                    }
+                ]
+            }
+        ]
+    )
+    translator = _NeutralTranslator()
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=translator,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="chicken", user_id="user-1", language="vi")
+    )
+
+    assert response.items[0].name == "Gà"
+    assert translator.calls == [(["Chicken"], "en", "vi")]
+
+
+@pytest.mark.asyncio
+async def test_parse_text_unknown_name_provenance_stays_canonical():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Chicken",
+                        "quantity": 1,
+                        "unit": "serving",
+                        "protein": 20,
+                        "carbs": 0,
+                        "fat": 5,
+                    }
+                ]
+            }
+        ]
+    )
+    translator = _NeutralTranslator()
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=translator,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="chicken", user_id="user-1", language="vi")
+    )
+
+    assert response.items[0].name == "Chicken"
+    assert translator.calls == []
 
 
 @pytest.mark.asyncio

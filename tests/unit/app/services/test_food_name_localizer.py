@@ -1,0 +1,53 @@
+from unittest.mock import AsyncMock
+
+import pytest
+
+from src.app.services.food_name_localizer import (
+    translate_food_texts,
+    translation_is_cacheable,
+)
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
+
+
+@pytest.mark.asyncio
+async def test_partial_result_is_renderable_but_not_cacheable():
+    service = AsyncMock()
+    service.translate_texts.return_value = TranslationResult(
+        ("Cơm", "Rice"),
+        TranslationOutcome.PARTIAL,
+        "en",
+        "vi",
+    )
+
+    result = await translate_food_texts(
+        ["Rice", "Chicken"],
+        target_language="vi",
+        translation_service=service,
+    )
+
+    assert result.texts == ("Cơm", "Rice")
+    assert not translation_is_cacheable(result)
+    service.translate_texts.assert_awaited_once_with(["Rice", "Chicken"], "en", "vi")
+
+
+@pytest.mark.asyncio
+async def test_missing_service_returns_canonical_unavailable_result():
+    result = await translate_food_texts(
+        ["Rice"], target_language="vi", translation_service=None
+    )
+
+    assert result.outcome is TranslationOutcome.UNAVAILABLE
+    assert result.texts == ("Rice",)
+
+
+@pytest.mark.asyncio
+async def test_invalid_translation_service_result_is_unavailable():
+    service = AsyncMock()
+    service.translate_texts.return_value = ["Cơm"]
+
+    result = await translate_food_texts(
+        ["Rice"], target_language="vi", translation_service=service
+    )
+
+    assert result.outcome is TranslationOutcome.UNAVAILABLE
+    assert result.texts == ("Rice",)

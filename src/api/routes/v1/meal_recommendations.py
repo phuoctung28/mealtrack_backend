@@ -9,8 +9,8 @@ from time import perf_counter
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from src.api.base_dependencies import (
-    get_deepl_text_translation_service,
     get_meal_recommendation_analytics_service,
+    get_text_translation_service,
 )
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -70,7 +70,7 @@ async def create_three_day_recommendations(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
-    translation_service=Depends(get_deepl_text_translation_service),
+    translation_service=Depends(get_text_translation_service),
 ) -> MealRecommendationPlanSummaryResponse:
     """Create or replay a durable three-day catalog recommendation plan."""
 
@@ -162,7 +162,7 @@ async def swap_meal_recommendation_slot(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
-    translation_service=Depends(get_deepl_text_translation_service),
+    translation_service=Depends(get_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
@@ -219,7 +219,7 @@ async def log_recommended_meal(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
-    translation_service=Depends(get_deepl_text_translation_service),
+    translation_service=Depends(get_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
@@ -272,7 +272,7 @@ async def skip_meal_recommendation_slot(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
-    translation_service=Depends(get_deepl_text_translation_service),
+    translation_service=Depends(get_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     started = perf_counter()
     metric_status = "error"
@@ -318,7 +318,7 @@ async def get_meal_recommendation_plan(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
-    translation_service=Depends(get_deepl_text_translation_service),
+    translation_service=Depends(get_text_translation_service),
 ) -> MealRecommendationPlanSummaryResponse:
     """Read an owner-scoped durable recommendation plan."""
 
@@ -364,7 +364,7 @@ async def get_meal_recommendation_slot_detail(
         get_meal_recommendation_analytics_service
     ),
     task_manager=Depends(get_optional_task_manager),
-    translation_service=Depends(get_deepl_text_translation_service),
+    translation_service=Depends(get_text_translation_service),
 ) -> MealRecommendationSlotDetailResponse:
     """Read one owner-scoped recommendation slot with alternatives."""
 

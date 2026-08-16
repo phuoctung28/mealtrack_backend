@@ -113,7 +113,7 @@ def _request(language: str = "en") -> Request:
 
 
 @pytest.mark.asyncio
-async def test_non_english_generates_requested_language_without_deepl():
+async def test_non_english_generates_requested_language_without_provider_dependency():
     ai_manager = AsyncMock()
     ai_manager.generate.return_value = {
         "meal_bullets": [
@@ -340,7 +340,7 @@ async def test_value_insights_endpoint_uses_profile_context_for_cache_version():
 
 
 @pytest.mark.asyncio
-async def test_language_specific_cache_hit_skips_ai_and_deepl():
+async def test_language_specific_cache_hit_skips_ai_and_translation_provider():
     cached = MealValueInsights(
         meal_bullets=[
             ValueInsight(

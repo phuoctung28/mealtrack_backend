@@ -5,14 +5,16 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 from dataclasses import replace
-from typing import Protocol
+from typing import Any, Protocol
 
+from src.app.services.food_name_localizer import translate_for_presentation
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
     PersistedMealRecommendationCandidate,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
+from src.domain.model.translation_result import TranslationOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 class TextTranslationService(Protocol):
     """Minimal translation dependency needed by catalog response localization."""
 
-    async def translate_texts(self, texts: list[str], target_lang: str) -> list[str]: ...
+    async def translate_texts(self, texts: list[str], *args: str) -> Any: ...
 
 
 async def localize_meal_recommendation_plan(
@@ -98,7 +100,7 @@ async def _localized_meals(
         return dict(unique_meals)
 
     try:
-        translated = await translation_service.translate_texts(texts, language)
+        result = await translate_for_presentation(translation_service, texts, language)
     except Exception as exc:
         logger.warning(
             "catalog response translation failed language=%s error_type=%s",
@@ -107,8 +109,11 @@ async def _localized_meals(
         )
         return None
 
+    if result.outcome is TranslationOutcome.UNAVAILABLE:
+        return None
+
     translations = {
-        text: translated[index] if index < len(translated) else text
+        text: result.items[index] if index < len(result.items) else text
         for index, text in enumerate(texts)
     }
     return {

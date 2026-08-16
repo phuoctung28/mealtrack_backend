@@ -1,6 +1,6 @@
 # Provider Outage Runbook
 
-Use this when FatSecret, USDA FoodData Central, DeepL, Cloudflare Workers AI, or
+Use this when FatSecret, USDA FoodData Central, OpenAI, Cloudflare Workers AI, or
 Redis has elevated errors or latency.
 
 ## First Checks
@@ -22,8 +22,28 @@ settings.
 | Redis optional cache | Local-first food search treats cache errors as misses and continues. Required Redis-backed state, such as legacy meal suggestion sessions, may fail fast. |
 | FatSecret search | `/v1/foods/search` returns verified local `food_reference` results when available. Provider enrichment may be absent. |
 | USDA barcode/details | Barcode cascade skips unavailable providers and continues to the next configured source or editable estimate when safe. |
-| DeepL | Non-English search falls back to local/provider results without translated names. |
+| OpenAI translation | Non-English search falls back to canonical local/provider results without translated names. |
 | Cloudflare Workers AI | AI manager uses configured fallback chain when available; catalog image generation can be paused. |
+
+## Translation Cutover Rollback
+
+For every release that changes the translation provider, record the UTC
+`translation_cutover_at` timestamp in the deployment record before enabling the
+new code. Keep the pre-cutover `food-search` cache namespace available during
+the observation window; a rollback must switch reads back to that namespace
+instead of trusting entries written by the new provider.
+
+If a rollback is required:
+
+1. Revert the application release and restore the previous translation
+   configuration.
+2. Switch search reads back to the retained pre-cutover cache namespace.
+3. Review translation rows with `translated_at >= translation_cutover_at`, then
+   delete or retranslate only the affected release window. The schema has no
+   provider provenance, so code rollback alone cannot identify or repair
+   provider-written rows.
+4. Confirm localized reads now return canonical provider/local values only, and
+   keep the observation window open until the reverted stack is stable.
 
 ## Response Steps
 
