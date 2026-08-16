@@ -56,7 +56,7 @@ async def test_manual_meal_replays_stored_response():
             return_value="abc",
         ),
     ):
-        response = await create_manual_meal(
+        response = await create_manual_meal.__wrapped__(
             request=SimpleNamespace(),
             payload=_payload(),
             user_id="user-1",
@@ -84,7 +84,7 @@ async def test_manual_meal_conflict_returns_409():
         ),
     ):
         with pytest.raises(HTTPException) as exc:
-            await create_manual_meal(
+            await create_manual_meal.__wrapped__(
                 request=SimpleNamespace(),
                 payload=_payload(),
                 user_id="user-1",
@@ -114,7 +114,7 @@ async def test_manual_meal_in_progress_returns_409_without_create():
         ),
     ):
         with pytest.raises(HTTPException) as exc:
-            await create_manual_meal(
+            await create_manual_meal.__wrapped__(
                 request=SimpleNamespace(),
                 payload=_payload(),
                 user_id="user-1",
@@ -176,7 +176,7 @@ async def test_manual_meal_persists_durable_write_on_first_create():
             return_value="en",
         ),
     ):
-        response = await create_manual_meal(
+        response = await create_manual_meal.__wrapped__(
             request=SimpleNamespace(),
             payload=_payload(),
             user_id="user-1",
@@ -212,7 +212,7 @@ async def test_manual_meal_abandons_claim_when_create_fails():
         ),
     ):
         with pytest.raises(Exception):
-            await create_manual_meal(
+            await create_manual_meal.__wrapped__(
                 request=SimpleNamespace(),
                 payload=_payload(),
                 user_id="user-1",

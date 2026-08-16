@@ -87,6 +87,38 @@ Manual food search reads Redis cache when available, then searches verified
 translation failures degrade to bounded local results when possible. Local
 result calories are always derived from stored macros using the backend formula.
 
+### Nutrition Integrity Policy
+Structured nutrition crosses one versioned domain policy,
+`nutrition_integrity_v1`, before it is trusted by parse finalization, search
+output, provider mapping, catalog approval, or verified reference upsert. The
+policy rejects non-finite or out-of-range macros, impossible macro mass,
+out-of-range or mismatched energy, and invalid serving conversions. The
+canonical `g` conversion is exactly one gram; a provider's 100g basis is a
+labelled serving and never the base `g` unit. Search and editorial trust
+boundaries fail closed, while the best-effort reference validator reports a
+failure and returns the original nutrition unchanged. Logical source identity
+is normalized separately from semantic preparation matching. Search and parse
+responses expose one tagged origin plus namespaced opaque provider identity,
+with `food_reference:<id>` retained only as a matching local alias. Provider
+identity is persisted as nullable `source_namespace` and `source_food_id`; a
+partial unique identity index prevents duplicate source rows while leaving
+legacy rows explicitly unknown. Local search filters through this policy before
+dedupe and limit, requiring verified references and continuing candidate batches
+until the valid-result limit is filled or candidates are exhausted. Provider
+serving labels are normalized through the same policy. Versioned cache keys
+include the active policy version to prevent stale serving contracts.
+
+### Authoritative manual meal writes
+V2 manual create and edit requests carry an explicit nutrition contract, source
+identity, and idempotency key. `ManualMealNutritionResolver` resolves local,
+USDA, provider, and custom items server-side; client macros, gram weights, and
+serving lists do not replace reference nutrition. Each successful v2 item stores
+an immutable source snapshot on `food_item`, and meal detail reads use that
+snapshot before consulting legacy references. User-scoped write-operation leases
+make retries replayable and fence stale workers before a meal mutation commits.
+The additive contract is advertised only through
+`/v1/capabilities/durable-writes` after the persistence migration is available.
+
 ### Observability Connector
 Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 

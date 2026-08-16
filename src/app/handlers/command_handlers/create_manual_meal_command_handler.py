@@ -5,19 +5,21 @@ All items must provide their own nutrition (via custom_nutrition).
 
 import logging
 import time
+from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
-from src.observability import distribution_metric
-
-logger = logging.getLogger(__name__)
-
+from src.api.exceptions import ConflictException, ValidationException
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.events.base import EventHandler
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.app.services.manual_meal_nutrition_resolver import (
+    ManualMealNutritionResolver,
+)
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.ports.provider_budget_port import ProviderBudgetPort
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
 )
@@ -26,6 +28,9 @@ from src.domain.utils.timezone_utils import (
     resolve_user_timezone_async,
     utc_now,
 )
+from src.observability import distribution_metric
+
+logger = logging.getLogger(__name__)
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
@@ -35,13 +40,26 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         cache_invalidation: CacheInvalidationService | None = None,
         meal_repository: MealRepositoryPort | None = None,
         nutrition_service: NutritionCalculationService | None = None,
+        nutrition_resolver: ManualMealNutritionResolver | None = None,
+        provider=None,
+        provider_budget: ProviderBudgetPort | None = None,
+        provider_rpm: int | None = None,
+        uow_factory=None,
     ):
         self.uow = uow
         self.cache_invalidation = cache_invalidation
         self.meal_repository = meal_repository
+        self.uow_factory = uow_factory
         self.nutrition_service = nutrition_service or NutritionCalculationService()
+        self.nutrition_resolver = nutrition_resolver or ManualMealNutritionResolver(
+            provider=provider,
+            provider_budget=provider_budget,
+            provider_rpm=provider_rpm,
+        )
 
     async def handle(self, event: CreateManualMealCommand):
+        if event.nutrition_contract_version == 2 and self.uow_factory is not None:
+            return await self._handle_v2(event)
         # Use provided meal_repository or create UnitOfWork with context manager
         if self.meal_repository:
             return await self._process_meal(event, self.meal_repository, uow=None)
@@ -50,7 +68,30 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
 
             _t_db_start = time.perf_counter()
             async with self.uow as uow:
-                saved_meal, meal_date = await self._process_meal(event, uow.meals, uow=uow)
+                reservation = await self._reserve_v2_write(event, uow)
+                if reservation and reservation.state == "replay":
+                    saved_meal = await uow.meals.find_by_id(reservation.target_meal_id)
+                    if saved_meal is None:
+                        raise ValidationException(
+                            "Idempotent meal result is no longer available",
+                            error_code="IDEMPOTENCY_RESULT_UNAVAILABLE",
+                        )
+                    meal_date = (saved_meal.created_at or utc_now()).date()
+                else:
+                    try:
+                        saved_meal, meal_date = await self._process_meal(
+                            event, uow.meals, uow=uow
+                        )
+                        if reservation:
+                            await uow.meal_write_operations.complete(
+                                reservation,
+                                target_meal_id=saved_meal.meal_id,
+                                response={"meal_id": saved_meal.meal_id},
+                            )
+                    except Exception:
+                        if reservation:
+                            await uow.meal_write_operations.release(reservation)
+                        raise
             _db_ms = (time.perf_counter() - _t_db_start) * 1000
 
             # Invalidate after commit so a concurrent read can't repopulate from a pre-commit snapshot.
@@ -60,8 +101,18 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             _cache_ms = (time.perf_counter() - _t_cache_start) * 1000
 
             _total_ms = (time.perf_counter() - _t_start) * 1000
-            distribution_metric("meal.manual_save.db_ms", _db_ms, unit="millisecond", attributes={"component": "manual_meal"})
-            distribution_metric("meal.manual_save.cache_ms", _cache_ms, unit="millisecond", attributes={"component": "manual_meal"})
+            distribution_metric(
+                "meal.manual_save.db_ms",
+                _db_ms,
+                unit="millisecond",
+                attributes={"component": "manual_meal"},
+            )
+            distribution_metric(
+                "meal.manual_save.cache_ms",
+                _cache_ms,
+                unit="millisecond",
+                attributes={"component": "manual_meal"},
+            )
             logger.info(
                 "manual_save handler timing: user=%s db_ms=%.1f cache_ms=%.1f total_ms=%.1f",
                 event.user_id,
@@ -71,8 +122,116 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             )
             return saved_meal
 
-    async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow=None):
-        nutrition, _ = self.nutrition_service.aggregate_from_command_items(event.items)
+    async def _handle_v2(self, event: CreateManualMealCommand):
+        """Reserve briefly, resolve outside the write UoW, then commit atomically."""
+        reservation = await self._reserve_v2_write_short(event)
+        if reservation and reservation.state == "replay":
+            async with self.uow_factory() as uow:
+                saved_meal = await uow.meals.find_by_id(reservation.target_meal_id)
+            if saved_meal is None:
+                raise ValidationException(
+                    "Idempotent meal result is no longer available",
+                    error_code="IDEMPOTENCY_RESULT_UNAVAILABLE",
+                )
+            return saved_meal
+
+        try:
+            async with self.uow_factory() as resolve_uow:
+                resolved_items = await self.nutrition_resolver.resolve_items(
+                    event.items,
+                    resolve_uow.food_references,
+                    contract_version=2,
+                )
+
+            async with self.uow as uow:
+                await self.nutrition_resolver.revalidate_local_items(
+                    resolved_items, uow.food_references
+                )
+                saved_meal, meal_date = await self._process_meal(
+                    event,
+                    uow.meals,
+                    uow=uow,
+                    resolved_items=resolved_items,
+                    revalidate_local=False,
+                )
+                await uow.meal_write_operations.complete(
+                    reservation,
+                    target_meal_id=saved_meal.meal_id,
+                    response={"meal_id": saved_meal.meal_id},
+                )
+
+            if self.cache_invalidation:
+                await self.cache_invalidation.after_meal_write(event.user_id, meal_date)
+            return saved_meal
+        except Exception:
+            await self._release_v2_write(reservation)
+            raise
+
+    async def _reserve_v2_write_short(self, event):
+        async with self.uow_factory() as uow:
+            cleanup = getattr(uow.meal_write_operations, "cleanup_finished", None)
+            if cleanup is not None:
+                await cleanup(
+                    older_than=utc_now() - timedelta(days=30),
+                    limit=100,
+                )
+            return await self._reserve_v2_write(event, uow)
+
+    async def _release_v2_write(self, reservation):
+        async with self.uow_factory() as uow:
+            await uow.meal_write_operations.release(reservation)
+
+    async def _reserve_v2_write(self, event, uow):
+        if event.nutrition_contract_version != 2:
+            return None
+        if not event.idempotency_key or not event.request_fingerprint:
+            raise ValidationException(
+                "v2 manual saves require idempotency metadata",
+                error_code="IDEMPOTENCY_KEY_REQUIRED",
+            )
+        reservation = await uow.meal_write_operations.reserve(
+            user_id=event.user_id,
+            operation="create_manual_meal",
+            idempotency_key=event.idempotency_key,
+            request_fingerprint=event.request_fingerprint,
+        )
+        if reservation.state == "fingerprint_conflict":
+            raise ConflictException(
+                "Idempotency-Key was already used for a different request",
+                error_code="IDEMPOTENCY_KEY_REUSED",
+            )
+        if reservation.state == "in_progress":
+            raise ConflictException(
+                "The same meal write is already in progress",
+                error_code="IDEMPOTENCY_IN_PROGRESS",
+            )
+        return reservation
+
+    async def _process_meal(
+        self,
+        event: CreateManualMealCommand,
+        meal_repo,
+        uow=None,
+        resolved_items=None,
+        revalidate_local=True,
+    ):
+        items = resolved_items or event.items
+        if event.nutrition_contract_version == 2:
+            if uow is None or not getattr(uow, "food_references", None):
+                raise ValueError(
+                    "v2 manual saves require a database reference resolver"
+                )
+            if resolved_items is None:
+                items = await self.nutrition_resolver.resolve_items(
+                    items,
+                    uow.food_references,
+                    contract_version=event.nutrition_contract_version,
+                )
+            if revalidate_local:
+                await self.nutrition_resolver.revalidate_local_items(
+                    items, uow.food_references
+                )
+        nutrition, _ = self.nutrition_service.aggregate_from_command_items(items)
 
         # Determine the meal date and datetime
         now = utc_now()
@@ -93,7 +252,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         # Determine source: use explicit source if provided, otherwise infer
         source = event.source
         if not source:
-            has_custom = any(item.custom_nutrition is not None for item in event.items)
+            has_custom = any(item.custom_nutrition is not None for item in items)
             if has_custom:
                 source = "food_search"
             else:

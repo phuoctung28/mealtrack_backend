@@ -6,6 +6,20 @@
 Prefer targeted paths; broad unscoped `pytest` can hit duplicate-package import
 collisions.
 
+Parse-text release gates are separate from HTTP contract tests:
+
+```bash
+python scripts/development/evaluate_parse_text_nutrition.py --mode offline
+pytest tests/unit/domain/services/test_meal_text_nutrition_eval_loop.py \
+  tests/unit/scripts/test_evaluate_parse_text_nutrition.py -v
+```
+
+Offline evaluation is deterministic and network-free. Reports default to an
+OS temporary file with mode `0600`, refuse overwrite, and stay aggregate-only.
+Live mode is staging-only, requires `ENVIRONMENT=staging`,
+`PARSE_TEXT_LIVE_EVAL_ENABLED=true`, and `--confirm-live-staging`, and never
+runs in CI.
+
 ---
 
 ## Coverage story (single authority)

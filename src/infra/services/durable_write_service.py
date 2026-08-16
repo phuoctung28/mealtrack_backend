@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
 
 from src.domain.utils.timezone_utils import utc_now
@@ -19,6 +19,27 @@ RETENTION_DAYS = 14
 PENDING_RESPONSE_STATUS = 0
 MANUAL_MEAL_CREATE_ACTION = "manual_meal_create"
 
+_REQUIRED_DURABLE_WRITE_COLUMNS = {
+    "food_item": {
+        "source_kind",
+        "source_food_id",
+        "nutrition_contract_version",
+        "source_snapshot",
+    },
+    "meal_write_operation": {
+        "user_id",
+        "operation",
+        "idempotency_key",
+        "request_fingerprint",
+        "status",
+        "lease_owner",
+        "lease_generation",
+        "lease_expires_at",
+        "target_meal_id",
+        "response",
+    },
+}
+
 
 class DurableWriteConflictError(Exception):
     """Same idempotency key was reused with a different request fingerprint."""
@@ -26,6 +47,46 @@ class DurableWriteConflictError(Exception):
 
 class DurableWriteInProgressError(Exception):
     """Same key + fingerprint is already claimed by an in-flight request."""
+
+
+def _durable_write_schema_is_ready(rows) -> bool:
+    available: dict[str, set[str]] = {}
+    for table_name, column_name in rows:
+        available.setdefault(table_name, set()).add(column_name)
+    return all(
+        required.issubset(available.get(table_name, set()))
+        for table_name, required in _REQUIRED_DURABLE_WRITE_COLUMNS.items()
+    )
+
+
+async def durable_write_schema_is_ready() -> bool:
+    """Return whether storage for the v2 durable-write contract is available."""
+    async with AsyncUnitOfWork() as uow:
+        session = uow.session
+        if session is None:
+            raise RuntimeError("database session is unavailable")
+        result = await session.execute(
+            text(
+                """
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND (
+                    (table_name = 'food_item' AND column_name IN (
+                      'source_kind', 'source_food_id',
+                      'nutrition_contract_version', 'source_snapshot'
+                    ))
+                    OR (table_name = 'meal_write_operation' AND column_name IN (
+                      'user_id', 'operation', 'idempotency_key',
+                      'request_fingerprint', 'status', 'lease_owner',
+                      'lease_generation', 'lease_expires_at',
+                      'target_meal_id', 'response'
+                    ))
+                  )
+                """
+            )
+        )
+        return _durable_write_schema_is_ready(result.all())
 
 
 @dataclass(frozen=True)

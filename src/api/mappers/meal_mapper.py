@@ -69,9 +69,8 @@ class MealMapper:
         image_url: str | None = None,
         target_language: str | None = None,
         value_insights: MealValueInsights | None = None,
-        source_nutrition_by_food_reference: dict[
-            int, FoodReferenceNutritionProjection
-        ] | None = None,
+        source_nutrition_by_food_reference: dict[int, FoodReferenceNutritionProjection]
+        | None = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -178,6 +177,7 @@ class MealMapper:
                     source_nutrition_dto = MealMapper._source_nutrition_response(
                         source_nutrition_by_food_reference,
                         getattr(item, "food_reference_id", None),
+                        getattr(item, "source_snapshot", None),
                     )
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),
@@ -204,6 +204,17 @@ class MealMapper:
                         fdc_id=getattr(item, "fdc_id", None),
                         food_reference_id=getattr(item, "food_reference_id", None),
                         is_custom=getattr(item, "is_custom", False),
+                        origin=getattr(item, "source_kind", None),
+                        source_namespace=(
+                            (getattr(item, "source_snapshot", None) or {}).get(
+                                "source_namespace"
+                            )
+                        ),
+                        source_food_id=getattr(item, "source_food_id", None),
+                        nutrition_contract_version=getattr(
+                            item, "nutrition_contract_version", None
+                        ),
+                        source_snapshot=getattr(item, "source_snapshot", None),
                         allowed_units=getattr(item, "allowed_units", None) or [],
                     )
                     food_items.append(food_item_dto)
@@ -318,12 +329,28 @@ class MealMapper:
 
     @staticmethod
     def _source_nutrition_response(
-        source_nutrition_by_food_reference: dict[
-            int, FoodReferenceNutritionProjection
-        ]
+        source_nutrition_by_food_reference: dict[int, FoodReferenceNutritionProjection]
         | None,
         food_reference_id: int | None,
+        source_snapshot: dict | None = None,
     ):
+        if source_snapshot:
+            required = (
+                source_snapshot.get("protein_per_100g"),
+                source_snapshot.get("carbs_per_100g"),
+                source_snapshot.get("fat_per_100g"),
+            )
+            if any(value is None for value in required):
+                return None
+            return MealMapper._custom_nutrition_response(
+                source_snapshot.get("calories_per_100g"),
+                source_snapshot.get("protein_per_100g"),
+                source_snapshot.get("carbs_per_100g"),
+                source_snapshot.get("fat_per_100g"),
+                source_snapshot.get("fiber_per_100g", 0),
+                source_snapshot.get("sugar_per_100g", 0),
+            )
+
         if not source_nutrition_by_food_reference or food_reference_id is None:
             return None
 
@@ -338,8 +365,6 @@ class MealMapper:
         ):
             return None
 
-        from src.api.schemas.response.meal_responses import CustomNutritionResponse
-
         macros = Macros(
             protein=reference.protein_100g,
             carbs=reference.carbs_100g,
@@ -347,13 +372,34 @@ class MealMapper:
             fiber=reference.fiber_100g,
             sugar=reference.sugar_100g,
         )
+        return MealMapper._custom_nutrition_response(
+            macros.total_calories,
+            macros.protein,
+            macros.carbs,
+            macros.fat,
+            macros.fiber,
+            macros.sugar,
+        )
+
+    @staticmethod
+    def _custom_nutrition_response(calories, protein, carbs, fat, fiber, sugar):
+        from src.api.schemas.response.meal_responses import CustomNutritionResponse
+
         return CustomNutritionResponse(
-            calories_per_100g=macros.total_calories,
-            protein_per_100g=macros.protein,
-            carbs_per_100g=macros.carbs,
-            fat_per_100g=macros.fat,
-            fiber_per_100g=macros.fiber,
-            sugar_per_100g=macros.sugar,
+            calories_per_100g=calories
+            if calories is not None
+            else Macros(
+                protein=protein,
+                carbs=carbs,
+                fat=fat,
+                fiber=fiber,
+                sugar=sugar,
+            ).total_calories,
+            protein_per_100g=protein,
+            carbs_per_100g=carbs,
+            fat_per_100g=fat,
+            fiber_per_100g=fiber,
+            sugar_per_100g=sugar,
         )
 
     @staticmethod
@@ -546,6 +592,10 @@ class MealMapper:
             food_reference_id=item_dict.get("food_reference_id"),
             is_custom=item_dict.get("is_custom", False),
             allowed_units=item_dict.get("allowed_units") or None,
+            source_kind=item_dict.get("origin") or item_dict.get("source_kind"),
+            source_food_id=item_dict.get("source_food_id"),
+            nutrition_contract_version=item_dict.get("nutrition_contract_version"),
+            source_snapshot=item_dict.get("source_snapshot"),
         )
 
     @staticmethod

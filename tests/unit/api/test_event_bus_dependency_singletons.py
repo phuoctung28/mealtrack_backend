@@ -161,6 +161,17 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
     assert len(bus1.handlers) > 10
     assert len(bus1.subscriptions) == 0
 
+    from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
+
+    assert (
+        sum(
+            1
+            for args, _kwargs in bus1.handlers
+            if args and args[0] is ParseMealTextCommand
+        )
+        == 1
+    )
+
 
 def test_configured_event_bus_wires_meal_analyze_validation(monkeypatch):
     mod = importlib.import_module("src.api.dependencies.event_bus")

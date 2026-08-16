@@ -6,6 +6,10 @@ from __future__ import annotations
 
 from datetime import date
 
+from src.domain.services.nutrition_integrity_policy import (
+    NUTRITION_INTEGRITY_POLICY_VERSION,
+)
+
 
 class CacheKeys:
     """Centralized cache key generator with TTL policies."""
@@ -91,9 +95,23 @@ class CacheKeys:
         )
 
     @staticmethod
-    def food_search(query: str) -> tuple[str, int]:
+    def food_search(
+        query: str,
+        *,
+        policy_version: str | None = None,
+        generation: int | None = None,
+    ) -> tuple[str, int]:
         normalized = query.lower().strip()[:64]
-        return (f"food:search:{normalized}", CacheKeys.TTL_7_DAYS)
+        policy = policy_version or NUTRITION_INTEGRITY_POLICY_VERSION
+        if generation is None:
+            return (
+                f"food:search:v2:{policy}:{normalized}",
+                CacheKeys.TTL_7_DAYS,
+            )
+        return (
+            f"food:search:v3:{policy}:generation:{generation}:{normalized}",
+            CacheKeys.TTL_7_DAYS,
+        )
 
     @staticmethod
     def food_details(food_id: str) -> tuple[str, int]:

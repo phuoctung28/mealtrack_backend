@@ -1,7 +1,7 @@
 # Durable Write Contract (Manual Meal Slice)
 
-**Status:** Accepted  
-**Date:** 2026-08-11  
+**Status:** Accepted
+**Date:** 2026-08-11
 **Scope:** Server-side operation identity for mutation replay; Phase 5 vertical slice.
 
 ## Context

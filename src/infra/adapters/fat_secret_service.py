@@ -6,12 +6,17 @@ Provides product lookup by barcode and food search using OAuth 2.0.
 import asyncio
 import base64
 import logging
+import math
 import re
 import time
 from typing import Any
 
 import httpx
 
+from src.domain.services.nutrition_integrity_policy import (
+    NutritionIntegrityPolicy,
+    normalize_serving_options,
+)
 from src.infra.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -38,12 +43,18 @@ LANGUAGE_TO_REGION = {
 class FatSecretService:
     """HTTP client for fatsecret API with OAuth 2.0."""
 
-    def __init__(self, client_id: str, client_secret: str):
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        integrity_policy: NutritionIntegrityPolicy | None = None,
+    ):
         self.client_id = client_id
         self.client_secret = client_secret
         self._access_token: str | None = None
         self._token_expires_at: float = 0
         self._client: httpx.AsyncClient | None = None
+        self._integrity_policy = integrity_policy or NutritionIntegrityPolicy()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
@@ -82,7 +93,8 @@ class FatSecretService:
 
             if response.status_code != 200:
                 logger.warning(
-                    f"fatsecret token request failed: {response.status_code} - {response.text[:200]}"
+                    "fatsecret token request failed: status=%s",
+                    response.status_code,
                 )
                 return None
 
@@ -92,8 +104,8 @@ class FatSecretService:
             self._token_expires_at = time.time() + expires_in
 
             return self._access_token
-        except Exception as e:
-            logger.warning(f"fatsecret OAuth error: {e}")
+        except Exception as exc:
+            logger.warning("fatsecret OAuth error: %s", type(exc).__name__)
             return None
 
     async def _api_request(
@@ -123,7 +135,8 @@ class FatSecretService:
 
             if response.status_code != 200:
                 logger.warning(
-                    f"fatsecret API error: {response.status_code} - {response.text[:200]}"
+                    "fatsecret API error: status=%s",
+                    response.status_code,
                 )
                 return None
 
@@ -131,12 +144,11 @@ class FatSecretService:
                 return response.json()
             except ValueError:
                 logger.warning(
-                    "fatsecret API returned non-JSON response: %s",
-                    response.text[:200],
+                    "fatsecret API returned non-JSON response",
                 )
                 return None
-        except httpx.HTTPError as e:
-            logger.warning(f"fatsecret request error: {e}")
+        except httpx.HTTPError as exc:
+            logger.warning("fatsecret request error: %s", type(exc).__name__)
             return None
 
     async def get_product(
@@ -148,7 +160,7 @@ class FatSecretService:
         """Fetch product by barcode from fatsecret."""
         # Validate barcode format
         if not BARCODE_PATTERN.match(barcode):
-            logger.warning(f"Invalid barcode format: {barcode}")
+            logger.warning("Invalid barcode format: type=%s", type(barcode).__name__)
             return None
 
         try:
@@ -183,7 +195,9 @@ class FatSecretService:
 
             return self._map_product(food_details, normalized_barcode)
         except Exception as e:
-            logger.warning(f"fatsecret API error for barcode {barcode}: {e}")
+            logger.warning(
+                "fatsecret API error for barcode lookup: %s", type(e).__name__
+            )
             return None
 
     async def search_foods(
@@ -227,7 +241,7 @@ class FatSecretService:
             processed = await asyncio.gather(*[_process(food) for food in foods])
             return list(processed)
         except Exception as e:
-            logger.warning(f"fatsecret search error for query '{query}': {e}")
+            logger.warning("fatsecret search error: %s", type(e).__name__)
             return []
 
     async def search_food_candidates(
@@ -256,11 +270,11 @@ class FatSecretService:
         if not foods:
             error = result.get("error")
             if error:
-                logger.warning(f"fatsecret API error for '{query}': {error}")
+                logger.warning("fatsecret API error response received")
             else:
                 logger.warning(
-                    f"fatsecret returned no foods for '{query}'. "
-                    f"Response keys: {list(result.keys())}"
+                    "fatsecret returned no foods: response_keys=%s",
+                    sorted(str(key) for key in result.keys()),
                 )
             return []
 
@@ -311,9 +325,12 @@ class FatSecretService:
         units = []
         seen = set()
         for s in servings:
-            unit = s.get("measurement_description")
+            unit = str(s.get("measurement_description") or "").strip()
+            description = str(s.get("serving_description") or "").strip()
+            if any(ord(char) < 32 for char in f"{unit}{description}"):
+                continue
             gram_weight = self._safe_float(s.get("metric_serving_amount"))
-            if unit and gram_weight and gram_weight > 0:
+            if unit and len(unit) <= 100 and gram_weight and gram_weight > 0:
                 unit_key = unit.lower().strip()
                 if unit_key in seen:
                     continue
@@ -322,11 +339,16 @@ class FatSecretService:
                     {
                         "unit": unit,
                         "gram_weight": gram_weight,
-                        "description": s.get("serving_description", ""),
+                        "description": description[:100],
                     }
                 )
+            if len(units) >= 12:
+                break
 
-        return units or self._default_allowed_units()
+        return (
+            normalize_serving_options(units, provider_100g_label=True)
+            or self._default_allowed_units()
+        )
 
     def _select_per_100g_serving(self, food: dict[str, Any]) -> dict | None:
         servings = food.get("servings", {}).get("serving", [])
@@ -350,24 +372,46 @@ class FatSecretService:
             return {"allowed_units": self._default_allowed_units()}
 
         # Get metric serving amount for per-100g calculation
-        metric_amount = self._safe_float(serving.get("metric_serving_amount")) or 100
+        metric_amount = self._safe_float(serving.get("metric_serving_amount"))
+        if metric_amount is None or metric_amount <= 0:
+            return {
+                "metric_serving_amount": None,
+                "calories_100g": None,
+                "protein_100g": None,
+                "carbs_100g": None,
+                "fat_100g": None,
+                "fiber_100g": None,
+                "sugar_100g": None,
+                "allowed_units": self._extract_serving_units(food),
+            }
 
-        return {
-            "calories_100g": self._calc_per_100g(
-                serving.get("calories"), metric_amount
-            ),
-            "protein_100g": self._calc_per_100g(serving.get("protein"), metric_amount),
-            "carbs_100g": self._calc_per_100g(
-                serving.get("carbohydrate"), metric_amount
-            ),
-            "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
-            "serving_description": serving.get("serving_description"),
-            "allowed_units": self._extract_serving_units(food),
-        }
+        return self._apply_integrity_policy(
+            {
+                "metric_serving_amount": metric_amount,
+                "calories_100g": self._calc_per_100g(
+                    serving.get("calories"), metric_amount
+                ),
+                "protein_100g": self._calc_per_100g(
+                    serving.get("protein"), metric_amount
+                ),
+                "carbs_100g": self._calc_per_100g(
+                    serving.get("carbohydrate"), metric_amount
+                ),
+                "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
+                "fiber_100g": self._calc_per_100g(serving.get("fiber"), metric_amount),
+                "sugar_100g": self._calc_per_100g(serving.get("sugar"), metric_amount),
+                "serving_description": serving.get("serving_description"),
+                "allowed_units": self._extract_serving_units(food),
+            },
+            require_metric_basis=True,
+        )
 
     def _default_allowed_units(self) -> list[dict]:
         """Return default allowed units when none are provided."""
-        return [{"unit": "g", "gram_weight": 100.0, "description": "100 g"}]
+        return normalize_serving_options(
+            [{"unit": "g", "gram_weight": 100.0, "description": "100 g"}],
+            provider_100g_label=True,
+        ) or [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
     def _map_product(self, food: dict[str, Any], barcode: str) -> dict[str, Any]:
         """Map fatsecret response to clean dict."""
@@ -387,22 +431,66 @@ class FatSecretService:
             }
         # Use metric_serving_amount for accurate per-100g calculation
         metric_amount = self._safe_float(serving.get("metric_serving_amount")) or 100
-        return {
-            "name": food.get("food_name", ""),
-            "brand": food.get("brand_name"),
-            "barcode": barcode,
-            "calories_100g": self._calc_per_100g(
-                serving.get("calories"), metric_amount
-            ),
-            "protein_100g": self._calc_per_100g(serving.get("protein"), metric_amount),
-            "carbs_100g": self._calc_per_100g(
-                serving.get("carbohydrate"), metric_amount
-            ),
-            "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
-            "serving_size": serving.get("serving_description"),
-            "image_url": food.get("food_url"),
-            "allowed_units": self._extract_serving_units(food),
-        }
+        return self._apply_integrity_policy(
+            {
+                "name": food.get("food_name", ""),
+                "brand": food.get("brand_name"),
+                "barcode": barcode,
+                "calories_100g": self._calc_per_100g(
+                    serving.get("calories"), metric_amount
+                ),
+                "protein_100g": self._calc_per_100g(
+                    serving.get("protein"), metric_amount
+                ),
+                "carbs_100g": self._calc_per_100g(
+                    serving.get("carbohydrate"), metric_amount
+                ),
+                "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
+                "serving_size": serving.get("serving_description"),
+                "image_url": food.get("food_url"),
+                "allowed_units": self._extract_serving_units(food),
+                "metric_serving_amount": metric_amount,
+            },
+            require_metric_basis=True,
+        )
+
+    def _apply_integrity_policy(
+        self,
+        payload: dict[str, Any],
+        *,
+        require_metric_basis: bool,
+    ) -> dict[str, Any]:
+        result = self._integrity_policy.evaluate(
+            payload,
+            require_energy=True,
+            require_metric_basis=require_metric_basis,
+            provider_100g_label=True,
+        )
+        payload["allowed_units"] = list(result.serving_options)
+        if not result.accepted:
+            payload["nutrition_integrity_reason"] = result.reason_code
+            for field in (
+                "calories_100g",
+                "protein_100g",
+                "carbs_100g",
+                "fat_100g",
+                "fiber_100g",
+                "sugar_100g",
+            ):
+                if field in payload:
+                    payload[field] = None
+            return payload
+        payload.update(
+            {
+                "calories_100g": result.derived_calories_100g,
+                "protein_100g": result.protein_100g,
+                "carbs_100g": result.carbs_100g,
+                "fat_100g": result.fat_100g,
+                "fiber_100g": result.fiber_100g,
+                "sugar_100g": result.sugar_100g,
+            }
+        )
+        return payload
 
     def _calc_per_100g(self, value: Any, metric_amount: float) -> float | None:
         """Calculate nutrition value per 100g using metric_serving_amount."""
@@ -433,9 +521,10 @@ class FatSecretService:
         if value is None:
             return None
         try:
-            return float(value)
+            converted = float(value)
         except (ValueError, TypeError):
             return None
+        return converted if math.isfinite(converted) else None
 
 
 _fat_secret_service: FatSecretService | None = None

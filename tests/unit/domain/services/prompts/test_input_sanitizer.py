@@ -1,7 +1,13 @@
 """Tests for user description input sanitization."""
 
 import pytest
-from src.domain.services.prompts.input_sanitizer import sanitize_user_description
+from pydantic import ValidationError
+
+from src.api.schemas.request.meal_requests import ParseMealTextRequest
+from src.domain.services.prompts.input_sanitizer import (
+    sanitize_user_description,
+    validate_refinement_items,
+)
 
 
 class TestSanitizeUserDescription:
@@ -96,3 +102,27 @@ class TestSanitizeUserDescription:
             result = sanitize_user_description(desc)
             assert result is not None, f"'{desc}' should be allowed"
             assert desc.strip() in result or result == desc.strip()
+
+
+def _refinement_with_blank_allowed_unit() -> list[dict]:
+    return [
+        {
+            "name": "potato",
+            "quantity": 1,
+            "unit": "piece",
+            "allowed_units": [{"unit": "   ", "gram_weight": 100}],
+        }
+    ]
+
+
+def test_refinement_rejects_blank_allowed_unit():
+    with pytest.raises(ValueError, match="must not be empty"):
+        validate_refinement_items(_refinement_with_blank_allowed_unit())
+
+
+def test_parse_meal_text_request_rejects_blank_allowed_unit():
+    with pytest.raises(ValidationError, match="must not be empty"):
+        ParseMealTextRequest(
+            text="update potato",
+            current_items=_refinement_with_blank_allowed_unit(),
+        )

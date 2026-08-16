@@ -7,6 +7,13 @@ from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
 )
+from src.domain.services.nutrition_calculation_service import (
+    AuthoritativeUnitMismatchError,
+)
+from src.domain.services.nutrition_integrity_policy import (
+    NutritionIntegrityError,
+    NutritionIntegrityResult,
+)
 
 
 def test_handle_exception_unexpected_returns_500():
@@ -58,3 +65,60 @@ def test_handle_exception_ai_output_validation_returns_422_without_field_details
         "attempt_count": 2,
     }
     assert "quantity_g" not in str(exc.detail)
+
+
+def test_handle_exception_authoritative_unit_mismatch_returns_422():
+    exc = handle_exception(
+        AuthoritativeUnitMismatchError(
+            "unit is not present in the authoritative source snapshot"
+        )
+    )
+
+    assert isinstance(exc, HTTPException)
+    assert exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert exc.detail == {
+        "error_code": "NUTRITION_UNIT_INVALID",
+        "message": "The selected serving unit is not available for this food.",
+        "details": {},
+    }
+
+
+def test_handle_exception_provider_failure_returns_503_without_internal_details():
+    exc = handle_exception(
+        NutritionIntegrityError(
+            NutritionIntegrityResult(
+                accepted=False,
+                reason_code="provider_unavailable",
+            )
+        )
+    )
+
+    assert isinstance(exc, HTTPException)
+    assert exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert exc.detail == {
+        "error_code": "NUTRITION_PROVIDER_UNAVAILABLE",
+        "message": (
+            "Nutrition provider capacity is temporarily unavailable. "
+            "Please try again later."
+        ),
+        "details": {},
+    }
+
+
+def test_handle_exception_integrity_rejection_hides_internal_reason_code():
+    exc = handle_exception(
+        NutritionIntegrityError(
+            NutritionIntegrityResult(
+                accepted=False,
+                reason_code="provider_identity_mismatch",
+            )
+        )
+    )
+
+    assert isinstance(exc, HTTPException)
+    assert exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert exc.detail == {
+        "error_code": "NUTRITION_INTEGRITY_REJECTED",
+        "message": "The nutrition data could not be verified.",
+        "details": {},
+    }

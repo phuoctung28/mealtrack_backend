@@ -17,6 +17,7 @@ from src.domain.services.meal_service import MealService
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
     clamp_nutrition_values,
+    convert_quantity_to_grams,
     normalize_unit_for_manual_save,
     scale_per_100g_nutrition,
 )
@@ -70,6 +71,98 @@ def test_manual_custom_nutrition_uses_density_for_oil_ml():
     assert nutrition.macros.carbs == pytest.approx(0.0)
     assert nutrition.macros.fat == pytest.approx(4.2)
     assert food_items[0].macros.fat == pytest.approx(4.232)
+
+
+def test_authoritative_snapshot_serving_weight_is_used_for_manual_save():
+    service = NutritionCalculationService()
+
+    nutrition, food_items = service.aggregate_from_command_items(
+        [
+            ManualMealItem(
+                name="Rice",
+                quantity=1.0,
+                unit="cup",
+                origin="local",
+                food_reference_id=42,
+                nutrition_contract_version="2",
+                allowed_units=[
+                    {"unit": "g", "gram_weight": 1.0},
+                    {"unit": "cup", "gram_weight": 158.0},
+                ],
+                custom_nutrition=CustomNutrition(
+                    calories_per_100g=124.7,
+                    protein_per_100g=2.7,
+                    carbs_per_100g=28.0,
+                    fat_per_100g=0.3,
+                ),
+            )
+        ]
+    )
+
+    assert food_items[0].macros.protein == pytest.approx(2.7 * 1.58)
+    assert nutrition.macros.protein == pytest.approx(4.3)
+
+
+def test_authoritative_snapshot_rejects_unknown_serving_unit():
+    with pytest.raises(ValueError, match="authoritative source snapshot"):
+        NutritionCalculationService().aggregate_from_command_items(
+            [
+                ManualMealItem(
+                    name="Rice",
+                    quantity=1.0,
+                    unit="bowl",
+                    origin="local",
+                    food_reference_id=42,
+                    nutrition_contract_version="2",
+                    allowed_units=[{"unit": "g", "gram_weight": 1.0}],
+                    custom_nutrition=CustomNutrition(
+                        calories_per_100g=124.7,
+                        protein_per_100g=2.7,
+                        carbs_per_100g=28.0,
+                        fat_per_100g=0.3,
+                    ),
+                )
+            ]
+        )
+
+
+def test_authoritative_snapshot_does_not_match_free_text_description_tokens():
+    with pytest.raises(ValueError, match="authoritative source snapshot"):
+        scale_per_100g_nutrition(
+            {"calories": 77.0},
+            quantity=100,
+            unit="potato",
+            allowed_units=[
+                {
+                    "unit": "medium",
+                    "gram_weight": 173.0,
+                    "description": "1 medium potato",
+                }
+            ],
+            food_name="Potato",
+            strict_allowed_units=True,
+        )
+
+
+def test_authoritative_snapshot_does_not_strip_arbitrary_unit_suffixes(caplog):
+    raw_unit = "medium private-text"
+    with pytest.raises(ValueError, match="authoritative source snapshot"):
+        scale_per_100g_nutrition(
+            {"calories": 77.0},
+            quantity=100,
+            unit=raw_unit,
+            allowed_units=[
+                {
+                    "unit": "medium",
+                    "gram_weight": 173.0,
+                    "description": "1 medium potato",
+                }
+            ],
+            food_name="Potato",
+            strict_allowed_units=True,
+        )
+
+    assert raw_unit not in caplog.text
 
 
 def test_meal_service_add_custom_nutrition_uses_unit_grams():
@@ -151,6 +244,12 @@ def test_allowed_unit_logs_do_not_expose_unit_or_description(caplog):
     assert "Unknown unit used the default allowed serving" in caplog.text
     assert fallback_unit not in caplog.text
     assert fallback_description not in caplog.text
+
+    caplog.clear()
+    raw_unit = "private family serving"
+    assert convert_quantity_to_grams(100, raw_unit, "Rice") == 100
+    assert "Unknown unit used quantity as grams" in caplog.text
+    assert raw_unit not in caplog.text
 
 
 def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():
