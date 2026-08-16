@@ -11,11 +11,19 @@ prevents duplicate Sentry issues per failure event.
 
 import logging
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from src.api.exceptions import MealTrackException, create_http_exception
+from src.api.exceptions import (
+    MealTrackException,
+    create_http_exception,
+    handle_exception,
+)
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.services.nutrition_calculation_service import (
+    AuthoritativeUnitMismatchError,
+)
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +64,19 @@ async def _ai_unavailable_handler(
                 "details": {"attempted_models": exc.attempted_models},
             }
         },
+    )
+
+
+async def _nutrition_exception_handler(
+    request: Request,
+    exc: NutritionIntegrityError | AuthoritativeUnitMismatchError,
+) -> JSONResponse:
+    """Convert nutrition trust-boundary failures at the global API boundary."""
+    http_exc = handle_exception(exc)
+    return JSONResponse(
+        status_code=http_exc.status_code,
+        content={"detail": http_exc.detail},
+        headers=http_exc.headers,
     )
 
 
@@ -109,6 +130,16 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     # AIUnavailableError — degraded, WARNING only
     app.add_exception_handler(AIUnavailableError, _ai_unavailable_handler)  # type: ignore[arg-type]
+
+    # Nutrition trust-boundary failures are expected request/provider outcomes.
+    app.add_exception_handler(
+        NutritionIntegrityError,
+        _nutrition_exception_handler,  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        AuthoritativeUnitMismatchError,
+        _nutrition_exception_handler,  # type: ignore[arg-type]
+    )
 
     # Catch-all for truly unexpected exceptions — one ERROR (ServerErrorMiddleware)
     app.add_exception_handler(Exception, _unexpected_exception_handler)
