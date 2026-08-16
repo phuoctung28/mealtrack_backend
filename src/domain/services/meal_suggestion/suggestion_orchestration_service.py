@@ -15,7 +15,6 @@ from src.domain.exceptions.meal_suggestion_exceptions import (
     MealSuggestionSessionStoreUnavailableError,
 )
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
-from src.domain.model.translation_result import TranslationOutcome
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
@@ -243,16 +242,10 @@ class SuggestionOrchestrationService:
             await self._repo.update_session(session)
         else:
             await self._repo.save_session(session)
-        persistable = (
-            suggestions
-            if session.language == "en"
-            else [
-                suggestion
-                for suggestion in suggestions
-                if suggestion.translation_outcome is TranslationOutcome.TRANSLATED
-            ]
-        )
-        await self._repo.save_suggestions(persistable)
+        # Keep canonical English fallbacks selectable when localization is
+        # unavailable or partial. The response and session both expose these
+        # suggestions, so dropping them here would break the follow-up flow.
+        await self._repo.save_suggestions(suggestions)
 
     async def _load_existing_session(
         self, session_id: str, user_id: str, language: str

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -112,6 +113,33 @@ async def test_translate_meal_suggestion_fills_canonical_when_provider_returns_p
     # Remaining fields fall back to originals (padded).
     assert result.description == suggestion.description
     assert result.ingredients[0].name == suggestion.ingredients[0].name
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("outcome", "texts"),
+    [
+        (TranslationOutcome.PARTIAL, ("Poulet grille",)),
+        (TranslationOutcome.UNAVAILABLE, ()),
+    ],
+)
+async def test_partial_or_unavailable_translation_preserves_selected_localized_name(
+    service, suggestion, text_translation_service, outcome, texts
+):
+    selected = replace(
+        suggestion,
+        meal_name="Ga nuong",
+        english_name="Grilled Chicken",
+    )
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        texts, outcome, "en", "fr"
+    )
+
+    result = await service.translate_meal_suggestion(selected, "fr")
+
+    assert result.meal_name == "Ga nuong"
+    called_texts = text_translation_service.translate_texts.call_args.args[0]
+    assert called_texts[0] == "Grilled Chicken"
 
 
 @pytest.mark.asyncio

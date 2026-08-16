@@ -331,9 +331,6 @@ class UploadMealImageImmediatelyHandler(
                     food_items=nutrition.food_items,
                     target_language=command.language,
                 )
-                logger.info(
-                    f"[TRANSLATION] meal={saved_meal.meal_id} translated to {command.language}"
-                )
             except Exception as exc:
                 logger.warning(
                     "[TRANSLATION] failed for meal=%s error_type=%s",

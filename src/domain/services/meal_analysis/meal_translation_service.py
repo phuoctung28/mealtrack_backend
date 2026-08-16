@@ -140,6 +140,12 @@ class MealTranslationService:
             )
 
             if result.outcome is not TranslationOutcome.TRANSLATED:
+                logger.warning(
+                    "Meal translation not persisted meal=%s lang=%s outcome=%s",
+                    meal.meal_id,
+                    target_language,
+                    result.outcome.value,
+                )
                 return translation
             saved = await self._save(translation)
             logger.info(

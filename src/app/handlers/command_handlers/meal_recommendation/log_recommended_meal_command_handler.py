@@ -105,11 +105,6 @@ class LogRecommendedMealCommandHandler(
                 food_items=food_items,
                 target_language=language,
             )
-            logger.info(
-                "recommended meal translated meal=%s language=%s",
-                meal.meal_id,
-                language,
-            )
         except Exception as exc:
             # Logging must succeed even when translation is unavailable.
             logger.warning(

@@ -116,8 +116,18 @@ class SuggestionTranslationService:
         Build one flat string list, call the provider once, then reconstruct the
         MealSuggestion dataclass with translated values.
         """
+        # Keep the canonical English identity as the provider source. A selected
+        # discovery meal may already have a localized display name, which is the
+        # safe fallback if this request only partially translates.
+        canonical_name = suggestion.english_name or suggestion.meal_name
+        localized_name_fallback = (
+            suggestion.meal_name
+            if suggestion.english_name
+            and suggestion.meal_name != suggestion.english_name
+            else None
+        )
         # Layout: [meal_name, description, *ingredient_names, *step_instructions]
-        strings: list[str] = [suggestion.meal_name, suggestion.description or ""]
+        strings: list[str] = [canonical_name, suggestion.description or ""]
         n_ingredients = len(suggestion.ingredients)
 
         strings.extend(ing.name for ing in suggestion.ingredients)
@@ -129,6 +139,11 @@ class SuggestionTranslationService:
 
         idx = 0
         translated_name = translated[idx]
+        if (
+            localized_name_fallback
+            and result.outcome is not TranslationOutcome.TRANSLATED
+        ):
+            translated_name = localized_name_fallback
         idx += 1
         translated_description = translated[idx]
         idx += 1

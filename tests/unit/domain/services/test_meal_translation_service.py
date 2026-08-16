@@ -210,7 +210,7 @@ async def test_translate_meal_normalizes_instruction_dicts(
 
 @pytest.mark.asyncio
 async def test_translate_meal_fills_canonical_when_provider_returns_partial(
-    service, meal, food_items, text_translation_service
+    service, meal, food_items, text_translation_service, caplog
 ):
     # Only dish name returned, rest should be padded with originals.
     text_translation_service.translate_texts.return_value = TranslationResult(
@@ -232,6 +232,8 @@ async def test_translate_meal_fills_canonical_when_provider_returns_partial(
     assert result.meal_instruction == [
         {"instruction": "Step 1", "duration_minutes": None}
     ]
+    assert "Meal translation not persisted" in caplog.text
+    assert "outcome=partial" in caplog.text
 
 
 @pytest.mark.asyncio

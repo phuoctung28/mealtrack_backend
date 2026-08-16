@@ -310,7 +310,7 @@ class ParallelRecipeGenerator:
             if not meal_name:
                 raise ValueError("selected meal is missing english_name/name")
             prompt = build_recipe_details_prompt(meal_name, recipe_session)
-            return await self._generate_with_retry(
+            generated = await self._generate_with_retry(
                 prompt,
                 meal_name,
                 index,
@@ -319,6 +319,14 @@ class ParallelRecipeGenerator:
                 reject_on_scale_out_of_range=False,
                 fill_missing_steps=True,
             )
+            localized_name = selected.get("name")
+            if (
+                generated is not None
+                and localized_name
+                and localized_name != meal_name
+            ):
+                generated = replace(generated, meal_name=localized_name)
+            return generated
 
         results: List[Optional[MealSuggestion]] = [None] * len(selected_meals)
 

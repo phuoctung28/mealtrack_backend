@@ -331,13 +331,14 @@ async def test_log_handler_claims_materializes_then_finalizes():
 
 
 @pytest.mark.asyncio
-async def test_log_handler_translates_and_invalidates_cache_for_non_english():
+async def test_log_handler_translates_and_invalidates_cache_for_non_english(caplog):
+    caplog.set_level("INFO")
     plans = _LogPlanRepo(replayed=False)
     materializer = _Materializer()
     translation_service = type(
         "TranslationService",
         (),
-        {"translate_meal": AsyncMock(return_value=None)},
+        {"translate_meal": AsyncMock(return_value={"dish_name": "Rice Bowl"})},
     )()
     cache_invalidation = type(
         "CacheInvalidation",
@@ -361,6 +362,7 @@ async def test_log_handler_translates_and_invalidates_cache_for_non_english():
     cache_invalidation.after_meal_write.assert_awaited_once_with(
         "user-1", _plan().slots[0].slot_date
     )
+    assert "recommended meal translated" not in caplog.text
 
 
 @pytest.mark.asyncio
