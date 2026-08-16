@@ -1,9 +1,14 @@
+import asyncio
+import gc
+import time
+
 import pytest
 
 from src.api.schemas.request.meal_requests import CreateManualMealFromFoodsRequest
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.handlers.command_handlers.parse_meal_text_handler import (
     ParseMealTextHandler,
+    _ParseTextRequestBudget,
 )
 from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
@@ -166,6 +171,91 @@ class _CountingFatSecretService:
     async def search_foods(self, *args, **kwargs):
         self.search_calls += 1
         return []
+
+
+@pytest.mark.asyncio
+async def test_expired_provider_budget_does_not_leak_unawaited_coroutine(recwarn):
+    provider = _CountingFatSecretService()
+    handler = ParseMealTextHandler(
+        meal_generation_service=_FakeMealGenerationService(),
+        fat_secret_service=provider,
+        structured_reference_enabled=False,
+    )
+    budget = _ParseTextRequestBudget(deadline=time.monotonic() - 1)
+
+    result = await handler._resolve_legacy_provider(
+        _parse_item(), "food", 100, "g", budget
+    )
+    gc.collect()
+
+    assert result is None
+    assert provider.search_calls == 0
+    assert not [
+        warning
+        for warning in recwarn
+        if issubclass(warning.category, RuntimeWarning)
+        and "was never awaited" in str(warning.message)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_provider_factory_is_not_called_when_budget_expires_waiting_for_slot():
+    handler = ParseMealTextHandler(meal_generation_service=_FakeMealGenerationService())
+    semaphore = asyncio.Semaphore(0)
+    budget = _ParseTextRequestBudget(
+        deadline=time.monotonic() + 60,
+        semaphore=semaphore,
+    )
+    factory_calls = 0
+
+    async def provider_call():
+        return []
+
+    def provider_factory():
+        nonlocal factory_calls
+        factory_calls += 1
+        return provider_call()
+
+    task = asyncio.create_task(handler._provider_call(provider_factory, budget))
+    await asyncio.sleep(0)
+    budget.deadline = time.monotonic() - 1
+    semaphore.release()
+
+    assert await task is None
+    assert factory_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_ai_latency_does_not_consume_fatsecret_resolution_budget(monkeypatch):
+    meal_generation_service = _FakeMealGenerationService()
+    original_generate = meal_generation_service.generate_meal_plan_async
+
+    async def delayed_generate(**kwargs):
+        await asyncio.sleep(0.1)
+        return await original_generate(**kwargs)
+
+    monkeypatch.setattr(
+        meal_generation_service,
+        "generate_meal_plan_async",
+        delayed_generate,
+    )
+    monkeypatch.setattr(
+        "src.app.handlers.command_handlers.parse_meal_text_handler."
+        "_parse_text_fatsecret_timeout_seconds",
+        lambda: 0.05,
+    )
+    provider = _CountingFatSecretService()
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=provider,
+        structured_reference_enabled=False,
+    )
+
+    await handler.handle(
+        ParseMealTextCommand(text="100g rice", user_id="user-1", language="en")
+    )
+
+    assert provider.search_calls == 1
 
 
 def _parse_item(name="food", quantity=100, unit="g", macros=None):

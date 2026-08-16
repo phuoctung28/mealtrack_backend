@@ -67,11 +67,12 @@ class AsyncMealWriteOperationRepository:
         lease_seconds: int = 60,
     ) -> MealWriteReservation:
         now = utc_now()
+        operation_id = str(uuid.uuid4())
         lease_owner = str(uuid.uuid4())
         insert_stmt = (
             pg_insert(MealWriteOperationORM)
             .values(
-                id=str(uuid.uuid4()),
+                id=operation_id,
                 user_id=user_id,
                 operation=operation,
                 idempotency_key=idempotency_key,
@@ -86,8 +87,18 @@ class AsyncMealWriteOperationRepository:
             .on_conflict_do_nothing(
                 index_elements=["user_id", "operation", "idempotency_key"]
             )
+            .returning(MealWriteOperationORM.id)
         )
-        await self.session.execute(insert_stmt)
+        insert_result = await self.session.execute(insert_stmt)
+        inserted_id = insert_result.scalar_one_or_none()
+        if inserted_id is not None:
+            return MealWriteReservation(
+                operation_id=str(inserted_id),
+                lease_owner=lease_owner,
+                lease_generation=1,
+                state="acquired",
+            )
+
         result = await self.session.execute(
             select(MealWriteOperationORM)
             .where(

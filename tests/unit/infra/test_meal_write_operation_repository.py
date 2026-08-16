@@ -17,6 +17,29 @@ def _result(row):
     return SimpleNamespace(scalars=lambda: scalars)
 
 
+def _insert_result(operation_id=None):
+    return SimpleNamespace(scalar_one_or_none=lambda: operation_id)
+
+
+@pytest.mark.asyncio
+async def test_new_reservation_is_acquired_by_the_inserting_caller():
+    session = SimpleNamespace(execute=AsyncMock(return_value=_insert_result("op-new")))
+    repo = AsyncMealWriteOperationRepository(session)
+
+    reservation = await repo.reserve(
+        user_id="user-1",
+        operation="create_manual_meal",
+        idempotency_key="brand-new-key",
+        request_fingerprint="fingerprint-a",
+    )
+
+    assert reservation.state == "acquired"
+    assert reservation.operation_id == "op-new"
+    assert reservation.lease_owner is not None
+    assert reservation.lease_generation == 1
+    assert session.execute.await_count == 1
+
+
 @pytest.mark.asyncio
 async def test_reservation_replays_completed_operation_and_rejects_fingerprint_reuse():
     row = SimpleNamespace(
@@ -29,7 +52,16 @@ async def test_reservation_replays_completed_operation_and_rejects_fingerprint_r
         target_meal_id="meal-1",
         response={"meal_id": "meal-1"},
     )
-    session = SimpleNamespace(execute=AsyncMock(return_value=_result(row)))
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _insert_result(),
+                _result(row),
+                _insert_result(),
+                _result(row),
+            ]
+        )
+    )
     repo = AsyncMealWriteOperationRepository(session)
 
     replay = await repo.reserve(
@@ -51,6 +83,34 @@ async def test_reservation_replays_completed_operation_and_rejects_fingerprint_r
 
 
 @pytest.mark.asyncio
+async def test_active_existing_reservation_remains_in_progress_for_other_callers():
+    row = SimpleNamespace(
+        id="op-1",
+        request_fingerprint="fingerprint-a",
+        status="in_progress",
+        lease_owner="current-owner",
+        lease_generation=1,
+        lease_expires_at=utc_now() + timedelta(seconds=30),
+        target_meal_id=None,
+        response=None,
+    )
+    session = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_insert_result(), _result(row)])
+    )
+    repo = AsyncMealWriteOperationRepository(session)
+
+    reservation = await repo.reserve(
+        user_id="user-1",
+        operation="create_manual_meal",
+        idempotency_key="key-1",
+        request_fingerprint="fingerprint-a",
+    )
+
+    assert reservation.state == "in_progress"
+    assert reservation.lease_owner == "current-owner"
+
+
+@pytest.mark.asyncio
 async def test_expired_lease_is_fenced_and_reacquired():
     row = SimpleNamespace(
         id="op-1",
@@ -63,7 +123,8 @@ async def test_expired_lease_is_fenced_and_reacquired():
         response=None,
     )
     session = SimpleNamespace(
-        execute=AsyncMock(return_value=_result(row)), flush=AsyncMock()
+        execute=AsyncMock(side_effect=[_insert_result(), _result(row)]),
+        flush=AsyncMock(),
     )
     repo = AsyncMealWriteOperationRepository(session)
 

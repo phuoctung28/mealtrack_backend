@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -91,7 +92,7 @@ TRUSTED_QUANTITY_UNITS = {
 class _ParseTextRequestBudget:
     """Request-wide limits shared by AI and staged reference resolution."""
 
-    deadline: float
+    deadline: float | None = None
     ai_generations: int = 0
     provider_searches: int = 0
     provider_details: int = 0
@@ -147,9 +148,7 @@ class ParseMealTextHandler(
             language=command.language
         )
 
-        budget = _ParseTextRequestBudget(
-            deadline=time.monotonic() + _parse_text_fatsecret_timeout_seconds()
-        )
+        budget = _ParseTextRequestBudget()
         semantic_feedback: list[str] = []
         enhanced_items: list[dict[str, Any]] = []
         validated_payload: dict[str, Any] | None = None
@@ -169,6 +168,10 @@ class ParseMealTextHandler(
             parsed_items = self._to_flat_parse_text_items(
                 validated_payload, raw_payload
             )
+            if budget.deadline is None:
+                budget.deadline = (
+                    time.monotonic() + _parse_text_fatsecret_timeout_seconds()
+                )
             local_references = await self._find_local_references(parsed_items, budget)
             try:
                 enhanced_items = [
@@ -385,10 +388,11 @@ class ParseMealTextHandler(
             }
             - {""}
         )
-        if not names or time.monotonic() >= budget.deadline:
+        deadline = budget.deadline
+        if not names or deadline is None or time.monotonic() >= deadline:
             return {}
         try:
-            remaining = max(0.01, budget.deadline - time.monotonic())
+            remaining = max(0.01, deadline - time.monotonic())
             return await asyncio.wait_for(
                 self._food_reference_batch_lookup(names), timeout=remaining
             )
@@ -480,7 +484,8 @@ class ParseMealTextHandler(
             return None
         budget.provider_searches += 1
         candidates = await self._provider_call(
-            provider.search_food_candidates(lookup_name, max_results=5), budget
+            lambda: provider.search_food_candidates(lookup_name, max_results=5),
+            budget,
         )
         if candidates is None:
             return None
@@ -491,7 +496,8 @@ class ParseMealTextHandler(
             return None
         budget.provider_details += 1
         details = await self._provider_call(
-            provider.get_food_details(str(selected["food_id"])), budget
+            lambda: provider.get_food_details(str(selected["food_id"])),
+            budget,
         )
         if not isinstance(details, dict):
             return None
@@ -517,7 +523,7 @@ class ParseMealTextHandler(
         budget.provider_searches += 1
         try:
             results = await self._provider_call(
-                provider.search_foods(lookup_name, max_results=5),
+                lambda: provider.search_foods(lookup_name, max_results=5),
                 budget,
             )
         except Exception as exc:
@@ -586,14 +592,25 @@ class ParseMealTextHandler(
         return item
 
     async def _provider_call(
-        self, awaitable: Any, budget: _ParseTextRequestBudget
+        self,
+        awaitable_factory: Callable[[], Awaitable[Any]],
+        budget: _ParseTextRequestBudget,
     ) -> Any:
-        remaining = budget.deadline - time.monotonic()
+        deadline = budget.deadline
+        if deadline is None:
+            return None
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
             return None
         async with budget.semaphore:
+            deadline = budget.deadline
+            if deadline is None:
+                return None
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
             try:
-                return await asyncio.wait_for(awaitable, timeout=remaining)
+                return await asyncio.wait_for(awaitable_factory(), timeout=remaining)
             except Exception as exc:
                 logger.debug("parse_text provider call failed: %s", type(exc).__name__)
                 return None
