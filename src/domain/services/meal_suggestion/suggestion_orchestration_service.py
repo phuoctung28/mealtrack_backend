@@ -19,8 +19,8 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
-from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
-    DeepLSuggestionTranslationService,
+from src.domain.services.meal_suggestion.suggestion_translation_service import (
+    SuggestionTranslationService,
 )
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
@@ -58,7 +58,7 @@ class SuggestionOrchestrationService:
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
         uow_factory: Optional[Callable[[], Any]] = None,
-        translation_service: Optional[DeepLSuggestionTranslationService] = None,
+        translation_service: Optional[SuggestionTranslationService] = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
@@ -242,6 +242,9 @@ class SuggestionOrchestrationService:
             await self._repo.update_session(session)
         else:
             await self._repo.save_session(session)
+        # Keep canonical English fallbacks selectable when localization is
+        # unavailable or partial. The response and session both expose these
+        # suggestions, so dropping them here would break the follow-up flow.
         await self._repo.save_suggestions(suggestions)
 
     async def _load_existing_session(

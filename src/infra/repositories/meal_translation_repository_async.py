@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -55,8 +56,23 @@ class AsyncMealTranslationRepository(MealTranslationRepositoryPort):
             return meal_translation_orm_to_domain(existing)
 
         model = meal_translation_domain_to_orm(translation)
-        self._session.add(model)
-        await self._session.flush()
+        try:
+            begin_nested = getattr(self._session, "begin_nested", None)
+            if begin_nested is None:
+                self._session.add(model)
+                await self._session.flush()
+            else:
+                async with begin_nested():
+                    self._session.add(model)
+                    await self._session.flush()
+        except IntegrityError:
+            # Another worker may have won the existing unique key between the
+            # read and insert. Re-read the durable winner instead of surfacing
+            # a duplicate translation failure.
+            winner = await self._find_model(translation.meal_id, translation.language)
+            if winner is not None:
+                return meal_translation_orm_to_domain(winner)
+            raise
         await self._session.refresh(model)
         return meal_translation_orm_to_domain(model)
 

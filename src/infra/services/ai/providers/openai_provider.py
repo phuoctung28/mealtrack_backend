@@ -19,6 +19,9 @@ from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
 from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 from src.infra.services.ai.langchain_openai_adapter import OpenAILangChainAdapter
 from src.infra.services.ai.openai_prompt_cache_policy import OpenAIPromptCachePolicy
+from src.infra.services.ai.openai_structured_generation_result import (
+    OpenAIStructuredGenerationResult,
+)
 from src.observability import increment_metric
 
 
@@ -158,6 +161,50 @@ class OpenAIProvider(AIProviderPort):
             return extract_ai_json(raw_content)
         return self._dump_parsed(result.parsed)
 
+    async def generate_structured_result(
+        self,
+        model: str,
+        prompt: str,
+        system_message: str,
+        *,
+        schema: type,
+        max_tokens: int | None = None,
+        store_responses: bool | None = None,
+        **kwargs: Any,
+    ) -> OpenAIStructuredGenerationResult:
+        """Return parsed structured data plus sanitized response metadata."""
+        purpose_hint = kwargs.get("purpose_hint")
+        prompt_cache_kwargs = self._prompt_cache_kwargs(
+            model=model,
+            purpose_hint=purpose_hint,
+            system_message=system_message,
+        )
+        result = await self._langchain.generate_structured(
+            model=model,
+            prompt=prompt,
+            system_message=system_message,
+            schema=schema,
+            max_tokens=max_tokens,
+            request_kwargs=prompt_cache_kwargs,
+            store_override=store_responses,
+        )
+        self._record_prompt_cache_usage(
+            result.raw_message,
+            model=model,
+            purpose_hint=purpose_hint,
+        )
+        raw = result.raw_message
+        response_metadata = getattr(raw, "response_metadata", {})
+        refusal = bool(_metadata_value(response_metadata, "refusal"))
+        incomplete = _response_is_incomplete(response_metadata)
+        return OpenAIStructuredGenerationResult(
+            parsed=result.parsed,
+            raw_message=raw,
+            refusal=refusal,
+            incomplete=incomplete,
+            usage=_safe_usage(raw),
+        )
+
     async def generate_with_vision(
         self,
         model: str,
@@ -221,3 +268,32 @@ class OpenAIProvider(AIProviderPort):
         if hasattr(parsed, "model_dump"):
             return parsed.model_dump()
         return dict(parsed)
+
+
+def _metadata_value(metadata: Any, key: str) -> Any:
+    if isinstance(metadata, dict):
+        return metadata.get(key)
+    return getattr(metadata, key, None)
+
+
+def _response_is_incomplete(metadata: Any) -> bool:
+    """Normalize Responses API completion metadata across LangChain versions."""
+    if bool(_metadata_value(metadata, "incomplete")):
+        return True
+    status = _metadata_value(metadata, "status")
+    if isinstance(status, str) and status.lower() != "completed":
+        return True
+    details = _metadata_value(metadata, "incomplete_details")
+    return details not in (None, {}, "")
+
+
+def _safe_usage(message: Any) -> dict[str, int]:
+    usage = getattr(message, "usage_metadata", None)
+    if not isinstance(usage, dict):
+        return {}
+    result: dict[str, int] = {}
+    for key in ("input_tokens", "output_tokens", "total_tokens"):
+        value = usage.get(key)
+        if isinstance(value, int) and value >= 0:
+            result[key] = value
+    return result

@@ -1,4 +1,4 @@
-"""Tests that food search caches partial localized results and skips the fallback."""
+"""Tests for canonical acquisition and outcome-aware localized search caching."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -8,6 +8,7 @@ from src.app.handlers.query_handlers.search_foods_query_handler import (
     SearchFoodsQueryHandler,
 )
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
@@ -108,6 +109,16 @@ def _make_handler(localized_results=None, fallback_results=None, local_results=N
     )
 
 
+class _NeutralTranslator:
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.calls = []
+
+    async def translate_texts(self, texts, source_language, target_language):
+        self.calls.append((list(texts), source_language, target_language))
+        return self.outcomes.pop(0)
+
+
 @pytest.mark.asyncio
 async def test_partial_localized_result_skips_fallback():
     """When localized search returns results (even partial), fallback must NOT run."""
@@ -117,29 +128,102 @@ async def test_partial_localized_result_skips_fallback():
     query = SearchFoodsQuery(query="pho", language="vi", limit=10)
     await handler.handle(query)
 
-    assert (
-        fat_secret.search_foods.call_count == 1
-    ), f"Expected 1 fatsecret call (localized only), got {fat_secret.search_foods.call_count}"
+    assert fat_secret.search_foods.call_count == 1, (
+        f"Expected 1 fatsecret call (localized only), got {fat_secret.search_foods.call_count}"
+    )
 
 
 @pytest.mark.asyncio
-async def test_partial_localized_result_is_cached():
-    """Partial localized results must be cached immediately."""
+async def test_partial_localized_result_is_not_cached():
+    """Partial/canonical presentation output must not poison a locale cache."""
     partial_results = [{"description": "Phở", "source": "fatsecret"}]
     handler, _, cache, _ = _make_handler(localized_results=partial_results)
 
     query = SearchFoodsQuery(query="pho", language="vi", limit=10)
     await handler.handle(query)
 
-    cache.cache_search.assert_called_once()
-    call_args = cache.cache_search.call_args
-    cached_data = call_args[0][1]  # second positional arg is the data
-    assert cached_data == partial_results
+    cache.cache_search.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_empty_localized_result_runs_fallback():
-    """When localized search returns empty, the fallback path still runs."""
+async def test_non_english_search_translates_query_and_only_full_results_are_cached():
+    cache = MagicMock()
+    cache.get_cached_search = AsyncMock(return_value=None)
+    cache.cache_search = AsyncMock()
+    fat_secret = MagicMock()
+    fat_secret.search_foods = AsyncMock(
+        return_value=[{"description": "Rice Bowl", "source": "fatsecret"}]
+    )
+    mapping = MagicMock()
+    mapping.map_search_item.side_effect = lambda item: item
+    local_search = AsyncMock(return_value=[])
+    translator = _NeutralTranslator(
+        [
+            TranslationResult(("rice",), TranslationOutcome.TRANSLATED, "vi", "en"),
+            TranslationResult(("Cơm tô",), TranslationOutcome.TRANSLATED, "en", "vi"),
+        ]
+    )
+    handler = SearchFoodsQueryHandler(
+        cache_service=cache,
+        mapping_service=mapping,
+        fat_secret_service=fat_secret,
+        translation_service=translator,
+        local_search=local_search,
+    )
+
+    result = await handler.handle(SearchFoodsQuery(query="cơm", language="vi"))
+
+    assert result["results"][0]["description"] == "Cơm tô"
+    assert translator.calls == [
+        (["cơm"], "vi", "en"),
+        (["Rice Bowl"], "en", "vi"),
+    ]
+    fat_secret.search_foods.assert_awaited_once_with("rice", max_results=20)
+    cache.cache_search.assert_awaited_once()
+    assert cache.cache_search.call_args.args[0].startswith("food-search:v2:vi:")
+
+
+@pytest.mark.asyncio
+async def test_non_english_partial_forward_result_is_presented_without_cache_write():
+    cache = MagicMock()
+    cache.get_cached_search = AsyncMock(return_value=None)
+    cache.cache_search = AsyncMock()
+    fat_secret = MagicMock()
+    fat_secret.search_foods = AsyncMock(
+        return_value=[
+            {"description": "Rice Bowl", "source": "fatsecret"},
+            {"description": "Chicken", "source": "fatsecret"},
+        ]
+    )
+    mapping = MagicMock()
+    mapping.map_search_item.side_effect = lambda item: item
+    translator = _NeutralTranslator(
+        [
+            TranslationResult(("rice",), TranslationOutcome.TRANSLATED, "vi", "en"),
+            TranslationResult(
+                ("Cơm tô", "Chicken"), TranslationOutcome.PARTIAL, "en", "vi"
+            ),
+        ]
+    )
+    handler = SearchFoodsQueryHandler(
+        cache_service=cache,
+        mapping_service=mapping,
+        fat_secret_service=fat_secret,
+        translation_service=translator,
+    )
+
+    result = await handler.handle(SearchFoodsQuery(query="cơm", language="vi"))
+
+    assert [item["description"] for item in result["results"]] == [
+        "Cơm tô",
+        "Chicken",
+    ]
+    cache.cache_search.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_empty_localized_result_uses_canonical_provider_once():
+    """Canonical acquisition does not make a second locale-provider request."""
     fallback_results = [{"description": "Noodle soup", "source": "fatsecret"}]
     handler, fat_secret, _, _ = _make_handler(
         localized_results=[], fallback_results=fallback_results
@@ -148,7 +232,8 @@ async def test_empty_localized_result_runs_fallback():
     query = SearchFoodsQuery(query="pho", language="vi", limit=10)
     await handler.handle(query)
 
-    assert fat_secret.search_foods.call_count == 2
+    assert fat_secret.search_foods.call_count == 1
+    fat_secret.search_foods.assert_awaited_once_with("pho", max_results=10)
 
 
 @pytest.mark.asyncio
@@ -161,7 +246,9 @@ async def test_english_search_calls_fatsecret_when_local_is_empty():
     query = SearchFoodsQuery(query="chicken", language="en", limit=7)
     result = await handler.handle(query)
 
-    cache.get_cached_search.assert_awaited_once_with("chicken")
+    cache.get_cached_search.assert_awaited_once_with(
+        SearchFoodsQueryHandler._cache_key("chicken", "en")
+    )
     local_search.assert_awaited_once_with("chicken", "US", 7)
     fat_secret.search_foods.assert_awaited_once_with("chicken", max_results=7)
     assert result["results"][0]["source"] == "fatsecret"
@@ -171,7 +258,9 @@ async def test_english_search_calls_fatsecret_when_local_is_empty():
 async def test_search_returns_local_results_without_provider_call():
     handler, fat_secret, _, local_search = _make_handler(local_results=[_local_rice()])
 
-    result = await handler.handle(SearchFoodsQuery(query="rice", language="en", limit=1))
+    result = await handler.handle(
+        SearchFoodsQuery(query="rice", language="en", limit=1)
+    )
 
     local_search.assert_awaited_once_with("rice", "US", 1)
     fat_secret.search_foods.assert_not_awaited()
@@ -185,7 +274,9 @@ async def test_search_metrics_are_bounded_and_do_not_include_query_text():
     set_observability_connector_for_test(metrics)
     handler, _, _, _ = _make_handler(local_results=[_local_rice()])
 
-    await handler.handle(SearchFoodsQuery(query="secret rice query", language="en", limit=1))
+    await handler.handle(
+        SearchFoodsQuery(query="secret rice query", language="en", limit=1)
+    )
 
     assert (
         "distribution",
@@ -210,7 +301,9 @@ async def test_provider_outage_returns_partial_local_results():
     handler, fat_secret, _, _ = _make_handler(local_results=[_local_rice()])
     fat_secret.search_foods = AsyncMock(side_effect=Exception("provider unavailable"))
 
-    result = await handler.handle(SearchFoodsQuery(query="rice", language="en", limit=5))
+    result = await handler.handle(
+        SearchFoodsQuery(query="rice", language="en", limit=5)
+    )
 
     assert result["results"] == [
         handler.mapping_service.map_search_item(
@@ -228,9 +321,13 @@ async def test_cache_outage_degrades_to_local_and_provider_results():
     cache.get_cached_search = AsyncMock(side_effect=Exception("redis unavailable"))
     cache.cache_search = AsyncMock(side_effect=Exception("redis unavailable"))
 
-    result = await handler.handle(SearchFoodsQuery(query="rice", language="en", limit=5))
+    result = await handler.handle(
+        SearchFoodsQuery(query="rice", language="en", limit=5)
+    )
 
-    cache.get_cached_search.assert_awaited_once_with("rice")
+    cache.get_cached_search.assert_awaited_once_with(
+        SearchFoodsQueryHandler._cache_key("rice", "en")
+    )
     local_search.assert_awaited_once_with("rice", "US", 5)
     fat_secret.search_foods.assert_awaited_once_with("rice", max_results=4)
     assert [item["source"] for item in result["results"]] == [
@@ -252,7 +349,9 @@ async def test_provider_duplicate_does_not_replace_verified_local_result():
         local_results=[_local_rice()],
     )
 
-    result = await handler.handle(SearchFoodsQuery(query="rice", language="en", limit=5))
+    result = await handler.handle(
+        SearchFoodsQuery(query="rice", language="en", limit=5)
+    )
 
     fat_secret.search_foods.assert_awaited_once_with("rice", max_results=4)
     assert len(result["results"]) == 1

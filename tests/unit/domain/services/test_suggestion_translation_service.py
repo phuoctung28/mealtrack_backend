@@ -1,0 +1,262 @@
+from dataclasses import replace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from src.domain.model.meal_suggestion import (
+    Ingredient,
+    MacroEstimate,
+    MealSuggestion,
+    MealType,
+    RecipeStep,
+)
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
+from src.domain.services.meal_suggestion.suggestion_translation_service import (
+    SuggestionTranslationService,
+)
+from src.domain.services.translation.text_translation_service import (
+    TextTranslationService,
+)
+
+
+@pytest.fixture
+def text_translation_service():
+    svc = AsyncMock(spec=TextTranslationService)
+    svc.translate_texts = AsyncMock()
+    return svc
+
+
+@pytest.fixture
+def service(text_translation_service):
+    return SuggestionTranslationService(text_translation_service)
+
+
+@pytest.fixture
+def suggestion():
+    return MealSuggestion(
+        id="sug_1",
+        session_id="sess_1",
+        user_id="user_1",
+        meal_name="Grilled Chicken",
+        description="Tasty and simple",
+        meal_type=MealType.DINNER,
+        macros=MacroEstimate(calories=500, protein=40.0, carbs=20.0, fat=25.0),
+        ingredients=[
+            Ingredient(name="chicken breast", amount=200.0, unit="g"),
+            Ingredient(name="olive oil", amount=10.0, unit="ml"),
+        ],
+        recipe_steps=[
+            RecipeStep(step=1, instruction="Heat pan", duration_minutes=2),
+            RecipeStep(step=2, instruction="Cook chicken", duration_minutes=10),
+        ],
+        prep_time_minutes=15,
+        confidence_score=0.9,
+    )
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_suggestion_skips_english(
+    service, suggestion, text_translation_service
+):
+    result = await service.translate_meal_suggestion(suggestion, "en")
+    assert result == suggestion
+    text_translation_service.translate_texts.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_suggestion_translates_all_fields(
+    service, suggestion, text_translation_service
+):
+    # Layout: [meal_name, description, *ingredient_names, *step_instructions]
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        (
+            "Gà nướng",
+            "Ngon và đơn giản",
+            "ức gà",
+            "dầu ô liu",
+            "Làm nóng chảo",
+            "Nấu gà",
+        ),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
+
+    result = await service.translate_meal_suggestion(suggestion, "vi")
+
+    assert result.meal_name == "Gà nướng"
+    assert result.description == "Ngon và đơn giản"
+    assert [i.name for i in result.ingredients] == ["ức gà", "dầu ô liu"]
+    assert [s.instruction for s in result.recipe_steps] == ["Làm nóng chảo", "Nấu gà"]
+
+    text_translation_service.translate_texts.assert_awaited_once()
+    called_texts, called_source, called_lang = (
+        text_translation_service.translate_texts.call_args.args
+    )
+    assert called_source == "en"
+    assert called_lang == "vi"
+    assert called_texts[0] == "Grilled Chicken"
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_suggestion_fills_canonical_when_provider_returns_partial(
+    service, suggestion, text_translation_service
+):
+    # Return fewer items than requested to exercise padding behavior.
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng",), TranslationOutcome.PARTIAL, "en", "vi"
+    )
+
+    result = await service.translate_meal_suggestion(suggestion, "vi")
+
+    assert result.meal_name == "Gà nướng"
+    # Remaining fields fall back to originals (padded).
+    assert result.description == suggestion.description
+    assert result.ingredients[0].name == suggestion.ingredients[0].name
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("outcome", "texts"),
+    [
+        (TranslationOutcome.PARTIAL, ("Poulet grille",)),
+        (TranslationOutcome.UNAVAILABLE, ()),
+    ],
+)
+async def test_partial_or_unavailable_translation_preserves_selected_localized_name(
+    service, suggestion, text_translation_service, outcome, texts
+):
+    selected = replace(
+        suggestion,
+        meal_name="Ga nuong",
+        english_name="Grilled Chicken",
+    )
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        texts, outcome, "en", "fr"
+    )
+
+    result = await service.translate_meal_suggestion(selected, "fr")
+
+    assert result.meal_name == "Ga nuong"
+    called_texts = text_translation_service.translate_texts.call_args.args[0]
+    assert called_texts[0] == "Grilled Chicken"
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_suggestion_returns_original_on_exception(
+    service, suggestion, text_translation_service
+):
+    text_translation_service.translate_texts.side_effect = Exception("provider down")
+    result = await service.translate_meal_suggestion(suggestion, "vi")
+    assert result == suggestion
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_suggestions_batch_skips_english(
+    service, suggestion, text_translation_service
+):
+    result = await service.translate_meal_suggestions_batch([suggestion], "en")
+    assert result == [suggestion]
+    text_translation_service.translate_texts.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_suggestions_batch_translates_each_item(
+    service, suggestion, text_translation_service
+):
+    other = MealSuggestion(
+        **{
+            **suggestion.__dict__,
+            "id": "sug_2",
+            "meal_name": "Baked Salmon",
+            "ingredients": [Ingredient(name="salmon", amount=100.0, unit="g")],
+            "recipe_steps": [
+                RecipeStep(step=1, instruction="Bake", duration_minutes=10)
+            ],
+        }
+    )
+
+    async def translate_side_effect(texts, source_lang, target_lang):
+        # Return "translated:" prefix for determinism.
+        return TranslationResult(
+            tuple(f"t:{t}" for t in texts),
+            TranslationOutcome.TRANSLATED,
+            "en",
+            target_lang,
+        )
+
+    text_translation_service.translate_texts.side_effect = translate_side_effect
+
+    result = await service.translate_meal_suggestions_batch([suggestion, other], "vi")
+
+    assert result[0].meal_name.startswith("t:")
+    assert result[1].meal_name.startswith("t:")
+    assert text_translation_service.translate_texts.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_suggestions_batch_falls_back_per_item(
+    service, suggestion, text_translation_service
+):
+    other = MealSuggestion(
+        **{
+            **suggestion.__dict__,
+            "id": "sug_2",
+            "meal_name": "Baked Salmon",
+        }
+    )
+
+    async def translate_side_effect(texts, source_lang, target_lang):
+        if texts and texts[0] == "Grilled Chicken":
+            raise Exception("fail one")
+        return TranslationResult(
+            tuple(f"ok:{t}" for t in texts),
+            TranslationOutcome.TRANSLATED,
+            "en",
+            target_lang,
+        )
+
+    text_translation_service.translate_texts.side_effect = translate_side_effect
+
+    result = await service.translate_meal_suggestions_batch([suggestion, other], "vi")
+
+    assert result[0] == suggestion  # failed item falls back
+    assert result[1].meal_name.startswith("ok:")
+
+
+@pytest.mark.asyncio
+async def test_translate_names_skips_english(service, text_translation_service):
+    names = ["Grilled Chicken", "Baked Salmon"]
+    result = await service.translate_names(names, "en")
+    assert result == names
+    text_translation_service.translate_texts.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_translate_names_skips_empty_list(service, text_translation_service):
+    result = await service.translate_names([], "vi")
+    assert result == []
+    text_translation_service.translate_texts.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_translate_names_translates_successfully(
+    service, text_translation_service
+):
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng", "Cá hồi nướng"), TranslationOutcome.TRANSLATED, "en", "vi"
+    )
+    names = ["Grilled Chicken", "Baked Salmon"]
+    result = await service.translate_names(names, "vi")
+    assert result == ["Gà nướng", "Cá hồi nướng"]
+    text_translation_service.translate_texts.assert_awaited_once_with(names, "en", "vi")
+
+
+@pytest.mark.asyncio
+async def test_translate_names_returns_originals_on_exception(
+    service, text_translation_service
+):
+    text_translation_service.translate_texts.side_effect = Exception("provider error")
+    names = ["Grilled Chicken", "Baked Salmon"]
+    result = await service.translate_names(names, "vi")
+    assert result == names

@@ -1,5 +1,5 @@
 """Translation services package."""
 
-from .deepl_text_translation_service import DeepLTextTranslationService
+from .text_translation_service import TextTranslationService
 
-__all__ = ["DeepLTextTranslationService"]
+__all__ = ["TextTranslationService"]

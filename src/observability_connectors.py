@@ -44,6 +44,8 @@ SAFE_CONTEXT_KEYS = frozenset(
         "image_id",          # uploaded image identifier for reviewable scan failures
         "image_url",         # uploaded Cloudinary URL for reviewable scan failures
         "rejection_reason",  # bounded reason for expected-but-reviewable rejects
+        "translation_outcome",
+        "batch_size_bucket",
     }
 )
 

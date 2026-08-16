@@ -73,6 +73,11 @@ Do not hand-maintain file, LOC, or endpoint counts in this document.
   `external-services.md` and `decisions/260608-2223-selective-cache-admission-policy.md`).
 - Vector cache: active meal-image-name path uses `pgvector`.
 - AI: OpenAI default; optional Cloudflare Workers AI for configured text/vision.
+- Translation: OpenAI-backed read-path localization via
+  `src/app/services/food_name_localizer.py` and
+  `src/infra/adapters/openai_translation_adapter.py`; Responses API payload
+  storage is disabled, and only complete translations are eligible for cache or
+  persistence.
 - Event bus: singleton PyMediator from `src/api/dependencies/event_bus.py`.
 - Migrations: `migrations/versions/` via Alembic / `migrations/run.py`.
 

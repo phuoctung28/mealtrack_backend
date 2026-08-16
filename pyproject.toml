@@ -37,7 +37,6 @@ dependencies = [
     "firebase-admin==6.9.0",
     "cachetools==7.1.4",
     "redis[hiredis]==8.0.0",
-    "deepl==1.30.0",
     "slowapi==0.1.10",
     "sentry-sdk[fastapi]==2.62.0",
     "resend==2.30.1",

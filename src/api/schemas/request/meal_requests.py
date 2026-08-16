@@ -8,6 +8,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
 from src.domain.model.nutrition.macros import Macros
 from src.domain.services.prompts.input_sanitizer import validate_refinement_items
 
@@ -136,7 +137,7 @@ class AnalyzeMealImageRequest(BaseModel):
     @classmethod
     def validate_language_code(cls, v: str) -> str:
         """Validate language code and fallback to 'en' if invalid."""
-        valid_languages = {"en", "vi", "es", "fr", "de", "ja", "zh"}
+        valid_languages = SUPPORTED_TRANSLATION_LANGUAGES
         normalized = v.lower().strip()
         if normalized not in valid_languages:
             warnings.warn(
