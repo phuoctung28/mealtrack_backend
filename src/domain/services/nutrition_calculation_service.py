@@ -12,6 +12,11 @@ from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 
 logger = logging.getLogger(__name__)
 
+
+class AuthoritativeUnitMismatchError(ValueError):
+    """The requested unit is absent from a source-controlled serving snapshot."""
+
+
 # Shared unit-to-grams conversion table for common serving units.
 # Used by both parse-text and manual-meal handlers to ensure consistent nutrition.
 UNIT_TO_GRAMS = {
@@ -137,6 +142,19 @@ def _normalize_unit(unit: str) -> str:
     return base
 
 
+def _normalize_authoritative_unit(unit: str) -> str:
+    """Normalize only exact aliases; never discard arbitrary suffix text."""
+    unit_lower = (unit or "g").lower().strip()
+    translated = UNIT_TRANSLATION.get(unit_lower)
+    if translated is not None:
+        return translated
+    if " " not in unit_lower and unit_lower.endswith("s"):
+        singular = unit_lower[:-1]
+        if singular in UNIT_TO_GRAMS:
+            return singular
+    return unit_lower
+
+
 def normalize_unit_for_manual_save(unit: str | None) -> str:
     """Return a client-safe unit accepted by manual meal creation."""
     normalized = _normalize_unit(unit or "")
@@ -169,9 +187,7 @@ def convert_quantity_to_grams(quantity: float, unit: str, food_name: str = "") -
 
     grams_per_unit = UNIT_TO_GRAMS.get(normalized)
     if grams_per_unit is None:
-        logger.warning(
-            f"Unknown unit '{unit}' (normalized: '{normalized}') — treating quantity as grams"
-        )
+        logger.warning("Unknown unit used quantity as grams")
         return quantity
     return quantity * grams_per_unit
 
@@ -248,25 +264,27 @@ def _convert_with_allowed_units(
             return quantity * au.get("gram_weight", 1.0)
 
     # 2. Translate unit (e.g., "quả lớn" → "large") and re-match
-    translated = _normalize_unit(unit)
+    translated = (
+        _normalize_authoritative_unit(unit) if strict else _normalize_unit(unit)
+    )
     if translated != unit_lower:
         for au in allowed_units:
             if au.get("unit", "").lower() == translated:
-                logger.info(
-                    f"Unit '{unit}' translated to '{translated}', matched allowed_unit"
-                )
+                logger.info("Unit alias matched an allowed unit")
                 return quantity * au.get("gram_weight", 1.0)
 
-    # 3. Keyword match: check if translated unit appears in description
-    #    e.g., translated="large" matches description="1 large egg"
+    if strict:
+        raise AuthoritativeUnitMismatchError(
+            "unit is not present in the authoritative source snapshot"
+        )
+
+    # 3. Legacy keyword match: check if translated unit appears in description.
+    # Authoritative writes never use free-form description tokens as unit identity.
     for au in allowed_units:
         desc = au.get("description", "").lower()
         if translated in desc.split():
             logger.info("Unit keyword matched an allowed-unit description")
             return quantity * au.get("gram_weight", 1.0)
-
-    if strict:
-        raise ValueError("unit is not present in the authoritative source snapshot")
 
     # 4. Global UNIT_TO_GRAMS mapping for legacy, non-authoritative writes.
     grams = UNIT_TO_GRAMS.get(translated)
@@ -286,6 +304,40 @@ def _convert_with_allowed_units(
     # Last resort: treat as grams (only if no allowed_units have useful servings)
     logger.warning(f"Unit '{unit}' unresolvable — treating quantity as grams")
     return quantity
+
+
+def canonicalize_authoritative_quantity(
+    quantity: float,
+    unit: str,
+    allowed_units: list[dict[str, Any]],
+    food_name: str = "",
+) -> tuple[float, str, bool]:
+    """Return an authoritative unit unchanged or a bounded gram fallback."""
+    try:
+        _convert_with_allowed_units(
+            quantity,
+            unit,
+            allowed_units,
+            food_name,
+            strict=True,
+        )
+        return quantity, unit, False
+    except AuthoritativeUnitMismatchError:
+        normalized = _normalize_authoritative_unit(unit)
+        if normalized == "g":
+            quantity_g = quantity
+        elif normalized in ("ml", "l", "liter", "litre"):
+            base_ml = quantity if normalized == "ml" else quantity * 1000
+            density = get_density(food_name) if food_name else DEFAULT_DENSITY
+            quantity_g = base_ml * density
+        else:
+            grams_per_unit = UNIT_TO_GRAMS.get(normalized)
+            if grams_per_unit is None:
+                logger.warning("Unknown authoritative unit used quantity as grams")
+                quantity_g = quantity
+            else:
+                quantity_g = quantity * grams_per_unit
+        return quantity_g, "g", True
 
 
 def clamp_nutrition_values(item: dict) -> dict:

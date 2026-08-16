@@ -17,6 +17,7 @@ from src.domain.services.meal_service import MealService
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
     clamp_nutrition_values,
+    convert_quantity_to_grams,
     normalize_unit_for_manual_save,
     scale_per_100g_nutrition,
 )
@@ -125,6 +126,45 @@ def test_authoritative_snapshot_rejects_unknown_serving_unit():
         )
 
 
+def test_authoritative_snapshot_does_not_match_free_text_description_tokens():
+    with pytest.raises(ValueError, match="authoritative source snapshot"):
+        scale_per_100g_nutrition(
+            {"calories": 77.0},
+            quantity=100,
+            unit="potato",
+            allowed_units=[
+                {
+                    "unit": "medium",
+                    "gram_weight": 173.0,
+                    "description": "1 medium potato",
+                }
+            ],
+            food_name="Potato",
+            strict_allowed_units=True,
+        )
+
+
+def test_authoritative_snapshot_does_not_strip_arbitrary_unit_suffixes(caplog):
+    raw_unit = "medium private-text"
+    with pytest.raises(ValueError, match="authoritative source snapshot"):
+        scale_per_100g_nutrition(
+            {"calories": 77.0},
+            quantity=100,
+            unit=raw_unit,
+            allowed_units=[
+                {
+                    "unit": "medium",
+                    "gram_weight": 173.0,
+                    "description": "1 medium potato",
+                }
+            ],
+            food_name="Potato",
+            strict_allowed_units=True,
+        )
+
+    assert raw_unit not in caplog.text
+
+
 def test_meal_service_add_custom_nutrition_uses_unit_grams():
     meal = _new_processing_meal()
 
@@ -204,6 +244,12 @@ def test_allowed_unit_logs_do_not_expose_unit_or_description(caplog):
     assert "Unknown unit used the default allowed serving" in caplog.text
     assert fallback_unit not in caplog.text
     assert fallback_description not in caplog.text
+
+    caplog.clear()
+    raw_unit = "private family serving"
+    assert convert_quantity_to_grams(100, raw_unit, "Rice") == 100
+    assert "Unknown unit used quantity as grams" in caplog.text
+    assert raw_unit not in caplog.text
 
 
 def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():

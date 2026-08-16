@@ -29,6 +29,7 @@ from src.domain.services.ai_output_validation_service import (
 )
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.services.nutrition_calculation_service import (
+    _convert_with_allowed_units,
     clamp_nutrition_values,
     convert_quantity_to_grams,
     normalize_unit_for_manual_save,
@@ -551,6 +552,12 @@ class ParseMealTextHandler(
         )
         if not per_100g:
             return None
+        allowed_units = self._safe_allowed_units(selected.get("allowed_units"))
+        quantity_g = self._canonicalize_reference_quantity(
+            item,
+            quantity_g=self._quantity_in_grams(item, lookup_name),
+            allowed_units=allowed_units,
+        )
         scaled = scale_per_100g_nutrition(
             {
                 "calories": per_100g.get("calories_100g", per_100g.get("calories", 0)),
@@ -560,10 +567,11 @@ class ParseMealTextHandler(
                 "fiber": per_100g.get("fiber_100g", per_100g.get("fiber", 0)),
                 "sugar": per_100g.get("sugar_100g", per_100g.get("sugar", 0)),
             },
-            quantity,
-            unit,
-            allowed_units=selected.get("allowed_units"),
+            item["quantity"],
+            item["unit"],
+            allowed_units=allowed_units,
             food_name=lookup_name,
+            strict_allowed_units=True,
         )
         if not validate_ai_fallback(
             name=lookup_name,
@@ -571,12 +579,12 @@ class ParseMealTextHandler(
             carbs=scaled.get("carbs"),
             fat=scaled.get("fat"),
             fiber=scaled.get("fiber"),
-            quantity_g=self._quantity_in_grams(item, lookup_name),
+            quantity_g=quantity_g,
         ):
             return None
         item.update(scaled)
         item["calories"] = self._derive_calories_from_macros(item)
-        item["allowed_units"] = self._safe_allowed_units(selected.get("allowed_units"))
+        item["allowed_units"] = allowed_units
         item["data_source"] = "fatsecret"
         item.update(self._reference_identity(selected, "fatsecret"))
         item["nutrition_basis"] = "100g"
@@ -665,6 +673,16 @@ class ParseMealTextHandler(
         source: str,
         raw: dict[str, Any],
     ) -> dict[str, Any]:
+        allowed_units = self._safe_allowed_units(
+            raw.get("allowed_units") or raw.get("serving_sizes")
+        )
+        if not allowed_units:
+            allowed_units = list(candidate.allowed_units or [])
+        quantity_g = self._canonicalize_reference_quantity(
+            item,
+            quantity_g=quantity_g,
+            allowed_units=allowed_units,
+        )
         factor = quantity_g / 100.0
         item.update(
             {
@@ -694,10 +712,38 @@ class ParseMealTextHandler(
                 "fiber_g": candidate.fiber_per_100g,
             }
         )
-        item["allowed_units"] = self._safe_allowed_units(
-            raw.get("allowed_units") or raw.get("serving_sizes")
-        )
+        item["allowed_units"] = allowed_units
         return item
+
+    @staticmethod
+    def _canonicalize_reference_quantity(
+        item: dict[str, Any],
+        *,
+        quantity_g: float,
+        allowed_units: list[dict[str, Any]],
+    ) -> float:
+        """Keep parsed portions saveable against the same source snapshot."""
+        quantity = float(item.get("quantity") or 1.0)
+        source_unit = str(item.get("english_unit") or item.get("unit") or "g")
+        try:
+            authoritative_grams = _convert_with_allowed_units(
+                quantity,
+                source_unit,
+                allowed_units,
+                str(item.get("lookup_name") or item.get("name") or ""),
+                strict=True,
+            )
+        except ValueError:
+            item["quantity"] = quantity_g
+            item["unit"] = "g"
+            item["english_unit"] = "g"
+            item["quantity_g"] = quantity_g
+            return quantity_g
+
+        item["unit"] = source_unit
+        item["english_unit"] = source_unit
+        item["quantity_g"] = authoritative_grams
+        return authoritative_grams
 
     @staticmethod
     def _reference_identity(raw: dict[str, Any], source: str) -> dict[str, Any]:

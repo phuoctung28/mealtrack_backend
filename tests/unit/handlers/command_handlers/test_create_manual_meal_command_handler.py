@@ -22,7 +22,6 @@ from src.app.handlers.command_handlers.create_manual_meal_command_handler import
 )
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 
-
 # ---------------------------------------------------------------------------
 # Minimal fakes (no mocking framework dependency for simple objects)
 # ---------------------------------------------------------------------------
@@ -130,8 +129,12 @@ async def test_handler_timing_logs_show_cache_delay(caplog):
         "Cache invalidation may not be awaited."
     )
 
-    timing_logs = [r.message for r in caplog.records if "manual_save handler timing" in r.message]
-    assert timing_logs, "No 'manual_save handler timing' log found — instrumentation missing."
+    timing_logs = [
+        r.message for r in caplog.records if "manual_save handler timing" in r.message
+    ]
+    assert timing_logs, (
+        "No 'manual_save handler timing' log found — instrumentation missing."
+    )
 
     # Result is the saved meal
     assert result is fake_meal
@@ -161,8 +164,12 @@ async def test_handler_timing_logs_fast_cache(caplog):
     with caplog.at_level(logging.INFO):
         result = await handler.handle(cmd)
 
-    timing_logs = [r.message for r in caplog.records if "manual_save handler timing" in r.message]
-    assert timing_logs, "No 'manual_save handler timing' log found — instrumentation missing."
+    timing_logs = [
+        r.message for r in caplog.records if "manual_save handler timing" in r.message
+    ]
+    assert timing_logs, (
+        "No 'manual_save handler timing' log found — instrumentation missing."
+    )
 
     assert result is fake_meal
 
@@ -181,10 +188,16 @@ async def test_cache_invalidation_service_emits_timing_log(caplog):
     svc = CacheInvalidationService(cache=fast_cache)
 
     with caplog.at_level(logging.INFO):
-        await svc.after_meal_write("550e8400-e29b-41d4-a716-446655440003", date(2026, 6, 10))
+        await svc.after_meal_write(
+            "550e8400-e29b-41d4-a716-446655440003", date(2026, 6, 10)
+        )
 
-    timing_logs = [r.message for r in caplog.records if "cache_invalidation timing" in r.message]
-    assert timing_logs, "No 'cache_invalidation timing' log found in CacheInvalidationService."
+    timing_logs = [
+        r.message for r in caplog.records if "cache_invalidation timing" in r.message
+    ]
+    assert timing_logs, (
+        "No 'cache_invalidation timing' log found in CacheInvalidationService."
+    )
     assert "critical_ms" in timing_logs[0]
     assert "secondary_ms" in timing_logs[0]
     assert "total_ms" in timing_logs[0]

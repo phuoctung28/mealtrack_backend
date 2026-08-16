@@ -10,14 +10,14 @@ from src.app.commands.meal.create_manual_meal_command import (
     CustomNutrition,
     ManualMealItem,
 )
+from src.domain.ports.provider_budget_port import ProviderBudgetPort
+from src.domain.services.nutrition_calculation_service import (
+    canonicalize_authoritative_quantity,
+)
 from src.domain.services.nutrition_integrity_policy import (
     NutritionIntegrityError,
     NutritionIntegrityPolicy,
     normalize_serving_options,
-)
-from src.domain.ports.provider_budget_port import ProviderBudgetPort
-from src.domain.services.nutrition_calculation_service import (
-    _convert_with_allowed_units,
 )
 from src.observability import increment_metric
 
@@ -95,13 +95,7 @@ class ManualMealNutritionResolver:
                     )
                 else:
                     raise ValueError("v2 item origin is required")
-                _convert_with_allowed_units(
-                    resolved_item.quantity,
-                    resolved_item.unit,
-                    resolved_item.allowed_units or [],
-                    resolved_item.name or "Food Item",
-                    strict=True,
-                )
+                resolved_item = self._canonicalize_unmatched_unit(resolved_item)
                 resolved.append(resolved_item)
             except Exception as exc:
                 result = getattr(exc, "result", None)
@@ -118,6 +112,23 @@ class ManualMealNutritionResolver:
                 attributes={"origin": item.origin or "unknown"},
             )
         return resolved
+
+    @staticmethod
+    def _canonicalize_unmatched_unit(item: ManualMealItem) -> ManualMealItem:
+        """Keep valid source units; convert any other request unit to grams."""
+        quantity, unit, used_fallback = canonicalize_authoritative_quantity(
+            item.quantity,
+            item.unit,
+            item.allowed_units or [],
+            item.name or "Food Item",
+        )
+        if used_fallback:
+            increment_metric(
+                "manual_nutrition_resolution.unit_fallback",
+                attributes={"origin": item.origin or "unknown"},
+            )
+            return replace(item, quantity=quantity, unit=unit)
+        return item
 
     async def revalidate_local_items(self, items, food_references) -> None:
         """Lock local references and reject a snapshot changed mid-write."""

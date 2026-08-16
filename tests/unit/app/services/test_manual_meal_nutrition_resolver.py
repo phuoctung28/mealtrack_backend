@@ -10,6 +10,9 @@ from src.app.commands.meal.create_manual_meal_command import (
 from src.app.services.manual_meal_nutrition_resolver import (
     ManualMealNutritionResolver,
 )
+from src.domain.services.nutrition_calculation_service import (
+    NutritionCalculationService,
+)
 from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 
 
@@ -67,21 +70,45 @@ async def test_local_reference_ignores_client_nutrition_and_units():
 
 
 @pytest.mark.asyncio
-async def test_local_reference_rejects_unit_not_in_source_snapshot():
-    with pytest.raises(ValueError, match="authoritative source snapshot"):
-        await ManualMealNutritionResolver().resolve_items(
-            [
-                ManualMealItem(
-                    name="Rice",
-                    quantity=1,
-                    unit="bowl",
-                    origin="local",
-                    food_reference_id=42,
-                )
-            ],
-            _References(),
-            contract_version=2,
-        )
+async def test_local_reference_canonicalizes_unknown_unit_to_grams():
+    resolved = await ManualMealNutritionResolver().resolve_items(
+        [
+            ManualMealItem(
+                name="Rice",
+                quantity=100,
+                unit="bowl",
+                origin="local",
+                food_reference_id=42,
+            )
+        ],
+        _References(),
+        contract_version=2,
+    )
+
+    assert resolved[0].quantity == pytest.approx(100.0)
+    assert resolved[0].unit == "g"
+    nutrition, _ = NutritionCalculationService().aggregate_from_command_items(resolved)
+    assert nutrition.macros.protein == pytest.approx(2.7)
+
+
+@pytest.mark.asyncio
+async def test_local_reference_canonicalizes_known_global_unit_to_grams():
+    resolved = await ManualMealNutritionResolver().resolve_items(
+        [
+            ManualMealItem(
+                name="Rice",
+                quantity=2,
+                unit="oz",
+                origin="local",
+                food_reference_id=42,
+            )
+        ],
+        _References(),
+        contract_version=2,
+    )
+
+    assert resolved[0].quantity == pytest.approx(56.7)
+    assert resolved[0].unit == "g"
 
 
 @pytest.mark.asyncio
@@ -181,3 +208,56 @@ async def test_provider_resolution_uses_shared_budget_and_deadline():
 
     assert resolved[0].source_snapshot["source_food_id"] == "provider-1"
     provider.get_food_details.assert_awaited_once_with("provider-1")
+
+
+@pytest.mark.asyncio
+async def test_provider_unit_prefix_cannot_multiply_arbitrary_suffix(caplog):
+    raw_unit = "medium private-text"
+    provider = SimpleNamespace(
+        get_food_details=AsyncMock(
+            return_value={
+                "food_id": "provider-1",
+                "food_name": "Potato",
+                "protein_100g": 2.0,
+                "carbs_100g": 17.0,
+                "fat_100g": 0.1,
+                "calories_100g": 77.0,
+                "allowed_units": [
+                    {
+                        "unit": "medium",
+                        "gram_weight": 173.0,
+                        "description": "1 medium potato",
+                    }
+                ],
+            }
+        )
+    )
+
+    class _Budget:
+        async def acquire(self, namespace, limit):
+            return True
+
+    resolved = await ManualMealNutritionResolver(
+        provider=provider,
+        provider_budget=_Budget(),
+        provider_rpm=10,
+    ).resolve_items(
+        [
+            ManualMealItem(
+                name="Potato",
+                quantity=100,
+                unit=raw_unit,
+                origin="provider",
+                source_namespace="fatsecret",
+                source_food_id="provider-1",
+            )
+        ],
+        _References(),
+        contract_version=2,
+    )
+
+    assert resolved[0].quantity == pytest.approx(100)
+    assert resolved[0].unit == "g"
+    nutrition, _ = NutritionCalculationService().aggregate_from_command_items(resolved)
+    assert nutrition.calories == pytest.approx(76.9)
+    assert raw_unit not in caplog.text

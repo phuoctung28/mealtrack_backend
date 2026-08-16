@@ -29,6 +29,16 @@ def test_v2_reference_item_requires_one_matching_source_identity():
     assert payload.items[0].origin == "local"
 
 
+def test_v2_create_accepts_arbitrary_unit_for_backend_normalization():
+    payload = CreateManualMealFromFoodsRequest(
+        dish_name="Rice",
+        nutrition_contract_version=2,
+        items=[_v2_create_item(quantity=100, unit="my family bowl")],
+    )
+
+    assert payload.items[0].unit == "my family bowl"
+
+
 def test_v2_custom_item_is_source_less_and_keeps_custom_nutrition():
     payload = CreateManualMealFromFoodsRequest(
         dish_name="Homemade rice",
