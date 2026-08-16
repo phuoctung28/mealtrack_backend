@@ -225,6 +225,39 @@ async def test_provider_factory_is_not_called_when_budget_expires_waiting_for_sl
     assert factory_calls == 0
 
 
+@pytest.mark.asyncio
+async def test_ai_latency_does_not_consume_fatsecret_resolution_budget(monkeypatch):
+    meal_generation_service = _FakeMealGenerationService()
+    original_generate = meal_generation_service.generate_meal_plan_async
+
+    async def delayed_generate(**kwargs):
+        await asyncio.sleep(0.1)
+        return await original_generate(**kwargs)
+
+    monkeypatch.setattr(
+        meal_generation_service,
+        "generate_meal_plan_async",
+        delayed_generate,
+    )
+    monkeypatch.setattr(
+        "src.app.handlers.command_handlers.parse_meal_text_handler."
+        "_parse_text_fatsecret_timeout_seconds",
+        lambda: 0.05,
+    )
+    provider = _CountingFatSecretService()
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=provider,
+        structured_reference_enabled=False,
+    )
+
+    await handler.handle(
+        ParseMealTextCommand(text="100g rice", user_id="user-1", language="en")
+    )
+
+    assert provider.search_calls == 1
+
+
 def _parse_item(name="food", quantity=100, unit="g", macros=None):
     macros = macros or {"protein": 2, "carbs": 17, "fat": 0.1}
     return {
