@@ -121,7 +121,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                 language="en",
             ),
         )
-        if fat_secret_result and self._has_nutrition(fat_secret_result):
+        if fat_secret_result and self._has_nutrition(fat_secret_result) and self._has_name(fat_secret_result):
             result = self._trusted_provider_result(
                 fat_secret_result, query.barcode, scanned_barcode, "fatsecret"
             )
@@ -130,12 +130,16 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
             return await self._maybe_translate(result, query.language, source_language="en")
         if fat_secret_result:
             partial_name = partial_name or fat_secret_result.get("name")
-            miss_reasons.append("fatsecret_partial_no_nutrition")
+            miss_reasons.append(
+                "fatsecret_partial_no_nutrition"
+                if not self._has_nutrition(fat_secret_result)
+                else "fatsecret_partial_no_name"
+            )
         else:
             miss_reasons.append("fatsecret_empty")
 
         off_result = await self._first_barcode_hit(aliases, self.off.get_product)
-        if off_result and self._has_nutrition(off_result):
+        if off_result and self._has_nutrition(off_result) and self._has_name(off_result):
             result = self._trusted_provider_result(
                 off_result, query.barcode, scanned_barcode, "openfoodfacts"
             )
@@ -144,16 +148,27 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
             return await self._maybe_translate(result, query.language)
         if off_result:
             partial_name = partial_name or off_result.get("name")
-            miss_reasons.append("openfoodfacts_partial_no_nutrition")
+            miss_reasons.append(
+                "openfoodfacts_partial_no_nutrition"
+                if not self._has_nutrition(off_result)
+                else "openfoodfacts_partial_no_name"
+            )
         else:
             miss_reasons.append("openfoodfacts_empty")
 
         fdc_result = await self._get_fdc_product(aliases, query.barcode, scanned_barcode)
-        if fdc_result and self._has_nutrition(fdc_result):
+        if fdc_result and self._has_nutrition(fdc_result) and self._has_name(fdc_result):
             await self._cache_result(fdc_result, cache_barcode=query.barcode)
             log_hit("usda_fdc", fdc_result)
             return await self._maybe_translate(fdc_result, query.language)
-        miss_reasons.append("usda_fdc_empty")
+        if fdc_result:
+            partial_name = partial_name or fdc_result.get("name")
+            if self._has_nutrition(fdc_result):
+                miss_reasons.append("usda_fdc_partial_no_name")
+            else:
+                miss_reasons.append("usda_fdc_partial_no_nutrition")
+        else:
+            miss_reasons.append("usda_fdc_empty")
 
         brave_name: str | None = None
         brave_result: dict[str, Any] | None = None
@@ -211,6 +226,11 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
             if val is not None and val > 0:
                 return True
         return False
+
+    @staticmethod
+    def _has_name(result: dict[str, Any]) -> bool:
+        """Check if result has a non-empty product name."""
+        return bool(result.get("name"))
 
     @staticmethod
     def _is_trusted_cached_row(result: dict[str, Any]) -> bool:

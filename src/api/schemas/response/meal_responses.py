@@ -63,6 +63,20 @@ class ParsedFoodItem(BaseModel):
         default_factory=list,
         description="Allowed unit options for this food item",
     )
+    food_id: str | None = Field(None, description="Namespaced source food identity")
+    food_reference_id: int | None = Field(
+        None, description="Canonical local food-reference id"
+    )
+    origin: str | None = Field(None, description="Logical nutrition origin")
+    source_namespace: str | None = Field(None, description="Opaque source namespace")
+    source_food_id: str | None = Field(None, description="Opaque source food id")
+    nutrition_basis: str | None = Field(None, description="Nutrition metric basis")
+    nutrition_contract_version: str | None = Field(
+        None, description="Backend nutrition contract version"
+    )
+    calories_per_100g: float | None = Field(
+        None, ge=0, description="Backend-derived calories per 100g"
+    )
 
 
 class ParseMealTextResponse(BaseModel):
@@ -244,6 +258,15 @@ class FoodItemResponse(BaseModel):
         None, description="Canonical food reference ID if available"
     )
     is_custom: bool = Field(False, description="Whether this is a custom ingredient")
+    origin: str | None = Field(None, description="Canonical nutrition origin")
+    source_namespace: str | None = Field(None, description="Opaque source namespace")
+    source_food_id: str | None = Field(None, description="Opaque source food id")
+    nutrition_contract_version: str | None = Field(
+        None, description="Backend nutrition contract version"
+    )
+    source_snapshot: dict | None = Field(
+        None, description="Immutable nutrition source snapshot used for this save"
+    )
     allowed_units: list[ServingUnitResponse] = Field(
         default_factory=list,
         description="Allowed unit options for this food item",

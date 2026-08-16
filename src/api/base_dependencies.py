@@ -291,6 +291,18 @@ def get_meal_analyze_graph_settings():
     }
 
 
+def get_parse_text_settings() -> dict[str, bool]:
+    """Return parse-text feature settings for API composition."""
+    from src.infra.config.settings import get_settings
+
+    current_settings = get_settings()
+    return {
+        "structured_reference_enabled": bool(
+            getattr(current_settings, "PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED", False)
+        )
+    }
+
+
 def get_meal_recommendation_analytics_service() -> MealRecommendationAnalyticsService:
     """Return privacy-safe recommendation analytics."""
     posthog_module = import_module("src.infra.adapters.posthog_adapter")

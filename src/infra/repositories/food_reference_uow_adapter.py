@@ -57,6 +57,7 @@ class AsyncFoodReferenceUowAdapter:
         source: str,
         is_verified: bool,
         external_id: str | None = None,
+        source_namespace: str | None = None,
     ) -> dict[str, Any] | None:
         async with self._uow_factory() as uow:
             return await uow.food_references.upsert_by_normalized_name(
@@ -70,6 +71,7 @@ class AsyncFoodReferenceUowAdapter:
                 source=source,
                 is_verified=is_verified,
                 external_id=external_id,
+                source_namespace=source_namespace,
             )
 
     async def upsert(self, data: dict[str, Any]) -> None:
@@ -78,6 +80,4 @@ class AsyncFoodReferenceUowAdapter:
 
     async def get_nutrition_projection(self, food_reference_id: int) -> Any | None:
         async with self._uow_factory() as uow:
-            return await uow.food_references.get_nutrition_projection(
-                food_reference_id
-            )
+            return await uow.food_references.get_nutrition_projection(food_reference_id)

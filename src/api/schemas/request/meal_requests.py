@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
 from src.domain.model.nutrition.macros import Macros
+from src.domain.services.prompts.input_sanitizer import validate_refinement_items
 
 
 class ParseMealTextRequest(BaseModel):
@@ -25,6 +26,11 @@ class ParseMealTextRequest(BaseModel):
         None,
         description="Current meal items for refinement (when user is editing an existing meal)",
     )
+
+    @model_validator(mode="after")
+    def validate_refinement_context(self) -> "ParseMealTextRequest":
+        self.current_items = validate_refinement_items(self.current_items)
+        return self
 
 
 class MacrosRequest(BaseModel):
@@ -206,6 +212,21 @@ class ManualMealItemRequest(BaseModel):
     fdc_id: Optional[int] = Field(
         None, description="USDA FDC ID (required for USDA foods)"
     )
+    origin: Optional[Literal["local", "usda", "provider", "custom"]] = Field(
+        None, description="Canonical nutrition origin for v2 saves"
+    )
+    food_reference_id: Optional[int] = Field(
+        None, description="Canonical local food-reference ID"
+    )
+    source_namespace: Optional[str] = Field(
+        None, min_length=1, max_length=64, description="Provider namespace"
+    )
+    source_food_id: Optional[str] = Field(
+        None, min_length=1, max_length=255, description="Opaque provider food ID"
+    )
+    food_id: Optional[str] = Field(
+        None, min_length=1, max_length=255, description="Deprecated response alias"
+    )
     name: Optional[str] = Field(
         None,
         min_length=1,
@@ -232,7 +253,10 @@ class CreateManualMealFromFoodsRequest(BaseModel):
     """Create a manual meal from selected USDA foods with portions."""
 
     dish_name: str = Field(..., min_length=1, max_length=200)
-    items: list[ManualMealItemRequest] = Field(..., min_items=1)
+    items: list[ManualMealItemRequest] = Field(..., min_items=1, max_length=50)
+    nutrition_contract_version: Optional[int] = Field(
+        None, description="Versioned authoritative nutrition save contract"
+    )
     meal_type: Optional[str] = Field(
         None, description="Meal type: breakfast, lunch, dinner, or snack"
     )
@@ -263,7 +287,73 @@ class CreateManualMealFromFoodsRequest(BaseModel):
                     "custom_nutrition macros must be <=100g per 100g "
                     "unless payload uses a legacy prompt unit"
                 )
+        self._validate_origin_contract()
         return self
+
+    def _validate_origin_contract(self) -> None:
+        has_v2_fields = any(
+            item.origin is not None
+            or item.food_reference_id is not None
+            or item.source_food_id is not None
+            or item.source_namespace is not None
+            or item.food_id is not None
+            for item in self.items
+        )
+        if self.nutrition_contract_version not in (None, 2):
+            raise ValueError("unsupported nutrition_contract_version")
+        if self.nutrition_contract_version != 2:
+            if has_v2_fields:
+                raise ValueError("origin requires nutrition_contract_version=2")
+            return
+
+        for item in self.items:
+            if item.origin is None:
+                raise ValueError("v2 items require origin")
+            if item.food_id is not None:
+                raise ValueError("v2 saves must use dedicated source identifiers")
+            if item.origin == "local":
+                if item.food_reference_id is None or any(
+                    value is not None
+                    for value in (
+                        item.fdc_id,
+                        item.source_namespace,
+                        item.source_food_id,
+                        item.custom_nutrition,
+                    )
+                ):
+                    raise ValueError("local origin requires only food_reference_id")
+            elif item.origin == "usda":
+                if item.fdc_id is None or any(
+                    value is not None
+                    for value in (
+                        item.food_reference_id,
+                        item.source_namespace,
+                        item.source_food_id,
+                        item.custom_nutrition,
+                    )
+                ):
+                    raise ValueError("usda origin requires only fdc_id")
+            elif item.origin == "provider":
+                if item.source_food_id is None or any(
+                    value is not None
+                    for value in (
+                        item.fdc_id,
+                        item.food_reference_id,
+                        item.custom_nutrition,
+                    )
+                ):
+                    raise ValueError("provider origin requires source_food_id")
+            elif item.origin == "custom":
+                if item.custom_nutrition is None or any(
+                    value is not None
+                    for value in (
+                        item.fdc_id,
+                        item.food_reference_id,
+                        item.source_namespace,
+                        item.source_food_id,
+                    )
+                ):
+                    raise ValueError("custom origin requires only custom_nutrition")
 
 
 # Meal Edit Feature Requests
@@ -277,6 +367,13 @@ class FoodItemChangeRequest(BaseModel):
         None, description="ID of existing food item (required for update/remove)"
     )
     fdc_id: Optional[int] = Field(None, description="USDA FDC ID for new ingredients")
+    origin: Optional[Literal["local", "usda", "provider", "custom"]] = Field(
+        None, description="Canonical nutrition origin for v2 actions"
+    )
+    food_reference_id: Optional[int] = Field(None)
+    source_namespace: Optional[str] = Field(None, min_length=1, max_length=64)
+    source_food_id: Optional[str] = Field(None, min_length=1, max_length=255)
+    food_id: Optional[str] = Field(None, min_length=1, max_length=255)
     name: Optional[str] = Field(
         None, min_length=1, max_length=200, description="Ingredient name"
     )
@@ -298,6 +395,9 @@ class FoodItemChangeRequest(BaseModel):
     )
     clear_nutrition_override: bool = Field(
         False, description="Restore source nutrition for this ingredient"
+    )
+    override_intent: Optional[Literal["user_entered"]] = Field(
+        None, description="Explicit user intent for an absolute nutrition override"
     )
 
     class Config:
@@ -354,10 +454,10 @@ class CustomNutritionRequest(BaseModel):
 class NutritionOverrideRequest(BaseModel):
     """Absolute values that intentionally bypass nutrition recalculation."""
 
-    calories: float
-    protein: float
-    carbs: float
-    fat: float
+    calories: float = Field(..., ge=0, le=900)
+    protein: float = Field(..., ge=0, le=1000)
+    carbs: float = Field(..., ge=0, le=1000)
+    fat: float = Field(..., ge=0, le=1000)
 
 
 class EditMealIngredientsRequest(BaseModel):
@@ -375,8 +475,12 @@ class EditMealIngredientsRequest(BaseModel):
     nutrition_override: Optional[NutritionOverrideRequest] = Field(
         None, description="Independent meal-level nutrition values"
     )
+    nutrition_contract_version: Optional[int] = Field(None)
+    override_intent: Optional[Literal["user_entered"]] = Field(None)
     food_item_changes: list[FoodItemChangeRequest] = Field(
-        default_factory=list, description="List of ingredient changes"
+        default_factory=list,
+        max_length=50,
+        description="List of ingredient changes",
     )
 
     @model_validator(mode="after")
@@ -389,6 +493,90 @@ class EditMealIngredientsRequest(BaseModel):
             and not self.food_item_changes
         ):
             raise ValueError("At least one meal edit field is required")
+        return self
+
+    @model_validator(mode="after")
+    def validate_v2_actions(self):
+        has_v2_fields = any(
+            change.origin is not None
+            or change.food_reference_id is not None
+            or change.source_food_id is not None
+            or change.source_namespace is not None
+            or change.food_id is not None
+            for change in self.food_item_changes
+        )
+        if self.nutrition_contract_version not in (None, 2):
+            raise ValueError("unsupported nutrition_contract_version")
+        if self.nutrition_contract_version != 2:
+            if has_v2_fields or self.override_intent is not None:
+                raise ValueError("v2 fields require nutrition_contract_version=2")
+            return self
+        if (
+            self.nutrition_override is not None
+            and self.override_intent != "user_entered"
+        ):
+            raise ValueError("meal override requires override_intent=user_entered")
+
+        for change in self.food_item_changes:
+            identity_fields = (
+                change.food_reference_id,
+                change.fdc_id,
+                change.source_food_id,
+                change.source_namespace,
+                change.food_id,
+            )
+            if change.action == "remove":
+                if (
+                    not change.id
+                    or change.name is not None
+                    or change.quantity is not None
+                    or change.unit is not None
+                    or change.custom_nutrition is not None
+                    or change.nutrition_override is not None
+                    or change.clear_nutrition_override
+                    or change.override_intent is not None
+                    or change.allowed_units
+                    or any(value is not None for value in identity_fields)
+                ):
+                    raise ValueError("v2 remove accepts only the owned item id")
+                continue
+
+            if not change.id and change.action == "update":
+                raise ValueError("v2 update requires an owned item id")
+            if change.nutrition_override is not None:
+                if change.override_intent != "user_entered" or any(
+                    value is not None for value in identity_fields
+                ):
+                    raise ValueError("item override cannot replace source nutrition")
+            elif change.clear_nutrition_override:
+                if change.override_intent != "user_entered" or any(
+                    value is not None
+                    for value in (
+                        change.name,
+                        change.quantity,
+                        change.unit,
+                        change.custom_nutrition,
+                        *identity_fields,
+                    )
+                ):
+                    raise ValueError("v2 clear-override accepts only the owned item id")
+            elif change.action == "add":
+                if change.origin is None:
+                    raise ValueError("v2 add requires origin")
+                _validate_change_origin(change)
+            elif change.origin is not None:
+                _validate_change_origin(change)
+            elif change.origin is None:
+                if any(
+                    value is not None
+                    for value in (
+                        change.name,
+                        change.custom_nutrition,
+                        change.allowed_units or None,
+                        *identity_fields,
+                    )
+                ):
+                    raise ValueError("v2 quantity update cannot replace source")
         return self
 
     class Config:
@@ -414,6 +602,54 @@ class EditMealIngredientsRequest(BaseModel):
                 ],
             }
         }
+
+
+def _validate_change_origin(change: FoodItemChangeRequest) -> None:
+    if change.food_id is not None or change.allowed_units:
+        raise ValueError("v2 saves cannot provide deprecated aliases or client units")
+    if change.origin == "local":
+        if change.food_reference_id is None or any(
+            value is not None
+            for value in (
+                change.fdc_id,
+                change.source_namespace,
+                change.source_food_id,
+                change.custom_nutrition,
+            )
+        ):
+            raise ValueError("local origin requires only food_reference_id")
+    elif change.origin == "usda":
+        if change.fdc_id is None or any(
+            value is not None
+            for value in (
+                change.food_reference_id,
+                change.source_namespace,
+                change.source_food_id,
+                change.custom_nutrition,
+            )
+        ):
+            raise ValueError("usda origin requires only fdc_id")
+    elif change.origin == "provider":
+        if change.source_food_id is None or any(
+            value is not None
+            for value in (
+                change.fdc_id,
+                change.food_reference_id,
+                change.custom_nutrition,
+            )
+        ):
+            raise ValueError("provider origin requires source_food_id")
+    elif change.origin == "custom":
+        if change.custom_nutrition is None or any(
+            value is not None
+            for value in (
+                change.fdc_id,
+                change.food_reference_id,
+                change.source_namespace,
+                change.source_food_id,
+            )
+        ):
+            raise ValueError("custom origin requires only custom_nutrition")
 
 
 class AttachMealPhotoRequest(BaseModel):

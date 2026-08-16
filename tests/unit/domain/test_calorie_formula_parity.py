@@ -88,6 +88,7 @@ class TestCalorieFormulaParityDirectCall:
         item = {
             "source": "food_reference",
             "food_reference_id": "fr-1",
+            "is_verified": True,
             "protein_100g": protein,
             "carbs_100g": carbs,
             "fat_100g": fat,
@@ -211,6 +212,32 @@ class TestCalorieFormulaParityDirectCall:
             fiber_per_100g=fiber,
         )
         assert request.calories_per_100g == pytest.approx(raw, abs=0.005)
+
+    def test_parse_text_api_mapper_propagates_fiber_sugar_and_derived_calories(self):
+        """Expected red: parse-text mapper derives fiber-aware calories but drops fields."""
+        from types import SimpleNamespace
+
+        from src.api.routes.v1.meals_route_helpers import parsed_food_item_to_response
+
+        item = parsed_food_item_to_response(
+            SimpleNamespace(
+                name="bran cereal",
+                quantity=100.0,
+                unit="g",
+                protein=15.0,
+                carbs=40.0,
+                fat=10.0,
+                fiber=8.0,
+                sugar=12.0,
+                data_source="fatsecret",
+                fdc_id=None,
+                allowed_units=[],
+            )
+        )
+
+        assert item.fiber == 8.0
+        assert item.sugar == 12.0
+        assert item.calories == pytest.approx(294.0)
 
 
 class TestCalorieFormulaParityStaticSource:

@@ -51,6 +51,7 @@ async def _source_nutrition_by_food_reference(meal, food_reference_repository):
         item.food_reference_id
         for item in food_items
         if getattr(item, "food_reference_id", None) is not None
+        and not getattr(item, "source_snapshot", None)
     }
     if not food_reference_ids:
         return {}

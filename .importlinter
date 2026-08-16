@@ -207,6 +207,8 @@ ignore_imports =
     src.api.dependencies.event_bus -> src.infra.adapters.brave_search_nutrition_service
     src.api.dependencies.event_bus -> src.infra.adapters.meal_generation_service
     src.api.dependencies.event_bus -> src.infra.adapters.nutritionix_service
+    src.api.dependencies.event_bus -> src.infra.cache.provider_budget
+    src.api.dependencies.event_bus -> src.infra.config.settings
     src.api.dependencies.event_bus -> src.infra.database.uow_async
     src.api.dependencies.event_bus -> src.infra.event_bus
     src.api.dependencies.food_image -> src.infra.adapters.pexels_image_adapter
@@ -254,6 +256,9 @@ ignore_imports =
     src.api.routes.v1.meals_analyze -> src.infra.event_bus
     src.api.routes.v1.meals_edit -> src.infra.event_bus
     src.api.routes.v1.meals_manual_text -> src.infra.event_bus
+    src.api.routes.v1.meals_manual_text -> src.infra.services.durable_write_service
+    src.api.routes.v1.manual_meal_durable -> src.infra.services.durable_write_service
+    src.api.routes.v1.capabilities -> src.infra.services.durable_write_service
     src.api.routes.v1.meals_read -> src.infra.event_bus
     src.api.routes.v1.monitoring -> src.infra.cache.metrics
     src.api.routes.v1.movement -> src.infra.event_bus

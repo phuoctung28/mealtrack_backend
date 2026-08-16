@@ -3,7 +3,7 @@
 import hashlib
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from time import perf_counter
 from typing import Any
 
@@ -19,6 +19,7 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 from src.observability import distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
@@ -35,12 +36,14 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         fat_secret_service: Any | None = None,
         translation_service: Any | None = None,
         local_search: Callable[[str, str, int], Any] | None = None,
+        integrity_context: Callable[[], Any] | None = None,
     ):
         self.cache_service = cache_service
         self.mapping_service = mapping_service
         self.fat_secret_service = fat_secret_service
         self.translation_service = translation_service
         self.local_search = local_search
+        self.integrity_context = integrity_context
 
     async def handle(self, event: SearchFoodsQuery) -> dict[str, Any]:
         started = perf_counter()
@@ -55,21 +58,37 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
 
         language = event.language
         is_non_english = language != "en"
-        cache_key = self._cache_key(event.query, language)
+        cache_context = await self._get_integrity_context()
+
+        # Integrity-controlled caches are versioned by policy and generation;
+        # retain the query as the stable key for that namespace.
+        cache_key = (
+            event.query
+            if self.integrity_context is not None
+            else self._cache_key(event.query, language)
+        )
         cached = None
-        try:
-            cached = await self.cache_service.get_cached_search(cache_key)
-        except Exception as exc:
-            logger.warning(
-                "food search cache read failed error_type=%s", type(exc).__name__
-            )
+        if self.integrity_context is None:
+            try:
+                cached = await self.cache_service.get_cached_search(cache_key)
+            except Exception:
+                logger.warning("food search cache read failed", exc_info=True)
+        elif cache_context is not None:
+            try:
+                cached = await self.cache_service.get_cached_search(
+                    cache_key,
+                    policy_version=str(cache_context["policy_version"]),
+                    generation=int(cache_context["generation"]),
+                )
+            except Exception:
+                logger.warning("food search cache read failed", exc_info=True)
         if cached is not None:
             processed_cached = self._process_search_results(cached)
             processed_cached = processed_cached[: event.limit]
             for item in processed_cached:
                 if "source" not in item:
                     item["source"] = "fatsecret"
-            mapped = [self.mapping_service.map_search_item(i) for i in processed_cached]
+            mapped = self._map_search_items(processed_cached)
             self._record_search_metrics(
                 started,
                 source="cache",
@@ -89,32 +108,33 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         provider_attempted = bool(self.fat_secret_service and remaining_limit > 0)
 
         if self.fat_secret_service and remaining_limit > 0:
-            try:
-                # Canonical provider acquisition is always English-shaped for
-                # localized requests; provider locale is not proof of output.
-                fs_results = await self.fat_secret_service.search_foods(
-                    canonical_query, max_results=remaining_limit
-                )
-                processed_raw = self._merge_search_results(
+            if is_non_english:
+                processed_raw = await self._search_localized(
+                    canonical_query,
+                    remaining_limit,
+                    language,
+                    cache_key,
                     processed_raw,
-                    fs_results,
-                    event.limit,
+                    cache_context,
                 )
-            except Exception as exc:
-                logger.warning(
-                    "fatsecret search failed error_type=%s", type(exc).__name__
-                )
+            else:
+                try:
+                    fs_results = await self.fat_secret_service.search_foods(
+                        event.query, max_results=remaining_limit
+                    )
+                    processed_raw = self._merge_search_results(
+                        processed_raw,
+                        fs_results,
+                        event.limit,
+                    )
+                    if fs_results:
+                        await self._cache_search(
+                            cache_key, processed_raw, cache_context
+                        )
+                except Exception:
+                    logger.warning("fatsecret search failed", exc_info=True)
 
-        if is_non_english:
-            processed_raw = await self._localize_results(
-                processed_raw,
-                language=language,
-                cache_key=cache_key,
-            )
-        elif processed_raw:
-            await self._cache_search(cache_key, processed_raw)
-
-        mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
+        mapped = self._map_search_items(processed_raw)
         self._record_search_metrics(
             started,
             source=self._source_label(local_count, len(processed_raw)),
@@ -127,6 +147,18 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         )
         return {"results": mapped, "query": event.query, "total": len(mapped)}
 
+    def _map_search_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        mapped: list[dict[str, Any]] = []
+        for item in items:
+            try:
+                mapped.append(self.mapping_service.map_search_item(item))
+            except NutritionIntegrityError as exc:
+                logger.info(
+                    "food search item rejected by nutrition integrity policy: %s",
+                    exc.result.reason_code,
+                )
+        return mapped
+
     async def _search_localized(
         self,
         query: str,
@@ -134,23 +166,26 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         language: str,
         cache_key: str,
         local_raw: list[dict[str, Any]],
+        cache_context: Mapping[str, int | str] | None,
     ) -> list[dict[str, Any]]:
-        """Compatibility wrapper for callers that still invoke this helper."""
-        if self.fat_secret_service is None:
-            return await self._localize_results(
-                local_raw, language=language, cache_key=cache_key
-            )
+        """Acquire canonical provider data, then localize complete results."""
         try:
             results = await self.fat_secret_service.search_foods(
                 query, max_results=limit
             )
-        except Exception as exc:
-            logger.warning("fatsecret search failed error_type=%s", type(exc).__name__)
-            results = []
-        merged = self._merge_search_results(local_raw, results, len(local_raw) + limit)
-        return await self._localize_results(
-            merged, language=language, cache_key=cache_key
-        )
+            if results:
+                merged = self._merge_search_results(
+                    local_raw, results, len(local_raw) + limit
+                )
+                return await self._localize_results(
+                    merged,
+                    language=language,
+                    cache_key=cache_key,
+                    cache_context=cache_context,
+                )
+        except Exception:
+            logger.warning("fatsecret canonical search failed", exc_info=True)
+        return local_raw
 
     async def _canonical_query(self, query: str, language: str) -> str:
         if language == "en" or self.translation_service is None:
@@ -171,8 +206,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         *,
         language: str,
         cache_key: str,
+        cache_context: Mapping[str, int | str] | None,
     ) -> list[dict[str, Any]]:
-        if not results:
+        if not results or self.translation_service is None:
             return results
         names: list[str] = []
         for item in results:
@@ -200,18 +236,43 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
                     localized_item["name"] = translated[original]
             localized.append(localized_item)
         if translation_is_cacheable(result):
-            await self._cache_search(cache_key, localized)
+            await self._cache_search(cache_key, localized, cache_context)
         return localized
 
     async def _cache_search(
-        self, cache_key: str, results: list[dict[str, Any]]
+        self,
+        cache_key: str,
+        results: list[dict[str, Any]],
+        cache_context: Mapping[str, int | str] | None,
     ) -> None:
+        if self.integrity_context is not None and cache_context is None:
+            return
         try:
-            await self.cache_service.cache_search(cache_key, results)
-        except Exception as exc:
-            logger.warning(
-                "food search cache write failed error_type=%s", type(exc).__name__
-            )
+            if self.integrity_context is None:
+                await self.cache_service.cache_search(cache_key, results)
+            else:
+                await self.cache_service.cache_search(
+                    cache_key,
+                    results,
+                    policy_version=str(cache_context["policy_version"]),
+                    generation=int(cache_context["generation"]),
+                )
+        except Exception:
+            logger.warning("food search cache write failed", exc_info=True)
+
+    async def _get_integrity_context(self) -> Mapping[str, int | str] | None:
+        if self.integrity_context is None:
+            return None
+        try:
+            value = await self.integrity_context()
+            if not isinstance(value, Mapping):
+                raise TypeError("integrity context must be a mapping")
+            if "policy_version" not in value or "generation" not in value:
+                raise ValueError("integrity context is incomplete")
+            return value
+        except Exception:
+            logger.warning("food integrity control read failed", exc_info=True)
+            return None
 
     async def _search_local(
         self,
@@ -228,10 +289,8 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
                 region or self._region_for_language(event.language),
                 event.limit,
             )
-        except Exception as exc:
-            logger.warning(
-                "local food_reference search failed error_type=%s", type(exc).__name__
-            )
+        except Exception:
+            logger.warning("local food_reference search failed", exc_info=True)
             return []
         return [self._local_projection_to_raw(item) for item in projections]
 
@@ -242,6 +301,10 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         return {
             "source": "food_reference",
             "food_reference_id": item.id,
+            "origin": "local",
+            "source_namespace": item.source_namespace or "food_reference",
+            "source_food_id": item.source_food_id or str(item.id),
+            "food_id": f"food_reference:{item.id}",
             "description": item.name,
             "name_normalized": item.name_normalized,
             "brand": item.brand,
@@ -264,8 +327,22 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
     ) -> list[dict[str, Any]]:
         merged = list(local_raw)
         seen = {self._search_result_key(item) for item in merged}
+        local_names = {
+            str(item.get("name_normalized") or item.get("description") or "")
+            .strip()
+            .lower()
+            for item in local_raw
+        }
         for item in provider_raw:
             item.setdefault("source", "fatsecret")
+            if not item.get("source_food_id") and not item.get("food_id"):
+                provider_name = (
+                    str(item.get("name_normalized") or item.get("description") or "")
+                    .strip()
+                    .lower()
+                )
+                if provider_name in local_names:
+                    continue
             key = self._search_result_key(item)
             if key in seen:
                 continue
@@ -276,6 +353,18 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         return merged[:limit]
 
     def _search_result_key(self, item: dict[str, Any]) -> str:
+        namespace = item.get("source_namespace")
+        source_id = item.get("source_food_id")
+        if namespace and source_id is not None:
+            return f"identity:{str(namespace).strip().lower()}:{str(source_id).strip()}"
+        if item.get("food_reference_id") is not None:
+            return f"identity:food_reference:{item['food_reference_id']}"
+        food_id = item.get("food_id")
+        if food_id and ":" in str(food_id):
+            return f"identity:{str(food_id).strip().lower()}"
+        source = str(item.get("source") or "").strip().lower()
+        if source in {"fatsecret", "openfoodfacts", "provider"} and food_id:
+            return f"identity:{source}:{str(food_id).strip()}"
         normalized = item.get("name_normalized")
         if normalized:
             return str(normalized).strip().lower()
@@ -347,7 +436,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         for item in raw_results:
             original_name = item.get("description", "")
             capitalized_name = self._capitalize_food_name(original_name)
-            name_key = capitalized_name.lower().strip()
+            name_key = self._search_result_key(
+                {**item, "description": capitalized_name}
+            )
 
             if name_key not in seen_names:
                 seen_names.add(name_key)
@@ -362,9 +453,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         if not name:
             return name
 
-        parts: list[str] = []
+        parts = []
         for part in name.split(","):
-            words: list[str] = []
+            words = []
             for word in part.strip().split():
                 word_lower = word.lower()
                 if word_lower in [

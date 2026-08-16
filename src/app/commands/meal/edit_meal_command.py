@@ -25,6 +25,10 @@ class EditMealCommand(Command):
     meal_type: Optional[str] = None
     food_item_changes: List[FoodItemChange] = field(default_factory=list)
     nutrition_override: Optional[NutritionOverride] = None
+    nutrition_contract_version: Optional[int] = None
+    override_intent: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    request_fingerprint: Optional[str] = None
 
 
 @dataclass

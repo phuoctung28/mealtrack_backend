@@ -736,6 +736,8 @@ class DailyContextPrecomputeService:
                 movement_by_user[row.user_id][local_date] = float(row.kcal)
 
             # ---- Compute calorie goals (batch preload + full effective-adjusted) ----
+            # Isolate per-user failures so one poisoned statement cannot abort
+            # the shared session for remaining users / bulk INSERT.
             calorie_goals: dict[str, int] = {}
             for user_id in user_ids:
                 profile = profiles_by_user.get(user_id)
@@ -757,20 +759,23 @@ class DailyContextPrecomputeService:
                         user_timezone=tz_name,
                     )
                 try:
-                    calorie_goals[user_id] = await self._get_user_calorie_goal(
-                        uow,
-                        user_id,
-                        today,
-                        profile,
-                        tz_name,
-                        weekly_budget=weekly_budget,
-                        cheat_dates=cheat_dates_by_user.get(user_id, []),
-                        weekly_preload=weekly_preload,
-                    )
+                    async with session.begin_nested():
+                        calorie_goals[user_id] = await self._get_user_calorie_goal(
+                            uow,
+                            user_id,
+                            today,
+                            profile,
+                            tz_name,
+                            weekly_budget=weekly_budget,
+                            cheat_dates=cheat_dates_by_user.get(user_id, []),
+                            weekly_preload=weekly_preload,
+                        )
                 except Exception as exc:
                     logger.warning(
-                        "TDEE calculation failed for user %s: %s; skipping target-bearing notification",
+                        "TDEE calculation failed for user %s in timezone %s: %s; "
+                        "skipping target-bearing notification",
                         user_id,
+                        tz_name,
                         exc,
                     )
 

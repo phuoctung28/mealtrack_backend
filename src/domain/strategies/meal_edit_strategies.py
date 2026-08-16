@@ -12,6 +12,7 @@ from src.domain.model.nutrition import FoodItem, Macros, NutritionOverride
 from src.domain.services import NutritionCalculationService
 from src.domain.services.nutrition_calculation_service import (
     ScaledNutritionResult,
+    _convert_with_allowed_units,
     convert_quantity_to_grams,
     scale_per_100g_nutrition,
 )
@@ -99,9 +100,22 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
 
         # Priority 1: Custom nutrition provided (user-edited macros)
         if change.custom_nutrition:
-            quantity_grams = convert_quantity_to_grams(
-                new_quantity, new_unit, existing_item.name
-            )
+            allowed_units = change.allowed_units or existing_item.allowed_units
+            if (
+                change.origin is not None
+                or existing_item.nutrition_contract_version == "2"
+            ):
+                quantity_grams = _convert_with_allowed_units(
+                    new_quantity,
+                    new_unit,
+                    allowed_units or [],
+                    existing_item.name,
+                    strict=True,
+                )
+            else:
+                quantity_grams = convert_quantity_to_grams(
+                    new_quantity, new_unit, existing_item.name
+                )
             _validate_quantity_grams(quantity_grams, new_quantity, new_unit)
             scale_factor = quantity_grams / 100.0
             food_items_dict[change.id] = FoodItem(
@@ -118,12 +132,38 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                 ),
                 micros=existing_item.micros,
                 confidence=0.8,
-                fdc_id=existing_item.fdc_id,
-                food_reference_id=existing_item.food_reference_id,
-                is_custom=True,
-                allowed_units=change.allowed_units or existing_item.allowed_units,
-                nutrition_override=_resolved_nutrition_override(
-                    change, existing_item
+                fdc_id=(
+                    change.fdc_id if change.origin is not None else existing_item.fdc_id
+                ),
+                food_reference_id=(
+                    change.food_reference_id
+                    if change.origin is not None
+                    else existing_item.food_reference_id
+                ),
+                is_custom=(
+                    change.origin == "custom" if change.origin is not None else True
+                ),
+                allowed_units=allowed_units,
+                nutrition_override=_resolved_nutrition_override(change, existing_item),
+                source_kind=(
+                    change.origin
+                    if change.origin is not None
+                    else existing_item.source_kind
+                ),
+                source_food_id=(
+                    change.source_food_id
+                    if change.origin is not None
+                    else existing_item.source_food_id
+                ),
+                nutrition_contract_version=(
+                    "2"
+                    if change.origin is not None
+                    else existing_item.nutrition_contract_version
+                ),
+                source_snapshot=(
+                    change.source_snapshot
+                    if change.origin is not None
+                    else existing_item.source_snapshot
                 ),
             )
             logger.info(
@@ -162,6 +202,10 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     nutrition_override=_resolved_nutrition_override(
                         change, existing_item
                     ),
+                    source_kind=existing_item.source_kind,
+                    source_food_id=existing_item.source_food_id,
+                    nutrition_contract_version=existing_item.nutrition_contract_version,
+                    source_snapshot=existing_item.source_snapshot,
                 )
                 logger.info(f"Updated food item with unit change: {existing_item.name}")
             else:
@@ -223,6 +267,10 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             is_custom=existing_item.is_custom,
             allowed_units=change.allowed_units or existing_item.allowed_units,
             nutrition_override=_resolved_nutrition_override(change, existing_item),
+            source_kind=existing_item.source_kind,
+            source_food_id=existing_item.source_food_id,
+            nutrition_contract_version=existing_item.nutrition_contract_version,
+            source_snapshot=existing_item.source_snapshot,
         )
         logger.info(f"Updated food item with scaling: {existing_item.name}")
 
@@ -232,6 +280,29 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
         quantity: float,
         unit: str,
     ) -> ScaledNutritionResult | None:
+        snapshot = existing_item.source_snapshot or {}
+        if snapshot:
+            nutrition = scale_per_100g_nutrition(
+                {
+                    "protein": snapshot.get("protein_per_100g"),
+                    "carbs": snapshot.get("carbs_per_100g"),
+                    "fat": snapshot.get("fat_per_100g"),
+                    "fiber": snapshot.get("fiber_per_100g", 0),
+                    "sugar": snapshot.get("sugar_per_100g", 0),
+                },
+                quantity,
+                unit,
+                allowed_units=snapshot.get("allowed_units") or [],
+                food_name=existing_item.name,
+                strict_allowed_units=existing_item.nutrition_contract_version == "2",
+            )
+            return ScaledNutritionResult(
+                calories=nutrition["calories"],
+                protein=nutrition["protein"],
+                carbs=nutrition["carbs"],
+                fat=nutrition["fat"],
+            )
+
         if existing_item.food_reference_id and self.food_reference_repository:
             reference = await self.food_reference_repository.get_nutrition_projection(
                 existing_item.food_reference_id
@@ -305,6 +376,10 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             is_custom=existing_item.is_custom,
             allowed_units=change.allowed_units or existing_item.allowed_units,
             nutrition_override=_resolved_nutrition_override(change, existing_item),
+            source_kind=existing_item.source_kind,
+            source_food_id=existing_item.source_food_id,
+            nutrition_contract_version=existing_item.nutrition_contract_version,
+            source_snapshot=existing_item.source_snapshot,
         )
 
 
@@ -337,6 +412,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 change.custom_nutrition,
                 change.allowed_units,
                 change.nutrition_override,
+                change,
             )
             food_items_dict[new_item_id] = food_item
             logger.info(f"Added custom food item: {change.name}")
@@ -361,9 +437,14 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                     ),
                     confidence=0.9,
                     fdc_id=change.fdc_id,
+                    food_reference_id=change.food_reference_id,
                     is_custom=False,
                     allowed_units=change.allowed_units,
                     nutrition_override=_resolved_nutrition_override(change),
+                    source_kind=change.origin,
+                    source_food_id=change.source_food_id,
+                    nutrition_contract_version=("2" if change.origin else None),
+                    source_snapshot=getattr(change, "source_snapshot", None),
                 )
                 logger.info(f"Added food item from nutrition service: {change.name}")
                 return
@@ -380,9 +461,14 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             macros=Macros(protein=0, carbs=0, fat=0),
             confidence=0.3,
             fdc_id=change.fdc_id,
+            food_reference_id=change.food_reference_id,
             is_custom=True,
             allowed_units=change.allowed_units,
             nutrition_override=_resolved_nutrition_override(change),
+            source_kind=change.origin or "custom",
+            source_food_id=change.source_food_id,
+            nutrition_contract_version=("2" if change.origin else None),
+            source_snapshot=getattr(change, "source_snapshot", None),
         )
 
     def _create_from_custom_nutrition(
@@ -394,9 +480,19 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
         custom_nutrition,
         allowed_units=None,
         nutrition_override=None,
+        change=None,
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
-        quantity_grams = convert_quantity_to_grams(quantity, unit, name)
+        if change is not None and change.origin is not None:
+            quantity_grams = _convert_with_allowed_units(
+                quantity,
+                unit,
+                allowed_units or [],
+                name,
+                strict=True,
+            )
+        else:
+            quantity_grams = convert_quantity_to_grams(quantity, unit, name)
         _validate_quantity_grams(quantity_grams, quantity, unit)
         scale_factor = quantity_grams / 100.0  # Custom nutrition is per 100g
 
@@ -413,7 +509,8 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 sugar=custom_nutrition.sugar_per_100g * scale_factor,
             ),
             confidence=0.8,
-            fdc_id=None,
+            fdc_id=change.fdc_id if change else None,
+            food_reference_id=(change.food_reference_id if change else None),
             is_custom=True,
             allowed_units=allowed_units,
             nutrition_override=(
@@ -426,6 +523,10 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 if nutrition_override
                 else None
             ),
+            source_kind=(change.origin if change and change.origin else "custom"),
+            source_food_id=change.source_food_id if change else None,
+            nutrition_contract_version=("2" if change and change.origin else None),
+            source_snapshot=getattr(change, "source_snapshot", None),
         )
 
 

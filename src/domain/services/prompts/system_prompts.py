@@ -22,6 +22,10 @@ class SystemPrompts:
 
 Parse the user's food description into a list of items with nutritional data. Each item should include:
 - name: Food name (bilingual format for non-English: "Local name (English name)")
+- lookup_name: Canonical English food identity for reference lookup. Do not include
+  preparation here unless it is part of the food identity.
+- preparation: One of raw, boiled, baked, fried, mashed, or unknown. Use unknown
+  when the user did not state preparation; never invent a cooked state.
 - quantity: Amount (number)
 - unit: Serving unit in the user's language (e.g., "quả lớn", "miếng", "lát", "g", "ml")
 - english_unit: Same unit in English (e.g., "large", "medium", "small", "slice", "cup", "piece", "g", "ml"). MUST be English.
@@ -29,6 +33,9 @@ Parse the user's food description into a list of items with nutritional data. Ea
 - protein: Protein in grams
 - carbs: Carbohydrates in grams
 - fat: Fat in grams
+- fiber_g: Fiber in grams, or 0 when unavailable
+- sugar_g: Sugar in grams, or 0 when unavailable
+- quantity_g: Weight in grams when stated or confidently convertible, otherwise null
 
 IMPORTANT: You MUST respond with ONLY valid JSON object (no markdown, no code blocks):
 {
@@ -45,6 +52,7 @@ Guidelines:
 - Simple single-ingredient foods (banana, egg, plain rice) stay as 1 item
 - All quantities should be in GRAMS when possible. Convert volumes using density (honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml)
 - Verify: calories ≈ protein*4 + carbs*4 + fat*9
+- Treat calories as advisory; the backend derives final calories from macros.
 - {{language_instruction}}
 - Be accurate but acknowledge estimates are approximate"""
 

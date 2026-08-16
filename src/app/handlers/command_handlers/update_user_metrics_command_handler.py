@@ -9,6 +9,7 @@ from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsC
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.common.enums import FitnessGoal, JobType, TrainingLevel
+from src.domain.model.user.body_fat_visual import remap_visual_profile_selection
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
 from src.domain.services.training_policy import normalize_training_pair
@@ -82,6 +83,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 profile.fitness_goal,
                 profile.training_level,
             )
+            sex_changed = False
 
             # Update provided fields only
             if command.age is not None:
@@ -102,6 +104,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             if command.biological_sex is not None:
                 if command.biological_sex not in _VALID_BIOLOGICAL_SEXES:
                     raise ValidationException("Biological sex must be male or female")
+                sex_changed = profile.gender != command.biological_sex
                 profile.gender = command.biological_sex
 
             if command.job_type is not None:
@@ -248,6 +251,17 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 profile.profile_target_revision = (
                     profile.profile_target_revision or 1
                 ) + 1
+
+            if sex_changed:
+                history = await uow.body_fat_visual_profiles.find_history_by_user(
+                    command.user_id
+                )
+                if history:
+                    await uow.body_fat_visual_profiles.append(
+                        remap_visual_profile_selection(
+                            history[-1], target_sex=profile.gender
+                        )
+                    )
 
             await uow.users.update_profile(profile)
 

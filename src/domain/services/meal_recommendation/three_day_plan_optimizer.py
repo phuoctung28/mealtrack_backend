@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
     MealRecommendationAlternative,
@@ -32,6 +34,8 @@ from src.domain.services.meal_recommendation.slot_alternative_service import (
     SlotAlternativeService,
 )
 
+logger = logging.getLogger(__name__)
+
 PLAN_DAYS = 3
 
 
@@ -61,14 +65,21 @@ class ThreeDayPlanOptimizer:
         ingredient_statistics: CatalogIngredientStatistics | None = None,
     ) -> MealRecommendationPlan | MealRecommendationInsufficiency:
         candidates = _filter_supported_catalog_meals(catalog_meals, cuisines)
-        if len({catalog_meal.id for catalog_meal in candidates}) < PLAN_DAYS * len(
-            MEAL_TYPE_ORDER
-        ):
+        unique_count = len({catalog_meal.id for catalog_meal in candidates})
+        required_slots = PLAN_DAYS * len(MEAL_TYPE_ORDER)
+        if unique_count < required_slots:
+            logger.warning(
+                "meal_recommendation_insufficient_catalog "
+                "meal_type=plan required=%s available=%s pool_size=%s",
+                required_slots,
+                unique_count,
+                len(catalog_meals),
+            )
             return MealRecommendationInsufficiency(
                 reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_CURRENT_RECIPES,
                 message="not enough unique catalog_meals for 3-day plan",
-                required=PLAN_DAYS * len(MEAL_TYPE_ORDER),
-                available=len({catalog_meal.id for catalog_meal in candidates}),
+                required=required_slots,
+                available=unique_count,
             )
 
         allocations = self._allocation.allocate(daily_calories)
@@ -103,6 +114,14 @@ class ThreeDayPlanOptimizer:
                     ingredient_statistics=statistics,
                 )
                 if not ranked:
+                    logger.warning(
+                        "meal_recommendation_insufficient_catalog "
+                        "meal_type=%s required=%s available=%s pool_size=%s",
+                        meal_type,
+                        1,
+                        0,
+                        len(ranked_pools[meal_type]),
+                    )
                     return MealRecommendationInsufficiency(
                         reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_CURRENT_RECIPES,
                         message=f"not enough unique candidates for {meal_type}",
@@ -244,6 +263,14 @@ class ThreeDayPlanOptimizer:
             ),
         )
         if len(ranked) < count:
+            logger.warning(
+                "meal_recommendation_insufficient_alternatives "
+                "meal_type=%s required=%s available=%s pool_size=%s",
+                meal_type,
+                count,
+                len(ranked),
+                len(ranked_pool),
+            )
             return MealRecommendationInsufficiency(
                 reason=MealRecommendationInsufficiencyReason.NOT_ENOUGH_ALTERNATIVES,
                 message=f"not enough alternatives for {meal_type}",

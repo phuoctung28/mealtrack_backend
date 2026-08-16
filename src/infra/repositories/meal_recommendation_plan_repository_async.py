@@ -247,8 +247,8 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                     score=Decimal(str(alternative.score)),
                     selection_version=expected_version + 1,
                     seen_at=now if position == 0 else None,
-                    catalog_meal=alternative.catalog_meal,
                 )
+                row._domain_catalog_meal = alternative.catalog_meal
                 self._session.add(row)
                 new_rows.append(row)
             target = new_rows[0]
@@ -264,6 +264,18 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
         selected.seen_at = selected_seen_at  # type: ignore[assignment]
         selected.retired_at = selected_seen_at  # type: ignore[assignment]
         await self._flush_operations()
+
+        if outcome == "replenished_candidate":
+            target_id = cast(str, target.id)
+            batch_rows = await self._load_batch(user_id=user_id, batch_id=plan_id)
+            anchor = _anchor_row(batch_rows)
+            rows = [row for row in batch_rows if cast(str, row.slot_id) == slot_id]
+            target = next(
+                (row for row in rows if cast(str, row.id) == target_id),
+                None,
+            )
+            if anchor is None or target is None:
+                raise MealRecommendationNotFoundError
 
         for row in rows:
             if cast(str, row.slot_id) != slot_id:
@@ -899,6 +911,9 @@ def _candidate_to_domain(
 
 
 def _candidate_catalog_meal(row: MealRecommendationORM) -> CatalogMeal | None:
+    domain_catalog_meal = getattr(row, "_domain_catalog_meal", None)
+    if domain_catalog_meal is not None:
+        return domain_catalog_meal
     catalog_meal = row.catalog_meal
     if catalog_meal is None:
         return None

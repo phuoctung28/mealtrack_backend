@@ -46,6 +46,7 @@ class AsyncUnitOfWorkPort(ABC):
     meal_translations: Any
     promo_codes: Any
     referrals: Any
+    meal_write_operations: Any
 
     @abstractmethod
     async def __aenter__(self) -> AsyncUnitOfWorkPort:

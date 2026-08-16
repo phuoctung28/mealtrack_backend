@@ -126,6 +126,21 @@ Default: do not cache. Admission checklist lives in the selective-cache decision
 above. `FAIL_ON_CACHE_ERROR=false` is the expected production posture for
 optional caches.
 
+### Parse-text nutrition validation
+
+- `/v1/meals/parse-text` keeps its authenticated and guest response contracts;
+  structured local `food_reference` and staged FatSecret details are optional
+  enrichment behind `PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED` (default `false`).
+- The handler derives calories from final macros. Provider detail calls are
+  bounded to one selected candidate per item, with a request-wide deadline and
+  call budget; invalid or ambiguous provider data falls back only when the AI
+  estimate passes density checks.
+- Run `python scripts/development/evaluate_parse_text_nutrition.py --mode offline`
+  for the hermetic golden corpus. Live evaluation is staging-only, opt-in via
+  `ENVIRONMENT=staging` and `PARSE_TEXT_LIVE_EVAL_ENABLED=true`, and requires
+  explicit `--confirm-live-staging`; reports are synthetic-ID, aggregate-only,
+  non-overwriting, and written with private `0600` permissions.
+
 ### RevenueCat and web redemption
 
 - Webhooks update local `subscriptions`; signature verification is constant-time.
