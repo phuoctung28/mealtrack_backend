@@ -39,6 +39,7 @@ scripts, dependency manifests. Active execution plans live under repo-root
 |------|-------|
 | Live HTTP surface | OpenAPI: `/docs`, `/redoc`, `/openapi.json`; registration in `src/api/main.py` |
 | Offline OpenAPI dump + conventions | `api-endpoints.md` (Live OpenAPI contract; not a route table) |
+| Public catalog browser route | `src/api/routes/v1/meal_catalog.py` (`GET /v1/meal-catalog`, `GET /v1/meal-catalog/{catalog_id}`) |
 | Layer layout | `src/api/`, `src/app/`, `src/domain/`, `src/infra/` plus root/bootstrap/cron |
 | Tests | `pytest tests/unit --cov=src --cov-fail-under=65` (default CI path) |
 | Migrations | `migrations/versions/` via Alembic |
@@ -75,6 +76,10 @@ Do not hand-maintain file, LOC, or endpoint counts in this document.
 - AI: OpenAI default; optional Cloudflare Workers AI for configured text/vision.
 - Event bus: singleton PyMediator from `src/api/dependencies/event_bus.py`.
 - Migrations: `migrations/versions/` via Alembic / `migrations/run.py`.
+- Meal catalog browse: authenticated list/detail live in
+  `src/api/routes/v1/meal_catalog.py`; the browse contract is documented in
+  `api-endpoints.md` and the import manifest contract in
+  `meal-catalog-import-schema.md`.
 
 Non-derivable calorie and weekly-budget rules: `AGENTS.md` / `CLAUDE.md`
 MUST-Follow. Meal scan vs hydration and other system rules:

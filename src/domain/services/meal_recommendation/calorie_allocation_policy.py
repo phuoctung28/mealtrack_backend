@@ -25,3 +25,14 @@ class CalorieAllocationPolicy:
         allocations["dinner"] += drift
         return {meal_type: allocations[meal_type] for meal_type in MEAL_TYPE_ORDER}
 
+    def target_for(self, daily_calories: int, meal_type: str) -> int:
+        """Return the browse target for a supported meal type."""
+        if meal_type == "snack":
+            if daily_calories <= 0:
+                raise ValueError("daily_calories must be positive")
+            return max(1, round(daily_calories * 0.10))
+        allocations = self.allocate(daily_calories)
+        try:
+            return allocations[meal_type]
+        except KeyError:
+            raise ValueError(f"unsupported meal_type: {meal_type}") from None

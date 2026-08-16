@@ -73,6 +73,8 @@ class _CatalogRepo:
 
     async def get_active_catalog_revision(self):
         self.revision_calls += 1
+        if isinstance(self.revision, Exception):
+            raise self.revision
         return self.revision
 
     async def list_active_meals(self):
@@ -194,6 +196,22 @@ async def test_snapshot_last_good_metric_records_no_payload_details():
     ) in metrics.calls
     assert "Meal meal-1" not in str(metrics.calls)
     assert "key-meal-1" not in str(metrics.calls)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_revision_failure_serves_last_good_snapshot():
+    clock = _Clock()
+    catalog = _CatalogRepo()
+    service = CatalogMealSnapshotService(ttl_seconds=10, clock=clock)
+
+    first = await service.get_snapshot(_Uow(catalog))
+    clock.value += 11
+    catalog.revision = RuntimeError("revision unavailable")
+
+    second = await service.get_snapshot(_Uow(catalog))
+
+    assert second is first
+    assert catalog.load_calls == 1
 
 
 def _revision(value: int) -> CatalogMealRevision:

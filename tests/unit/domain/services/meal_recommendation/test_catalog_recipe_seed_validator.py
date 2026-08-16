@@ -208,6 +208,25 @@ def test_manifest_rejects_derived_recipe_fields():
     assert any("protein_g is derived by backend" in error for error in result.errors)
 
 
+def test_manifest_rejects_invalid_popularity_rank():
+    manifest = {
+        "release_key": "test-release",
+        "expected_recipe_count": 1,
+        "recipes": [_recipe("vn-breakfast", "vietnamese", "breakfast")],
+    }
+    manifest["recipes"][0]["popularity_rank"] = 2_147_483_648
+
+    result = validate_catalog_seed_manifest(
+        manifest,
+        expected_recipe_count=1,
+        min_per_cuisine_meal_type=0,
+        expected_cuisine_counts=None,
+    )
+
+    assert result.is_valid is False
+    assert "popularity_rank must fit a non-negative PostgreSQL INTEGER or null" in result.errors[0]
+
+
 def test_manifest_rejects_derived_ingredient_fields():
     recipe = _recipe("vn-breakfast", "vietnamese", "breakfast")
     recipe["ingredients"][0]["resolved_grams"] = 100

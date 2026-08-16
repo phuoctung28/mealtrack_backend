@@ -6,7 +6,7 @@ import unicodedata
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -133,6 +133,7 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
             cuisine=seed.cuisine,
             description=seed.description,
             image_url=seed.image_url,
+            popularity_rank=seed.popularity_rank,
             breakfast_eligible="breakfast" in seed.meal_types,
             lunch_eligible="lunch" in seed.meal_types,
             dinner_eligible="dinner" in seed.meal_types,
@@ -149,6 +150,16 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
             for item in seed.ingredients
         ]
         self._session.add(row)
+        await self._session.flush()
+
+    async def update_popularity_rank(
+        self, *, catalog_key: str, popularity_rank: int | None
+    ) -> None:
+        await self._session.execute(
+            update(MealCatalogORM)
+            .where(MealCatalogORM.catalog_key == catalog_key)
+            .values(popularity_rank=popularity_rank)
+        )
         await self._session.flush()
 
     async def lock_seed_import(self) -> None:
@@ -207,6 +218,7 @@ def _meal_to_domain(row: MealCatalogORM) -> CatalogMeal:
         cuisine=cast(str, row.cuisine),
         description=cast(str | None, row.description),
         image_url=cast(str | None, row.image_url),
+        popularity_rank=_optional_int(getattr(row, "popularity_rank", None)),
         protein_g=_decimal(nutrition.protein),
         carbs_g=_decimal(nutrition.carbs),
         fat_g=_decimal(nutrition.fat),
@@ -282,6 +294,10 @@ def _meal_types(row: MealCatalogORM) -> tuple[str, ...]:
     if row.snack_eligible:
         values.append("snack")
     return tuple(values)
+
+
+def _optional_int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _decimal(value) -> Decimal:

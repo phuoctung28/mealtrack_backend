@@ -60,6 +60,7 @@ def teardown_function():
 class _Session:
     def __init__(self):
         self.added = []
+        self.updated = []
         self.flushed = False
         self.locked = False
         self.signatures = []
@@ -67,6 +68,9 @@ class _Session:
     async def add_seed_meal(self, row):
         self.added.append(row)
         self.flushed = True
+
+    async def update_popularity_rank(self, *, catalog_key, popularity_rank):
+        self.updated.append((catalog_key, popularity_rank))
 
     async def find_seed_existing(self, *, catalog_key, content_hash):
         return None
@@ -144,6 +148,8 @@ class _Importer(CatalogMealSeedImporter):
             return SimpleNamespace(catalog_key=catalog_key, content_hash=content_hash)
         if self.existing == "changed":
             return SimpleNamespace(catalog_key=catalog_key, content_hash="different")
+        if self.existing == "same-content-different-key":
+            return SimpleNamespace(catalog_key="other-key", content_hash=content_hash)
         return None
 
     async def _ranked_candidates(self, normalized_name):
@@ -243,6 +249,34 @@ async def test_import_skips_exact_existing_catalog_meal():
     assert summary.inserted == 0
     assert summary.skipped_existing == 1
     assert importer.session.added == []
+
+
+@pytest.mark.asyncio
+async def test_import_updates_popularity_rank_for_exact_existing_catalog_meal():
+    importer = _Importer(refs_by_id={7: _reference()}, existing="exact")
+    manifest = _manifest()
+    manifest["recipes"][0]["popularity_rank"] = 4
+
+    summary = await importer.import_manifest(manifest)
+
+    assert summary.inserted == 0
+    assert summary.updated == 1
+    assert summary.skipped_existing == 1
+    assert importer.session.updated == [("vn-rice-breakfast", 4)]
+
+
+@pytest.mark.asyncio
+async def test_import_does_not_update_rank_for_same_content_under_another_key():
+    importer = _Importer(
+        refs_by_id={7: _reference()}, existing="same-content-different-key"
+    )
+    manifest = _manifest()
+    manifest["recipes"][0]["popularity_rank"] = 4
+
+    summary = await importer.import_manifest(manifest)
+
+    assert summary.updated == 0
+    assert importer.session.updated == []
 
 
 @pytest.mark.asyncio

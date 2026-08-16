@@ -27,6 +27,7 @@ recommendations, and reliable AI-assisted meal analysis.
 | AI meal analysis | Multiple analysis strategies; food-label scan is a separate validated path. Backend owns calorie presentation. |
 | Meal scan vs hydration | Meal image/scan endpoints treat edible/drinkable intake as **meals**. They must **not** create `hydration_entries`. Zero-cal drinks use `/v1/hydration/*` explicitly. |
 | Catalog recommendations | Deterministic ranking of curated catalog meals; **no LLM at recommendation time**. Separate from AI meal-suggestions. |
+| Public catalog browser | `popular` is curated by explicit `popularity_rank` and fails closed with 503 until seeded; `for_you` is a browse surface that can fall back to curated global order and surface fallback metadata. |
 | Meal suggestions | Session-based, additive AI discovery; not a fallback for catalog recommendations. |
 | Local-first food search | Cache (optional) → local `food_reference` → provider fill. Calories from macros on the backend. |
 | Weekly budget | Redistribution from prior consumption is the source of truth for adjusted daily targets. Movement credits balance without inflating baseline TDEE. See AGENTS MUST-Follow for `remaining_days`. |

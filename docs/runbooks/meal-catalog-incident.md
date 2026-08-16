@@ -23,6 +23,9 @@ recommendation incidents.
    - `meal_recommendation.requests`
 4. Confirm whether the issue affects create, replay/read, slot detail, swap,
    log, skip, food search, or import only.
+5. For browse incidents, confirm whether `popular` is missing curated
+   `popularity_rank` values or `for_you` is legitimately reporting
+   `fallback=true` / `ranking_source=curated` on a cold start.
 
 ## Decision Tree
 
@@ -36,11 +39,15 @@ recommendation incidents.
    criteria, expected row count, rollback SQL, and reviewer sign-off.
 5. If migration state blocks startup, follow
    [Render CD Flow](../archive/guides/render-cd.md#emergency-recovery).
+6. If browse requests return 503, confirm whether the curated popularity source
+   has been seeded before treating it as an outage.
 
 ## SQL Safety
 
 Use read-only count queries first. For catalog deactivation, prefer a transaction
-with explicit `RETURNING` evidence:
+with explicit `RETURNING` evidence. For browse outages, inspect the current
+`popularity_rank` coverage first; a 503 from `popular` can be the expected
+fail-closed behavior when the curated signal has not been seeded.
 
 ```sql
 begin;
