@@ -40,6 +40,80 @@ class _References:
 
 
 @pytest.mark.asyncio
+async def test_custom_preserves_client_allowed_units_and_selected_unit():
+    resolved = await ManualMealNutritionResolver().resolve_items(
+        [
+            ManualMealItem(
+                name="Sườn Nướng",
+                quantity=1,
+                unit="Miếng",
+                origin="custom",
+                custom_nutrition=CustomNutrition(
+                    calories_per_100g=630,
+                    protein_per_100g=60,
+                    carbs_per_100g=13.3,
+                    fat_per_100g=36.7,
+                ),
+                allowed_units=[
+                    {
+                        "unit": "Miếng",
+                        "gram_weight": 30.0,
+                        "description": "1 Miếng",
+                    },
+                    {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+                    {"unit": "kg", "gram_weight": 1000.0, "description": "1 kg"},
+                    {"unit": "oz", "gram_weight": 28.35, "description": "1 oz"},
+                ],
+            )
+        ],
+        _References(),
+        contract_version=2,
+    )
+
+    assert resolved[0].quantity == pytest.approx(1)
+    assert resolved[0].unit == "Miếng"
+    assert resolved[0].allowed_units[0] == {
+        "unit": "g",
+        "gram_weight": 1.0,
+        "description": "1 g",
+    }
+    assert any(unit["unit"] == "miếng" for unit in resolved[0].allowed_units)
+    assert {unit["unit"] for unit in resolved[0].allowed_units} >= {
+        "g",
+        "miếng",
+        "kg",
+        "oz",
+    }
+
+
+@pytest.mark.asyncio
+async def test_custom_without_allowed_units_defaults_to_grams():
+    resolved = await ManualMealNutritionResolver().resolve_items(
+        [
+            ManualMealItem(
+                name="Soup",
+                quantity=100,
+                unit="g",
+                origin="custom",
+                custom_nutrition=CustomNutrition(
+                    calories_per_100g=50,
+                    protein_per_100g=2,
+                    carbs_per_100g=5,
+                    fat_per_100g=1,
+                ),
+                allowed_units=None,
+            )
+        ],
+        _References(),
+        contract_version=2,
+    )
+
+    assert resolved[0].allowed_units == [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_local_reference_ignores_client_nutrition_and_units():
     item = ManualMealItem(
         name="Rice",

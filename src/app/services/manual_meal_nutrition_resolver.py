@@ -192,6 +192,9 @@ class ManualMealNutritionResolver:
     def _resolve_custom(self, item: ManualMealItem) -> ManualMealItem:
         if item.custom_nutrition is None:
             raise ValueError("custom origin requires custom nutrition")
+        # Custom foods have no catalog servings — keep client units (Miếng, etc.)
+        # after normalization so reopen/edit can show the same chips as parse-text.
+        allowed_units = self._custom_allowed_units(item.allowed_units)
         result = self.policy.require_valid(
             {
                 "protein_100g": item.custom_nutrition.protein_per_100g,
@@ -199,6 +202,7 @@ class ManualMealNutritionResolver:
                 "fat_100g": item.custom_nutrition.fat_per_100g,
                 "fiber_100g": item.custom_nutrition.fiber_per_100g,
                 "sugar_100g": item.custom_nutrition.sugar_per_100g,
+                "allowed_units": allowed_units,
             },
             require_energy=False,
             require_metric_basis=False,
@@ -213,11 +217,30 @@ class ManualMealNutritionResolver:
                 fiber_per_100g=result.fiber_100g or 0.0,
                 sugar_per_100g=result.sugar_100g or 0.0,
             ),
-            allowed_units=[{"unit": "g", "gram_weight": 1.0, "description": "1 g"}],
+            allowed_units=allowed_units,
             source_kind="custom",
             nutrition_contract_version="2",
-            source_snapshot=self._snapshot(result, "custom", None, None),
+            source_snapshot=self._snapshot(
+                result, "custom", None, None, allowed_units
+            ),
         )
+
+    @staticmethod
+    def _custom_allowed_units(
+        raw_units: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        normalized = normalize_serving_options(raw_units or [])
+        if not normalized:
+            return [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
+        has_gram = any(
+            str(unit.get("unit", "")).strip().lower() == "g" for unit in normalized
+        )
+        if has_gram:
+            return normalized
+        return [
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            *normalized,
+        ]
 
     def _resolve_reference(self, item, reference, origin: str) -> ManualMealItem:
         if reference is None:
