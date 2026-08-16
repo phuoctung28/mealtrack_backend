@@ -152,6 +152,11 @@ handler/schema when implementing; the bullets below are the durable WHY.
   clearing restores source/macro-derived nutrition without rewriting source rows.
 - `custom_nutrition` on non-USDA ingredients is per-100g macros; calories stay
   macro-derived (fiber-aware), which is distinct from absolute overrides.
+- Manual meal v2 save failures now split between validation and provider trust
+  boundaries: `NUTRITION_UNIT_INVALID` returns 422 when the requested serving
+  unit is not allowed by the authoritative snapshot, `NUTRITION_PROVIDER_UNAVAILABLE`
+  returns 503 for temporary provider capacity loss, and other integrity rejects
+  return 422 `NUTRITION_INTEGRITY_REJECTED`.
 
 ### Meal recommendations (catalog)
 

@@ -18,8 +18,20 @@ from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
 )
+from src.domain.services.nutrition_calculation_service import (
+    AuthoritativeUnitMismatchError,
+)
+from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
 
 logger = logging.getLogger(__name__)
+
+_NUTRITION_PROVIDER_UNAVAILABLE_REASONS = frozenset(
+    {
+        "provider_budget_unavailable",
+        "provider_resolution_unavailable",
+        "provider_unavailable",
+    }
+)
 
 
 class MealTrackException(Exception):
@@ -156,6 +168,39 @@ def handle_exception(exc: Exception) -> HTTPException:
                     "purpose": exc.purpose,
                     "attempt_count": exc.attempt_count,
                 },
+            },
+        )
+
+    if isinstance(exc, AuthoritativeUnitMismatchError):
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "NUTRITION_UNIT_INVALID",
+                "message": "The selected serving unit is not available for this food.",
+                "details": {},
+            },
+        )
+
+    if isinstance(exc, NutritionIntegrityError):
+        result = exc.result
+        if result.reason_code in _NUTRITION_PROVIDER_UNAVAILABLE_REASONS:
+            return HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "error_code": "NUTRITION_PROVIDER_UNAVAILABLE",
+                    "message": (
+                        "Nutrition provider capacity is temporarily unavailable. "
+                        "Please try again later."
+                    ),
+                    "details": {},
+                },
+            )
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "NUTRITION_INTEGRITY_REJECTED",
+                "message": "The nutrition data could not be verified.",
+                "details": {},
             },
         )
 

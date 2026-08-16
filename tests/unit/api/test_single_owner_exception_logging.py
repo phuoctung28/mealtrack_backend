@@ -19,14 +19,16 @@ from fastapi.testclient import TestClient
 from src.api.exception_handlers import register_exception_handlers
 from src.api.exceptions import (
     BusinessLogicException,
-    MealTrackException,
     ResourceNotFoundException,
     ValidationException,
     handle_exception,
 )
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
-
+from src.domain.services.nutrition_integrity_policy import (
+    NutritionIntegrityError,
+    NutritionIntegrityResult,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -206,6 +208,28 @@ class TestExpectedExceptionOwnership:
             + "; ".join(r.message for r in errors)
         )
 
+    def test_nutrition_provider_failure_is_global_503_without_error(self, caplog):
+        app = _make_app()
+
+        @app.get("/nutrition-provider-failure")
+        def nutrition_provider_failure():
+            raise NutritionIntegrityError(
+                NutritionIntegrityResult(
+                    accepted=False,
+                    reason_code="provider_unavailable",
+                )
+            )
+
+        client = TestClient(app, raise_server_exceptions=False)
+        with caplog.at_level(logging.ERROR):
+            response = client.get("/nutrition-provider-failure")
+
+        assert response.status_code == 503
+        assert response.json()["detail"]["error_code"] == (
+            "NUTRITION_PROVIDER_UNAVAILABLE"
+        )
+        assert _error_records(caplog) == []
+
 
 # ---------------------------------------------------------------------------
 # Middleware outcome log — must never duplicate root-cause ERROR
@@ -266,4 +290,7 @@ class TestBackgroundTaskLogging:
         assert len(errors) == 1, (
             f"Expected exactly 1 ERROR from background task failure, got {len(errors)}"
         )
-        assert "background failure" in errors[0].message or "test-task" in errors[0].message
+        assert (
+            "background failure" in errors[0].message
+            or "test-task" in errors[0].message
+        )
