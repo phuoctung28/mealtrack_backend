@@ -7,6 +7,7 @@ from src.app.handlers.query_handlers.lookup_barcode_query_handler import (
 )
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.domain.model.translation_result import TranslationOutcome, TranslationResult
+from src.infra.adapters.open_food_facts_service import OpenFoodFactsService
 
 
 class _FoodReferenceRepo:
@@ -141,6 +142,36 @@ async def test_non_english_barcode_fetches_and_stores_english_then_localizes_res
 
 
 @pytest.mark.asyncio
+async def test_non_english_openfoodfacts_english_name_is_localized_without_persisting_metadata():
+    repo = _FoodReferenceRepo()
+    fat_secret = AsyncMock()
+    fat_secret.get_product.return_value = None
+    off = AsyncMock()
+    off.get_product.return_value = OpenFoodFactsService()._map_product(
+        {
+            "product_name": "Riz brun",
+            "product_name_en": "Brown Rice",
+            "nutriments": {
+                "proteins_100g": 2.7,
+                "carbohydrates_100g": 28,
+                "fat_100g": 0.3,
+            },
+        }
+    )
+    handler = _handler(
+        repo,
+        fat_secret_service=fat_secret,
+        open_food_facts_service=off,
+        translation_service=_NeutralTranslator(),
+    )
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    assert result["name"] == "Cơm gạo lứt"
+    assert "source_language" not in repo.upserts[0]
+
+
+@pytest.mark.asyncio
 async def test_cached_barcode_without_source_provenance_stays_canonical():
     repo = _FoodReferenceRepo(
         {
@@ -191,7 +222,7 @@ async def test_lookup_barcode_skips_untrusted_brave_cache_row():
 
 
 @pytest.mark.asyncio
-async def test_lookup_barcode_uses_fdc_exact_hit_and_caches_verified():
+async def test_lookup_barcode_uses_fdc_exact_hit_caches_verified_and_localizes():
     repo = _FoodReferenceRepo()
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
@@ -224,13 +255,23 @@ async def test_lookup_barcode_uses_fdc_exact_hit_and_caches_verified():
         open_food_facts_service=off,
         food_data_service=food_data,
         food_mapping_service=mapping,
+        translation_service=_NeutralTranslator(),
     )
 
-    result = await handler.handle(_query())
+    base_query = _query()
+    result = await handler.handle(
+        LookupBarcodeQuery(
+            barcode=base_query.barcode,
+            scanned_barcode=base_query.scanned_barcode,
+            aliases=base_query.aliases,
+            language="vi",
+        )
+    )
 
     assert result is not None
     assert result["source"] == "usda_fdc"
     assert result["barcode"] == "036000291452"
+    assert result["name"] == "Cơm gạo lứt"
     assert repo.upserts[0]["barcode"] == "00036000291452"
     assert repo.upserts[0]["is_verified"] is True
 

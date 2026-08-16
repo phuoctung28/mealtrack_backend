@@ -140,12 +140,16 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
 
         off_result = await self._first_barcode_hit(aliases, self.off.get_product)
         if off_result and self._has_nutrition(off_result) and self._has_name(off_result):
+            off_result = dict(off_result)
+            source_language = off_result.pop("source_language", None)
             result = self._trusted_provider_result(
                 off_result, query.barcode, scanned_barcode, "openfoodfacts"
             )
             await self._cache_result(result, cache_barcode=query.barcode)
             log_hit("openfoodfacts", result)
-            return await self._maybe_translate(result, query.language)
+            return await self._maybe_translate(
+                result, query.language, source_language=source_language
+            )
         if off_result:
             partial_name = partial_name or off_result.get("name")
             miss_reasons.append(
@@ -160,7 +164,9 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         if fdc_result and self._has_nutrition(fdc_result) and self._has_name(fdc_result):
             await self._cache_result(fdc_result, cache_barcode=query.barcode)
             log_hit("usda_fdc", fdc_result)
-            return await self._maybe_translate(fdc_result, query.language)
+            return await self._maybe_translate(
+                fdc_result, query.language, source_language="en"
+            )
         if fdc_result:
             partial_name = partial_name or fdc_result.get("name")
             if self._has_nutrition(fdc_result):
