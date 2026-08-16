@@ -445,6 +445,14 @@ class ParseMealTextHandler(
             if legacy is not None:
                 return legacy
 
+        # When the user specified an explicit gram-weight quantity, the AI may have
+        # produced nutrition values for a standard serving rather than scaling them
+        # to the actual weight.  Rescale the macros proportionally so that a tiny
+        # quantity (e.g. "0.5 gram rau sống") does not fail the density check.
+        raw_unit = str(item.get("english_unit") or item.get("unit") or "").lower().strip()
+        if raw_unit in {"g", "gram", "grams", "kg", "kilogram", "kilograms"} and fallback_quantity_g:
+            item = self._scale_ai_macros_to_quantity_g(item, fallback_quantity_g)
+
         if not validate_ai_fallback(
             name=lookup_name,
             protein=item.get("protein", 0),
@@ -631,6 +639,36 @@ class ParseMealTextHandler(
         return convert_quantity_to_grams(
             quantity, normalize_unit_for_manual_save(unit), food_name
         )
+
+    def _scale_ai_macros_to_quantity_g(
+        self, item: dict[str, Any], quantity_g: float
+    ) -> dict[str, Any]:
+        """Proportionally scale AI-estimated macros to fit within the physical weight.
+
+        The LLM sometimes returns per-serving nutrition values regardless of the
+        user's specified gram quantity.  When the sum of macros (protein + carbs +
+        fat + fiber) exceeds the actual weight we infer an implied serving size and
+        scale all macro fields down to the real quantity.
+        """
+        protein = float(item.get("protein") or 0)
+        carbs = float(item.get("carbs") or 0)
+        fat = float(item.get("fat") or 0)
+        fiber = float(item.get("fiber") or 0)
+        implied_serving_g = protein + carbs + fat + fiber
+        if implied_serving_g <= quantity_g * 1.1 or implied_serving_g <= 0:
+            # Macros already fit within the physical weight – nothing to do.
+            return item
+        factor = quantity_g / implied_serving_g
+        item = dict(item)
+        item["protein"] = round(protein * factor, 2)
+        item["carbs"] = round(carbs * factor, 2)
+        item["fat"] = round(fat * factor, 2)
+        item["fiber"] = round(fiber * factor, 2)
+        if item.get("sugar") is not None:
+            item["sugar"] = round(float(item["sugar"]) * factor, 2)
+        # Keep calories consistent with the scaled macros.
+        item["calories"] = self._derive_calories_from_macros(item)
+        return item
 
     def _trusted_quantity_in_grams(
         self, item: dict[str, Any], food_name: str
