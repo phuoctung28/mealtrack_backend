@@ -134,11 +134,11 @@ class ParseMealTextHandler(
         sanitized_text = sanitize_user_description(command.text)
         if not sanitized_text:
             raise ValueError("Invalid or empty meal description.")
-        validate_refinement_items(command.current_items)
+        validated_current_items = validate_refinement_items(command.current_items)
 
         # Add refinement context if current_items provided
-        if command.current_items:
-            context = json.dumps(command.current_items, ensure_ascii=False)
+        if validated_current_items:
+            context = json.dumps(validated_current_items, ensure_ascii=False)
             sanitized_text += (
                 f"\n\nCurrent meal items:\n{context}\n\n"
                 "Update the meal based on my request above. Return the COMPLETE updated list."

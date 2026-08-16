@@ -37,6 +37,7 @@ _REFINEMENT_STRING_LIMITS = {
     "data_source": 50,
     "fdc_id": 50,
 }
+_NON_EMPTY_REFINEMENT_STRING_KEYS = {"name", "unit", "english_unit"}
 
 # Patterns that indicate prompt injection attempts
 INJECTION_PATTERNS = [
@@ -137,7 +138,7 @@ def validate_refinement_items(items: Any) -> list[dict[str, Any]] | None:
                         raise ValueError("refinement serving metadata is invalid")
                     normalized_unit = dict(unit)
                     normalized_unit["unit"] = _sanitize_refinement_string(
-                        unit["unit"], 100
+                        unit["unit"], 100, allow_empty=False
                     )
                     if isinstance(unit.get("description"), str):
                         normalized_unit["description"] = _sanitize_refinement_string(
@@ -152,19 +153,25 @@ def validate_refinement_items(items: Any) -> list[dict[str, Any]] | None:
                 raise ValueError("refinement contains non-finite nutrition")
             if isinstance(value, str) and key in _REFINEMENT_STRING_LIMITS:
                 normalized_item[key] = _sanitize_refinement_string(
-                    value, _REFINEMENT_STRING_LIMITS[key]
+                    value,
+                    _REFINEMENT_STRING_LIMITS[key],
+                    allow_empty=key not in _NON_EMPTY_REFINEMENT_STRING_KEYS,
                 )
         validated.append(normalized_item)
     return validated
 
 
-def _sanitize_refinement_string(value: str, max_length: int) -> str:
+def _sanitize_refinement_string(
+    value: str, max_length: int, *, allow_empty: bool = True
+) -> str:
     """Keep refinement labels bounded and subject to the normal prompt guard."""
     stripped = value.strip()
     if len(stripped) > max_length:
         raise ValueError("refinement string exceeds the supported length")
-    if not stripped:
+    if not stripped and allow_empty:
         return ""
+    if not stripped:
+        raise ValueError("refinement string must not be empty")
     sanitized = sanitize_user_description(stripped)
     if sanitized is None:
         raise ValueError("refinement contains unsafe prompt text")

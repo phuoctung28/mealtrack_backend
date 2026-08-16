@@ -815,6 +815,49 @@ async def test_parse_text_rejects_nested_refinement_before_ai_or_provider_calls(
 
 
 @pytest.mark.asyncio
+async def test_parse_text_rejects_blank_refinement_unit_before_ai_call():
+    meal_generation_service = _FakeMealGenerationService()
+    handler = ParseMealTextHandler(meal_generation_service=meal_generation_service)
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        await handler.handle(
+            ParseMealTextCommand(
+                text="update potato",
+                user_id="user-1",
+                language="en",
+                current_items=[
+                    {
+                        "name": "potato",
+                        "quantity": 1,
+                        "unit": "piece",
+                        "allowed_units": [{"unit": "   ", "gram_weight": 100}],
+                    }
+                ],
+            )
+        )
+
+    assert meal_generation_service.calls == []
+
+
+@pytest.mark.asyncio
+async def test_parse_text_uses_normalized_refinement_items_in_prompt():
+    meal_generation_service = _FakeMealGenerationService()
+    handler = ParseMealTextHandler(meal_generation_service=meal_generation_service)
+
+    await handler.handle(
+        ParseMealTextCommand(
+            text="update potato",
+            user_id="user-1",
+            language="en",
+            current_items=[{"name": "potato", "unit": " piece "}],
+        )
+    )
+
+    assert '"unit": "piece"' in meal_generation_service.calls[0]["prompt"]
+    assert '"unit": " piece "' not in meal_generation_service.calls[0]["prompt"]
+
+
+@pytest.mark.asyncio
 async def test_parse_text_rejects_fatsecret_using_backend_derived_calories(
     monkeypatch,
 ):
