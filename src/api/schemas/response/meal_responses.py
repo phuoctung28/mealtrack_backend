@@ -77,6 +77,24 @@ class ParsedFoodItem(BaseModel):
     calories_per_100g: float | None = Field(
         None, ge=0, description="Backend-derived calories per 100g"
     )
+    protein_per_100g: float | None = Field(
+        None, ge=0, description="Backend-derived protein per 100g"
+    )
+    carbs_per_100g: float | None = Field(
+        None, ge=0, description="Backend-derived carbohydrates per 100g"
+    )
+    fat_per_100g: float | None = Field(
+        None, ge=0, description="Backend-derived fat per 100g"
+    )
+    fiber_per_100g: float | None = Field(
+        None, ge=0, description="Backend-derived fiber per 100g"
+    )
+    sugar_per_100g: float | None = Field(
+        None, ge=0, description="Backend-derived sugar per 100g"
+    )
+    source_snapshot: dict | None = Field(
+        None, description="Validated nutrition snapshot for the confirmed item"
+    )
 
 
 class ParseMealTextResponse(BaseModel):

@@ -206,6 +206,7 @@ class ParseMealTextHandler(
         for item in enhanced_items:
             clamped = clamp_nutrition_values(item)
             item.update(clamped)
+            self._attach_per_100g_snapshot(item)
 
         # Calculate totals
         total_protein = sum(item.get("protein", 0) for item in enhanced_items)
@@ -247,6 +248,12 @@ class ParseMealTextHandler(
                 nutrition_basis=item.get("nutrition_basis"),
                 nutrition_contract_version=item.get("nutrition_contract_version"),
                 calories_per_100g=item.get("calories_per_100g"),
+                protein_per_100g=item.get("protein_per_100g"),
+                carbs_per_100g=item.get("carbs_per_100g"),
+                fat_per_100g=item.get("fat_per_100g"),
+                fiber_per_100g=item.get("fiber_per_100g"),
+                sugar_per_100g=item.get("sugar_per_100g"),
+                source_snapshot=item.get("source_snapshot"),
             )
             for item in enhanced_items
         ]
@@ -258,6 +265,53 @@ class ParseMealTextHandler(
             total_fat=total_fat,
             emoji=emoji,
         )
+
+    def _attach_per_100g_snapshot(self, item: dict[str, Any]) -> None:
+        """Expose the validated density used to derive the displayed portion."""
+        quantity_g = item.get("quantity_g")
+        if quantity_g is None:
+            quantity_g = self._quantity_in_grams(
+                item,
+                str(item.get("lookup_name") or item.get("name") or ""),
+            )
+        quantity_g = float(quantity_g)
+        if quantity_g <= 0:
+            return
+        factor = 100.0 / quantity_g
+        for absolute, density in (
+            ("protein", "protein_per_100g"),
+            ("carbs", "carbs_per_100g"),
+            ("fat", "fat_per_100g"),
+            ("fiber", "fiber_per_100g"),
+            ("sugar", "sugar_per_100g"),
+        ):
+            if item.get(density) is None:
+                item[density] = round(float(item.get(absolute) or 0.0) * factor, 4)
+        if item.get("calories_per_100g") is None:
+            item["calories_per_100g"] = round(
+                self._derive_calories_from_macros(
+                    {
+                        "protein_g": item["protein_per_100g"],
+                        "carbs_g": item["carbs_per_100g"],
+                        "fat_g": item["fat_per_100g"],
+                        "fiber_g": item["fiber_per_100g"],
+                    }
+                ),
+                4,
+            )
+        item["source_snapshot"] = {
+            "basis": "100g",
+            "protein_per_100g": item["protein_per_100g"],
+            "carbs_per_100g": item["carbs_per_100g"],
+            "fat_per_100g": item["fat_per_100g"],
+            "fiber_per_100g": item["fiber_per_100g"],
+            "sugar_per_100g": item["sugar_per_100g"],
+            "calories_per_100g": item["calories_per_100g"],
+            "allowed_units": item.get("allowed_units") or [],
+            "origin": item.get("origin"),
+            "source_namespace": item.get("source_namespace"),
+            "source_food_id": item.get("source_food_id"),
+        }
 
     async def _generate_parse_text_payload(
         self,
