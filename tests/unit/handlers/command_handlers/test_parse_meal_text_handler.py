@@ -16,7 +16,10 @@ from src.domain.exceptions.ai_exceptions import (
 )
 from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
 from src.domain.model.nutrition.macros import Macros
-from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
+from src.domain.services.nutrition_calculation_service import (
+    _convert_with_allowed_units,
+    convert_quantity_to_grams,
+)
 
 
 class _FakeMealGenerationService:
@@ -161,6 +164,36 @@ class _StagedFatSecretService:
             "calories_100g": 77.0,
             "metric_serving_amount": 100.0,
             "allowed_units": [{"unit": "g", "gram_weight": 100.0}],
+        }
+
+
+class _LocalizedServingFatSecretService:
+    async def search_food_candidates(self, *args, **kwargs):
+        return [
+            {
+                "food_id": "potato-medium",
+                "food_name": "Potato, raw",
+                "food_type": "Generic",
+            }
+        ]
+
+    async def get_food_details(self, food_id, **kwargs):
+        return {
+            "food_id": food_id,
+            "food_name": "Potato, raw",
+            "protein_100g": 2.0,
+            "carbs_100g": 17.0,
+            "fat_100g": 0.1,
+            "calories_100g": 77.0,
+            "metric_serving_amount": 100.0,
+            "allowed_units": [
+                {"unit": "g", "gram_weight": 100.0, "description": "100 g"},
+                {
+                    "unit": "medium",
+                    "gram_weight": 173.0,
+                    "description": "1 medium potato",
+                },
+            ],
         }
 
 
@@ -527,6 +560,87 @@ async def test_parse_text_uses_one_staged_detail_for_wrong_first_candidate():
     assert len(provider.detail_calls) == 1
     assert provider.detail_calls[0][0] == "generic-potato"
     assert response.items[0].data_source == "fatsecret"
+
+
+@pytest.mark.asyncio
+async def test_provider_parse_returns_authoritative_unit_instead_of_localized_alias():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Khoai tay",
+                        "lookup_name": "potato",
+                        "quantity": 1,
+                        "quantity_g": 173,
+                        "unit": "cu vua",
+                        "english_unit": "medium",
+                        "macros": {"protein_g": 2, "carbs_g": 17, "fat_g": 0.1},
+                    }
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_LocalizedServingFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="1 cu khoai tay vua", user_id="user-1", language="vi")
+    )
+    item = response.items[0]
+
+    assert item.unit == "medium"
+    assert item.quantity == 1
+    assert item.protein == pytest.approx(3.46)
+    assert _convert_with_allowed_units(
+        item.quantity,
+        item.unit,
+        item.allowed_units,
+        item.name,
+        strict=True,
+    ) == pytest.approx(173)
+
+
+@pytest.mark.asyncio
+async def test_provider_parse_falls_back_to_grams_for_unsupported_serving_unit():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Potato bowl",
+                        "lookup_name": "potato",
+                        "quantity": 1,
+                        "quantity_g": 180,
+                        "unit": "to",
+                        "english_unit": "bowl",
+                        "macros": {"protein_g": 2, "carbs_g": 17, "fat_g": 0.1},
+                    }
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_StagedFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="1 to khoai tay", user_id="user-1", language="vi")
+    )
+    item = response.items[0]
+
+    assert item.unit == "g"
+    assert item.quantity == pytest.approx(180)
+    assert _convert_with_allowed_units(
+        item.quantity,
+        item.unit,
+        item.allowed_units,
+        item.name,
+        strict=True,
+    ) == pytest.approx(180)
 
 
 @pytest.mark.parametrize(

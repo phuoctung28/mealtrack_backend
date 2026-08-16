@@ -3,8 +3,8 @@ Handler for editing meal ingredients.
 """
 
 import logging
-from datetime import timedelta
 from dataclasses import replace
+from datetime import timedelta
 from typing import Any
 
 from src.api.exceptions import (
@@ -28,6 +28,9 @@ from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.provider_budget_port import ProviderBudgetPort
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
+)
+from src.domain.services.nutrition_calculation_service import (
+    canonicalize_authoritative_quantity,
 )
 from src.domain.utils.timezone_utils import utc_now
 
@@ -552,6 +555,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                         change,
                         fdc_id=authoritative.fdc_id,
                         name=authoritative.name,
+                        quantity=authoritative.quantity,
+                        unit=authoritative.unit,
                         custom_nutrition=self._to_domain_custom_nutrition(
                             authoritative.custom_nutrition
                         ),
@@ -565,8 +570,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 continue
 
             existing = current_by_id[change.id]
-            self._validate_snapshot_unit(existing, change.unit)
-            prepared.append(change)
+            prepared.append(self._canonicalize_snapshot_unit(existing, change))
         if revalidate_local:
             await self.nutrition_resolver.revalidate_local_items(
                 resolved_items, uow.food_references
@@ -602,19 +606,32 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         return locked_meal
 
     @staticmethod
-    def _validate_snapshot_unit(existing_item, unit: str | None) -> None:
+    def _canonicalize_snapshot_unit(existing_item, change):
+        unit = change.unit
         if unit is None or unit.lower().strip() == existing_item.unit.lower().strip():
-            return
+            return change
         snapshot = existing_item.source_snapshot
         if not snapshot:
             raise ValueError("v2 quantity updates require an immutable source snapshot")
         allowed_units = snapshot.get("allowed_units") or []
-        normalized = unit.lower().strip()
-        if normalized != "g" and not any(
-            normalized == str(option.get("unit", "")).lower().strip()
-            for option in allowed_units
-        ):
-            raise ValueError("quantity unit is not allowed by the source snapshot")
+        quantity = (
+            change.quantity if change.quantity is not None else existing_item.quantity
+        )
+        canonical_quantity, canonical_unit, used_fallback = (
+            canonicalize_authoritative_quantity(
+                quantity,
+                unit,
+                allowed_units,
+                existing_item.name,
+            )
+        )
+        if used_fallback:
+            return replace(
+                change,
+                quantity=canonical_quantity,
+                unit=canonical_unit,
+            )
+        return change
 
     @staticmethod
     def _to_manual_custom_nutrition(value):
