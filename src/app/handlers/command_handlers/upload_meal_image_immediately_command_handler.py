@@ -4,6 +4,7 @@ Handler for immediate meal image upload and analysis.
 
 import logging
 import time
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+from src.domain.constants.languages import normalize_language
 from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal.meal_response_localization import (
@@ -347,6 +349,10 @@ class UploadMealImageImmediatelyHandler(
                 nutrition=nutrition,
             )
             meal = persist_meal_response_localization(meal, localization)
+            meal = replace(
+                meal,
+                display_language=normalize_language(command.language),
+            )
 
             saved_meal = await uow.meals.save(meal)
             await uow.commit()

@@ -601,6 +601,7 @@ async def test_async_graph_returns_same_call_locale_without_translation_reload()
     assert result["result"].meal_id == "22222222-2222-4222-8222-222222222222"
     assert result["result"].dish_name == "Cơm gà"
     assert result["result"].nutrition.food_items[0].name == "Cơm gà"
+    assert result["result"].display_language == "vi"
 
 
 @pytest.mark.asyncio

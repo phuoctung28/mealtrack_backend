@@ -1,6 +1,7 @@
 """Nodes for the meal image analysis graph."""
 
 import logging
+from dataclasses import replace
 
 from src.api.exceptions import ValidationException
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
@@ -14,6 +15,7 @@ from src.app.graphs.meal_analyze.quality_gate import (
 from src.app.graphs.meal_analyze.runtime import AcquiredImage, MealAnalyzeRuntime
 from src.app.graphs.meal_analyze.state import MealAnalyzeGraphState
 from src.domain.constants import MealDefaults
+from src.domain.constants.languages import normalize_language
 from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal.meal_response_localization import (
@@ -414,6 +416,11 @@ async def persist_meal(
             expected_food_count=len(runtime.nutrition.food_items or []),
         )
         meal = persist_meal_response_localization(meal, localization)
+
+    if not is_food_label:
+        # Display names are immutable from a locale perspective after creation.
+        # Nutrition remains parsed and validated from canonical English fields.
+        meal = replace(meal, display_language=normalize_language(command.language))
 
     async with runtime.uow as uow:
         saved_meal = await uow.meals.save(meal)

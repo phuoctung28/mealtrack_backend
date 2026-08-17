@@ -241,6 +241,7 @@ class TestMealMapper:
                 size_bytes=1024,
             ),
             dish_name="Bún nước",
+            display_language="vi",
             created_at=datetime(2025, 1, 15),
             ready_at=datetime(2025, 1, 15),
             raw_gpt_json=json.dumps(
@@ -270,8 +271,8 @@ class TestMealMapper:
 
         english_result = MealMapper.to_detailed_response(meal, target_language="en")
 
-        assert english_result.dish_name == "Vietnamese rice noodle soup"
-        assert english_result.food_items[0].name == "Cooked rice noodles"
+        assert english_result.dish_name == "Bún nước"
+        assert english_result.food_items[0].name == "Bún gạo đã nấu"
         assert english_result.food_items[0].canonical_name == "Cooked rice noodles"
 
     @pytest.mark.parametrize(
@@ -306,6 +307,7 @@ class TestMealMapper:
                 size_bytes=1024,
             ),
             dish_name=localized_dish,
+            display_language=language,
             created_at=datetime(2025, 1, 15),
             ready_at=datetime(2025, 1, 15),
             raw_gpt_json=json.dumps(
@@ -333,8 +335,8 @@ class TestMealMapper:
         assert localized.dish_name == localized_dish
         assert localized.food_items[0].name == localized_food
         assert localized.food_items[0].canonical_name == "Rice noodles"
-        assert english.dish_name == "Rice noodle soup"
-        assert english.food_items[0].name == "Rice noodles"
+        assert english.dish_name == localized_dish
+        assert english.food_items[0].name == localized_food
         assert localized.total_calories == english.total_calories
         assert (
             localized.total_nutrition.model_dump()

@@ -68,6 +68,8 @@ async def _ensure_requested_meal_translation(
     meal_translation_service,
 ):
     """Materialize a missing locale without serving a partial translation."""
+    if MealMapper.has_persisted_display_language(meal):
+        return meal
     if language == "en":
         return meal
 

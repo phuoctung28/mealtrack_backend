@@ -241,21 +241,34 @@ class MealMapper:
                     )
                     food_items.append(food_item_dto)
 
-        # --- Apply same-call localized response fields when available ---
+        # A persisted display locale is authoritative for meals created by the
+        # image flow. The requested locale must not rewrite that meal later.
         dish_name = meal.dish_name
-        if requested_language == "en" and canonical_dish_name:
+        persisted_language = (
+            normalize_language(getattr(meal, "display_language", None))
+            if getattr(meal, "display_language", None)
+            else None
+        )
+        if persisted_language:
+            translation_language = (
+                persisted_language if persisted_language != "en" else None
+            )
+        elif requested_language == "en" and canonical_dish_name:
             dish_name = canonical_dish_name
         instructions = MealMapper._normalize_instructions(
             getattr(meal, "instructions", None)
         )
-        translation_language = None
-        direct_localization = MealMapper._raw_response_localization(
-            meal,
-            requested_language,
-            expected_food_count=len(food_items),
-        )
+        if not persisted_language:
+            translation_language = None
+            direct_localization = MealMapper._raw_response_localization(
+                meal,
+                requested_language,
+                expected_food_count=len(food_items),
+            )
+        else:
+            direct_localization = None
 
-        if requested_language == "en":
+        if not persisted_language and requested_language == "en":
             for food_item, canonical_name in zip(
                 food_items,
                 canonical_food_names,
@@ -263,7 +276,7 @@ class MealMapper:
             ):
                 food_item.name = canonical_name
                 food_item.display_name = canonical_name
-        elif direct_localization:
+        elif not persisted_language and direct_localization:
             translation_language = direct_localization.language
             dish_name = direct_localization.dish_name
             for food_item, localized_name in zip(
@@ -273,7 +286,12 @@ class MealMapper:
             ):
                 food_item.name = localized_name
                 food_item.display_name = localized_name
-        elif requested_language and requested_language != "en" and meal.translations:
+        elif (
+            not persisted_language
+            and requested_language
+            and requested_language != "en"
+            and meal.translations
+        ):
             tr = meal.translations.get(requested_language)
             if tr and tr.translation_version == CURRENT_MEAL_TRANSLATION_VERSION:
                 translation_language = requested_language
@@ -434,6 +452,11 @@ class MealMapper:
             )
             is not None
         )
+
+    @staticmethod
+    def has_persisted_display_language(meal: Meal) -> bool:
+        """Return whether the meal has an immutable creation display locale."""
+        return bool(getattr(meal, "display_language", None))
 
     @staticmethod
     def _source_nutrition_response(

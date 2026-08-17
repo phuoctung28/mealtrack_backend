@@ -95,6 +95,7 @@ class TestMealDatabaseModelEdit:
                 url="https://example.com/image.jpg",
             ),
             dish_name="Test Meal",
+            display_language="de",
             nutrition=Nutrition(
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
@@ -115,6 +116,32 @@ class TestMealDatabaseModelEdit:
         assert meal_model.is_manually_edited is True
         assert meal_model.last_edited_at is not None
         assert meal_model.updated_at is not None
+
+    def test_meal_model_round_trip_preserves_display_language(self):
+        domain_meal = DomainMeal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            created_at=datetime.now(),
+            image=MealImage(
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=100,
+            ),
+            dish_name="Hähnchen mit Reis",
+            display_language="de",
+            nutrition=Nutrition(
+                macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
+                food_items=[],
+            ),
+            ready_at=datetime.now(),
+        )
+
+        meal_model = meal_domain_to_orm(domain_meal)
+        converted_domain_meal = meal_orm_to_domain(meal_model)
+
+        assert meal_model.display_language == "de"
+        assert converted_domain_meal.display_language == "de"
 
     def test_meal_model_round_trip_preserves_food_label_metadata(self):
         """Food-label serving metadata is persisted independently of raw AI JSON."""
