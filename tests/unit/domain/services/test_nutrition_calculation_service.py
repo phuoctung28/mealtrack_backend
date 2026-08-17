@@ -269,6 +269,33 @@ def test_herb_sprig_units_use_countable_serving_grams():
     ) == 4
 
 
+def test_qualitative_garnish_units_use_countable_serving_grams():
+    assert convert_quantity_to_grams(1, "ít", "Hành Lá") == 100
+    assert convert_quantity_to_grams(1, "pinch", "Hành Lá") == 100
+    assert quantity_to_grams(
+        1,
+        "ít",
+        "Hành Lá",
+        [
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {"unit": "ít", "gram_weight": 1.0, "description": "1 ít"},
+        ],
+    ) == pytest.approx(100.0)
+
+
+def test_bowl_alias_matches_cup_serving_not_one_gram():
+    assert quantity_to_grams(
+        1,
+        "bát",
+        "Bánh Phở",
+        [
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {"unit": "cup", "gram_weight": 240.0, "description": "1 cup"},
+            {"unit": "bát", "gram_weight": 1.0, "description": "1 bát"},
+        ],
+    ) == pytest.approx(240.0)
+
+
 def test_reconcile_calories_drops_hundredfold_energy_mismatch():
     assert reconcile_calories_per_100g(4000, 40) == 40
     assert reconcile_calories_per_100g(123.4, 165) == 123.4

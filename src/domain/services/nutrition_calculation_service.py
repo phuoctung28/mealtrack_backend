@@ -90,6 +90,23 @@ UNIT_TRANSLATION = {
     "sprigs": "serving",
     "cọng": "serving",
     "lá": "piece",
+    "ổ": "piece",
+    "loaf": "piece",
+    "ít": "serving",
+    "một ít": "serving",
+    "chút": "serving",
+    "chut": "serving",
+    "chút ít": "serving",
+    "chút xíu": "serving",
+    "vài": "serving",
+    "nắm": "serving",
+    "nhiều": "serving",
+    "pinch": "serving",
+    "pinches": "serving",
+    "dash": "serving",
+    "dashes": "serving",
+    "handful": "serving",
+    "a little": "serving",
     # Spanish
     "grande": "large",
     "mediano": "medium",
@@ -349,32 +366,35 @@ def _convert_with_allowed_units(
     if translated == "g":
         return quantity
 
-    # 1. Exact match against allowed_units
     for au in allowed_units:
-        if au.get("unit", "").lower() == unit_lower:
-            return quantity * au.get("gram_weight", 1.0)
-
-    # 2. Translate unit (e.g., "quả lớn" → "large") and re-match
-    if translated != unit_lower:
-        for au in allowed_units:
-            if au.get("unit", "").lower() == translated:
-                logger.info("Unit alias matched an allowed unit")
-                return quantity * au.get("gram_weight", 1.0)
+        au_unit = str(au.get("unit") or "")
+        gram_weight = float(au.get("gram_weight") or 0)
+        if not _units_refer_to_same_serving(au_unit, unit, strict=strict):
+            continue
+        if not _has_trusted_portion_weight(au_unit, gram_weight):
+            continue
+        if au_unit.lower().strip() != unit_lower:
+            logger.info("Unit alias matched an allowed unit")
+        return quantity * gram_weight
 
     if strict:
         raise AuthoritativeUnitMismatchError(
             "unit is not present in the authoritative source snapshot"
         )
 
-    # 3. Legacy keyword match: check if translated unit appears in description.
+    # Legacy keyword match: check if translated unit appears in description.
     # Authoritative writes never use free-form description tokens as unit identity.
     for au in allowed_units:
         desc = au.get("description", "").lower()
-        if translated in desc.split():
-            logger.info("Unit keyword matched an allowed-unit description")
-            return quantity * au.get("gram_weight", 1.0)
+        gram_weight = float(au.get("gram_weight") or 0)
+        if translated not in desc.split():
+            continue
+        if not _has_trusted_portion_weight(str(au.get("unit") or ""), gram_weight):
+            continue
+        logger.info("Unit keyword matched an allowed-unit description")
+        return quantity * gram_weight
 
-    # 4. Global UNIT_TO_GRAMS mapping for legacy, non-authoritative writes.
+    # Global UNIT_TO_GRAMS mapping for legacy, non-authoritative writes.
     grams = UNIT_TO_GRAMS.get(translated)
     if grams is not None:
         logger.warning(
@@ -382,16 +402,45 @@ def _convert_with_allowed_units(
         )
         return quantity * grams
 
-    # 5. Smart fallback: use first non-gram serving (common portion) instead of raw grams
+    # Smart fallback: use first non-gram serving (common portion) instead of raw grams
     for au in allowed_units:
         au_unit = au.get("unit", "").lower()
-        if _normalize_unit(au_unit) != "g" and au_unit not in ("100 g", "1 g"):
-            logger.warning("Unknown unit used the default allowed serving")
-            return quantity * au.get("gram_weight", 1.0)
+        gram_weight = float(au.get("gram_weight") or 0)
+        if _normalize_unit(au_unit) == "g" or au_unit in ("100 g", "1 g"):
+            continue
+        if not _has_trusted_portion_weight(au_unit, gram_weight):
+            continue
+        logger.warning("Unknown unit used the default allowed serving")
+        return quantity * gram_weight
 
     # Last resort: treat as grams (only if no allowed_units have useful servings)
     logger.warning(f"Unit '{unit}' unresolvable — treating quantity as grams")
     return quantity
+
+
+def _has_trusted_portion_weight(unit: str, gram_weight: float) -> bool:
+    normalized = _normalize_unit(unit)
+    if normalized in {"g", "ml"}:
+        return gram_weight > 0
+    return gram_weight > 1
+
+
+def _units_refer_to_same_serving(
+    left: str, right: str, *, strict: bool = False
+) -> bool:
+    a = (left or "").lower().strip()
+    b = (right or "").lower().strip()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    left_alias = UNIT_TRANSLATION.get(a, a)
+    right_alias = UNIT_TRANSLATION.get(b, b)
+    if left_alias == right_alias:
+        return True
+    if strict:
+        return False
+    return _normalize_unit(a) == _normalize_unit(b)
 
 
 def canonicalize_authoritative_quantity(
