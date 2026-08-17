@@ -79,8 +79,14 @@ class MealTranslation:
         """Return whether the row covers the available source manifest."""
         if (
             self.translation_version != expected_translation_version
-            or self.dish_name is None
+            or not isinstance(self.dish_name, str)
+            or not self.dish_name.strip()
             or self.meal_ingredients is None
+            or not isinstance(self.meal_ingredients, list)
+            or any(
+                not isinstance(name, str) or not name.strip()
+                for name in self.meal_ingredients
+            )
         ):
             return False
         if (
@@ -93,8 +99,17 @@ class MealTranslation:
         if expected_instruction_count == 0:
             return self.meal_instruction in (None, [])
         return (
-            self.meal_instruction is not None
+            isinstance(self.meal_instruction, list)
             and len(self.meal_instruction) == expected_instruction_count
+            and all(
+                (
+                    isinstance(step.get("instruction"), str)
+                    and bool(step["instruction"].strip())
+                    if isinstance(step, dict)
+                    else bool(str(step).strip())
+                )
+                for step in self.meal_instruction
+            )
         )
 
     def to_dict(self) -> dict:
