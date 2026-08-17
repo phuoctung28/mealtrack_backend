@@ -225,6 +225,13 @@ _food_search_event_bus: EventBus | None = None
 _configured_event_bus: EventBus | None = None
 
 
+def _build_provider_budget(cache_service):
+    """Build the required shared provider budget from the initialized Redis client."""
+    if cache_service is None or settings.NUTRITION_PROVIDER_GLOBAL_RPM is None:
+        return None
+    return RedisProviderBudget(cache_service.redis)
+
+
 async def _search_local_food_references(
     query: str,
     region: str,
@@ -353,7 +360,6 @@ def get_configured_event_bus() -> EventBus:
         get_ai_model_manager,
         get_cache_service,
         get_daily_context_precompute_service,
-        get_meal_translation_service,
         get_fat_secret_service_instance,
         get_food_cache_service,
         get_food_data_service,
@@ -361,6 +367,7 @@ def get_configured_event_bus() -> EventBus:
         get_gpt_parser,
         get_image_store,
         get_meal_analyze_graph_settings,
+        get_meal_translation_service,
         get_parse_text_settings,
         get_suggestion_orchestration_service,
         get_text_translation_service,
@@ -400,13 +407,7 @@ def get_configured_event_bus() -> EventBus:
     # Synchronous invalidation service — handlers await this before returning,
     # eliminating the fire-and-forget race condition.
     cache_invalidation_service = CacheInvalidationService(cache_service)
-    provider_budget = (
-        RedisProviderBudget(cache_service.redis)
-        if cache_service is not None
-        and settings.CACHE_ENABLED
-        and settings.NUTRITION_PROVIDER_GLOBAL_RPM is not None
-        else None
-    )
+    provider_budget = _build_provider_budget(cache_service)
     nutrition_integrity_policy = NutritionIntegrityPolicy()
 
     event_bus = PyMediatorEventBus()
