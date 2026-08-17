@@ -16,6 +16,7 @@ from src.domain.model.nutrition import Macros, Nutrition
 from src.domain.services.meal_service import MealService
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
+    _convert_with_allowed_units,
     clamp_nutrition_values,
     convert_quantity_to_grams,
     normalize_unit_for_manual_save,
@@ -272,6 +273,27 @@ def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():
         "carbs": 80.0,
         "fat": 12.0,
     }
+
+
+def test_unknown_tuber_unit_uses_countable_provider_serving_not_one_gram():
+    allowed_units = [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {
+            "unit": "sweetpotato",
+            "gram_weight": 130.0,
+            "description": "1 sweetpotato",
+        },
+        {"unit": "oz", "gram_weight": 28.35, "description": "1 oz"},
+        {"unit": "cup", "gram_weight": 200.0, "description": "1 cup, mashed"},
+    ]
+
+    assert _convert_with_allowed_units(
+        1, "củ lớn", allowed_units, "Khoai lang"
+    ) == pytest.approx(130.0)
+    with pytest.raises(ValueError):
+        _convert_with_allowed_units(
+            1, "củ lớn", allowed_units, "Khoai lang", strict=True
+        )
 
 
 def _new_processing_meal() -> Meal:
