@@ -99,6 +99,16 @@ The domain translation service returns explicit outcomes, and only
 `PARTIAL`, `PASSTHROUGH`, and `UNAVAILABLE` keep canonical text in the response
 path.
 
+Fresh meal-image analysis uses a same-call bilingual structured response. The
+vision contract keeps English dish and food identities as the canonical source
+for nutrition and reference validation, while requested-language display names
+are validated and persisted on the `Meal` and `FoodItem` display fields. The
+stored raw analysis payload retains the English canonical fields for validation,
+English responses, and canonical identifiers. Fresh image analysis does not
+create a `MealTranslation` row or reload the meal to obtain localized content;
+existing meals without same-call fields continue through the versioned read-path
+translation fallback.
+
 ### Nutrition Integrity Policy
 Structured nutrition crosses one versioned domain policy,
 `nutrition_integrity_v1`, before it is trusted by parse finalization, search

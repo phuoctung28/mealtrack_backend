@@ -85,6 +85,7 @@ class VisionFoodEstimate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=200)
+    localized_name: str | None = Field(None, max_length=200)
     quantity_g: float = Field(
         ...,
         gt=0,
@@ -205,6 +206,8 @@ class VisionNutritionResponse(BaseModel):
 
     is_food: bool = Field(True, description="Whether the image contains edible food")
     dish_name: str | None = Field(None, max_length=200)
+    localized_language: str | None = Field(None, max_length=8)
+    localized_dish_name: str | None = Field(None, max_length=200)
     emoji: str | None = Field(None, max_length=32)
     foods: list[VisionFoodEstimate] = Field(
         default_factory=list,

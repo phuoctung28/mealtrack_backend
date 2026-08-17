@@ -76,6 +76,9 @@ async def _ensure_requested_meal_translation(
     if not meal.dish_name and not food_items and not instructions:
         return meal
 
+    if MealMapper.has_direct_response_localization(meal, language):
+        return meal
+
     expected_ingredient_count = sum(
         1 for item in food_items if getattr(item, "name", None)
     )

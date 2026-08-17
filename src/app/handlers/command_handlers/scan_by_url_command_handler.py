@@ -16,7 +16,10 @@ from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
 from src.domain.constants import MealDefaults
 from src.domain.model.meal import Meal, MealImage, MealStatus
-from src.domain.model.meal_projection import MealProjection
+from src.domain.model.meal.meal_response_localization import (
+    parse_meal_response_localization,
+    persist_meal_response_localization,
+)
 from src.domain.parsers.vision_response_parser import (
     VisionResponseParser as GPTResponseParser,
 )
@@ -217,7 +220,8 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 )
 
                 strategy = AnalysisStrategyFactory.create_user_context_strategy(
-                    command.user_description
+                    command.user_description,
+                    language=command.language,
                 )
                 vision_result = await self.vision_service.analyze_with_strategy(
                     image_bytes, strategy
@@ -225,9 +229,21 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             else:
                 if image_bytes is None:
                     raise RuntimeError("Image bytes unavailable for scan-by-url")
-                vision_result = await self.vision_service.analyze(image_bytes)
+                vision_result = await self.vision_service.analyze(
+                    image_bytes,
+                    language=command.language,
+                )
 
             vision_elapsed = time.time() - start
+
+            if command.scan_mode != "food_label" and command.language != "en":
+                structured_data = vision_result.get("structured_data") or {}
+                if structured_data.get("is_food") is not False:
+                    parse_meal_response_localization(
+                        structured_data,
+                        command.language,
+                        expected_food_count=len(structured_data.get("foods") or []),
+                    )
 
             if command.scan_mode == "food_label":
                 nutrition = self.gpt_parser.parse_food_label_to_nutrition(vision_result)
@@ -318,6 +334,17 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     error_code="NOT_FOOD_IMAGE",
                 )
 
+            structured_data = (
+                vision_result.get("structured_data")
+                if isinstance(vision_result, dict)
+                else None
+            )
+            localization = parse_meal_response_localization(
+                structured_data,
+                command.language,
+                expected_food_count=len(nutrition.food_items or []),
+            )
+
             meal = Meal(
                 meal_id=str(uuid4()),
                 user_id=command.user_id,
@@ -337,6 +364,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
                 nutrition=nutrition,
             )
+            meal = persist_meal_response_localization(meal, localization)
 
             async with self.uow as uow:
                 saved_meal = await uow.meals.save(meal)
@@ -354,33 +382,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 time.time() - start,
             )
 
-            if (
-                command.language
-                and command.language != "en"
-                and self.meal_translation_service
-                and nutrition
-                and nutrition.food_items
-            ):
-                try:
-                    await self.meal_translation_service.translate_meal(
-                        meal=saved_meal,
-                        dish_name=saved_meal.dish_name,
-                        food_items=nutrition.food_items,
-                        target_language=command.language,
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "[SCAN-BY-URL] translation failed meal=%s error_type=%s",
-                        saved_meal.meal_id,
-                        type(exc).__name__,
-                    )
-
-            async with self.uow as uow:
-                final_meal = await uow.meals.find_by_id(
-                    meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
-                )
-
-            return final_meal
+            return saved_meal
 
         except Exception:
             raise

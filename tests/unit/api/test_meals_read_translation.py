@@ -1,3 +1,4 @@
+import json
 from dataclasses import replace
 from datetime import datetime
 from unittest.mock import AsyncMock
@@ -107,6 +108,40 @@ async def test_ensure_requested_translation_does_not_call_provider_for_current_c
     meal = _meal()
     meal_translation = _translation(meal)
     meal.translations = {"vi": meal_translation}
+    event_bus = _EventBus()
+    translation_service = type("TranslationService", (), {})()
+    translation_service.translate_meal = AsyncMock()
+    query = GetMealByIdQuery(meal_id=meal.meal_id, user_id=meal.user_id)
+
+    result = await meals_read._ensure_requested_meal_translation(
+        meal=meal,
+        language="vi",
+        query=query,
+        event_bus=event_bus,
+        meal_translation_service=translation_service,
+    )
+
+    assert result is meal
+    translation_service.translate_meal.assert_not_awaited()
+    assert event_bus.queries == []
+
+
+@pytest.mark.asyncio
+async def test_ensure_requested_translation_skips_provider_for_same_call_locale():
+    meal = _meal()
+    meal.raw_gpt_json = json.dumps(
+        {
+            "dish_name": "Grilled chicken",
+            "localized_language": "vi",
+            "localized_dish_name": "Gà nướng",
+            "foods": [
+                {
+                    "name": "Chicken breast",
+                    "localized_name": "Ức gà",
+                }
+            ],
+        }
+    )
     event_bus = _EventBus()
     translation_service = type("TranslationService", (), {})()
     translation_service.translate_meal = AsyncMock()

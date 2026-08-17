@@ -223,7 +223,11 @@ class VisionAIService(VisionAIServicePort):
         except Exception as e:
             raise RuntimeError(f"Failed to fetch image URL: {str(e)}") from e
 
-    async def analyze(self, image_bytes: bytes) -> dict[str, Any]:
+    async def analyze(
+        self,
+        image_bytes: bytes,
+        language: str = "en",
+    ) -> dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
 
@@ -237,7 +241,8 @@ class VisionAIService(VisionAIServicePort):
             RuntimeError: If analysis fails
         """
         strategy = AnalysisStrategyFactory.create_basic_strategy(
-            optimized_prompt_enabled=self._optimized_prompt_enabled
+            optimized_prompt_enabled=self._optimized_prompt_enabled,
+            language=language,
         )
         return await self.analyze_with_strategy(image_bytes, strategy)
 
