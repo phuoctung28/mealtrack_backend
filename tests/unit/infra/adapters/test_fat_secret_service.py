@@ -253,6 +253,21 @@ async def test_fatsecret_search_candidates_does_not_fetch_details():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_fatsecret_search_candidates_logs_error_code(caplog):
+    service = FatSecretService("client", "secret")
+    service._api_request = AsyncMock(
+        return_value={"error": {"code": 21, "message": "Invalid OAuth signature"}}
+    )
+
+    with caplog.at_level("WARNING"):
+        results = await service.search_food_candidates("grilled pork ribs")
+
+    assert results == []
+    assert any("code=21" in record.message for record in caplog.records)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_fatsecret_get_food_details_fetches_one_selected_candidate():
     service = FatSecretService("client", "secret")
     service._api_request = AsyncMock(
