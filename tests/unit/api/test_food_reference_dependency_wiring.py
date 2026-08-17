@@ -86,19 +86,36 @@ def test_meal_translation_singleton_uses_async_repository_adapter(monkeypatch):
         async def save(self, translation):
             return translation
 
-    deps._deepl_meal_translation_service = None
+    deps._meal_translation_service = None
     monkeypatch.setattr(
         deps, "_async_meal_translation_repository", _AsyncMealTranslationRepository()
     )
-    monkeypatch.setattr(deps, "get_deepl_text_translation_service", _TextTranslationService)
+    monkeypatch.setattr(deps, "get_text_translation_service", _TextTranslationService)
 
-    import src.domain.services.meal_analysis.deepl_meal_translation_service as service_mod
+    import src.domain.services.meal_analysis.meal_translation_service as service_mod
 
-    monkeypatch.setattr(service_mod, "DeepLMealTranslationService", _MealTranslationService)
+    monkeypatch.setattr(service_mod, "MealTranslationService", _MealTranslationService)
 
-    service = deps.get_deepl_meal_translation_service()
+    service = deps.get_meal_translation_service()
 
     assert service.translation_repo is deps._async_meal_translation_repository
     assert inspect.iscoroutinefunction(
         service.translation_repo.get_by_meal_and_language
     )
+
+
+def test_text_translation_singleton_uses_openai_adapter(monkeypatch):
+    import src.api.base_dependencies as deps
+    from src.domain.services.translation.text_translation_service import (
+        TextTranslationService,
+    )
+    from src.infra.adapters.openai_translation_adapter import OpenAITranslationAdapter
+
+    monkeypatch.setattr(deps, "_text_translation_service", None)
+    monkeypatch.setattr(deps.settings, "OPENAI_API_KEY", "test-key")
+
+    service = deps.get_text_translation_service()
+
+    assert isinstance(service, TextTranslationService)
+    assert isinstance(service._translation_port, OpenAITranslationAdapter)
+    assert service._translation_port._model == deps.settings.OPENAI_TRANSLATION_MODEL

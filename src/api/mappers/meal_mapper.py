@@ -78,7 +78,7 @@ class MealMapper:
         Args:
             meal: Meal domain model
             image_url: Optional image URL
-            target_language: ISO 639-1 code; if provided and a cached DeepL
+            target_language: ISO 639-1 code; if provided and a cached translation
                 translation exists, translated fields are applied to the response.
 
         Returns:
@@ -219,7 +219,7 @@ class MealMapper:
                     )
                     food_items.append(food_item_dto)
 
-        # --- Apply DeepL translation if available ---
+        # --- Apply cached translation if available ---
         dish_name = meal.dish_name
         instructions = MealMapper._normalize_instructions(
             getattr(meal, "instructions", None)

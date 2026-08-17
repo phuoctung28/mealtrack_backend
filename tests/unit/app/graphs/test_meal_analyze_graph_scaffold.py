@@ -381,7 +381,9 @@ async def test_graph_ready_response_returns_before_value_insight_ai_completes(ca
     assert task_manager.spawned
     ai_manager.generate.assert_not_awaited()
 
-    with caplog.at_level("INFO", logger="src.domain.services.meal_value_insight_service"):
+    with caplog.at_level(
+        "INFO", logger="src.domain.services.meal_value_insight_service"
+    ):
         await task_manager.spawned[0][1]
 
     ai_manager.generate.assert_awaited_once()
@@ -442,7 +444,9 @@ async def test_async_graph_runner_no_food_does_not_persist():
         image_id_factory=lambda: image_id,
     )
 
-    with pytest.raises(ValidationException, match="Image does not appear to contain food"):
+    with pytest.raises(
+        ValidationException, match="Image does not appear to contain food"
+    ):
         await run_meal_analyze_graph_async(
             {
                 "scan_mode": "meal_scan",
@@ -459,8 +463,12 @@ async def test_async_graph_runner_no_food_does_not_persist():
 async def test_async_graph_food_label_crop_persists_original_image_reference():
     full_image_id = "1325c7ca-e012-4df3-b0b4-55bfaeb55eb0"
     crop_image_id = "33333333-3333-4333-8333-333333333333"
-    full_url = f"https://res.cloudinary.com/demo/image/upload/mealtrack/{full_image_id}.jpg"
-    crop_url = f"https://res.cloudinary.com/demo/image/upload/mealtrack/{crop_image_id}.jpg"
+    full_url = (
+        f"https://res.cloudinary.com/demo/image/upload/mealtrack/{full_image_id}.jpg"
+    )
+    crop_url = (
+        f"https://res.cloudinary.com/demo/image/upload/mealtrack/{crop_image_id}.jpg"
+    )
     download_image_bytes = AsyncMock(return_value=b"crop-label-bytes")
     vision_service = AsyncMock()
     vision_service.analyze_with_strategy = AsyncMock(
@@ -551,7 +559,9 @@ async def test_async_graph_translation_failure_still_returns_saved_meal_and_inva
         }
     )
     translation_service = AsyncMock()
-    translation_service.translate_meal = AsyncMock(side_effect=RuntimeError("deepl down"))
+    translation_service.translate_meal = AsyncMock(
+        side_effect=RuntimeError("translation provider down")
+    )
     cache = AsyncMock()
     cache.after_meal_write = AsyncMock()
     uow = _FakeGraphUow()

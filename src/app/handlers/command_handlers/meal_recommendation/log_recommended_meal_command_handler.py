@@ -14,8 +14,8 @@ from src.domain.model.meal import Meal
 from src.domain.model.meal_recommendation import (
     PersistedMealRecommendationSlotMutationResult,
 )
-from src.domain.services.meal_analysis.deepl_meal_translation_service import (
-    DeepLMealTranslationService,
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class LogRecommendedMealCommandHandler(
         self,
         uow,
         materializer: RecommendedMealMaterializationService | None = None,
-        meal_translation_service: DeepLMealTranslationService | None = None,
+        meal_translation_service: MealTranslationService | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
@@ -86,7 +86,7 @@ class LogRecommendedMealCommandHandler(
         command: LogRecommendedMealCommand,
         meal: Meal,
     ) -> None:
-        """Persist DeepL meal_translation so Today's Meals can show localized titles."""
+        """Persist meal translation so Today's Meals can show localized titles."""
 
         language = (command.language or "en").strip().lower()
         if language == "en" or self.meal_translation_service is None:

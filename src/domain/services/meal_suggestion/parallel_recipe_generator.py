@@ -13,8 +13,8 @@ from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
-    DeepLSuggestionTranslationService,
+from src.domain.services.meal_suggestion.suggestion_translation_service import (
+    SuggestionTranslationService,
 )
 from src.domain.services.meal_suggestion.discovery_fallback_builder import (
     build_discovery_fallback_meals,
@@ -83,7 +83,7 @@ class ParallelRecipeGenerator:
     def __init__(
         self,
         generation_service: MealGenerationServicePort,
-        translation_service: DeepLSuggestionTranslationService,
+        translation_service: SuggestionTranslationService,
         macro_validator: MacroValidationService,
         nutrition_lookup: NutritionLookupService,
         meal_names_schema_class: type,
@@ -491,7 +491,7 @@ class ParallelRecipeGenerator:
 
         logger.debug(
             f"[PHASE-2-COMPLETE] session={session.id} | "
-            f"success={len(successful)}/{total_attempts} | elapsed={time.time()-gen_start:.2f}s"
+            f"success={len(successful)}/{total_attempts} | elapsed={time.time() - gen_start:.2f}s"
         )
         if len(successful) < min_acceptable:
             if not successful:
@@ -626,7 +626,7 @@ class ParallelRecipeGenerator:
 
         logger.debug(
             f"[PHASE-2-PIPELINE-COMPLETE] session={session.id} | "
-            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time()-gen_start:.2f}s"
+            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time() - gen_start:.2f}s"
         )
 
         if gen_successes < min_acceptable:

@@ -12,8 +12,8 @@ from src.domain.ports.food_reference_repository_port import (
 )
 from src.domain.services.food_mapping_service import FoodMappingService
 from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
+from src.domain.services.translation.text_translation_service import (
+    TextTranslationService,
 )
 from src.observability import distribution_metric, increment_metric
 
@@ -29,7 +29,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         cache_service,
         mapping_service: FoodMappingService,
         fat_secret_service: Any | None = None,
-        translation_service: DeepLTextTranslationService | None = None,
+        translation_service: TextTranslationService | None = None,
         local_search: Callable[[str, str, int], Any] | None = None,
         integrity_context: Callable[[], Any] | None = None,
     ):

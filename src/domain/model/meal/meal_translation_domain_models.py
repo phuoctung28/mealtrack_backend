@@ -7,7 +7,6 @@ data integrity and support multiple languages.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -23,7 +22,7 @@ class FoodItemTranslation:
 
     food_item_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -61,13 +60,13 @@ class MealTranslation:
     meal_id: str
     language: str
     dish_name: str
-    food_items: List[FoodItemTranslation]
+    food_items: list[FoodItemTranslation]
     translated_at: datetime = field(default_factory=datetime.utcnow)
-    meal_instruction: Optional[list] = None
-    meal_ingredients: Optional[list] = None
+    meal_instruction: list | None = None
+    meal_ingredients: list | None = None
 
     def is_fully_cached(self) -> bool:
-        """Return True when all three translatable fields have been populated by DeepL."""
+        """Return True when all translatable fields are populated."""
         return (
             self.dish_name is not None
             and self.meal_instruction is not None
@@ -97,7 +96,7 @@ class MealTranslation:
 
     def get_food_item_translation(
         self, food_item_id: str
-    ) -> Optional[FoodItemTranslation]:
+    ) -> FoodItemTranslation | None:
         """Get translation for a specific food item."""
         for fi in self.food_items:
             if fi.food_item_id == food_item_id:

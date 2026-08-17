@@ -51,8 +51,8 @@ from src.domain.services.prompts.input_sanitizer import (
     validate_refinement_items,
 )
 from src.domain.services.prompts.system_prompts import SystemPrompts
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
+from src.domain.services.translation.text_translation_service import (
+    TextTranslationService,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ class ParseMealTextHandler(
         self,
         meal_generation_service: MealGenerationServicePort,
         fat_secret_service: Any | None = None,
-        translation_service: DeepLTextTranslationService | None = None,
+        translation_service: TextTranslationService | None = None,
         food_reference_batch_lookup: Any | None = None,
         structured_reference_enabled: bool = True,
     ):
@@ -219,9 +219,9 @@ class ParseMealTextHandler(
                 item["name"] = self._extract_display_name(
                     item.get("name", "Unknown"), command.language
                 )
-            # Step 2: Translate any remaining English names using DeepL
+            # Step 2: Translate any remaining English names with the configured provider
             if self._translation_service:
-                await self._translate_english_names_deepl(
+                await self._translate_english_names_openai(
                     enhanced_items, command.language
                 )
 
@@ -827,10 +827,10 @@ class ParseMealTextHandler(
         letters = [c for c in name if c.isalpha()]
         return bool(letters) and all(ord(c) < 128 for c in letters)
 
-    async def _translate_english_names_deepl(
+    async def _translate_english_names_openai(
         self, items: list[dict[str, Any]], language: str
     ) -> None:
-        """Detect and batch-translate any remaining English food names using DeepL."""
+        """Detect and batch-translate any remaining English food names."""
         if self._translation_service is None:
             return
 
@@ -842,7 +842,7 @@ class ParseMealTextHandler(
 
         names_to_translate = [items[i]["name"] for i in english_indices]
         logger.info(
-            f"Translating {len(names_to_translate)} English names to {language} via DeepL"
+            f"Translating {len(names_to_translate)} English names to {language}"
         )
 
         try:
@@ -855,10 +855,10 @@ class ParseMealTextHandler(
                     if isinstance(name, str) and name.strip():
                         items[idx]["name"] = name.strip()
             else:
-                logger.warning("DeepL translation response length mismatch, skipping")
+                logger.warning("Translation response length mismatch, skipping")
         except Exception as exc:
             logger.warning(
-                "DeepL name translation failed, keeping English: %s",
+                "Name translation failed, keeping English: %s",
                 type(exc).__name__,
             )
 

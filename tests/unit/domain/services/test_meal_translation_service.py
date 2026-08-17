@@ -9,11 +9,11 @@ from src.domain.model.meal.meal_image import MealImage
 from src.domain.model.meal.meal_translation_domain_models import MealTranslation
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import FoodItem
-from src.domain.services.meal_analysis.deepl_meal_translation_service import (
-    DeepLMealTranslationService,
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
 )
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
+from src.domain.services.translation.text_translation_service import (
+    TextTranslationService,
 )
 
 
@@ -68,14 +68,14 @@ def async_repo():
 
 @pytest.fixture
 def text_translation_service():
-    svc = AsyncMock(spec=DeepLTextTranslationService)
+    svc = AsyncMock(spec=TextTranslationService)
     svc.translate_texts = AsyncMock()
     return svc
 
 
 @pytest.fixture
 def service(repo, text_translation_service):
-    return DeepLMealTranslationService(
+    return MealTranslationService(
         translation_repo=repo,
         text_translation_service=text_translation_service,
     )
@@ -83,7 +83,7 @@ def service(repo, text_translation_service):
 
 @pytest.fixture
 def async_repo_service(async_repo, text_translation_service):
-    return DeepLMealTranslationService(
+    return MealTranslationService(
         translation_repo=async_repo,
         text_translation_service=text_translation_service,
     )
@@ -123,7 +123,7 @@ async def test_translate_meal_uses_cache_when_fully_cached(
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_calls_deepl_and_saves(
+async def test_translate_meal_calls_translation_provider_and_saves(
     service, meal, food_items, text_translation_service, repo
 ):
     text_translation_service.translate_texts.return_value = [
@@ -208,7 +208,7 @@ async def test_translate_meal_normalizes_instruction_dicts(
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_pads_when_deepl_returns_short(
+async def test_translate_meal_pads_when_translation_provider_returns_short(
     service, meal, food_items, text_translation_service
 ):
     # Only dish name returned, rest should be padded with originals.
@@ -235,7 +235,9 @@ async def test_translate_meal_pads_when_deepl_returns_short(
 async def test_translate_meal_returns_none_on_exception(
     service, meal, food_items, text_translation_service, repo
 ):
-    text_translation_service.translate_texts.side_effect = Exception("DeepL down")
+    text_translation_service.translate_texts.side_effect = Exception(
+        "translation provider down"
+    )
 
     result = await service.translate_meal(
         meal,

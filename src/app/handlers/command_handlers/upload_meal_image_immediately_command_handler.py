@@ -24,8 +24,8 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.deepl_meal_translation_service import (
-    DeepLMealTranslationService,
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
 )
 from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 from src.domain.services.meal_type_determination_service import (
@@ -56,7 +56,7 @@ class UploadMealImageImmediatelyHandler(
         image_store: ImageStorePort = None,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        meal_translation_service: DeepLMealTranslationService | None = None,
+        meal_translation_service: MealTranslationService | None = None,
         fast_path_policy: MealAnalyzeFastPathPolicy | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
         meal_value_insight_task_manager: Any | None = None,
@@ -193,7 +193,7 @@ class UploadMealImageImmediatelyHandler(
 
         upload_elapsed = time.time() - start
         logger.info(
-            f"[UPLOAD-COMPLETE] image_id={image_id} | " f"elapsed={upload_elapsed:.2f}s"
+            f"[UPLOAD-COMPLETE] image_id={image_id} | elapsed={upload_elapsed:.2f}s"
         )
 
         # Step 4: Run AI analysis

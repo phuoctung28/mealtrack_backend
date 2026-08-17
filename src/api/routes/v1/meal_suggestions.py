@@ -109,11 +109,11 @@ async def discover_meals(
     translated_names = [m["name"] for m in meals]
     if language and language != "en":
         from src.api.base_dependencies import (
-            get_deepl_suggestion_translation_service,
+            get_suggestion_translation_service,
         )
 
         try:
-            translation_svc = get_deepl_suggestion_translation_service()
+            translation_svc = get_suggestion_translation_service()
             if translation_svc:
                 translated = await translation_svc.translate_names(
                     [m["name"] for m in meals], language
@@ -268,8 +268,7 @@ async def save_meal_suggestion(
             for i in body.ingredients
         ],
         instructions=[
-            i.model_dump() if hasattr(i, "model_dump") else i
-            for i in body.instructions
+            i.model_dump() if hasattr(i, "model_dump") else i for i in body.instructions
         ],
         portion_multiplier=body.portion_multiplier,
         meal_date=body.meal_date,

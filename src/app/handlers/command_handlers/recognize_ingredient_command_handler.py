@@ -11,8 +11,8 @@ from src.app.commands.ingredient import RecognizeIngredientCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
+from src.domain.services.translation.text_translation_service import (
+    TextTranslationService,
 )
 from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
 
@@ -30,7 +30,7 @@ class RecognizeIngredientCommandHandler(
     def __init__(
         self,
         vision_service: VisionAIServicePort = None,
-        translation_service: DeepLTextTranslationService | None = None,
+        translation_service: TextTranslationService | None = None,
     ):
         self.vision_service = vision_service
         self.translation_service = translation_service
@@ -84,7 +84,9 @@ class RecognizeIngredientCommandHandler(
             strategy = (
                 AnalysisStrategyFactory.create_ingredient_identification_strategy()
             )
-            result = await self.vision_service.analyze_with_strategy(image_bytes, strategy)
+            result = await self.vision_service.analyze_with_strategy(
+                image_bytes, strategy
+            )
 
             # Parse structured_data from response
             data = result.get("structured_data", {})

@@ -109,9 +109,6 @@ class Settings(BaseSettings):
     EMAIL_ENABLED: bool = Field(default=False)
 
     # External APIs & integrations
-    DEEPL_API_KEY: str | None = Field(
-        default=None, description="DeepL API key for meal translation"
-    )
     USDA_FDC_API_KEY: str | None = Field(default=None)
     FATSECRET_CLIENT_ID: str | None = Field(
         default=None, description="fatsecret OAuth 2.0 client ID"
@@ -140,6 +137,15 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = Field(default=None)
     OPENAI_VISION_MODEL: str = Field(default="gpt-5.4-mini-2026-03-17")
     OPENAI_TEXT_MODEL: str = Field(default="gpt-5.4-mini-2026-03-17")
+    OPENAI_TRANSLATION_MODEL: str = Field(
+        default="gpt-5.4-mini-2026-03-17",
+        description="OpenAI model for bounded structured text translation",
+    )
+    OPENAI_TRANSLATION_TIMEOUT_SECONDS: float = Field(
+        default=8.0,
+        gt=0,
+        description="Timeout for one OpenAI translation batch",
+    )
     OPENAI_REQUEST_TIMEOUT_SECONDS: int = Field(default=20)
     OPENAI_MAX_RETRIES: int = Field(default=1)
     OPENAI_STORE_RESPONSES: bool = Field(

@@ -24,8 +24,8 @@ from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.deepl_meal_translation_service import (
-    DeepLMealTranslationService,
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
 )
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
@@ -55,7 +55,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         event_bus: Any,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        meal_translation_service: DeepLMealTranslationService | None = None,
+        meal_translation_service: MealTranslationService | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
         meal_value_insight_task_manager: Any | None = None,
         meal_value_insight_cache: CachePort | None = None,

@@ -1,6 +1,6 @@
 # Provider Outage Runbook
 
-Use this when FatSecret, USDA FoodData Central, DeepL, Cloudflare Workers AI, or
+Use this when FatSecret, USDA FoodData Central, OpenAI, Cloudflare Workers AI, or
 Redis has elevated errors or latency.
 
 ## First Checks
@@ -22,7 +22,7 @@ settings.
 | Redis optional cache | Local-first food search treats cache errors as misses and continues. Required Redis-backed state, such as legacy meal suggestion sessions, may fail fast. |
 | FatSecret search | `/v1/foods/search` returns verified local `food_reference` results when available. Provider enrichment may be absent. |
 | USDA barcode/details | Barcode cascade skips unavailable providers and continues to the next configured source or editable estimate when safe. |
-| DeepL | Non-English search falls back to local/provider results without translated names. |
+| OpenAI translation | Non-English search falls back to local/provider results without translated names. |
 | Cloudflare Workers AI | AI manager uses configured fallback chain when available; catalog image generation can be paused. |
 
 ## Response Steps

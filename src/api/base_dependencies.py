@@ -379,35 +379,30 @@ def get_meal_suggestion_repository():
     return MealSuggestionRepository(_redis_client)
 
 
-_deepl_suggestion_translation_service = None
+_suggestion_translation_service = None
 
 
-def get_deepl_suggestion_translation_service():
-    """Get DeepL-backed suggestion translation service (singleton).
+def get_suggestion_translation_service():
+    """Get the OpenAI-backed suggestion translation service (singleton)."""
+    global _suggestion_translation_service
 
-    Returns None if DEEPL_API_KEY is not set (generation still works, just in English).
-    """
-    global _deepl_suggestion_translation_service
-
-    if _deepl_suggestion_translation_service is not None:
-        return _deepl_suggestion_translation_service
+    if _suggestion_translation_service is not None:
+        return _suggestion_translation_service
 
     # Requires text translation service
-    text_service = get_deepl_text_translation_service()
+    text_service = get_text_translation_service()
     if text_service is None:
-        logger.warning("DEEPL_API_KEY not set – suggestion translation will be skipped")
+        logger.warning("OPENAI_API_KEY not set - suggestion translation is disabled")
         return None
 
     from src.domain.services.meal_suggestion import (
-        deepl_suggestion_translation_service,
+        suggestion_translation_service,
     )
 
-    service_cls = deepl_suggestion_translation_service.DeepLSuggestionTranslationService
-    _deepl_suggestion_translation_service = service_cls(
-        text_translation_service=text_service
-    )
-    logger.info("DeepL suggestion translation service initialised")
-    return _deepl_suggestion_translation_service
+    service_cls = suggestion_translation_service.SuggestionTranslationService
+    _suggestion_translation_service = service_cls(text_translation_service=text_service)
+    logger.info("OpenAI suggestion translation service initialised")
+    return _suggestion_translation_service
 
 
 def get_suggestion_orchestration_service():
@@ -443,7 +438,7 @@ def get_suggestion_orchestration_service():
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
         recipe_details_schema_class=RecipeDetailsResponse,
-        translation_service=get_deepl_suggestion_translation_service(),
+        translation_service=get_suggestion_translation_service(),
     )
 
 
@@ -451,7 +446,7 @@ def get_suggestion_orchestration_service():
 # The event bus configuration in event_bus.py handles all dependencies
 
 
-_deepl_meal_translation_service = None
+_meal_translation_service = None
 _async_meal_translation_repository = None
 
 
@@ -467,63 +462,70 @@ def get_async_meal_translation_repository():
     return _async_meal_translation_repository
 
 
-def get_deepl_meal_translation_service():
-    """Get DeepL-backed meal translation service (singleton).
+def get_meal_translation_service():
+    """Get the OpenAI-backed persisted meal translation service (singleton)."""
+    global _meal_translation_service
 
-    Returns None if DEEPL_API_KEY is not configured so callers can
-    treat translation as optional.
-    """
-    global _deepl_meal_translation_service
-
-    if _deepl_meal_translation_service is not None:
-        return _deepl_meal_translation_service
+    if _meal_translation_service is not None:
+        return _meal_translation_service
 
     # Requires text translation service
-    text_service = get_deepl_text_translation_service()
+    text_service = get_text_translation_service()
     if text_service is None:
-        logger.warning("DEEPL_API_KEY not set – meal translation will be skipped")
+        logger.warning("OPENAI_API_KEY not set - meal translation is disabled")
         return None
 
-    from src.domain.services.meal_analysis.deepl_meal_translation_service import (
-        DeepLMealTranslationService,
+    from src.domain.services.meal_analysis.meal_translation_service import (
+        MealTranslationService,
     )
 
-    _deepl_meal_translation_service = DeepLMealTranslationService(
+    _meal_translation_service = MealTranslationService(
         translation_repo=get_async_meal_translation_repository(),
         text_translation_service=text_service,
     )
-    logger.info("DeepL meal translation service initialised")
-    return _deepl_meal_translation_service
+    logger.info("OpenAI meal translation service initialised")
+    return _meal_translation_service
 
 
-_deepl_text_translation_service = None
+_text_translation_service = None
 
 
-def get_deepl_text_translation_service():
-    """Get DeepL-backed text translation service (singleton).
+def get_text_translation_service():
+    """Get the process-scoped OpenAI-backed text translation service."""
+    global _text_translation_service
 
-    Used for ingredient recognition, food search, barcode lookup, and meal text parsing.
-    Returns None if DEEPL_API_KEY is not configured.
-    """
-    global _deepl_text_translation_service
+    if _text_translation_service is not None:
+        return _text_translation_service
 
-    if _deepl_text_translation_service is not None:
-        return _deepl_text_translation_service
-
-    if not settings.DEEPL_API_KEY:
-        logger.warning("DEEPL_API_KEY not set – text translation will be skipped")
+    if not settings.OPENAI_API_KEY:
+        logger.warning("OPENAI_API_KEY not set - text translation is disabled")
         return None
 
-    from src.domain.services.translation.deepl_text_translation_service import (
-        DeepLTextTranslationService,
+    from src.domain.services.translation.text_translation_service import (
+        TextTranslationService,
     )
-    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+    from src.infra.adapters.openai_translation_adapter import (
+        OpenAITranslationAdapter,
+    )
+    from src.infra.services.ai.providers.openai_provider import OpenAIProvider
 
-    _deepl_text_translation_service = DeepLTextTranslationService(
-        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+    _text_translation_service = TextTranslationService(
+        translation_port=OpenAITranslationAdapter(
+            provider=OpenAIProvider(
+                api_key=settings.OPENAI_API_KEY,
+                request_timeout_seconds=settings.OPENAI_REQUEST_TIMEOUT_SECONDS,
+                max_retries=settings.OPENAI_MAX_RETRIES,
+                store_responses=False,
+                prompt_cache_enabled=settings.OPENAI_PROMPT_CACHE_ENABLED,
+                prompt_cache_retention=settings.OPENAI_PROMPT_CACHE_RETENTION or None,
+                prompt_cache_key_prefix=settings.OPENAI_PROMPT_CACHE_KEY_PREFIX,
+            ),
+            model=settings.OPENAI_TRANSLATION_MODEL,
+            timeout_seconds=settings.OPENAI_TRANSLATION_TIMEOUT_SECONDS,
+        ),
     )
-    logger.info("DeepL text translation service initialised")
-    return _deepl_text_translation_service
+    logger.info("OpenAI text translation service initialised")
+    return _text_translation_service
 
 
 def get_ai_model_manager():
