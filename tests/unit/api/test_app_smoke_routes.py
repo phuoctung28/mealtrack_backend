@@ -448,6 +448,71 @@ def test_meals_edit_ingredients_edit_group(client: TestClient):
     assert edit_command.dish_name == "Updated Dish"
 
 
+def test_meals_edit_ingredients_v2_includes_meal_detail(client: TestClient):
+    """v2 PUT returns meal_detail so clients can skip a follow-up GET."""
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.app.commands.meal import EditMealCommand
+    from src.domain.model.meal import Meal, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    meal_id = str(uuid4())
+    meal = Meal(
+        meal_id=meal_id,
+        user_id=str(uuid4()),
+        status=MealStatus.READY,
+        created_at=datetime(2026, 7, 2, 12, 0),
+        ready_at=datetime(2026, 7, 2, 12, 0),
+        image=None,
+        dish_name="Updated Dish",
+        source="scanner",
+        nutrition=Nutrition(
+            macros=Macros(protein=35, carbs=5, fat=20),
+            food_items=[
+                FoodItem(
+                    id="item-1",
+                    name="Salmon",
+                    quantity=200,
+                    unit="g",
+                    macros=Macros(protein=35, carbs=5, fat=20),
+                )
+            ],
+        ),
+    )
+
+    class _EditBus:
+        async def send(self, msg):
+            if isinstance(msg, EditMealCommand):
+                return {"success": True}
+            return meal
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _EditBus()
+
+    r = client.put(
+        f"/v1/meals/{meal_id}/ingredients",
+        json={
+            "dish_name": "Updated Dish",
+            "food_item_changes": [],
+            "nutrition_contract_version": 2,
+        },
+        headers={
+            "X-Nutrition-Contract-Version": "2",
+            "X-App-Version": "1.0.0",
+            "X-Platform": "ios",
+            "Idempotency-Key": "smoke-edit-v2",
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["success"] is True
+    assert body["meal_detail"]["meal_id"] == meal_id
+    assert body["meal_detail"]["dish_name"] == "Updated Dish"
+    assert body["meal_detail"]["food_items"][0]["name"] == "Salmon"
+
+
 def test_meals_streak_smoke(client: TestClient):
     """Smoke coverage for GET /v1/meals/streak."""
     from src.api.dependencies.event_bus import get_configured_event_bus
