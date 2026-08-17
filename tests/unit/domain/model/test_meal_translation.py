@@ -122,6 +122,7 @@ class TestMealTranslation:
         assert translation.dish_name == "炒饭"
         assert len(translation.food_items) == 1
         assert translation.food_items[0].name == "米饭"
+        assert translation.translation_version is None
 
     def test_get_food_item_translation(self):
         """Test getting a specific food item translation."""

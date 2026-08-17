@@ -117,9 +117,9 @@ class MealTranslation:
             dish_name=data["dish_name"],
             food_items=[FoodItemTranslation.from_dict(fi) for fi in data["food_items"]],
             translated_at=datetime.fromisoformat(data["translated_at"]),
-            translation_version=data.get(
-                "translation_version", CURRENT_MEAL_TRANSLATION_VERSION
-            ),
+            # Missing versions belong to the legacy contract and must not be
+            # admitted as current cache entries.
+            translation_version=data.get("translation_version"),
         )
 
     def get_food_item_translation(
