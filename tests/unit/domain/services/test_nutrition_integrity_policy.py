@@ -103,6 +103,18 @@ def test_provider_100g_is_a_labelled_serving_and_g_is_one_gram():
     ]
 
 
+def test_provider_gram_alias_is_labelled_serving_and_g_is_one_gram():
+    normalized = normalize_serving_options(
+        [{"unit": "gram", "gram_weight": 100, "description": "100 gram"}],
+        provider_100g_label=True,
+    )
+
+    assert normalized == [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {"unit": "serving", "gram_weight": 100.0, "description": "100 gram"},
+    ]
+
+
 @pytest.mark.parametrize(
     "serving",
     [

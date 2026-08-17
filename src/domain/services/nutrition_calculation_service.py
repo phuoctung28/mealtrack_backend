@@ -58,6 +58,8 @@ UNIT_TRANSLATION = {
     "pounds": "lb",
     "ounce": "oz",
     "ounces": "oz",
+    "gramme": "g",
+    "grammes": "g",
     # Vietnamese count/size units
     "quả lớn": "large",
     "quả to": "large",
@@ -83,6 +85,11 @@ UNIT_TRANSLATION = {
     "phần": "serving",
     "suất": "serving",
     "khẩu phần": "serving",
+    "nhánh": "serving",
+    "sprig": "serving",
+    "sprigs": "serving",
+    "cọng": "serving",
+    "lá": "piece",
     # Spanish
     "grande": "large",
     "mediano": "medium",
@@ -121,6 +128,7 @@ UNIT_TRANSLATION = {
 }
 
 CONVERTIBLE_UNITS = set(UNIT_TO_GRAMS) | {"g", "ml", "l", "liter", "litre"}
+MASS_VOLUME_CANONICAL_UNITS = {"g", "kg", "ml", "l", "oz", "lb"}
 
 
 def _normalize_unit(unit: str) -> str:
@@ -153,6 +161,15 @@ def _normalize_authoritative_unit(unit: str) -> str:
         if singular in UNIT_TO_GRAMS:
             return singular
     return unit_lower
+
+
+def canonicalize_mass_volume_unit(unit: str | None) -> str:
+    """Collapse gram/ounce/liter aliases onto the canonical mass-volume token."""
+    raw = (unit or "g").strip() or "g"
+    normalized = _normalize_authoritative_unit(raw)
+    if normalized in MASS_VOLUME_CANONICAL_UNITS:
+        return normalized
+    return raw
 
 
 def normalize_unit_for_manual_save(unit: str | None) -> str:
@@ -222,6 +239,47 @@ def convert_quantity_to_grams(quantity: float, unit: str, food_name: str = "") -
     return quantity * grams_per_unit
 
 
+def quantity_to_grams(
+    quantity: float,
+    unit: str,
+    food_name: str = "",
+    allowed_units: list[dict[str, Any]] | None = None,
+    *,
+    strict: bool = False,
+) -> float:
+    """Convert using food servings first, then the shared unit table."""
+    if allowed_units:
+        try:
+            return _convert_with_allowed_units(
+                quantity,
+                unit,
+                allowed_units,
+                food_name,
+                strict=strict,
+            )
+        except AuthoritativeUnitMismatchError:
+            if strict:
+                raise
+    return convert_quantity_to_grams(quantity, unit, food_name)
+
+
+MAX_KCAL_PER_100G = 900.0
+_ENERGY_MISMATCH_RATIO = 5.0
+
+
+def reconcile_calories_per_100g(advertised: float, derived: float) -> float:
+    """Keep advertised energy only when it is physically plausible vs macros."""
+    if derived <= 0:
+        return max(advertised, 0.0)
+    if advertised < 0 or advertised > MAX_KCAL_PER_100G:
+        return derived
+    if advertised > derived * _ENERGY_MISMATCH_RATIO:
+        return derived
+    if derived > advertised * _ENERGY_MISMATCH_RATIO:
+        return derived
+    return advertised
+
+
 def scale_per_100g_nutrition(
     per_100g: dict,
     quantity: float,
@@ -285,7 +343,10 @@ def _convert_with_allowed_units(
     5. Smart fallback: first non-gram allowed_unit (common serving size)
     """
     unit_lower = unit.lower().strip()
-    if unit_lower == "g":
+    translated = (
+        _normalize_authoritative_unit(unit) if strict else _normalize_unit(unit)
+    )
+    if translated == "g":
         return quantity
 
     # 1. Exact match against allowed_units
@@ -294,9 +355,6 @@ def _convert_with_allowed_units(
             return quantity * au.get("gram_weight", 1.0)
 
     # 2. Translate unit (e.g., "quả lớn" → "large") and re-match
-    translated = (
-        _normalize_authoritative_unit(unit) if strict else _normalize_unit(unit)
-    )
     if translated != unit_lower:
         for au in allowed_units:
             if au.get("unit", "").lower() == translated:
@@ -327,7 +385,7 @@ def _convert_with_allowed_units(
     # 5. Smart fallback: use first non-gram serving (common portion) instead of raw grams
     for au in allowed_units:
         au_unit = au.get("unit", "").lower()
-        if au_unit not in ("g", "100 g", "1 g"):
+        if _normalize_unit(au_unit) != "g" and au_unit not in ("100 g", "1 g"):
             logger.warning("Unknown unit used the default allowed serving")
             return quantity * au.get("gram_weight", 1.0)
 
@@ -518,8 +576,7 @@ class NutritionCalculationService:
                     # established global unit mapping for those items; source
                     # backed v2 items remain strict against their snapshot.
                     strict=not (
-                        getattr(item, "origin", None) == "custom"
-                        and not allowed_units
+                        getattr(item, "origin", None) == "custom" and not allowed_units
                     ),
                 )
             factor = quantity_grams / 100.0

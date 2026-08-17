@@ -31,9 +31,11 @@ from src.domain.services.ai_output_validation_service import (
 )
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.services.nutrition_calculation_service import (
+    MASS_VOLUME_CANONICAL_UNITS,
     UNIT_TO_GRAMS,
     _convert_with_allowed_units,
     _normalize_unit,
+    canonicalize_mass_volume_unit,
     clamp_nutrition_values,
     convert_quantity_to_grams,
     fallback_custom_serving_options,
@@ -88,9 +90,13 @@ def _preferred_parse_unit(item: dict[str, Any]) -> str:
     """Prefer the local unit when it is a real mass, volume, or countable unit."""
     local = str(item.get("unit") or "").strip()
     english = str(item.get("english_unit") or "").strip()
-    local_norm = _normalize_unit(local) if local else ""
-    if local_norm in TRUSTED_QUANTITY_UNITS or local_norm in COUNTABLE_GRAM_UNITS:
-        return local
+    if local:
+        canonical = canonicalize_mass_volume_unit(local)
+        if canonical in MASS_VOLUME_CANONICAL_UNITS:
+            return canonical
+        local_norm = _normalize_unit(local)
+        if local_norm in TRUSTED_QUANTITY_UNITS or local_norm in COUNTABLE_GRAM_UNITS:
+            return local
     return english or local or "serving"
 
 
@@ -816,7 +822,9 @@ class ParseMealTextHandler(
     ) -> float:
         """Keep parsed portions saveable against the same source snapshot."""
         quantity = float(item.get("quantity") or 1.0)
-        source_unit = str(item.get("english_unit") or item.get("unit") or "g")
+        source_unit = canonicalize_mass_volume_unit(
+            str(item.get("english_unit") or item.get("unit") or "g")
+        )
         try:
             authoritative_grams = _convert_with_allowed_units(
                 quantity,

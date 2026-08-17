@@ -1164,3 +1164,19 @@ async def test_parse_text_rejects_fatsecret_using_backend_derived_calories(
     assert item.protein == 10
     assert item.carbs == 10
     assert item.fat == 0
+
+
+def test_canonicalize_reference_quantity_maps_gram_alias_to_g():
+    item = {"quantity": 100, "unit": "gram", "english_unit": "gram"}
+    grams = ParseMealTextHandler._canonicalize_reference_quantity(
+        item,
+        quantity_g=100,
+        allowed_units=[
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {"unit": "serving", "gram_weight": 100.0, "description": "1 serving"},
+        ],
+    )
+
+    assert grams == pytest.approx(100)
+    assert item["unit"] == "g"
+    assert item["english_unit"] == "g"
