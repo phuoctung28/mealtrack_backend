@@ -44,6 +44,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         provider=None,
         provider_budget: ProviderBudgetPort | None = None,
         provider_rpm: int | None = None,
+        provider_cache=None,
         uow_factory=None,
     ):
         self.uow = uow
@@ -55,6 +56,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             provider=provider,
             provider_budget=provider_budget,
             provider_rpm=provider_rpm,
+            provider_cache=provider_cache,
         )
 
     async def handle(self, event: CreateManualMealCommand):

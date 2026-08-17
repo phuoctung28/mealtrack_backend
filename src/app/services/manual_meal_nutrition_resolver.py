@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from dataclasses import replace
 from typing import Any
 
@@ -22,6 +24,12 @@ from src.domain.services.nutrition_integrity_policy import (
 )
 from src.observability import increment_metric
 
+logger = logging.getLogger(__name__)
+
+# TTL for cached provider food details (24 hours). Food nutrition data is
+# essentially static, so a long TTL is safe and dramatically reduces calls.
+_PROVIDER_DETAIL_CACHE_TTL = 86_400
+
 
 class ManualMealNutritionResolver:
     """Resolve v2 source identity and build immutable per-item snapshots."""
@@ -33,12 +41,14 @@ class ManualMealNutritionResolver:
         provider_budget: ProviderBudgetPort | None = None,
         provider_rpm: int | None = None,
         provider_timeout_seconds: float = 5.0,
+        provider_cache: Any | None = None,
     ):
         self.policy = policy or NutritionIntegrityPolicy()
         self.provider = provider
         self.provider_budget = provider_budget
         self.provider_rpm = provider_rpm
         self.provider_timeout_seconds = provider_timeout_seconds
+        self.provider_cache = provider_cache
         self._provider_semaphore = asyncio.Semaphore(4)
         self._provider_inflight: dict[tuple[str, str], asyncio.Task] = {}
         self._provider_inflight_lock = asyncio.Lock()
@@ -372,6 +382,11 @@ class ManualMealNutritionResolver:
     async def _get_provider_details(
         self, source_id: str, *, namespace: str, deadline: float | None
     ):
+        # Check Redis cache first — cache hits bypass budget consumption entirely.
+        cached = await self._load_from_provider_cache(namespace, source_id)
+        if cached is not None:
+            return cached
+
         inflight_key = (namespace, source_id)
         async with self._provider_inflight_lock:
             task: asyncio.Task[Any] | None = self._provider_inflight.get(inflight_key)
@@ -381,10 +396,18 @@ class ManualMealNutritionResolver:
                         self.policy.rejection("provider_budget_unavailable")
                     )
                 if len(self._provider_inflight) < 256:
-                    task = asyncio.create_task(self._fetch_provider_details(source_id))
+                    task = asyncio.create_task(
+                        self._fetch_and_cache_provider_details(
+                            source_id, namespace=namespace
+                        )
+                    )
                     self._provider_inflight[inflight_key] = task
         if task is None:
-            task = asyncio.create_task(self._fetch_provider_details(source_id))
+            task = asyncio.create_task(
+                self._fetch_and_cache_provider_details(
+                    source_id, namespace=namespace
+                )
+            )
         try:
             timeout = self.provider_timeout_seconds
             if deadline is not None:
@@ -395,6 +418,41 @@ class ManualMealNutritionResolver:
                 async with self._provider_inflight_lock:
                     if self._provider_inflight.get(inflight_key) is task:
                         self._provider_inflight.pop(inflight_key, None)
+
+    async def _load_from_provider_cache(
+        self, namespace: str, source_id: str
+    ) -> Any | None:
+        """Return cached provider details from Redis, or None on miss/error."""
+        if self.provider_cache is None:
+            return None
+        try:
+            key = f"nutrition:provider-detail:v1:{namespace}:{source_id}"
+            raw = await self.provider_cache.get(key)
+            if raw is not None:
+                return json.loads(raw)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("provider_cache get failed: %s", exc)
+        return None
+
+    async def _save_to_provider_cache(
+        self, namespace: str, source_id: str, details: Any
+    ) -> None:
+        """Persist provider details to Redis for future cache hits."""
+        if self.provider_cache is None or details is None:
+            return
+        try:
+            key = f"nutrition:provider-detail:v1:{namespace}:{source_id}"
+            await self.provider_cache.set(key, json.dumps(details), _PROVIDER_DETAIL_CACHE_TTL)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("provider_cache set failed: %s", exc)
+
+    async def _fetch_and_cache_provider_details(
+        self, source_id: str, *, namespace: str
+    ) -> Any:
+        """Fetch from the provider and write the result to cache."""
+        result = await self._fetch_provider_details(source_id)
+        await self._save_to_provider_cache(namespace, source_id, result)
+        return result
 
     async def _acquire_provider_budget(self, namespace: str) -> bool:
         if self.provider_budget is None or self.provider_rpm is None:

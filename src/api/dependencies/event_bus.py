@@ -487,6 +487,7 @@ def get_configured_event_bus() -> EventBus:
             provider=fat_secret_service,
             provider_budget=provider_budget,
             provider_rpm=settings.NUTRITION_PROVIDER_GLOBAL_RPM,
+            provider_cache=cache_service.redis if cache_service is not None and settings.CACHE_ENABLED else None,
         ),
     )
 
@@ -531,6 +532,7 @@ def get_configured_event_bus() -> EventBus:
             provider=fat_secret_service,
             provider_budget=provider_budget,
             provider_rpm=settings.NUTRITION_PROVIDER_GLOBAL_RPM,
+            provider_cache=cache_service.redis if cache_service is not None and settings.CACHE_ENABLED else None,
         ),
     )
 

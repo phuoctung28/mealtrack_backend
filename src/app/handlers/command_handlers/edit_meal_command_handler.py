@@ -49,6 +49,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         provider=None,
         provider_budget: ProviderBudgetPort | None = None,
         provider_rpm: int | None = None,
+        provider_cache=None,
         uow_factory=None,
     ):
         self.uow = uow
@@ -58,6 +59,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             provider=provider,
             provider_budget=provider_budget,
             provider_rpm=provider_rpm,
+            provider_cache=provider_cache,
         )
 
     async def handle(self, command: EditMealCommand) -> dict[str, Any]:
