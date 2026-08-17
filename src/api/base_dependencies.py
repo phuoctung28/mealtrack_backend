@@ -67,12 +67,17 @@ _vision_service: VisionAIServicePort | None = None
 
 
 async def initialize_cache_layer() -> None:
-    """Initialize Redis cache if enabled."""
+    """Initialize Redis for optional caches and the provider budget."""
     global _redis_client, _cache_service
 
-    if not settings.CACHE_ENABLED:
+    if not settings.CACHE_ENABLED and settings.NUTRITION_PROVIDER_GLOBAL_RPM is None:
         logger.info("Caching disabled via settings")
         return
+
+    if not settings.CACHE_ENABLED:
+        logger.info(
+            "Optional caching disabled; Redis remains enabled for provider budget"
+        )
 
     if _redis_client is None:
         _redis_client = RedisClient(

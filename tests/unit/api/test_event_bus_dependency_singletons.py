@@ -3,6 +3,25 @@ import importlib
 import pytest
 
 
+def test_provider_budget_does_not_depend_on_optional_cache_flag(monkeypatch):
+    mod = importlib.import_module("src.api.dependencies.event_bus")
+
+    class _Cache:
+        redis = object()
+
+    class _Budget:
+        def __init__(self, redis):
+            self.redis = redis
+
+    monkeypatch.setattr(mod, "RedisProviderBudget", _Budget)
+    monkeypatch.setattr(mod.settings, "CACHE_ENABLED", False)
+    monkeypatch.setattr(mod.settings, "NUTRITION_PROVIDER_GLOBAL_RPM", 10)
+
+    budget = mod._build_provider_budget(_Cache())
+
+    assert isinstance(budget, _Budget)
+
+
 def test_get_food_search_event_bus_is_singleton(monkeypatch):
     # Import fresh to reset module globals
     mod = importlib.import_module("src.api.dependencies.event_bus")
