@@ -538,6 +538,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                         if change.custom_nutrition
                         else None
                     ),
+                    allowed_units=change.allowed_units,
                     origin=change.origin,
                     food_reference_id=change.food_reference_id,
                     source_namespace=change.source_namespace,

@@ -31,9 +31,12 @@ from src.domain.services.ai_output_validation_service import (
 )
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.services.nutrition_calculation_service import (
+    UNIT_TO_GRAMS,
     _convert_with_allowed_units,
+    _normalize_unit,
     clamp_nutrition_values,
     convert_quantity_to_grams,
+    fallback_custom_serving_options,
     normalize_unit_for_manual_save,
     scale_per_100g_nutrition,
 )
@@ -71,21 +74,24 @@ TRUSTED_QUANTITY_UNITS = {
     "l",
     "liter",
     "litre",
-    "piece",
-    "pieces",
-    "slice",
-    "slices",
-    "cup",
-    "cups",
-    "tablespoon",
-    "tablespoons",
-    "tbsp",
-    "teaspoon",
-    "teaspoons",
-    "tsp",
-    "serving",
-    "portion",
+    "oz",
+    "ounce",
+    "ounces",
+    "lb",
+    "pound",
+    "pounds",
 }
+COUNTABLE_GRAM_UNITS = set(UNIT_TO_GRAMS) - {"kg", "lb", "oz"}
+
+
+def _preferred_parse_unit(item: dict[str, Any]) -> str:
+    """Prefer the local unit when it is a real mass, volume, or countable unit."""
+    local = str(item.get("unit") or "").strip()
+    english = str(item.get("english_unit") or "").strip()
+    local_norm = _normalize_unit(local) if local else ""
+    if local_norm in TRUSTED_QUANTITY_UNITS or local_norm in COUNTABLE_GRAM_UNITS:
+        return local
+    return english or local or "serving"
 
 
 @dataclass
@@ -235,7 +241,11 @@ class ParseMealTextHandler(
                 sugar=item.get("sugar", 0),
                 data_source=item.get("data_source"),
                 fdc_id=item.get("fdc_id"),
-                allowed_units=item.get("allowed_units") or [],
+                allowed_units=item.get("allowed_units")
+                or fallback_custom_serving_options(
+                    item.get("unit") or "serving",
+                    item.get("name") or "",
+                ),
                 food_id=item.get("food_id"),
                 food_reference_id=item.get("food_reference_id"),
                 origin=item.get("origin"),
@@ -632,7 +642,7 @@ class ParseMealTextHandler(
         if item.get("quantity_g") is not None:
             return float(item["quantity_g"])
         quantity = float(item.get("quantity") or 1)
-        unit = item.get("english_unit") or item.get("unit", "serving")
+        unit = _preferred_parse_unit(item)
         return convert_quantity_to_grams(
             quantity, normalize_unit_for_manual_save(unit), food_name
         )
@@ -640,13 +650,24 @@ class ParseMealTextHandler(
     def _trusted_quantity_in_grams(
         self, item: dict[str, Any], food_name: str
     ) -> float | None:
-        """Return grams only when the input supplies a reliable unit basis."""
-        if item.get("quantity_g") is not None:
-            return self._quantity_in_grams(item, food_name)
-        raw_unit = str(item.get("english_unit") or item.get("unit") or "")
-        unit = raw_unit.lower().strip().split(",", 1)[0].split(" ", 1)[0]
-        if unit not in TRUSTED_QUANTITY_UNITS:
+        """Return grams only for mass/volume units, where density is meaningful.
+
+        Countable units (miếng/piece/slice) use estimated gram weights. Treating
+        those estimates as exact grams 422s parse-text whenever FatSecret is down.
+        """
+        local_raw = str(item.get("unit") or "").strip()
+        english_raw = str(item.get("english_unit") or "").strip()
+        local_norm = _normalize_unit(local_raw) if local_raw else ""
+        english_norm = _normalize_unit(english_raw) if english_raw else ""
+        if local_norm and local_norm not in TRUSTED_QUANTITY_UNITS:
             return None
+        if (
+            local_norm not in TRUSTED_QUANTITY_UNITS
+            and english_norm not in TRUSTED_QUANTITY_UNITS
+        ):
+            return None
+        if item.get("quantity_g") is not None:
+            return float(item["quantity_g"])
         return self._quantity_in_grams(item, food_name)
 
     def _local_reference_is_usable(

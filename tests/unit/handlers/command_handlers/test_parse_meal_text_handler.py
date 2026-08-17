@@ -362,6 +362,82 @@ async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
 
 
 @pytest.mark.asyncio
+async def test_parse_text_unmatched_countable_unit_is_saved_as_allowed_unit():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Sườn Nướng",
+                        "quantity": 1,
+                        "unit": "miếng",
+                        "english_unit": "piece",
+                        "calories": 298,
+                        "protein": 18,
+                        "carbs": 4,
+                        "fat": 11,
+                    }
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_FakeFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="1 miếng sườn nướng", user_id="user-1", language="vi")
+    )
+    item = response.items[0]
+    units = {option["unit"]: option["gram_weight"] for option in item.allowed_units}
+
+    assert item.unit == "miếng"
+    assert item.quantity == 1
+    assert "miếng" in units
+    assert units["miếng"] == pytest.approx(100.0)
+    assert units["g"] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_parse_text_countable_unit_survives_provider_outage():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Sườn Nướng",
+                        "lookup_name": "grilled pork ribs",
+                        "quantity": 1,
+                        "unit": "miếng",
+                        "english_unit": "slice",
+                        "macros": {
+                            "protein_g": 18,
+                            "carbs_g": 4,
+                            "fat_g": 11,
+                        },
+                    }
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_FakeFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="1 miếng sườn nướng", user_id="user-1", language="vi")
+    )
+    item = response.items[0]
+
+    assert item.unit == "miếng"
+    assert item.quantity == 1
+    assert item.protein == pytest.approx(18)
+    assert item.data_source == "ai_estimate"
+
+
+@pytest.mark.asyncio
 async def test_parse_text_translates_only_structurally_identified_english_name():
     generation = _FakeMealGenerationService(
         responses=[

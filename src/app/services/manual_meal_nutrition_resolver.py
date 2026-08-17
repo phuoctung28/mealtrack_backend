@@ -13,6 +13,7 @@ from src.app.commands.meal.create_manual_meal_command import (
 from src.domain.ports.provider_budget_port import ProviderBudgetPort
 from src.domain.services.nutrition_calculation_service import (
     canonicalize_authoritative_quantity,
+    fallback_custom_serving_options,
 )
 from src.domain.services.nutrition_integrity_policy import (
     NutritionIntegrityError,
@@ -203,6 +204,11 @@ class ManualMealNutritionResolver:
             require_energy=False,
             require_metric_basis=False,
         )
+        allowed_units = fallback_custom_serving_options(
+            item.unit,
+            item.name or "",
+            item.allowed_units,
+        )
         return replace(
             item,
             custom_nutrition=CustomNutrition(
@@ -213,10 +219,12 @@ class ManualMealNutritionResolver:
                 fiber_per_100g=result.fiber_100g or 0.0,
                 sugar_per_100g=result.sugar_100g or 0.0,
             ),
-            allowed_units=[{"unit": "g", "gram_weight": 1.0, "description": "1 g"}],
+            allowed_units=allowed_units,
             source_kind="custom",
             nutrition_contract_version="2",
-            source_snapshot=self._snapshot(result, "custom", None, None),
+            source_snapshot=self._snapshot(
+                result, "custom", None, None, allowed_units
+            ),
         )
 
     def _resolve_reference(self, item, reference, origin: str) -> ManualMealItem:
