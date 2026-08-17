@@ -13,7 +13,11 @@ from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
-from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
+from src.domain.exceptions.ai_exceptions import (
+    AIVisionError,
+    AIVisionFailureKind,
+    MealResponseLocalizationError,
+)
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal.meal_response_localization import (
     parse_meal_response_localization,
@@ -129,15 +133,24 @@ class UploadMealImageImmediatelyHandler(
                 last_error = e
                 # Deterministic failures (schema/parse/no-food) cannot be fixed by retrying
                 # the same provider chain — skip outer retry and surface immediately
-                if isinstance(e, AIVisionError) and e.kind in (
-                    AIVisionFailureKind.schema_validation,
-                    AIVisionFailureKind.json_parse,
-                    AIVisionFailureKind.no_food,
+                if isinstance(e, MealResponseLocalizationError) or (
+                    isinstance(e, AIVisionError)
+                    and e.kind
+                    in (
+                        AIVisionFailureKind.schema_validation,
+                        AIVisionFailureKind.json_parse,
+                        AIVisionFailureKind.no_food,
+                    )
                 ):
+                    failure_kind = (
+                        e.kind.value
+                        if isinstance(e, AIVisionError)
+                        else "localization_validation"
+                    )
                     logger.warning(
                         "[PHASE-1-NO-RETRY] meal=%s kind=%s attempt=%d/%d",
                         meal_id,
-                        e.kind.value,
+                        failure_kind,
                         attempt,
                         max_attempts,
                     )
@@ -161,13 +174,12 @@ class UploadMealImageImmediatelyHandler(
         """Reject incomplete same-call locale output before meal persistence."""
         if language == "en" or not isinstance(result, dict):
             return
-        structured_data = result.get("structured_data") or {}
-        if structured_data.get("is_food") is False:
+        structured_data = result.get("structured_data") if isinstance(result, dict) else None
+        if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
             return
         parse_meal_response_localization(
             structured_data,
             language,
-            expected_food_count=len(structured_data.get("foods") or []),
         )
 
     def _validate_cloudinary_url(self, url: str) -> bool:

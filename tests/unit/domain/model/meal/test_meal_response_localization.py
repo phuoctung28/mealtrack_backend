@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 
 from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
+from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal.meal_response_localization import (
     parse_meal_response_localization,
@@ -120,5 +121,45 @@ def test_rejects_incomplete_or_wrong_locale(mutator):
     data = _structured_data()
     mutator(data)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(MealResponseLocalizationError):
         parse_meal_response_localization(data, "vi", expected_food_count=1)
+
+
+def test_rejects_mismatched_persisted_food_count_with_typed_error():
+    item = FoodItem(
+        id="item-1",
+        name="Rice noodles",
+        quantity=180,
+        unit="g",
+        macros=Macros(protein=4, carbs=50, fat=1),
+    )
+    meal = Meal(
+        meal_id="22222222-2222-4222-8222-222222222222",
+        user_id="00000000-0000-0000-0000-000000000001",
+        status=MealStatus.READY,
+        image=MealImage(
+            image_id="11111111-1111-4111-8111-111111111111",
+            format="jpeg",
+            size_bytes=100,
+        ),
+        dish_name="Rice noodle soup",
+        nutrition=Nutrition(macros=item.macros, food_items=[item]),
+        ready_at=datetime(2025, 1, 15),
+        created_at=datetime(2025, 1, 15),
+    )
+    localization = parse_meal_response_localization(
+        _structured_data(),
+        "vi",
+        expected_food_count=1,
+    )
+    assert localization is not None
+
+    with pytest.raises(MealResponseLocalizationError):
+        persist_meal_response_localization(
+            meal,
+            localization.__class__(
+                language=localization.language,
+                dish_name=localization.dish_name,
+                food_item_names=("Bún gạo", "Nước dùng"),
+            ),
+        )

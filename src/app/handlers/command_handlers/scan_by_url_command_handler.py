@@ -236,13 +236,20 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             vision_elapsed = time.time() - start
 
+            localization = None
             if command.scan_mode != "food_label" and command.language != "en":
-                structured_data = vision_result.get("structured_data") or {}
-                if structured_data.get("is_food") is not False:
-                    parse_meal_response_localization(
+                structured_data = (
+                    vision_result.get("structured_data")
+                    if isinstance(vision_result, dict)
+                    else None
+                )
+                if not (
+                    isinstance(structured_data, dict)
+                    and structured_data.get("is_food") is False
+                ):
+                    localization = parse_meal_response_localization(
                         structured_data,
                         command.language,
-                        expected_food_count=len(structured_data.get("foods") or []),
                     )
 
             if command.scan_mode == "food_label":
@@ -333,17 +340,6 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     ),
                     error_code="NOT_FOOD_IMAGE",
                 )
-
-            structured_data = (
-                vision_result.get("structured_data")
-                if isinstance(vision_result, dict)
-                else None
-            )
-            localization = parse_meal_response_localization(
-                structured_data,
-                command.language,
-                expected_food_count=len(nutrition.food_items or []),
-            )
 
             meal = Meal(
                 meal_id=str(uuid4()),

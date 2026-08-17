@@ -1,6 +1,6 @@
 """Tests for the default-off meal analysis graph scaffold."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -14,9 +14,17 @@ from src.app.graphs.meal_analyze.graph import (
     run_meal_analyze_graph,
     run_meal_analyze_graph_async,
 )
-from src.app.graphs.meal_analyze.nodes import acquire_image, schedule_value_insights
-from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
+from src.app.graphs.meal_analyze.nodes import (
+    acquire_image,
+    analyze_vision,
+    schedule_value_insights,
+)
+from src.app.graphs.meal_analyze.runtime import AcquiredImage, MealAnalyzeRuntime
+from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
 from src.domain.model.meal import MealStatus
+from src.domain.model.meal.meal_response_localization import (
+    parse_meal_response_localization,
+)
 from src.domain.parsers.vision_response_parser import VisionResponseParser
 from src.infra.config.settings import Settings
 
@@ -583,14 +591,18 @@ async def test_async_graph_returns_same_call_locale_without_translation_reload()
         meal_id_factory=lambda: "22222222-2222-4222-8222-222222222222",
     )
 
-    result = await run_meal_analyze_graph_async(
-        {
-            "scan_mode": "meal_scan",
-            "user_id": runtime.command.user_id,
-            "target_date": None,
-        },
-        runtime,
-    )
+    with patch(
+        "src.app.graphs.meal_analyze.nodes.parse_meal_response_localization",
+        wraps=parse_meal_response_localization,
+    ) as parse_localization:
+        result = await run_meal_analyze_graph_async(
+            {
+                "scan_mode": "meal_scan",
+                "user_id": runtime.command.user_id,
+                "target_date": None,
+            },
+            runtime,
+        )
 
     vision_service.analyze.assert_awaited_once_with(
         b"upload-bytes",
@@ -601,6 +613,85 @@ async def test_async_graph_returns_same_call_locale_without_translation_reload()
     assert result["result"].meal_id == "22222222-2222-4222-8222-222222222222"
     assert result["result"].dish_name == "Cơm gà"
     assert result["result"].nutrition.food_items[0].name == "Cơm gà"
+    parse_localization.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_graph_does_not_retry_invalid_localization():
+    vision_service = AsyncMock()
+    vision_service.analyze = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food": True,
+                "foods": [{"name": "Pho", "localized_name": "Phở"}],
+            }
+        }
+    )
+    runtime = MealAnalyzeRuntime(
+        command=UploadMealImageImmediatelyCommand(
+            user_id="user-123",
+            file_contents=b"upload-bytes",
+            content_type="image/jpeg",
+            language="vi",
+        ),
+        vision_service=vision_service,
+        gpt_parser=VisionResponseParser(),
+        max_vision_attempts=3,
+    )
+    runtime.acquired_image = AcquiredImage(
+        image_id="image-123",
+        image_url="https://example.com/image-123.jpg",
+        persisted_image_id="image-123",
+        persisted_image_url="https://example.com/image-123.jpg",
+        source_bytes=b"upload-bytes",
+        analysis_bytes=b"upload-bytes",
+        content_type="image/jpeg",
+        content_kind="meal_image",
+    )
+
+    with pytest.raises(MealResponseLocalizationError):
+        await analyze_vision({}, runtime)
+
+    assert vision_service.analyze.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_async_graph_treats_malformed_localization_container_as_non_retryable():
+    vision_service = AsyncMock()
+    vision_service.analyze = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food": True,
+                "foods": 1,
+            }
+        }
+    )
+    runtime = MealAnalyzeRuntime(
+        command=UploadMealImageImmediatelyCommand(
+            user_id="user-123",
+            file_contents=b"upload-bytes",
+            content_type="image/jpeg",
+            language="vi",
+        ),
+        vision_service=vision_service,
+        gpt_parser=VisionResponseParser(),
+        max_vision_attempts=3,
+    )
+    runtime.acquired_image = AcquiredImage(
+        image_id="image-123",
+        image_url="https://example.com/image-123.jpg",
+        persisted_image_id="image-123",
+        persisted_image_url="https://example.com/image-123.jpg",
+        source_bytes=b"upload-bytes",
+        analysis_bytes=b"upload-bytes",
+        content_type="image/jpeg",
+        content_kind="meal_image",
+    )
+
+    with pytest.raises(MealResponseLocalizationError):
+        await analyze_vision({}, runtime)
+
+    assert vision_service.analyze.await_count == 1
 
 
 @pytest.mark.asyncio

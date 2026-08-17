@@ -9,6 +9,7 @@ from src.app.commands.meal.upload_meal_image_immediately_command import (
 from src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler import (
     UploadMealImageImmediatelyHandler,
 )
+from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
@@ -61,6 +62,66 @@ async def test_run_vision_analysis_raises_after_max_attempts():
         await handler._run_vision_analysis(command, "meal-123")
 
     assert handler.vision_service.analyze.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_run_vision_analysis_does_not_retry_invalid_localization():
+    handler = UploadMealImageImmediatelyHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        fast_path_policy=MealAnalyzeFastPathPolicy(max_attempts=3),
+    )
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food": True,
+                "foods": [{"name": "Pho", "localized_name": "Phở"}],
+            }
+        }
+    )
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"img",
+        content_type="image/jpeg",
+        language="vi",
+    )
+
+    with pytest.raises(MealResponseLocalizationError):
+        await handler._run_vision_analysis(command, "meal-123")
+
+    assert handler.vision_service.analyze.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_run_vision_analysis_does_not_retry_malformed_localization_container():
+    handler = UploadMealImageImmediatelyHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        fast_path_policy=MealAnalyzeFastPathPolicy(max_attempts=3),
+    )
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food": True,
+                "foods": 1,
+            }
+        }
+    )
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"img",
+        content_type="image/jpeg",
+        language="vi",
+    )
+
+    with pytest.raises(MealResponseLocalizationError):
+        await handler._run_vision_analysis(command, "meal-123")
+
+    assert handler.vision_service.analyze.call_count == 1
 
 
 @pytest.mark.asyncio

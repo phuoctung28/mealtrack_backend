@@ -105,3 +105,9 @@ class AIOutputValidationError(AIError):
         if self.validation_details:
             parts.append(f"validation_details={self.validation_details}")
         return " | ".join(parts)
+
+
+class MealResponseLocalizationError(ValueError):
+    """Raised when localized meal display fields are incomplete or invalid."""
+
+    pass

@@ -14,7 +14,11 @@ from src.app.graphs.meal_analyze.quality_gate import (
 from src.app.graphs.meal_analyze.runtime import AcquiredImage, MealAnalyzeRuntime
 from src.app.graphs.meal_analyze.state import MealAnalyzeGraphState
 from src.domain.constants import MealDefaults
-from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
+from src.domain.exceptions.ai_exceptions import (
+    AIVisionError,
+    AIVisionFailureKind,
+    MealResponseLocalizationError,
+)
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal.meal_response_localization import (
     parse_meal_response_localization,
@@ -237,15 +241,16 @@ async def _analyze_and_validate_locale(runtime: MealAnalyzeRuntime, operation):
         or not runtime.gpt_parser
         or not isinstance(result, dict)
     ):
+        runtime.localization = None
         return result
 
-    structured_data = result.get("structured_data") or {}
-    if structured_data.get("is_food") is False:
+    structured_data = result.get("structured_data") if isinstance(result, dict) else None
+    if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
+        runtime.localization = None
         return result
-    parse_meal_response_localization(
+    runtime.localization = parse_meal_response_localization(
         structured_data,
         command.language,
-        expected_food_count=len(structured_data.get("foods") or []),
     )
     return result
 
@@ -262,10 +267,14 @@ async def _run_vision_with_retry(
             return await operation()
         except Exception as exc:
             last_error = exc
-            if isinstance(exc, AIVisionError) and exc.kind in (
-                AIVisionFailureKind.schema_validation,
-                AIVisionFailureKind.json_parse,
-                AIVisionFailureKind.no_food,
+            if isinstance(exc, MealResponseLocalizationError) or (
+                isinstance(exc, AIVisionError)
+                and exc.kind
+                in (
+                    AIVisionFailureKind.schema_validation,
+                    AIVisionFailureKind.json_parse,
+                    AIVisionFailureKind.no_food,
+                )
             ):
                 raise
             if attempt == max_attempts:
@@ -337,16 +346,6 @@ async def parse_nutrition(
             ),
             error_code="NOT_FOOD_IMAGE",
         )
-    structured_data = (
-        runtime.vision_result.get("structured_data")
-        if isinstance(runtime.vision_result, dict)
-        else None
-    )
-    parse_meal_response_localization(
-        structured_data,
-        runtime.command.language,
-        expected_food_count=len(nutrition.food_items or []),
-    )
     runtime.nutrition = nutrition
     return {"nutrition_parsed": True}
 
@@ -403,17 +402,7 @@ async def persist_meal(
         meal = await runtime.food_reference_validation_service.validate_meal(meal)
 
     if not is_food_label:
-        structured_data = (
-            runtime.vision_result.get("structured_data")
-            if isinstance(runtime.vision_result, dict)
-            else None
-        )
-        localization = parse_meal_response_localization(
-            structured_data,
-            command.language,
-            expected_food_count=len(runtime.nutrition.food_items or []),
-        )
-        meal = persist_meal_response_localization(meal, localization)
+        meal = persist_meal_response_localization(meal, runtime.localization)
 
     async with runtime.uow as uow:
         saved_meal = await uow.meals.save(meal)
