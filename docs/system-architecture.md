@@ -81,6 +81,25 @@ Phase 0 persistence is four-table only: `meal_catalog`,
 separate additive system and is not a fallback or replacement for these
 catalog-backed recommendations.
 
+### Public Catalog Browser
+
+The authenticated browse route (`GET /v1/meal-catalog` and
+`GET /v1/meal-catalog/{catalog_id}`) reads the same immutable catalog snapshot
+as deterministic recommendation generation. Browse requests do not create plan
+rows, candidate rows, or meal logs.
+
+`popular` is a curated view ordered by the nullable `meal_catalog.popularity_rank`
+with stable name/ID tie-breakers. The route fails closed with 503 until that
+curated signal has been seeded instead of fabricating popularity from UUID or
+timestamp order.
+
+`for_you` reuses the shared snapshot, current daily target, linked 90-day
+ingredient affinity, and deterministic scoring. When the user has no usable
+history or the target cannot be resolved, the route falls back to the curated
+global order and reports `fallback=true` with `ranking_source=curated`; a warm
+personalized result reports `ranking_source=personalized`. `allergy_evaluated`
+remains false until canonical allergen evaluation is implemented.
+
 ### Local-First Food Search
 Manual food search reads Redis cache when available, then searches verified
 `food_reference` rows locally before provider fill. Cache, provider, and

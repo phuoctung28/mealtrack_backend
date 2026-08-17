@@ -8,6 +8,8 @@ from datetime import datetime
 
 from src.domain.model.meal_recommendation.catalog_recipe import CatalogMeal
 
+MAX_CATALOG_POPULARITY_RANK = 2_147_483_647
+
 
 @dataclass(frozen=True)
 class CatalogMealSeedIngredientWrite:
@@ -31,6 +33,7 @@ class CatalogMealSeedWrite:
     image_url: str | None
     meal_types: tuple[str, ...]
     ingredients: tuple[CatalogMealSeedIngredientWrite, ...]
+    popularity_rank: int | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,12 @@ class CatalogMealRepositoryPort(ABC):
     @abstractmethod
     async def add_seed_meal(self, seed: CatalogMealSeedWrite) -> None:
         """Add one display-only catalog seed meal without owning commit."""
+
+    @abstractmethod
+    async def update_popularity_rank(
+        self, *, catalog_key: str, popularity_rank: int | None
+    ) -> None:
+        """Update the editorial rank for an existing catalog seed."""
 
     @abstractmethod
     async def lock_seed_import(self) -> None:

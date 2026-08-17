@@ -10,9 +10,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from difflib import SequenceMatcher
 from time import perf_counter
-from typing import Any
+from typing import Any, NoReturn
 
 from src.domain.ports.catalog_recipe_repository_port import (
+    MAX_CATALOG_POPULARITY_RANK,
     CatalogMealRepositoryPort,
     CatalogMealSeedExisting,
     CatalogMealSeedIngredientWrite,
@@ -157,6 +158,7 @@ class CatalogSeedImportSummary:
     """Import outcome for CLI reporting and tests."""
 
     inserted: int = 0
+    updated: int = 0
     skipped_existing: int = 0
     dry_run: bool = False
     errors: tuple[str, ...] = field(default_factory=tuple)
@@ -175,6 +177,7 @@ class CatalogSeedImportSummary:
     def resolution_report(self) -> dict[str, Any]:
         return {
             "inserted": self.inserted,
+            "updated": self.updated,
             "skipped_existing": self.skipped_existing,
             "dry_run": self.dry_run,
             "errors": list(self.errors),
@@ -267,6 +270,7 @@ class CatalogMealSeedImporter:
             allow_common_unit_fallbacks=resolve_all_best_effort,
         )
         self._candidate_rows: list[_FoodReferenceSearchRow] | None = None
+        self._pending_popularity_updates: list[tuple[str, int | None]] = []
 
     def with_options(
         self,
@@ -290,6 +294,7 @@ class CatalogMealSeedImporter:
 
     async def import_manifest(self, manifest: dict[str, Any]) -> CatalogSeedImportSummary:
         started = perf_counter()
+        self._pending_popularity_updates = []
         skipped = 0
         errors: list[str] = []
         resolution_issues: list[CatalogSeedResolutionIssue] = []
@@ -337,9 +342,13 @@ class CatalogMealSeedImporter:
             _record_seed_import_metrics(summary, started)
             return summary
 
-        to_insert, skipped_after_lock, lock_errors, lock_reviews = await self._recheck_under_lock(
-            prepared
-        )
+        if prepared:
+            to_insert, skipped_after_lock, lock_errors, lock_reviews = (
+                await self._recheck_under_lock(prepared)
+            )
+        else:
+            await self._catalog_repository.lock_seed_import()
+            to_insert, skipped_after_lock, lock_errors, lock_reviews = [], 0, [], []
         skipped += skipped_after_lock
         if lock_errors or lock_reviews:
             summary = CatalogSeedImportSummary(
@@ -354,8 +363,14 @@ class CatalogMealSeedImporter:
 
         for item in to_insert:
             await self._catalog_repository.add_seed_meal(item.seed)
+        for catalog_key, popularity_rank in self._pending_popularity_updates:
+            await self._catalog_repository.update_popularity_rank(
+                catalog_key=catalog_key,
+                popularity_rank=popularity_rank,
+            )
         summary = CatalogSeedImportSummary(
             inserted=len(to_insert),
+            updated=len(self._pending_popularity_updates),
             skipped_existing=skipped,
             dry_run=self._dry_run,
         )
@@ -372,12 +387,36 @@ class CatalogMealSeedImporter:
         content_hash = _content_hash(recipe, resolved_ingredients)
         existing = await self._find_existing(catalog_key, content_hash)
         if existing is not None:
-            if existing.catalog_key == catalog_key and existing.content_hash != content_hash:
-                raise CatalogSeedImportError(
-                    f"recipes[{index}] catalog_key already exists with different content: "
-                    f"{catalog_key}"
-                )
+            if existing.catalog_key == catalog_key:
+                if existing.content_hash != content_hash:
+                    raise CatalogSeedImportError(
+                        f"recipes[{index}] catalog_key already exists with different content: "
+                        f"{catalog_key}"
+                    )
+                if "popularity_rank" in recipe:
+                    popularity_rank = _optional_popularity_rank(
+                        recipe.get("popularity_rank")
+                    )
+                    if not self._dry_run:
+                        self._pending_popularity_updates.append(
+                            (catalog_key, popularity_rank)
+                        )
             return None
+
+        seed_ingredients = []
+        for item in resolved_ingredients:
+            if item.food_reference_id is None:
+                raise CatalogSeedImportError(
+                    f"recipes[{index}] resolved ingredient is missing food_reference_id"
+                )
+            seed_ingredients.append(
+                CatalogMealSeedIngredientWrite(
+                    food_reference_id=item.food_reference_id,
+                    display_name=item.display_name,
+                    quantity=item.quantity,
+                    unit=item.unit,
+                )
+            )
 
         seed = CatalogMealSeedWrite(
             catalog_key=catalog_key,
@@ -387,15 +426,8 @@ class CatalogMealSeedImporter:
             description=_optional_string(recipe.get("description")),
             image_url=_optional_string(recipe.get("image_url")),
             meal_types=tuple(str(item).strip() for item in recipe["meal_types"]),
-            ingredients=tuple(
-                CatalogMealSeedIngredientWrite(
-                    food_reference_id=item.food_reference_id,
-                    display_name=item.display_name,
-                    quantity=item.quantity,
-                    unit=item.unit,
-                )
-                for item in resolved_ingredients
-            ),
+            popularity_rank=_optional_popularity_rank(recipe.get("popularity_rank")),
+            ingredients=tuple(seed_ingredients),
         )
         return _PreparedCatalogSeed(
             recipe_index=index,
@@ -688,7 +720,7 @@ class CatalogMealSeedImporter:
         normalized_name: str,
         reason: str,
         candidates: tuple[CatalogSeedResolutionCandidate, ...],
-    ) -> None:
+    ) -> NoReturn:
         issue = CatalogSeedResolutionIssue(
             recipe_index=recipe_index,
             recipe_key=recipe_key,
@@ -825,6 +857,18 @@ def _content_hash(
 
 def _canonical_decimal(value: float) -> str:
     return format(Decimal(str(value)).quantize(Decimal("0.0001")), "f")
+
+
+def _optional_popularity_rank(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise CatalogSeedImportError("popularity_rank must be an integer") from None
+    if value < 0 or value > MAX_CATALOG_POPULARITY_RANK:
+        raise CatalogSeedImportError(
+            "popularity_rank must fit a non-negative PostgreSQL INTEGER"
+        )
+    return value
 
 
 def _seed_signature(

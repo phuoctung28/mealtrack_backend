@@ -7,6 +7,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.api.mappers.catalog_meal_mapper import (
+    catalog_meal_ingredients,
+    catalog_meal_response,
+)
 from src.api.schemas.response.meal_recommendation_responses import (
     MealRecommendationAlternativeResponse,
     MealRecommendationCatalogMealResponse,
@@ -254,27 +258,16 @@ def _selected_catalog_meal(slot) -> CatalogMeal:
 
 def _required_catalog_meal(catalog_meal: CatalogMeal | None) -> CatalogMeal:
     if catalog_meal is None:
-        raise ValueError("catalog meal details are missing for recommendation candidate")
+        raise ValueError(
+            "catalog meal details are missing for recommendation candidate"
+        )
     return catalog_meal
 
 
-def _catalog_meal_response(catalog_meal: CatalogMeal) -> MealRecommendationCatalogMealResponse:
-    return MealRecommendationCatalogMealResponse(
-        id=catalog_meal.id,
-        name=catalog_meal.name,
-        cuisine=catalog_meal.cuisine,
-        description=catalog_meal.description,
-        image_url=catalog_meal.image_url,
-        calories=catalog_meal.calories,
-        macros=MealRecommendationMacrosResponse(
-            protein_g=float(catalog_meal.protein_g),
-            carbs_g=float(catalog_meal.carbs_g),
-            fat_g=float(catalog_meal.fat_g),
-            fiber_g=float(catalog_meal.fiber_g),
-            sugar_g=float(catalog_meal.sugar_g),
-        ),
-        ingredients=_catalog_meal_ingredients(catalog_meal),
-    )
+def _catalog_meal_response(
+    catalog_meal: CatalogMeal,
+) -> MealRecommendationCatalogMealResponse:
+    return catalog_meal_response(catalog_meal)
 
 
 def _catalog_meal_summary_response(
@@ -300,12 +293,4 @@ def _catalog_meal_summary_response(
 def _catalog_meal_ingredients(
     catalog_meal: CatalogMeal,
 ) -> list[MealRecommendationIngredientResponse]:
-    return [
-        MealRecommendationIngredientResponse(
-            food_reference_id=ingredient.food_reference_id,
-            display_name=ingredient.display_name,
-            quantity=float(ingredient.quantity),
-            unit=ingredient.unit,
-        )
-        for ingredient in catalog_meal.ingredients
-    ]
+    return catalog_meal_ingredients(catalog_meal)

@@ -111,6 +111,7 @@ def _item_response(item: Any) -> AdminMealCatalogItemResponse:
         cuisine=meal.cuisine,
         description=meal.description,
         image_url=meal.image_url,
+        popularity_rank=meal.popularity_rank,
         meal_types=list(meal.meal_types),
         calories=meal.calories,
         protein_g=float(meal.protein_g),

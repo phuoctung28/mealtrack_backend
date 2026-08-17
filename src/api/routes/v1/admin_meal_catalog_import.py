@@ -190,6 +190,7 @@ def _response(validation, summary, *, applied: bool) -> AdminMealCatalogImportRe
         recipe_count=validation.recipe_count,
         coverage=validation.coverage,
         inserted=summary.inserted,
+        updated=summary.updated,
         skipped_existing=summary.skipped_existing,
         dry_run=summary.dry_run,
         applied=applied,

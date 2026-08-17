@@ -12,6 +12,7 @@ from src.app.services.catalog_food_reference_review_service import (
     CatalogFoodReferenceReviewService,
 )
 from src.app.services.catalog_meal_seed_import_service import CatalogMealSeedImporter
+from src.app.services.catalog_meal_snapshot_service import CatalogMealSnapshotService
 from src.app.services.meal_recommendation_analytics_service import (
     MealRecommendationAnalyticsService,
 )
@@ -36,6 +37,7 @@ from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.repositories.admin_meal_catalog_repository_async import (
     AsyncAdminMealCatalogRepository,
 )
@@ -64,6 +66,8 @@ _cache_monitor = CacheMonitor()
 # Singleton service instances (initialized once, reused across requests)
 _image_store: ImageStorePort | None = None
 _vision_service: VisionAIServicePort | None = None
+_catalog_meal_snapshot_service: CatalogMealSnapshotService | None = None
+_catalog_meal_browse_service = None
 
 
 async def initialize_cache_layer() -> None:
@@ -202,6 +206,33 @@ def get_catalog_meal_seed_importer(
         food_reference_repository,
         candidate_enricher=enrich_missing_with_fatsecret,
     )
+
+
+def get_catalog_meal_snapshot_service() -> CatalogMealSnapshotService:
+    """Return the process-local snapshot shared by catalog readers."""
+    global _catalog_meal_snapshot_service
+    if _catalog_meal_snapshot_service is None:
+        _catalog_meal_snapshot_service = CatalogMealSnapshotService()
+    return _catalog_meal_snapshot_service
+
+
+def get_catalog_meal_browse_service():
+    """Return the read-only public catalog browser service."""
+    global _catalog_meal_browse_service
+    if _catalog_meal_browse_service is None:
+        from src.app.services.catalog_meal_browse_service import (
+            CatalogMealBrowseService,
+        )
+        from src.app.services.meal_recommendation_history_projector import (
+            MealRecommendationHistoryProjector,
+        )
+
+        _catalog_meal_browse_service = CatalogMealBrowseService(
+            uow_factory=AsyncUnitOfWork,
+            snapshot_service=get_catalog_meal_snapshot_service(),
+            history_projector=MealRecommendationHistoryProjector(),
+        )
+    return _catalog_meal_browse_service
 
 
 def get_catalog_food_reference_review_service(

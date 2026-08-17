@@ -205,7 +205,6 @@ from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
 from src.app.queries.weight import GetWeightEntriesQuery
-from src.app.services.catalog_meal_snapshot_service import CatalogMealSnapshotService
 from src.app.services.meal_recommendation_history_projector import (
     MealRecommendationHistoryProjector,
 )
@@ -410,7 +409,9 @@ def get_configured_event_bus() -> EventBus:
     nutrition_integrity_policy = NutritionIntegrityPolicy()
 
     event_bus = PyMediatorEventBus()
-    recommendation_snapshot = CatalogMealSnapshotService()
+    from src.api.base_dependencies import get_catalog_meal_snapshot_service
+
+    recommendation_snapshot = get_catalog_meal_snapshot_service()
     recommendation_history = MealRecommendationHistoryProjector()
     graph_settings = get_meal_analyze_graph_settings()
 

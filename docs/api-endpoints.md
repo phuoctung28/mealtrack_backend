@@ -170,6 +170,30 @@ handler/schema when implementing; the bullets below are the durable WHY.
 - `Accept-Language` selects display language; translation failure returns
   successful canonical English rather than failing the request.
 
+### Public meal-catalog browser
+
+- `GET /v1/meal-catalog` and `GET /v1/meal-catalog/{catalog_id}` are
+  authenticated read-only catalog routes. The list accepts
+  `feed=popular|for_you` (default `popular`), `limit` 1–50, non-negative
+  `offset`, trimmed `q` up to 160 characters, normalized exact `cuisine`, and
+  the four catalog meal types.
+- List items use the recommendation nutrition contract, derive calories on the
+  backend from authoritative catalog macros, and intentionally return
+  `ingredients: []` plus `meal_types` and `ingredient_count`; detail returns the
+  full ingredient identity, quantity, and unit list.
+- `popular` is ordered only by the curated nullable `meal_catalog.popularity_rank`
+  with stable name/ID tie-breakers. The route returns 503 until the curated
+  source has been seeded rather than presenting UUID or timestamp order as
+  popularity.
+- `for_you` reuses the shared immutable catalog snapshot, adjusted daily target,
+  canonical linked 90-day ingredient affinity, and deterministic scoring. A
+  cold start falls back to the curated global order and sets `fallback=true`
+  with `ranking_source=curated`; a personalized warm path reports
+  `ranking_source=personalized`.
+- `allergy_evaluated` remains false until canonical allergen evaluation exists.
+- Browse requests do not create recommendation plans, candidate rows, or meal
+  logs; Home's three-day recommendation endpoints remain a separate flow.
+
 ### Food search and barcode
 
 - Search order: optional Redis cache → local `food_reference` → provider fill.

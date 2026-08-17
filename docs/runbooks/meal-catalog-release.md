@@ -13,6 +13,9 @@ payloads, search text, or user identifiers into release notes.
 - Confirm `scripts/data/meal-recommendation-recipes.json` and
   `scripts/data/meal-recommendation-resolver-map.json` are available from the
   approved storage location.
+- Confirm the public browse contract is ready to serve as documented:
+  `popular` requires seeded `popularity_rank` values, and `for_you` can report
+  `fallback=true` with `ranking_source=curated` on cold start.
 
 ## Release Checks
 
@@ -75,10 +78,19 @@ eligible request success >=99.95%.
 6. Smoke requests after deploy:
 
 - `GET /health`
+- `GET /v1/meal-catalog?feed=popular&limit=5`
+- `GET /v1/meal-catalog?feed=for_you&limit=5`
+- `GET /v1/meal-catalog/{catalog_id}`
 - `GET /v1/foods/search?query=rice&limit=5&language=en`
 - `POST /v1/meal-recommendations/three-day` with `Idempotency-Key`
 - `GET /v1/meal-recommendations/{plan_id}`
 - `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}`
+
+Verify `feed`, `ranking_source`, and `fallback` on the browse response instead
+of inferring readiness from a 200 alone.
+
+Local tests, OpenAPI shape, and import dry-runs are not deployment proof; check
+the deployed revision separately before calling the browse surface released.
 
 ## Rollback Order
 
