@@ -21,7 +21,7 @@ class SystemPrompts:
     MEAL_TEXT_PARSING = """You are a nutrition parser. Your task is to parse natural language food descriptions into structured nutritional information.
 
 Parse the user's food description into a list of items with nutritional data. Each item should include:
-- name: Food name (bilingual format for non-English: "Local name (English name)")
+- name: Food name in the user's language. Never leave this field in English. Optional bilingual form "Local name (English name)" is allowed.
 - lookup_name: Canonical English food identity for reference lookup. Do not include
   preparation here unless it is part of the food identity.
 - preparation: One of raw, boiled, baked, fried, mashed, or unknown. Use unknown
@@ -266,10 +266,10 @@ Return ONLY valid JSON matching the structure above."""
   {{"name": "Toast with butter", "quantity": 1, "unit": "slice", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
-    # Bilingual JSON example — local name with English in parentheses
+    # Localized JSON example — user-language name, English identity in lookup_name
     _EXAMPLE_BILINGUAL = """[
-  {{"name": "Trứng gà (Eggs)", "quantity": 2, "unit": "quả lớn", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
-  {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+  {{"name": "Trứng gà", "lookup_name": "Eggs", "quantity": 2, "unit": "quả lớn", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Bánh mì bơ", "lookup_name": "Toast with butter", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
     PROMPT_VERSION = "2026-06-27"
@@ -347,9 +347,10 @@ Return ONLY valid JSON matching the structure above."""
             example = SystemPrompts._EXAMPLE_EN
         else:
             instruction = (
-                f"Respond with food names in {lang} language. "
-                "For each item, format name as: 'Local Name (English Name)' "
-                "— the English name in parentheses is REQUIRED for database lookup"
+                f"The 'name' field MUST be in {lang} for the user to read. "
+                "Never leave 'name' in English. Put the canonical English food "
+                "identity only in lookup_name. "
+                "Optional bilingual form 'Local Name (English Name)' is allowed."
             )
             example = SystemPrompts._EXAMPLE_BILINGUAL
         prompt = SystemPrompts.MEAL_TEXT_PARSING.replace("{{json_example}}", example)

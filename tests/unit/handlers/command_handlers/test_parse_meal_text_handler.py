@@ -105,14 +105,15 @@ class _AllowedUnitsFatSecretService:
 
 
 class _NeutralTranslator:
-    def __init__(self, value="Gà"):
+    def __init__(self, value="Gà", mapping=None):
         self.value = value
+        self.mapping = mapping or {}
         self.calls = []
 
     async def translate_texts(self, texts, source_language, target_language):
         self.calls.append((list(texts), source_language, target_language))
         return TranslationResult(
-            (self.value,),
+            tuple(self.mapping.get(text, self.value) for text in texts),
             TranslationOutcome.TRANSLATED,
             source_language,
             target_language,
@@ -527,13 +528,14 @@ async def test_parse_text_translates_only_structurally_identified_english_name()
 
 
 @pytest.mark.asyncio
-async def test_parse_text_unknown_name_provenance_stays_canonical():
+async def test_parse_text_ascii_display_name_is_localized():
     generation = _FakeMealGenerationService(
         responses=[
             {
                 "items": [
                     {
                         "name": "Chicken",
+                        "lookup_name": "Chicken",
                         "quantity": 1,
                         "unit": "serving",
                         "protein": 20,
@@ -555,8 +557,84 @@ async def test_parse_text_unknown_name_provenance_stays_canonical():
         ParseMealTextCommand(text="chicken", user_id="user-1", language="vi")
     )
 
-    assert response.items[0].name == "Chicken"
-    assert translator.calls == []
+    assert response.items[0].name == "Gà"
+    assert translator.calls == [(["Chicken"], "en", "vi")]
+
+
+@pytest.mark.asyncio
+async def test_parse_text_keeps_localized_names_and_translates_ascii_leftovers():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Rice vermicelli",
+                        "lookup_name": "Rice vermicelli",
+                        "quantity": 200,
+                        "unit": "g",
+                        "protein": 3.6,
+                        "carbs": 45,
+                        "fat": 0.4,
+                    },
+                    {
+                        "name": "Thịt bò (Beef)",
+                        "lookup_name": "Beef",
+                        "quantity": 80,
+                        "unit": "g",
+                        "protein": 20.8,
+                        "carbs": 0,
+                        "fat": 8.8,
+                    },
+                    {
+                        "name": "Pork knuckle",
+                        "lookup_name": "Pork knuckle",
+                        "quantity": 60,
+                        "unit": "g",
+                        "protein": 11.4,
+                        "carbs": 0,
+                        "fat": 9.6,
+                    },
+                    {
+                        "name": "Nước dùng Bún bò Huế",
+                        "lookup_name": "Bun bo Hue broth",
+                        "quantity": 300,
+                        "unit": "ml",
+                        "protein": 4.5,
+                        "carbs": 3,
+                        "fat": 6,
+                    },
+                ]
+            }
+        ]
+    )
+    translator = _NeutralTranslator(
+        mapping={
+            "Rice vermicelli": "Bún gạo",
+            "Pork knuckle": "Giò heo",
+        }
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=translator,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(
+            text="bún bò Huế", user_id="user-1", language="vi"
+        )
+    )
+
+    names = [item.name for item in response.items]
+    assert names == [
+        "Bún gạo",
+        "Thịt bò",
+        "Giò heo",
+        "Nước dùng Bún bò Huế",
+    ]
+    assert translator.calls == [
+        (["Rice vermicelli", "Pork knuckle"], "en", "vi")
+    ]
 
 
 @pytest.mark.asyncio

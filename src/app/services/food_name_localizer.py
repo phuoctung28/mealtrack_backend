@@ -134,6 +134,12 @@ def translated_values(
     )
 
 
+def is_ascii_display_name(name: str) -> bool:
+    """True when a display name has no localized letters and still needs translation."""
+    stripped = name.strip()
+    return bool(stripped) and all(ord(character) < 128 for character in stripped)
+
+
 def translation_is_cacheable(result: TranslationResult) -> bool:
     """Only complete translations may enter locale-specific caches."""
 

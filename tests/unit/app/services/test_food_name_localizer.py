@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.app.services.food_name_localizer import (
+    is_ascii_display_name,
     translate_food_texts,
     translation_is_cacheable,
 )
@@ -51,3 +52,11 @@ async def test_invalid_translation_service_result_is_unavailable():
 
     assert result.outcome is TranslationOutcome.UNAVAILABLE
     assert result.texts == ("Rice",)
+
+
+def test_ascii_display_name_detects_english_leftovers():
+    assert is_ascii_display_name("Rice vermicelli")
+    assert is_ascii_display_name("Pork knuckle")
+    assert not is_ascii_display_name("Thịt bò")
+    assert not is_ascii_display_name("Nước dùng Bún bò Huế")
+    assert not is_ascii_display_name("  ")

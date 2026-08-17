@@ -19,7 +19,10 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     parse_fatsecret_nutrition,
 )
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
-from src.app.services.food_name_localizer import translate_food_texts
+from src.app.services.food_name_localizer import (
+    is_ascii_display_name,
+    translate_food_texts,
+)
 from src.domain.exceptions.ai_exceptions import AIOutputValidationError
 from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
 from src.domain.model.nutrition.macros import Macros
@@ -225,7 +228,7 @@ class ParseMealTextHandler(
                 item["name"] = self._extract_display_name(
                     item.get("name", "Unknown"), command.language
                 )
-            await self._translate_structured_english_names(
+            await self._localize_english_display_names(
                 enhanced_items, command.language
             )
 
@@ -913,19 +916,24 @@ class ParseMealTextHandler(
             )
         return normalize_serving_options(units, provider_100g_label=True) or []
 
-    async def _translate_structured_english_names(
+    async def _localize_english_display_names(
         self, items: list[dict[str, Any]], language: str
     ) -> None:
-        """Translate only names explicitly identified as English by the payload."""
+        """Translate leftover English display names after bilingual stripping.
+
+        Lookup already ran against lookup_name, so translating name is
+        presentation-only. Names with non-ASCII letters stay as-is.
+        """
         if self._translation_service is None:
             return
-        candidates = [
-            str(item["english_name"])
-            for item in items
-            if isinstance(item.get("english_name"), str)
-            and item["english_name"].strip()
-            and item.get("name") == item.get("english_name")
-        ]
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            name = str(item.get("name") or "").strip()
+            if not is_ascii_display_name(name) or name in seen:
+                continue
+            seen.add(name)
+            candidates.append(name)
         if not candidates:
             return
         result = await translate_food_texts(
@@ -940,9 +948,10 @@ class ParseMealTextHandler(
             return
         translated_by_source = dict(zip(candidates, result.texts, strict=False))
         for item in items:
-            english_name = item.get("english_name")
-            if english_name and item.get("name") == english_name:
-                item["name"] = translated_by_source.get(english_name, english_name)
+            name = str(item.get("name") or "").strip()
+            translated = translated_by_source.get(name)
+            if isinstance(translated, str) and translated.strip():
+                item["name"] = translated.strip()
 
     @staticmethod
     def _extract_english_name(name: str) -> str:
