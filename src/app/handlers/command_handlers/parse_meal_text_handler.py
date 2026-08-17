@@ -651,13 +651,6 @@ class ParseMealTextHandler(
                 "fiber_g": per_100g.get("fiber_100g", per_100g.get("fiber", 0)),
             }
         )
-        item["protein_per_100g"] = per_100g.get(
-            "protein_100g", per_100g.get("protein", 0)
-        )
-        item["carbs_per_100g"] = per_100g.get("carbs_100g", per_100g.get("carbs", 0))
-        item["fat_per_100g"] = per_100g.get("fat_100g", per_100g.get("fat", 0))
-        item["fiber_per_100g"] = per_100g.get("fiber_100g", per_100g.get("fiber", 0))
-        item["sugar_per_100g"] = per_100g.get("sugar_100g", per_100g.get("sugar", 0))
         return item
 
     async def _provider_call(
@@ -773,11 +766,6 @@ class ParseMealTextHandler(
                 "fiber_g": candidate.fiber_per_100g,
             }
         )
-        item["protein_per_100g"] = candidate.protein_per_100g
-        item["carbs_per_100g"] = candidate.carbs_per_100g
-        item["fat_per_100g"] = candidate.fat_per_100g
-        item["fiber_per_100g"] = candidate.fiber_per_100g
-        item["sugar_per_100g"] = candidate.sugar_per_100g
         item["allowed_units"] = allowed_units
         return item
 

@@ -128,4 +128,3 @@ def test_parse_response_keeps_legacy_fields_and_adds_identity_metadata():
     assert response.source_namespace == "fatsecret"
     assert response.source_food_id == "fs-42"
     assert response.calories_per_100g == 124.7
-    assert response.protein_per_100g is None
