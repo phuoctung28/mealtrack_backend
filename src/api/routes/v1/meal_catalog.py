@@ -164,7 +164,7 @@ async def _personalization_context(request: Request, *, user_id: str, event_bus)
     except ResourceNotFoundException:
         return None, None, None
     except ExternalServiceException as exc:
-        if exc.error_code == "target_unavailable":
+        if exc.error_code in {"target_unavailable", "target_service_unavailable"}:
             return None, None, None
         raise
     except Exception as exc:

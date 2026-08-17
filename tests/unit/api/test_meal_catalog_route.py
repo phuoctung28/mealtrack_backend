@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exceptions import ExternalServiceException
 from src.api.routes.v1 import meal_catalog as meal_catalog_route
 from src.api.routes.v1.meal_catalog import router
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
@@ -125,6 +126,100 @@ async def test_for_you_context_marks_weekly_budget_read_only():
     assert context[2] == 2000
     budget_query = next(query for query in sent if isinstance(query, GetWeeklyBudgetQuery))
     assert budget_query.read_only is True
+
+
+@pytest.mark.asyncio
+async def test_for_you_context_falls_back_when_read_only_target_is_unavailable():
+    class _Bus:
+        async def send(self, query):
+            if isinstance(query, GetUserTimezoneQuery):
+                return "UTC"
+            raise ExternalServiceException(
+                "Authoritative target calculation is unavailable",
+                "target_service_unavailable",
+            )
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-timezone", b"UTC")],
+        }
+    )
+
+    context = await meal_catalog_route._personalization_context(
+        request,
+        user_id="user-1",
+        event_bus=_Bus(),
+    )
+
+    assert context == (None, None, None)
+
+
+def test_for_you_endpoint_falls_back_to_popular_when_target_is_unavailable(monkeypatch):
+    class _Bus:
+        async def send(self, query):
+            if isinstance(query, GetUserTimezoneQuery):
+                return "UTC"
+            raise ExternalServiceException(
+                "Authoritative target calculation is unavailable",
+                "target_service_unavailable",
+            )
+
+    class _FallbackService:
+        async def list_meals(self, **kwargs):
+            assert kwargs["daily_calories"] is None
+            assert kwargs["start_date"] is None
+            assert kwargs["timezone"] is None
+            return SimpleNamespace(
+                items=(_meal(),),
+                total=1,
+                feed=CatalogFeed.POPULAR,
+                ranking_source="curated",
+                fallback=True,
+                allergy_evaluated=False,
+            )
+
+    from src.api.base_dependencies import get_catalog_meal_browse_service
+
+    app = _app()
+    app.dependency_overrides[get_catalog_meal_browse_service] = (
+        lambda: _FallbackService()
+    )
+    monkeypatch.setattr(meal_catalog_route, "get_configured_event_bus", lambda: _Bus())
+
+    response = TestClient(app).get("/v1/meal-catalog?feed=for_you")
+
+    assert response.status_code == 200
+    assert response.json()["feed"] == "popular"
+    assert response.json()["fallback"] is True
+
+
+@pytest.mark.asyncio
+async def test_for_you_context_propagates_unrelated_external_service_errors():
+    class _Bus:
+        async def send(self, query):
+            if isinstance(query, GetUserTimezoneQuery):
+                return "UTC"
+            raise ExternalServiceException(
+                "Catalog personalization failed",
+                "catalog_personalization_unavailable",
+            )
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-timezone", b"UTC")],
+        }
+    )
+
+    with pytest.raises(ExternalServiceException) as error:
+        await meal_catalog_route._personalization_context(
+            request,
+            user_id="user-1",
+            event_bus=_Bus(),
+        )
+
+    assert error.value.error_code == "catalog_personalization_unavailable"
 
 
 def test_detail_returns_ingredient_identity_and_backend_calories():
