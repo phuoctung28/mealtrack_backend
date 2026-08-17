@@ -16,6 +16,9 @@ from src.api.schemas.response import (
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
+from src.domain.model.meal.meal_translation_domain_models import (
+    CURRENT_MEAL_TRANSLATION_VERSION,
+)
 from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
@@ -227,7 +230,7 @@ class MealMapper:
 
         if target_language and target_language != "en" and meal.translations:
             tr = meal.translations.get(target_language)
-            if tr:
+            if tr and tr.translation_version == CURRENT_MEAL_TRANSLATION_VERSION:
                 translation_language = target_language
                 # Apply each translated field independently if it exists
                 # (lenient check - scanned meals may not have instructions)

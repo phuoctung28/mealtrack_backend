@@ -91,6 +91,9 @@ internal IDs, status codes, and error class.
 - The OpenAI translation adapter uses the Responses API with
   `store_responses=False`; the translation path never opts back into payload
   storage.
+- Persisted meal translation rows written before the active translation version
+  are treated as stale and excluded from responses until the next translation
+  request rewrites them.
 - Translation requests are bounded indexed batches. The adapter sends the
   indexed item text only, treats it as data rather than instructions, and
   preserves placeholders, units, and brands.
