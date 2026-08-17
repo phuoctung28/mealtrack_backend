@@ -68,12 +68,17 @@ async def _ensure_requested_meal_translation(
     meal_translation_service,
 ):
     """Materialize a missing locale without serving a partial translation."""
+    if MealMapper.has_persisted_image_display_names(meal):
+        return meal
     if language == "en":
         return meal
 
     food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
     instructions = getattr(meal, "instructions", None)
     if not meal.dish_name and not food_items and not instructions:
+        return meal
+
+    if MealMapper.has_direct_response_localization(meal, language):
         return meal
 
     expected_ingredient_count = sum(

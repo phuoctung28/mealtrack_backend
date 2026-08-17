@@ -1,5 +1,8 @@
 """Tests for prompt constants, including fallback meal name localization."""
 
+import pytest
+
+from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
 from src.domain.services.prompts.prompt_constants import (
     LANGUAGE_NAMES,
     get_fallback_meal_name,
@@ -106,6 +109,25 @@ class TestBasicAnalysisPromptConstraints:
 
         prompt = BasicAnalysisStrategy().get_analysis_prompt()
         assert prompt == SystemPrompts.VISION_ANALYSIS
+
+    def test_localized_analysis_prompt_keeps_english_canonical_fields(self):
+        prompt = BasicAnalysisStrategy(language="vi").get_analysis_prompt()
+
+        assert '"localized_language": "vi"' in prompt
+        assert '"localized_dish_name"' in prompt
+        assert '"localized_name"' in prompt
+        assert "canonical English food identities" in prompt
+        assert "Vietnamese" in prompt
+
+    @pytest.mark.parametrize(
+        "language", sorted(SUPPORTED_TRANSLATION_LANGUAGES - {"en"})
+    )
+    def test_localized_analysis_prompt_covers_every_supported_language(self, language):
+        prompt = BasicAnalysisStrategy(language=language).get_analysis_prompt()
+
+        assert f'"localized_language": "{language}"' in prompt
+        assert LANGUAGE_NAMES[language] in prompt
+        assert "canonical English food identities" in prompt
 
     def test_basic_analysis_prompt_includes_food_guard_contract(self):
         """Vision prompt must expose the single-stage food guard field."""

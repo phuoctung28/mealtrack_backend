@@ -3,7 +3,11 @@
 Centralizes prompt management for easy maintenance and versioning.
 """
 
-from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
+from src.domain.constants.languages import (
+    SUPPORTED_TRANSLATION_LANGUAGES,
+    normalize_language,
+)
+from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES
 
 
 class SystemPrompts:
@@ -256,6 +260,40 @@ WORKED EXAMPLE 2 — Coca-Cola 330ml can:
 }
 
 Return ONLY valid JSON matching the structure above."""
+
+    @staticmethod
+    def get_vision_analysis_prompt(language: str = "en") -> str:
+        """Add same-call localized display fields for a non-English request."""
+        language = normalize_language(language)
+        if language == "en":
+            return SystemPrompts.VISION_ANALYSIS
+
+        language_name = LANGUAGE_NAMES.get(language, language)
+        prompt = SystemPrompts.VISION_ANALYSIS.replace(
+            '  "dish_name": "Overall dish name or comma-separated items if complex",',
+            '  "dish_name": "Overall dish name or comma-separated items if complex",\n'
+            f'  "localized_language": "{language}",\n'
+            f'  "localized_dish_name": "Overall dish name in {language_name}",',
+        ).replace(
+            '      "name": "Food name in English",',
+            '      "name": "Food name in English",\n'
+            f'      "localized_name": "Food name in {language_name}",',
+        )
+        prompt = prompt.replace(
+            "Return ONLY valid JSON matching the structure above.",
+            "Return ONLY valid JSON matching the structure above and the localized fields.",
+        )
+        return (
+            prompt
+            + f"""\n\nLOCALIZED DISPLAY CONTRACT — requested language: {language_name} ({language})
+- `dish_name` and every `foods[].name` are canonical English food identities.
+- Use only canonical English fields for nutrition, quantity, and reference validation.
+- `localized_language` MUST be exactly `{language}`.
+- `localized_dish_name` and every `foods[].localized_name` MUST be complete, natural {language_name} display text.
+- Localized fields are display-only. Never change quantities or macros because of localization.
+- Do not omit localized fields for any food item.
+"""
+        )
 
     # Supported language codes (ISO 639-1)
     SUPPORTED_LANGUAGES = SUPPORTED_TRANSLATION_LANGUAGES

@@ -14,9 +14,16 @@ from src.app.graphs.meal_analyze.quality_gate import (
 from src.app.graphs.meal_analyze.runtime import AcquiredImage, MealAnalyzeRuntime
 from src.app.graphs.meal_analyze.state import MealAnalyzeGraphState
 from src.domain.constants import MealDefaults
-from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
+from src.domain.exceptions.ai_exceptions import (
+    AIVisionError,
+    AIVisionFailureKind,
+    MealResponseLocalizationError,
+)
 from src.domain.model.meal import Meal, MealImage, MealStatus
-from src.domain.model.meal_projection import MealProjection
+from src.domain.model.meal.meal_response_localization import (
+    parse_meal_response_localization,
+    persist_meal_response_localization,
+)
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
@@ -98,7 +105,9 @@ async def _acquire_scan_by_url_image(
     runtime: MealAnalyzeRuntime,
 ) -> MealAnalyzeGraphState:
     if runtime.download_image_bytes is None:
-        raise RuntimeError("Image downloader dependency is required for URL acquisition")
+        raise RuntimeError(
+            "Image downloader dependency is required for URL acquisition"
+        )
 
     is_food_label = command.scan_mode == "food_label"
     source_url = command.image_url
@@ -195,22 +204,55 @@ async def analyze_vision(
         )
     elif command.user_description:
         strategy = AnalysisStrategyFactory.create_user_context_strategy(
-            command.user_description
+            command.user_description,
+            language=command.language,
         )
         runtime.vision_result = await _run_vision_with_retry(
             runtime,
-            lambda: runtime.vision_service.analyze_with_strategy(
-                image_bytes,
-                strategy,
+            lambda: _analyze_and_validate_locale(
+                runtime,
+                lambda: runtime.vision_service.analyze_with_strategy(
+                    image_bytes,
+                    strategy,
+                ),
             ),
         )
     else:
         runtime.vision_result = await _run_vision_with_retry(
             runtime,
-            lambda: runtime.vision_service.analyze(image_bytes),
+            lambda: _analyze_and_validate_locale(
+                runtime,
+                lambda: runtime.vision_service.analyze(
+                    image_bytes,
+                    language=command.language,
+                ),
+            ),
         )
 
     return {"vision_analyzed": True}
+
+
+async def _analyze_and_validate_locale(runtime: MealAnalyzeRuntime, operation):
+    """Run one vision attempt and reject incomplete localized display data."""
+    result = await operation()
+    command = runtime.command
+    if (
+        command.language == "en"
+        or not runtime.gpt_parser
+        or not isinstance(result, dict)
+    ):
+        runtime.localization = None
+        return result
+
+    structured_data = result.get("structured_data") if isinstance(result, dict) else None
+    if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
+        runtime.localization = None
+        return result
+    runtime.localization = parse_meal_response_localization(
+        structured_data,
+        command.language,
+    )
+    return result
 
 
 async def _run_vision_with_retry(
@@ -225,10 +267,14 @@ async def _run_vision_with_retry(
             return await operation()
         except Exception as exc:
             last_error = exc
-            if isinstance(exc, AIVisionError) and exc.kind in (
-                AIVisionFailureKind.schema_validation,
-                AIVisionFailureKind.json_parse,
-                AIVisionFailureKind.no_food,
+            if isinstance(exc, MealResponseLocalizationError) or (
+                isinstance(exc, AIVisionError)
+                and exc.kind
+                in (
+                    AIVisionFailureKind.schema_validation,
+                    AIVisionFailureKind.json_parse,
+                    AIVisionFailureKind.no_food,
+                )
             ):
                 raise
             if attempt == max_attempts:
@@ -313,7 +359,10 @@ async def maybe_validate_reference(
         return {"reference_validated": False}
     if runtime.food_reference_validation_service is None:
         return {"reference_validated": False}
-    if isinstance(runtime.command, ScanByUrlCommand) and runtime.command.scan_mode == "food_label":
+    if (
+        isinstance(runtime.command, ScanByUrlCommand)
+        and runtime.command.scan_mode == "food_label"
+    ):
         return {"reference_validated": False}
 
     # Full meal validation happens after the domain object exists.
@@ -324,7 +373,7 @@ async def persist_meal(
     state: MealAnalyzeGraphState,
     runtime: MealAnalyzeRuntime,
 ) -> MealAnalyzeGraphState:
-    """Persist a READY meal and reload the full projection."""
+    """Persist a READY meal and return the canonical response source."""
     if runtime.acquired_image is None:
         raise RuntimeError("Image must be acquired before meal persistence")
     if runtime.nutrition is None:
@@ -352,30 +401,23 @@ async def persist_meal(
     ):
         meal = await runtime.food_reference_validation_service.validate_meal(meal)
 
+    if not is_food_label:
+        meal = persist_meal_response_localization(meal, runtime.localization)
+
     async with runtime.uow as uow:
         saved_meal = await uow.meals.save(meal)
         await uow.commit()
 
-    # Invalidate immediately after the parent commit so translation latency
-    # cannot leave stale meal caches visible after a successful write.
     if runtime.cache_invalidation and runtime.meal_date:
         await runtime.cache_invalidation.after_meal_write(
             runtime.command.user_id,
             runtime.meal_date,
         )
 
-    await _translate_if_needed(runtime, saved_meal)
-
-    async with runtime.uow as uow:
-        final_meal = await uow.meals.find_by_id(
-            saved_meal.meal_id,
-            projection=MealProjection.FULL_WITH_TRANSLATIONS,
-        )
-
-    runtime.saved_meal = final_meal
+    runtime.saved_meal = saved_meal
     return {
-        "meal_id": final_meal.meal_id,
-        "result": final_meal,
+        "meal_id": saved_meal.meal_id,
+        "result": saved_meal,
         "cache_invalidated": True,
     }
 
@@ -410,9 +452,7 @@ async def _resolve_meal_datetime(runtime: MealAnalyzeRuntime):
         meal_datetime = now
 
     zone_info = get_zone_info(user_timezone)
-    meal_type = determine_meal_type_from_timestamp(
-        meal_datetime.astimezone(zone_info)
-    )
+    meal_type = determine_meal_type_from_timestamp(meal_datetime.astimezone(zone_info))
     return meal_datetime, meal_date, meal_type
 
 
@@ -432,7 +472,9 @@ def _build_ready_meal(
     dish_name = MealDefaults.UNNAMED_FOOD_NAME
     source = "food_label" if is_food_label else "scanner"
     if not is_food_label:
-        dish_name = runtime.gpt_parser.parse_dish_name(runtime.vision_result) or "Unknown dish"
+        dish_name = (
+            runtime.gpt_parser.parse_dish_name(runtime.vision_result) or "Unknown dish"
+        )
 
     return Meal(
         meal_id=runtime.meal_id_factory(),
@@ -448,35 +490,11 @@ def _build_ready_meal(
         ),
         source=source,
         dish_name=dish_name,
-        emoji=None if is_food_label else runtime.gpt_parser.parse_emoji(runtime.vision_result),
+        emoji=None
+        if is_food_label
+        else runtime.gpt_parser.parse_emoji(runtime.vision_result),
         ready_at=utc_now(),
         raw_gpt_json=runtime.gpt_parser.extract_raw_json(runtime.vision_result),
         food_label_metadata=runtime.label_metadata if is_food_label else None,
         nutrition=runtime.nutrition,
     )
-
-
-async def _translate_if_needed(runtime: MealAnalyzeRuntime, meal: Meal) -> None:
-    command = runtime.command
-    if (
-        not command.language
-        or command.language == "en"
-        or runtime.meal_translation_service is None
-        or runtime.nutrition is None
-        or not runtime.nutrition.food_items
-    ):
-        return
-
-    try:
-        await runtime.meal_translation_service.translate_meal(
-            meal=meal,
-            dish_name=meal.dish_name,
-            food_items=runtime.nutrition.food_items,
-            target_language=command.language,
-        )
-    except Exception as exc:
-        logger.warning(
-            "[MEAL-ANALYZE-GRAPH] translation failed meal=%s error_type=%s",
-            meal.meal_id,
-            type(exc).__name__,
-        )

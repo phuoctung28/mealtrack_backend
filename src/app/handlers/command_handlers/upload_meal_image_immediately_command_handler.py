@@ -13,9 +13,16 @@ from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
-from src.domain.exceptions.ai_exceptions import AIVisionError, AIVisionFailureKind
+from src.domain.exceptions.ai_exceptions import (
+    AIVisionError,
+    AIVisionFailureKind,
+    MealResponseLocalizationError,
+)
 from src.domain.model.meal import Meal, MealImage, MealStatus
-from src.domain.model.meal_projection import MealProjection
+from src.domain.model.meal.meal_response_localization import (
+    parse_meal_response_localization,
+    persist_meal_response_localization,
+)
 from src.domain.parsers.vision_response_parser import (
     VisionResponseParser as GPTResponseParser,
 )
@@ -24,10 +31,10 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 from src.domain.services.meal_analysis.meal_translation_service import (
     MealTranslationService,
 )
-from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
@@ -103,30 +110,47 @@ class UploadMealImageImmediatelyHandler(
                         f"attempt={attempt}/{max_attempts}"
                     )
                     strategy = AnalysisStrategyFactory.create_user_context_strategy(
-                        command.user_description
+                        command.user_description,
+                        language=command.language,
                     )
-                    return await self.vision_service.analyze_with_strategy(
+                    result = await self.vision_service.analyze_with_strategy(
                         command.file_contents, strategy
                     )
+                    self._validate_localized_vision_result(result, command.language)
+                    return result
 
                 logger.info(
                     f"[PHASE-1-START] meal={meal_id} | "
                     f"vision analysis | attempt={attempt}/{max_attempts}"
                 )
-                return await self.vision_service.analyze(command.file_contents)
+                result = await self.vision_service.analyze(
+                    command.file_contents,
+                    language=command.language,
+                )
+                self._validate_localized_vision_result(result, command.language)
+                return result
             except Exception as e:
                 last_error = e
                 # Deterministic failures (schema/parse/no-food) cannot be fixed by retrying
                 # the same provider chain — skip outer retry and surface immediately
-                if isinstance(e, AIVisionError) and e.kind in (
-                    AIVisionFailureKind.schema_validation,
-                    AIVisionFailureKind.json_parse,
-                    AIVisionFailureKind.no_food,
+                if isinstance(e, MealResponseLocalizationError) or (
+                    isinstance(e, AIVisionError)
+                    and e.kind
+                    in (
+                        AIVisionFailureKind.schema_validation,
+                        AIVisionFailureKind.json_parse,
+                        AIVisionFailureKind.no_food,
+                    )
                 ):
+                    failure_kind = (
+                        e.kind.value
+                        if isinstance(e, AIVisionError)
+                        else "localization_validation"
+                    )
                     logger.warning(
                         "[PHASE-1-NO-RETRY] meal=%s kind=%s attempt=%d/%d",
                         meal_id,
-                        e.kind.value,
+                        failure_kind,
                         attempt,
                         max_attempts,
                     )
@@ -141,6 +165,22 @@ class UploadMealImageImmediatelyHandler(
         if last_error:
             raise last_error
         raise RuntimeError("Vision analysis failed without a captured exception.")
+
+    @staticmethod
+    def _validate_localized_vision_result(
+        result: Any,
+        language: str,
+    ) -> None:
+        """Reject incomplete same-call locale output before meal persistence."""
+        if language == "en" or not isinstance(result, dict):
+            return
+        structured_data = result.get("structured_data") if isinstance(result, dict) else None
+        if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
+            return
+        parse_meal_response_localization(
+            structured_data,
+            language,
+        )
 
     def _validate_cloudinary_url(self, url: str) -> bool:
         """Validate that the Cloudinary response is a valid HTTPS URL."""
@@ -271,6 +311,16 @@ class UploadMealImageImmediatelyHandler(
                 ),
                 error_code="NOT_FOOD_IMAGE",
             )
+        structured_data = (
+            analysis_result.get("structured_data")
+            if isinstance(analysis_result, dict)
+            else None
+        )
+        localization = parse_meal_response_localization(
+            structured_data,
+            command.language,
+            expected_food_count=len(nutrition.food_items or []),
+        )
 
         # Step 6: NOW create meal record with verified image URL
         async with self.uow as uow:
@@ -308,6 +358,7 @@ class UploadMealImageImmediatelyHandler(
                 raw_gpt_json=self.gpt_parser.extract_raw_json(analysis_result),
                 nutrition=nutrition,
             )
+            meal = persist_meal_response_localization(meal, localization)
 
             saved_meal = await uow.meals.save(meal)
             await uow.commit()
@@ -322,35 +373,7 @@ class UploadMealImageImmediatelyHandler(
             f"total_elapsed={total_elapsed:.2f}s"
         )
 
-        # Translation repository uses its own DB session, so the parent meal must
-        # be committed before inserting meal_translation rows.
-        if (
-            command.language
-            and command.language != "en"
-            and self.meal_translation_service
-            and nutrition
-            and nutrition.food_items
-        ):
-            try:
-                await self.meal_translation_service.translate_meal(
-                    meal=saved_meal,
-                    dish_name=saved_meal.dish_name,
-                    food_items=nutrition.food_items,
-                    target_language=command.language,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "[TRANSLATION] failed for meal=%s error_type=%s",
-                    saved_meal.meal_id,
-                    type(exc).__name__,
-                )
-
-        async with self.uow as uow:
-            final_meal = await uow.meals.find_by_id(
-                saved_meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
-            )
-
-        return final_meal
+        return saved_meal
 
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
