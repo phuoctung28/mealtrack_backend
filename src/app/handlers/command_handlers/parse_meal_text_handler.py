@@ -20,13 +20,15 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
 )
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
 from src.app.services.food_name_localizer import (
-    is_ascii_display_name,
+    needs_display_localization,
     translate_food_texts,
 )
 from src.domain.exceptions.ai_exceptions import AIOutputValidationError
-from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
+from src.domain.model.ai.nutrition_contracts import (
+    LocalizedFoodNameBatch,
+    MealTextNutritionResponse,
+)
 from src.domain.model.nutrition.macros import Macros
-from src.domain.model.translation_result import TranslationOutcome
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.ai_output_validation_service import (
     build_validation_retry_prompt,
@@ -922,36 +924,88 @@ class ParseMealTextHandler(
         """Translate leftover English display names after bilingual stripping.
 
         Lookup already ran against lookup_name, so translating name is
-        presentation-only. Names with non-ASCII letters stay as-is.
+        presentation-only. Names that are already localized stay as-is.
         """
-        if self._translation_service is None:
+        leftovers = self._english_display_names(items, language)
+        if not leftovers:
             return
-        candidates: list[str] = []
+        if self._translation_service is not None:
+            result = await translate_food_texts(
+                leftovers,
+                target_language=language,
+                translation_service=self._translation_service,
+            )
+            self._apply_localized_names(
+                items,
+                dict(zip(leftovers, result.texts, strict=False)),
+                language,
+            )
+            leftovers = self._english_display_names(items, language)
+        if leftovers:
+            await self._force_translate_display_names(items, leftovers, language)
+
+    @staticmethod
+    def _english_display_names(items: list[dict[str, Any]], language: str) -> list[str]:
+        names: list[str] = []
         seen: set[str] = set()
         for item in items:
             name = str(item.get("name") or "").strip()
-            if not is_ascii_display_name(name) or name in seen:
+            if not needs_display_localization(name, language) or name in seen:
                 continue
             seen.add(name)
-            candidates.append(name)
-        if not candidates:
-            return
-        result = await translate_food_texts(
-            candidates,
-            target_language=language,
-            translation_service=self._translation_service,
-        )
-        if result.outcome not in {
-            TranslationOutcome.TRANSLATED,
-            TranslationOutcome.PARTIAL,
-        }:
-            return
-        translated_by_source = dict(zip(candidates, result.texts, strict=False))
+            names.append(name)
+        return names
+
+    @staticmethod
+    def _apply_localized_names(
+        items: list[dict[str, Any]],
+        translated_by_source: dict[str, Any],
+        language: str,
+    ) -> None:
         for item in items:
             name = str(item.get("name") or "").strip()
             translated = translated_by_source.get(name)
-            if isinstance(translated, str) and translated.strip():
-                item["name"] = translated.strip()
+            if not isinstance(translated, str) or not translated.strip():
+                continue
+            localized = translated.strip()
+            if needs_display_localization(localized, language):
+                continue
+            item["name"] = localized
+
+    async def _force_translate_display_names(
+        self,
+        items: list[dict[str, Any]],
+        leftovers: list[str],
+        language: str,
+    ) -> None:
+        try:
+            raw = await self._meal_generation_service.generate_meal_plan_async(
+                prompt=json.dumps({"names": leftovers}, ensure_ascii=False),
+                system_message=SystemPrompts.get_food_name_localization_prompt(
+                    language
+                ),
+                response_type="json",
+                max_tokens=512,
+                schema=LocalizedFoodNameBatch,
+                model_purpose="parse_text",
+                thinking_budget=0,
+            )
+            payload = self._extract_parse_text_payload(raw)
+            validated = validate_ai_output(
+                payload,
+                schema=LocalizedFoodNameBatch,
+                purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                attempt_count=1,
+            )
+        except Exception:
+            logger.warning("parse-text leftover name localization failed", exc_info=True)
+            return
+        translated = [str(name).strip() for name in validated.get("items", [])]
+        if len(translated) != len(leftovers):
+            return
+        self._apply_localized_names(
+            items, dict(zip(leftovers, translated, strict=False)), language
+        )
 
     @staticmethod
     def _extract_english_name(name: str) -> str:

@@ -638,6 +638,43 @@ async def test_parse_text_keeps_localized_names_and_translates_ascii_leftovers()
 
 
 @pytest.mark.asyncio
+async def test_parse_text_force_localizes_english_when_translator_leaves_original():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Shredded pork skin and pork",
+                        "lookup_name": "Shredded pork skin and pork",
+                        "quantity": 1,
+                        "unit": "phần",
+                        "protein": 8,
+                        "carbs": 2,
+                        "fat": 7,
+                    }
+                ]
+            },
+            {"items": ["Bì heo"]},
+        ]
+    )
+    translator = _NeutralTranslator(value="Shredded pork skin and pork")
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=translator,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(
+            text="cơm tấm", user_id="user-1", language="vi"
+        )
+    )
+
+    assert response.items[0].name == "Bì heo"
+    assert len(generation.calls) == 2
+
+
+@pytest.mark.asyncio
 async def test_parse_text_preserves_fatsecret_allowed_units(monkeypatch):
     meal_generation_service = _FakeMealGenerationService(
         responses=[

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from typing import Any, Protocol
 
@@ -138,6 +139,55 @@ def is_ascii_display_name(name: str) -> bool:
     """True when a display name has no localized letters and still needs translation."""
     stripped = name.strip()
     return bool(stripped) and all(ord(character) < 128 for character in stripped)
+
+
+_ENGLISH_CONNECTORS = re.compile(
+    r"\b(and|with|of|the|in|from|style)\b", re.IGNORECASE
+)
+_ENGLISH_FOOD_HINTS = frozenset(
+    {
+        "beef",
+        "bread",
+        "broth",
+        "chicken",
+        "egg",
+        "eggs",
+        "fish",
+        "fried",
+        "grilled",
+        "knuckle",
+        "milk",
+        "noodle",
+        "noodles",
+        "oil",
+        "pork",
+        "potato",
+        "rice",
+        "salad",
+        "sauce",
+        "shredded",
+        "shrimp",
+        "skin",
+        "soup",
+        "steamed",
+        "vermicelli",
+    }
+)
+
+
+def needs_display_localization(name: str, language: str) -> bool:
+    """True when a leftover display name is still English for a non-English user."""
+    if not language or language == "en":
+        return False
+    stripped = name.strip()
+    if not is_ascii_display_name(stripped):
+        return False
+    tokens = re.findall(r"[A-Za-z]+", stripped.lower())
+    if not tokens:
+        return False
+    if _ENGLISH_CONNECTORS.search(stripped):
+        return True
+    return any(token in _ENGLISH_FOOD_HINTS for token in tokens)
 
 
 def translation_is_cacheable(result: TranslationResult) -> bool:

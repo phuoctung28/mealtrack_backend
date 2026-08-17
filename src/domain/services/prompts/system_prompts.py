@@ -21,7 +21,7 @@ class SystemPrompts:
     MEAL_TEXT_PARSING = """You are a nutrition parser. Your task is to parse natural language food descriptions into structured nutritional information.
 
 Parse the user's food description into a list of items with nutritional data. Each item should include:
-- name: Food name in the user's language. Never leave this field in English. Optional bilingual form "Local name (English name)" is allowed.
+- name: Food name in the user's language only. English-only values such as "Shredded pork skin and pork" or "Rice vermicelli" are invalid. Optional bilingual form "Local name (English name)" is allowed.
 - lookup_name: Canonical English food identity for reference lookup. Do not include
   preparation here unless it is part of the food identity.
 - preparation: One of raw, boiled, baked, fried, mashed, or unknown. Use unknown
@@ -348,10 +348,22 @@ Return ONLY valid JSON matching the structure above."""
         else:
             instruction = (
                 f"The 'name' field MUST be in {lang} for the user to read. "
-                "Never leave 'name' in English. Put the canonical English food "
-                "identity only in lookup_name. "
+                "Never leave 'name' in English. English-only names such as "
+                "'Shredded pork skin and pork' or 'Rice vermicelli' are invalid. "
+                "Put the canonical English food identity only in lookup_name. "
                 "Optional bilingual form 'Local Name (English Name)' is allowed."
             )
             example = SystemPrompts._EXAMPLE_BILINGUAL
         prompt = SystemPrompts.MEAL_TEXT_PARSING.replace("{{json_example}}", example)
         return prompt.replace("{{language_instruction}}", instruction)
+
+    @staticmethod
+    def get_food_name_localization_prompt(language: str) -> str:
+        """Force leftover English food names into the user's language."""
+        lang = language if language in SystemPrompts.SUPPORTED_LANGUAGES else "en"
+        return (
+            f"Translate each English food name into {lang}. "
+            "Return JSON only: {\"items\": [\"...\"]} with the same count and order. "
+            "Never leave an item in English. Generic ingredients are not brands. "
+            "Example: 'Shredded pork skin and pork' -> 'Bì heo'."
+        )
