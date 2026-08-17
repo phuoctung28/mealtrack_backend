@@ -1,26 +1,30 @@
 """Mock Vision AI Service for testing."""
 
 from copy import deepcopy
-from typing import Dict, Any, List
+from typing import Any
 
-from src.domain.strategies.meal_analysis_strategy import MealAnalysisStrategy
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.strategies.meal_analysis_strategy import MealAnalysisStrategy
 
 
 class MockVisionAIService(VisionAIServicePort):
     """Mock implementation of vision AI service for testing."""
 
-    def __init__(self, mock_response: Dict[str, Any] = None):
+    def __init__(self, mock_response: dict[str, Any] = None):
         """Initialize with optional mock response."""
         self.mock_response = mock_response or self._default_response()
 
-    async def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
+    async def analyze(
+        self,
+        image_bytes: bytes,
+        language: str = "en",
+    ) -> dict[str, Any]:
         """Return mock analysis result."""
         return self.mock_response
 
     async def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Return mock analysis result for URL-based strategy analysis."""
         response = deepcopy(self.mock_response)
         response["image_url"] = image_url
@@ -28,8 +32,8 @@ class MockVisionAIService(VisionAIServicePort):
         return response
 
     async def analyze_with_ingredients_context(
-        self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, image_bytes: bytes, ingredients: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Return mock analysis result with ingredients context."""
         response = deepcopy(self.mock_response)
         if ingredients:
@@ -38,7 +42,7 @@ class MockVisionAIService(VisionAIServicePort):
 
     async def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Return mock analysis result with portion context."""
         response = deepcopy(self.mock_response)
         response["portion_context"] = {"portion_size": portion_size, "unit": unit}
@@ -46,7 +50,7 @@ class MockVisionAIService(VisionAIServicePort):
 
     async def analyze_with_weight_context(
         self, image_bytes: bytes, weight_grams: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Return mock analysis result with weight context."""
         response = deepcopy(self.mock_response)
         response["weight_context"] = {"weight_grams": weight_grams}
@@ -62,13 +66,13 @@ class MockVisionAIService(VisionAIServicePort):
 
     async def analyze_with_strategy(
         self, image_bytes: bytes, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Return mock analysis result using a strategy."""
         response = deepcopy(self.mock_response)
         response["strategy_used"] = strategy.get_strategy_name()
         return response
 
-    def _default_response(self) -> Dict[str, Any]:
+    def _default_response(self) -> dict[str, Any]:
         """Default mock response for meal analysis."""
         return {
             "structured_data": {

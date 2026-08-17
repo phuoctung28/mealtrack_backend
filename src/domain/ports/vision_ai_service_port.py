@@ -11,12 +11,16 @@ class VisionAIServicePort(ABC):
     This port is used by the application layer to interact with vision AI services
     behind the configured provider router.
 
-    NOTE: All methods generate content in English. Translation to user's
-    language happens post-generation via TranslationService (PR #61 approach).
+    Meal-scan methods keep canonical food identities in English and may include
+    same-call localized display fields for the requested language.
     """
 
     @abstractmethod
-    async def analyze(self, image_bytes: bytes) -> dict[str, Any]:
+    async def analyze(
+        self,
+        image_bytes: bytes,
+        language: str = "en",
+    ) -> dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
 

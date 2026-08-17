@@ -18,6 +18,7 @@ from src.domain.services.meal_value_insight_contract import (
 from src.observability import log_event
 
 INSIGHT_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7
+MEAL_VALUE_INSIGHT_CACHE_VERSION = "v11"
 logger = logging.getLogger(__name__)
 
 
@@ -348,7 +349,7 @@ class MealValueInsightService:
     def _cache_key(self, summary: dict[str, Any]) -> str:
         payload = json.dumps(summary, ensure_ascii=False, sort_keys=True)
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
-        return f"meal-value-insights:v10:{digest}"
+        return f"meal-value-insights:{MEAL_VALUE_INSIGHT_CACHE_VERSION}:{digest}"
 
     def _target_language(self, language: str) -> str:
         normalized = (language or "en").split("-")[0].lower()

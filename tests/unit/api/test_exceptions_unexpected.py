@@ -6,6 +6,7 @@ from src.api.exceptions import handle_exception
 from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
+    MealResponseLocalizationError,
 )
 from src.domain.services.nutrition_calculation_service import (
     AuthoritativeUnitMismatchError,
@@ -65,6 +66,24 @@ def test_handle_exception_ai_output_validation_returns_422_without_field_details
         "attempt_count": 2,
     }
     assert "quantity_g" not in str(exc.detail)
+
+
+def test_handle_exception_localization_validation_returns_422_without_internal_details():
+    exc = handle_exception(
+        MealResponseLocalizationError("localized food item is missing")
+    )
+
+    assert isinstance(exc, HTTPException)
+    assert exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert exc.detail == {
+        "error_code": "AI_OUTPUT_INVALID",
+        "message": (
+            "AI could not produce complete localized meal information. "
+            "Please try again with a clearer photo."
+        ),
+        "details": {},
+    }
+    assert "missing" not in str(exc.detail)
 
 
 def test_handle_exception_authoritative_unit_mismatch_returns_422():

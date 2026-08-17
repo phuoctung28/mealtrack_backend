@@ -133,6 +133,28 @@ def test_meals_analyze_ai_unavailable_returns_503(client: TestClient):
     assert r.json()["detail"]["error_code"] == "AI_UNAVAILABLE"
 
 
+def test_meals_analyze_localization_error_returns_controlled_422(client: TestClient):
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
+
+    class _LocalizationErrorBus:
+        async def send(self, msg):
+            raise MealResponseLocalizationError("localized food item is missing")
+
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _LocalizationErrorBus()
+    )
+
+    r = client.post(
+        "/v1/meals/image/analyze",
+        files={"file": ("x.jpg", b"image-bytes", "image/jpeg")},
+        headers={"Accept-Language": "vi"},
+    )
+
+    assert r.status_code == 422
+    assert r.json()["detail"]["error_code"] == "AI_OUTPUT_INVALID"
+
+
 def test_meals_analyze_non_food_returns_not_food_image(client: TestClient):
     from src.api.dependencies.event_bus import get_configured_event_bus
 
@@ -168,6 +190,31 @@ def test_scan_by_url_non_food_returns_not_food_image(client: TestClient):
 
     assert r.status_code == 400
     assert r.json()["detail"]["error_code"] == "NOT_FOOD_IMAGE"
+
+
+def test_scan_by_url_localization_error_returns_controlled_422(client: TestClient):
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
+
+    class _LocalizationErrorBus:
+        async def send(self, msg):
+            raise MealResponseLocalizationError("localized food item is missing")
+
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _LocalizationErrorBus()
+    )
+
+    r = client.post(
+        "/v1/meals/scan-by-url",
+        json={
+            "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
+            "image_id": "abc",
+        },
+        headers={"Accept-Language": "vi"},
+    )
+
+    assert r.status_code == 422
+    assert r.json()["detail"]["error_code"] == "AI_OUTPUT_INVALID"
 
 
 def test_scan_by_url_rejects_food_label_mode(client: TestClient):

@@ -17,6 +17,7 @@ from fastapi import HTTPException, status
 from src.domain.exceptions.ai_exceptions import (
     AIOutputValidationError,
     AIUnavailableError,
+    MealResponseLocalizationError,
 )
 from src.domain.services.nutrition_calculation_service import (
     AuthoritativeUnitMismatchError,
@@ -168,6 +169,20 @@ def handle_exception(exc: Exception) -> HTTPException:
                     "purpose": exc.purpose,
                     "attempt_count": exc.attempt_count,
                 },
+            },
+        )
+
+    if isinstance(exc, MealResponseLocalizationError):
+        logger.warning("AI localization output validation failed: %s", exc)
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "AI_OUTPUT_INVALID",
+                "message": (
+                    "AI could not produce complete localized meal information. "
+                    "Please try again with a clearer photo."
+                ),
+                "details": {},
             },
         )
 
