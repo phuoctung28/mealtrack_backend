@@ -7,7 +7,8 @@ data integrity and support multiple languages.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+
+CURRENT_MEAL_TRANSLATION_VERSION = 2
 
 
 @dataclass
@@ -23,7 +24,7 @@ class FoodItemTranslation:
 
     food_item_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -56,32 +57,45 @@ class MealTranslation:
         translated_at: Timestamp of translation
         meal_instruction: Translated instructions as List[{instruction, duration_minutes}]
         meal_ingredients: Translated ingredient names as List[str] (same order as food items)
+        translation_version: Contract version used to create the persisted row.
     """
 
     meal_id: str
     language: str
     dish_name: str
-    food_items: List[FoodItemTranslation]
+    food_items: list[FoodItemTranslation]
     translated_at: datetime = field(default_factory=datetime.utcnow)
-    meal_instruction: Optional[list] = None
-    meal_ingredients: Optional[list] = None
+    meal_instruction: list | None = None
+    meal_ingredients: list | None = None
+    translation_version: int | None = CURRENT_MEAL_TRANSLATION_VERSION
 
     def is_fully_cached(
         self,
         *,
         expected_ingredient_count: int | None = None,
         expected_instruction_count: int | None = None,
+        expected_translation_version: int = CURRENT_MEAL_TRANSLATION_VERSION,
     ) -> bool:
         """Return whether the row covers the available source manifest."""
-        if self.dish_name is None or self.meal_ingredients is None:
+        if (
+            self.translation_version != expected_translation_version
+            or self.dish_name is None
+            or self.meal_ingredients is None
+        ):
             return False
-        if expected_ingredient_count is not None and len(self.meal_ingredients) != expected_ingredient_count:
+        if (
+            expected_ingredient_count is not None
+            and len(self.meal_ingredients) != expected_ingredient_count
+        ):
             return False
         if expected_instruction_count is None:
             return self.meal_instruction is not None
         if expected_instruction_count == 0:
             return self.meal_instruction in (None, [])
-        return self.meal_instruction is not None and len(self.meal_instruction) == expected_instruction_count
+        return (
+            self.meal_instruction is not None
+            and len(self.meal_instruction) == expected_instruction_count
+        )
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -91,6 +105,7 @@ class MealTranslation:
             "dish_name": self.dish_name,
             "food_items": [fi.to_dict() for fi in self.food_items],
             "translated_at": self.translated_at.isoformat(),
+            "translation_version": self.translation_version,
         }
 
     @classmethod
@@ -102,11 +117,14 @@ class MealTranslation:
             dish_name=data["dish_name"],
             food_items=[FoodItemTranslation.from_dict(fi) for fi in data["food_items"]],
             translated_at=datetime.fromisoformat(data["translated_at"]),
+            # Missing versions belong to the legacy contract and must not be
+            # admitted as current cache entries.
+            translation_version=data.get("translation_version"),
         )
 
     def get_food_item_translation(
         self, food_item_id: str
-    ) -> Optional[FoodItemTranslation]:
+    ) -> FoodItemTranslation | None:
         """Get translation for a specific food item."""
         for fi in self.food_items:
             if fi.food_item_id == food_item_id:

@@ -4,7 +4,8 @@ Meal translation database models.
 Stores translated content separately from original English to support
 multiple languages.
 """
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Boolean, JSON
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from src.infra.database.base import Base
@@ -31,6 +32,8 @@ class MealTranslationORM(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     meal_instruction = Column(JSON, nullable=True)
     meal_ingredients = Column(JSON, nullable=True)
+    # NULL marks rows created before the OpenAI translation contract.
+    translation_version = Column(Integer, nullable=True)
 
     # Soft delete
     is_deleted = Column(Boolean, default=False, nullable=False, server_default="false")

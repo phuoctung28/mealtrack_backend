@@ -11,6 +11,9 @@ import pytest
 from src.api.mappers.meal_mapper import STATUS_MAPPING, MealMapper
 from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
 from src.domain.model.meal import FoodItemTranslation, MealTranslation
+from src.domain.model.meal.meal_translation_domain_models import (
+    CURRENT_MEAL_TRANSLATION_VERSION,
+)
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
 )
@@ -457,6 +460,49 @@ class TestMealMapper:
         assert result.food_items[0].display_name == "Rice"
         assert result.food_items[0].canonical_name == "Rice"
         assert result.translation_language == "vi"
+
+    def test_to_detailed_response_does_not_apply_pre_cutover_translation(self):
+        food_item = FoodItem(
+            id="item-2",
+            name="Rice",
+            quantity=150,
+            unit="g",
+            macros=Macros(protein=4, carbs=43, fat=0.4),
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/detailed.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            dish_name="Rice",
+            ready_at=datetime(2025, 1, 15, 14, 0),
+            created_at=datetime(2025, 1, 15, 13, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=4, carbs=43, fat=0.4),
+                food_items=[food_item],
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm",
+                    meal_ingredients=["Cơm"],
+                    food_items=[],
+                    translation_version=CURRENT_MEAL_TRANSLATION_VERSION - 1,
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert result.dish_name == "Rice"
+        assert result.food_items[0].name == "Rice"
+        assert result.translation_language is None
 
     def test_to_detailed_response_with_custom_food_item(self):
         """Test detailed response with custom food item."""

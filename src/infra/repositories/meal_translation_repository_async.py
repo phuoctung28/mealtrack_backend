@@ -38,6 +38,7 @@ class AsyncMealTranslationRepository(MealTranslationRepositoryPort):
             existing.translated_at = translation.translated_at
             existing.meal_instruction = translation.meal_instruction
             existing.meal_ingredients = translation.meal_ingredients
+            existing.translation_version = translation.translation_version
             for food_item in list(existing.food_items):
                 await self._session.delete(food_item)
             await self._session.flush()

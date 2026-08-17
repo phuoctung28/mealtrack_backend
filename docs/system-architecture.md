@@ -91,8 +91,10 @@ result calories are always derived from stored macros using the backend formula.
 
 Read-path localization is presentation-only. The application layer owns the
 translation service used by catalog and suggestion responses; the infrastructure
-adapter uses the OpenAI Responses API with payload storage disabled. The domain
-translation service returns explicit outcomes, and only
+adapter uses the OpenAI Responses API with payload storage disabled. Persisted
+meal translation rows are versioned against the active translation contract, so
+rows written before that version are invalidated and retranslated on demand.
+The domain translation service returns explicit outcomes, and only
 `TranslationOutcome.TRANSLATED` may be persisted or admitted to locale caches.
 `PARTIAL`, `PASSTHROUGH`, and `UNAVAILABLE` keep canonical text in the response
 path.
