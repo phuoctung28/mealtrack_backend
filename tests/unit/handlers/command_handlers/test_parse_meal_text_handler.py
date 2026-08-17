@@ -351,6 +351,28 @@ def _parse_item(name="food", quantity=100, unit="g", macros=None):
     }
 
 
+def test_parse_text_exposes_portion_density_for_confirmed_save():
+    handler = ParseMealTextHandler(meal_generation_service=_FakeMealGenerationService())
+    item = {
+        "name": "Pork rib",
+        "quantity": 1,
+        "unit": "slice",
+        "protein": 27,
+        "carbs": 0,
+        "fat": 15,
+        "fiber": 0,
+        "sugar": 0,
+    }
+
+    handler._attach_per_100g_snapshot(item)
+
+    assert item["protein_per_100g"] == pytest.approx(90)
+    assert item["fat_per_100g"] == pytest.approx(50)
+    assert item["calories_per_100g"] == pytest.approx(810)
+    assert item["source_snapshot"]["basis"] == "100g"
+    assert item["source_snapshot"]["protein_per_100g"] == pytest.approx(90)
+
+
 @pytest.mark.asyncio
 async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
     meal_generation_service = _FakeMealGenerationService()

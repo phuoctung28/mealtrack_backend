@@ -243,6 +243,10 @@ class ManualMealItemRequest(BaseModel):
         default_factory=list,
         description="Food-specific units allowed for editing this ingredient",
     )
+    source_snapshot: Optional[dict[str, Any]] = Field(
+        None,
+        description="Validated nutrition snapshot returned by parse/search flows",
+    )
     custom_nutrition: Optional[ManualMealCustomNutritionRequest] = Field(
         None,
         description="Custom nutrition data for non-USDA foods",
@@ -318,10 +322,11 @@ class CreateManualMealFromFoodsRequest(BaseModel):
                         item.fdc_id,
                         item.source_namespace,
                         item.source_food_id,
-                        item.custom_nutrition,
                     )
                 ):
                     raise ValueError("local origin requires only food_reference_id")
+                if item.custom_nutrition is not None and item.source_snapshot is None:
+                    raise ValueError("prepared local items require source_snapshot")
             elif item.origin == "usda":
                 if item.fdc_id is None or any(
                     value is not None
@@ -329,20 +334,22 @@ class CreateManualMealFromFoodsRequest(BaseModel):
                         item.food_reference_id,
                         item.source_namespace,
                         item.source_food_id,
-                        item.custom_nutrition,
                     )
                 ):
                     raise ValueError("usda origin requires only fdc_id")
+                if item.custom_nutrition is not None and item.source_snapshot is None:
+                    raise ValueError("prepared usda items require source_snapshot")
             elif item.origin == "provider":
                 if item.source_food_id is None or any(
                     value is not None
                     for value in (
                         item.fdc_id,
                         item.food_reference_id,
-                        item.custom_nutrition,
                     )
                 ):
                     raise ValueError("provider origin requires source_food_id")
+                if item.custom_nutrition is not None and item.source_snapshot is None:
+                    raise ValueError("prepared provider items require source_snapshot")
             elif item.origin == "custom":
                 if item.custom_nutrition is None or any(
                     value is not None

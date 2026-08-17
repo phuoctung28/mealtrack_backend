@@ -513,7 +513,14 @@ class NutritionCalculationService:
                     item.unit,
                     allowed_units,
                     item_name,
-                    strict=True,
+                    # Source-less prepared custom items may come from older
+                    # clients that omit the optional unit table. Preserve the
+                    # established global unit mapping for those items; source
+                    # backed v2 items remain strict against their snapshot.
+                    strict=not (
+                        getattr(item, "origin", None) == "custom"
+                        and not allowed_units
+                    ),
                 )
             factor = quantity_grams / 100.0
             protein = item.custom_nutrition.protein_per_100g * factor

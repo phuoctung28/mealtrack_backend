@@ -35,6 +35,7 @@ class ParsedFoodItemDto:
     fat_per_100g: float | None = None
     fiber_per_100g: float | None = None
     sugar_per_100g: float | None = None
+    source_snapshot: dict[str, Any] | None = None
 
 
 @dataclass
