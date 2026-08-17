@@ -12,7 +12,7 @@ from src.domain.model.nutrition import MAX_FOOD_ITEM_QUANTITY, Macros
 NUTRITION_INTEGRITY_POLICY_VERSION = "nutrition_integrity_v1"
 ACCEPTED_REASON = "accepted"
 DEFAULT_GRAM_SERVING = {"unit": "g", "gram_weight": 1.0, "description": "1 g"}
-_GRAM_UNITS = {"g", "gram", "grams"}
+_GRAM_UNITS = {"g", "gram", "grams", "gramme", "grammes"}
 _PROVIDER_SOURCES = {"fatsecret", "openfoodfacts", "provider"}
 
 # The boundary cases are kept beside the policy so other enforcement layers can

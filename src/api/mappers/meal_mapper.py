@@ -33,7 +33,10 @@ from src.domain.services.meal_calorie_service import (
     effective_meal_calories,
 )
 from src.domain.services.meal_value_insight_contract import MealValueInsights
-from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
+from src.domain.services.nutrition_calculation_service import (
+    quantity_to_grams,
+    reconcile_calories_per_100g,
+)
 
 # Status mapping from domain to API
 STATUS_MAPPING = {
@@ -93,7 +96,6 @@ class MealMapper:
             DetailedMealResponse DTO
         """
         from src.api.schemas.response.meal_responses import (
-            CustomNutritionResponse,
             MacrosResponse,
             MealTranslationResponse,
             NutritionOverrideResponse,
@@ -162,39 +164,13 @@ class MealMapper:
                             sugar_g=item.macros.sugar,
                         )
 
-                    # Calculate per-100g custom nutrition if custom ingredient
-                    custom_nutrition_dto = None
-                    if (
-                        hasattr(item, "is_custom")
-                        and item.is_custom
-                        and item.quantity > 0
-                    ):
-                        quantity_grams = convert_quantity_to_grams(
-                            item.quantity,
-                            item.unit,
+                    custom_nutrition_dto = (
+                        MealMapper._custom_nutrition_response_for_item(
+                            item,
+                            item_calories,
                             canonical_name,
                         )
-                        scale_factor = 100.0 / quantity_grams
-                        custom_nutrition_dto = CustomNutritionResponse(
-                            calories_per_100g=item_calories * scale_factor,
-                            protein_per_100g=(
-                                item.macros.protein * scale_factor
-                                if item.macros
-                                else 0.0
-                            ),
-                            carbs_per_100g=(
-                                item.macros.carbs * scale_factor if item.macros else 0.0
-                            ),
-                            fat_per_100g=(
-                                item.macros.fat * scale_factor if item.macros else 0.0
-                            ),
-                            fiber_per_100g=(
-                                item.macros.fiber * scale_factor if item.macros else 0.0
-                            ),
-                            sugar_per_100g=(
-                                item.macros.sugar * scale_factor if item.macros else 0.0
-                            ),
-                        )
+                    )
 
                     source_nutrition_dto = MealMapper._source_nutrition_response(
                         source_nutrition_by_food_reference,
@@ -529,6 +505,49 @@ class MealMapper:
             macros.fat,
             macros.fiber,
             macros.sugar,
+        )
+
+    @staticmethod
+    def _custom_nutrition_response_for_item(
+        item: FoodItem,
+        item_calories: float,
+        food_name: str | None = None,
+    ):
+        from src.api.schemas.response.meal_responses import CustomNutritionResponse
+
+        if not getattr(item, "is_custom", False) or item.quantity <= 0:
+            return None
+
+        quantity_grams = quantity_to_grams(
+            item.quantity,
+            item.unit,
+            food_name or item.name,
+            getattr(item, "allowed_units", None) or [],
+        )
+        if quantity_grams <= 0:
+            return None
+        scale_factor = 100.0 / quantity_grams
+        protein = item.macros.protein * scale_factor if item.macros else 0.0
+        carbs = item.macros.carbs * scale_factor if item.macros else 0.0
+        fat = item.macros.fat * scale_factor if item.macros else 0.0
+        fiber = item.macros.fiber * scale_factor if item.macros else 0.0
+        sugar = item.macros.sugar * scale_factor if item.macros else 0.0
+        derived = Macros(
+            protein=protein,
+            carbs=carbs,
+            fat=fat,
+            fiber=fiber,
+        ).total_calories
+        return CustomNutritionResponse(
+            calories_per_100g=reconcile_calories_per_100g(
+                item_calories * scale_factor,
+                derived,
+            ),
+            protein_per_100g=protein,
+            carbs_per_100g=carbs,
+            fat_per_100g=fat,
+            fiber_per_100g=fiber,
+            sugar_per_100g=sugar,
         )
 
     @staticmethod

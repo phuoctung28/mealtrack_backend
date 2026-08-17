@@ -902,6 +902,52 @@ class TestMealMapper:
         assert custom.carbs_per_100g == pytest.approx(0.7)
         assert custom.fat_per_100g == pytest.approx(9.6)
 
+    def test_to_detailed_response_custom_nutrition_does_not_treat_nhanh_as_one_gram(self):
+        """Unknown culinary units must not explode per-100g calories 100x."""
+        food_items = [
+            FoodItem(
+                id="item-cilantro",
+                name="Cilantro",
+                quantity=1,
+                unit="nhánh",
+                macros=Macros(protein=5, carbs=5, fat=0),
+                confidence=0.8,
+                is_custom=True,
+                allowed_units=[
+                    {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+                    {"unit": "nhánh", "gram_weight": 100.0, "description": "1 nhánh"},
+                ],
+            )
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/cilantro.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Herbs",
+            ready_at=datetime(2025, 1, 15, 15, 0),
+            created_at=datetime(2025, 1, 15, 14, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=5, carbs=5, fat=0),
+                food_items=food_items,
+            ),
+        )
+
+        result = MealMapper.to_detailed_response(meal)
+
+        custom = result.food_items[0].custom_nutrition
+        assert custom is not None
+        assert custom.protein_per_100g == pytest.approx(5.0)
+        assert custom.calories_per_100g == pytest.approx(40.0)
+        assert custom.calories_per_100g < 100
+
     def test_to_detailed_response_without_nutrition(self):
         """Test detailed response when nutrition is None."""
         image = MealImage(

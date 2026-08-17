@@ -12,8 +12,7 @@ from src.domain.model.nutrition import FoodItem, Macros, NutritionOverride
 from src.domain.services import NutritionCalculationService
 from src.domain.services.nutrition_calculation_service import (
     ScaledNutritionResult,
-    _convert_with_allowed_units,
-    convert_quantity_to_grams,
+    quantity_to_grams,
     scale_per_100g_nutrition,
 )
 
@@ -101,21 +100,16 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
         # Priority 1: Custom nutrition provided (user-edited macros)
         if change.custom_nutrition:
             allowed_units = change.allowed_units or existing_item.allowed_units
-            if (
-                change.origin is not None
-                or existing_item.nutrition_contract_version == "2"
-            ):
-                quantity_grams = _convert_with_allowed_units(
-                    new_quantity,
-                    new_unit,
-                    allowed_units or [],
-                    existing_item.name,
-                    strict=True,
-                )
-            else:
-                quantity_grams = convert_quantity_to_grams(
-                    new_quantity, new_unit, existing_item.name
-                )
+            quantity_grams = quantity_to_grams(
+                new_quantity,
+                new_unit,
+                existing_item.name,
+                allowed_units or [],
+                strict=(
+                    change.origin is not None
+                    or existing_item.nutrition_contract_version == "2"
+                ),
+            )
             _validate_quantity_grams(quantity_grams, new_quantity, new_unit)
             scale_factor = quantity_grams / 100.0
             food_items_dict[change.id] = FoodItem(
@@ -232,14 +226,19 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
     ) -> None:
         """Apply simple proportional scaling to nutrition with unit conversion."""
         # Convert new quantity to grams for proper scaling
-        new_quantity_grams = convert_quantity_to_grams(
-            new_quantity, new_unit, existing_item.name
+        new_quantity_grams = quantity_to_grams(
+            new_quantity,
+            new_unit,
+            existing_item.name,
+            existing_item.allowed_units or [],
         )
         _validate_quantity_grams(new_quantity_grams, new_quantity, new_unit)
 
-        # Convert existing quantity to grams (existing item's nutrition is already in grams)
-        existing_quantity_grams = convert_quantity_to_grams(
-            existing_item.quantity, existing_item.unit, existing_item.name
+        existing_quantity_grams = quantity_to_grams(
+            existing_item.quantity,
+            existing_item.unit,
+            existing_item.name,
+            existing_item.allowed_units or [],
         )
 
         # Scale factor based on gram conversion
@@ -483,16 +482,13 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
         change=None,
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
-        if change is not None and change.origin is not None:
-            quantity_grams = _convert_with_allowed_units(
-                quantity,
-                unit,
-                allowed_units or [],
-                name,
-                strict=True,
-            )
-        else:
-            quantity_grams = convert_quantity_to_grams(quantity, unit, name)
+        quantity_grams = quantity_to_grams(
+            quantity,
+            unit,
+            name,
+            allowed_units or [],
+            strict=change is not None and change.origin is not None,
+        )
         _validate_quantity_grams(quantity_grams, quantity, unit)
         scale_factor = quantity_grams / 100.0  # Custom nutrition is per 100g
 
