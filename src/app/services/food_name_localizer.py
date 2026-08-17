@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from typing import Any, Protocol
 
+from src.app.services.food_display_name import (
+    is_ascii_display_name,
+    needs_display_localization,
+)
 from src.domain.model.translation_result import TranslationOutcome, TranslationResult
+
+__all__ = [
+    "FoodTextTranslationService",
+    "is_ascii_display_name",
+    "needs_display_localization",
+    "translate_food_texts",
+    "translate_for_presentation",
+    "translated_values",
+    "translation_is_cacheable",
+]
 
 
 class FoodTextTranslationService(Protocol):
@@ -133,61 +146,6 @@ def translated_values(
         result.texts[index] if index < len(result.texts) else text
         for index, text in enumerate(originals)
     )
-
-
-def is_ascii_display_name(name: str) -> bool:
-    """True when a display name has no localized letters and still needs translation."""
-    stripped = name.strip()
-    return bool(stripped) and all(ord(character) < 128 for character in stripped)
-
-
-_ENGLISH_CONNECTORS = re.compile(
-    r"\b(and|with|of|the|in|from|style)\b", re.IGNORECASE
-)
-_ENGLISH_FOOD_HINTS = frozenset(
-    {
-        "beef",
-        "bread",
-        "broth",
-        "chicken",
-        "egg",
-        "eggs",
-        "fish",
-        "fried",
-        "grilled",
-        "knuckle",
-        "milk",
-        "noodle",
-        "noodles",
-        "oil",
-        "pork",
-        "potato",
-        "rice",
-        "salad",
-        "sauce",
-        "shredded",
-        "shrimp",
-        "skin",
-        "soup",
-        "steamed",
-        "vermicelli",
-    }
-)
-
-
-def needs_display_localization(name: str, language: str) -> bool:
-    """True when a leftover display name is still English for a non-English user."""
-    if not language or language == "en":
-        return False
-    stripped = name.strip()
-    if not is_ascii_display_name(stripped):
-        return False
-    tokens = re.findall(r"[A-Za-z]+", stripped.lower())
-    if not tokens:
-        return False
-    if _ENGLISH_CONNECTORS.search(stripped):
-        return True
-    return any(token in _ENGLISH_FOOD_HINTS for token in tokens)
 
 
 def translation_is_cacheable(result: TranslationResult) -> bool:

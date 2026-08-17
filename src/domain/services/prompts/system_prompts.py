@@ -21,7 +21,7 @@ class SystemPrompts:
     MEAL_TEXT_PARSING = """You are a nutrition parser. Your task is to parse natural language food descriptions into structured nutritional information.
 
 Parse the user's food description into a list of items with nutritional data. Each item should include:
-- name: Food name in the user's language only. English-only values such as "Shredded pork skin and pork" or "Rice vermicelli" are invalid. Optional bilingual form "Local name (English name)" is allowed.
+- name: Food name in the user's language only. English-only names are invalid. Mixed slash names that mix languages are invalid; every segment must be in the user's language. Optional bilingual form "Local name (English name)" is allowed.
 - lookup_name: Canonical English food identity for reference lookup. Do not include
   preparation here unless it is part of the food identity.
 - preparation: One of raw, boiled, baked, fried, mashed, or unknown. Use unknown
@@ -48,8 +48,9 @@ Guidelines:
 - Use reasonable portion sizes
 - If ambiguous, make a reasonable assumption and note it in the name
 - Include common items like beverages, condiments, and cooking oils
-- DECOMPOSITION (MANDATORY): For ANY multi-ingredient dish (e.g., "pho", "pasta carbonara", "cơm tấm"), ALWAYS decompose into individual ingredients with separate nutritional data. Never return a single entry for a compound dish. Minimum 3 ingredients per dish.
-- Simple single-ingredient foods (banana, egg, plain rice) stay as 1 item
+- COMPOSITION: If the user named a prepared dish or meal as a whole, return the edible components of one serving as separate items. Do not return the dish as a single row. Stop at foods a diner would point to on the plate. Do not recurse into recipes, dough, or unnamed spices.
+- If the user listed separate foods (commas, new lines, "and"/"và", or several quantity+food pairs), return those foods one-for-one. Do not expand listed foods into compositions.
+- A measured mass or volume of one food, or a counted piece of one food, stays one item.
 - All quantities should be in GRAMS when possible. Convert volumes using density (honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml)
 - Verify: calories ≈ protein*4 + carbs*4 + fat*9
 - Treat calories as advisory; the backend derives final calories from macros.
@@ -262,14 +263,14 @@ Return ONLY valid JSON matching the structure above."""
 
     # English-only JSON example for prompt
     _EXAMPLE_EN = """[
-  {{"name": "Eggs", "quantity": 2, "unit": "large", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
-  {{"name": "Toast with butter", "quantity": 1, "unit": "slice", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+  {{"name": "Eggs", "lookup_name": "Eggs", "quantity": 2, "unit": "large", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Chicken breast", "lookup_name": "Chicken breast", "quantity": 100, "unit": "g", "english_unit": "g", "calories": 165, "protein": 31.0, "carbs": 0.0, "fat": 3.6}}
 ]"""
 
     # Localized JSON example — user-language name, English identity in lookup_name
     _EXAMPLE_BILINGUAL = """[
   {{"name": "Trứng gà", "lookup_name": "Eggs", "quantity": 2, "unit": "quả lớn", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
-  {{"name": "Bánh mì bơ", "lookup_name": "Toast with butter", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+  {{"name": "Ức gà", "lookup_name": "Chicken breast", "quantity": 100, "unit": "g", "english_unit": "g", "calories": 165, "protein": 31.0, "carbs": 0.0, "fat": 3.6}}
 ]"""
 
     PROMPT_VERSION = "2026-06-27"
@@ -348,10 +349,11 @@ Return ONLY valid JSON matching the structure above."""
         else:
             instruction = (
                 f"The 'name' field MUST be in {lang} for the user to read. "
-                "Never leave 'name' in English. English-only names such as "
-                "'Shredded pork skin and pork' or 'Rice vermicelli' are invalid. "
-                "Put the canonical English food identity only in lookup_name. "
-                "Optional bilingual form 'Local Name (English Name)' is allowed."
+                "Never leave 'name' in English. English-only names and mixed "
+                "slash names that mix languages are invalid. Translate every "
+                "slash-separated segment. Put the canonical English food "
+                "identity only in lookup_name. Optional bilingual form "
+                "'Local Name (English Name)' is allowed."
             )
             example = SystemPrompts._EXAMPLE_BILINGUAL
         prompt = SystemPrompts.MEAL_TEXT_PARSING.replace("{{json_example}}", example)
@@ -365,5 +367,6 @@ Return ONLY valid JSON matching the structure above."""
             f"Translate each English food name into {lang}. "
             "Return JSON only: {\"items\": [\"...\"]} with the same count and order. "
             "Never leave an item in English. Generic ingredients are not brands. "
-            "Example: 'Shredded pork skin and pork' -> 'Bì heo'."
+            "Use the everyday name a speaker of that language would say for "
+            "that food, not a brand or a copied English label."
         )
