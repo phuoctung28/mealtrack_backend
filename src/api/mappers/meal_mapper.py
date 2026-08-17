@@ -241,25 +241,25 @@ class MealMapper:
                     )
                     food_items.append(food_item_dto)
 
-        # A persisted display locale is authoritative for meals created by the
-        # image flow. The requested locale must not rewrite that meal later.
+        # Stored names are authoritative for scanner meals. The requested
+        # locale must not rewrite those names later.
         dish_name = meal.dish_name
-        persisted_language = (
-            normalize_language(getattr(meal, "display_language", None))
-            if getattr(meal, "display_language", None)
+        persisted_image_names = MealMapper.has_persisted_image_display_names(meal)
+        translation_language = (
+            MealMapper._raw_response_localization_language(meal)
+            if persisted_image_names
             else None
         )
-        if persisted_language:
-            translation_language = (
-                persisted_language if persisted_language != "en" else None
-            )
-        elif requested_language == "en" and canonical_dish_name:
+        if (
+            not persisted_image_names
+            and requested_language == "en"
+            and canonical_dish_name
+        ):
             dish_name = canonical_dish_name
         instructions = MealMapper._normalize_instructions(
             getattr(meal, "instructions", None)
         )
-        if not persisted_language:
-            translation_language = None
+        if not persisted_image_names:
             direct_localization = MealMapper._raw_response_localization(
                 meal,
                 requested_language,
@@ -268,7 +268,7 @@ class MealMapper:
         else:
             direct_localization = None
 
-        if not persisted_language and requested_language == "en":
+        if not persisted_image_names and requested_language == "en":
             for food_item, canonical_name in zip(
                 food_items,
                 canonical_food_names,
@@ -276,7 +276,7 @@ class MealMapper:
             ):
                 food_item.name = canonical_name
                 food_item.display_name = canonical_name
-        elif not persisted_language and direct_localization:
+        elif not persisted_image_names and direct_localization:
             translation_language = direct_localization.language
             dish_name = direct_localization.dish_name
             for food_item, localized_name in zip(
@@ -287,7 +287,7 @@ class MealMapper:
                 food_item.name = localized_name
                 food_item.display_name = localized_name
         elif (
-            not persisted_language
+            not persisted_image_names
             and requested_language
             and requested_language != "en"
             and meal.translations
@@ -454,9 +454,28 @@ class MealMapper:
         )
 
     @staticmethod
-    def has_persisted_display_language(meal: Meal) -> bool:
-        """Return whether the meal has an immutable creation display locale."""
-        return bool(getattr(meal, "display_language", None))
+    def has_persisted_image_display_names(meal: Meal) -> bool:
+        """Return whether an image meal can trust its stored display names."""
+        return getattr(meal, "source", None) == "scanner" and not getattr(
+            meal, "translations", None
+        )
+
+    @staticmethod
+    def _raw_response_localization_language(meal: Meal) -> str | None:
+        """Read the locale used for persisted same-call display names."""
+        if not meal.raw_gpt_json:
+            return None
+        try:
+            structured_data = json.loads(meal.raw_gpt_json)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(structured_data, dict):
+            return None
+        localized_language = structured_data.get("localized_language")
+        if not isinstance(localized_language, str):
+            return None
+        language = normalize_language(localized_language)
+        return language if language != "en" else None
 
     @staticmethod
     def _source_nutrition_response(

@@ -240,8 +240,8 @@ class TestMealMapper:
                 format="jpeg",
                 size_bytes=1024,
             ),
+            source="scanner",
             dish_name="Bún nước",
-            display_language="vi",
             created_at=datetime(2025, 1, 15),
             ready_at=datetime(2025, 1, 15),
             raw_gpt_json=json.dumps(
@@ -306,8 +306,8 @@ class TestMealMapper:
                 format="jpeg",
                 size_bytes=1024,
             ),
+            source="scanner",
             dish_name=localized_dish,
-            display_language=language,
             created_at=datetime(2025, 1, 15),
             ready_at=datetime(2025, 1, 15),
             raw_gpt_json=json.dumps(
@@ -343,6 +343,43 @@ class TestMealMapper:
             == english.total_nutrition.model_dump()
         )
         assert localized.translations is None
+
+    def test_to_detailed_response_keeps_english_image_names_for_other_locale(self):
+        item = FoodItem(
+            id="item-1",
+            name="Rice noodles",
+            quantity=180,
+            unit="g",
+            macros=Macros(protein=4, carbs=50, fat=1),
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/noodles.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            source="scanner",
+            dish_name="Rice noodle soup",
+            created_at=datetime(2025, 1, 15),
+            ready_at=datetime(2025, 1, 15),
+            raw_gpt_json=json.dumps(
+                {
+                    "dish_name": "Rice noodle soup",
+                    "foods": [{"name": "Rice noodles"}],
+                }
+            ),
+            nutrition=Nutrition(macros=item.macros, food_items=[item]),
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="de")
+
+        assert result.dish_name == "Rice noodle soup"
+        assert result.food_items[0].name == "Rice noodles"
+        assert result.translation_language is None
 
     def test_to_detailed_response_uses_item_id_translations_when_list_is_stale(self):
         """Translated food item IDs preserve locale after ingredient add/remove."""

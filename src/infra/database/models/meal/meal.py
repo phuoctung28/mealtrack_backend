@@ -35,8 +35,6 @@ class MealORM(Base, TimestampMixin):
     )  # User who created this meal
     status = Column(Enum(MealStatusEnum, native_enum=False), nullable=False)
     dish_name = Column(String(255), nullable=True)  # The name of the dish
-    # Locale of the display names persisted by image analysis. Null is legacy.
-    display_language = Column(String(8), nullable=True)
     meal_type = Column(String(20), nullable=True)  # breakfast, lunch, dinner, snack
     ready_at = Column(
         DateTime(timezone=True), nullable=True

@@ -102,14 +102,14 @@ path.
 Fresh meal-image analysis uses a same-call bilingual structured response. The
 vision contract keeps English dish and food identities as the canonical source
 for nutrition and reference validation, while requested-language display names
-are validated and persisted on the `Meal` and `FoodItem` display fields. The
-meal also persists the creation locale in `display_language`, making that
-locale authoritative on every later read regardless of the request locale.
-The stored raw analysis payload retains the English canonical fields for
-validation, nutrition, and canonical identifiers. Fresh image analysis does
-not create a `MealTranslation` row or reload the meal to obtain localized
-content; existing meals with a null `display_language` continue through the
-versioned read-path translation fallback.
+are validated and persisted on the `Meal` and `FoodItem` display fields. Image
+meals are identified by the existing `source="scanner"` marker and return
+those stored names on later reads regardless of the request locale. The stored
+raw analysis payload retains the English canonical fields for validation,
+nutrition, and canonical identifiers. Fresh image analysis does not create a
+`MealTranslation` row or reload the meal to obtain localized content; meals
+with existing translation rows continue through the versioned read-path
+fallback.
 
 ### Nutrition Integrity Policy
 Structured nutrition crosses one versioned domain policy,

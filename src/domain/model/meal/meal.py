@@ -38,9 +38,6 @@ class Meal:
     created_at: datetime
     image: MealImage | None
     dish_name: str | None = None
-    # Language used for the persisted display names created by meal analysis.
-    # None keeps legacy meals on the translation fallback path.
-    display_language: str | None = None
     nutrition: Nutrition | None = None
     ready_at: datetime | None = None
     error_message: str | None = None
@@ -124,7 +121,6 @@ class Meal:
             created_at=self.created_at,
             image=self.image,
             dish_name=self.dish_name,
-            display_language=self.display_language,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
@@ -149,7 +145,6 @@ class Meal:
             created_at=self.created_at,
             image=self.image,
             dish_name=self.dish_name,
-            display_language=self.display_language,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
@@ -180,7 +175,6 @@ class Meal:
             created_at=self.created_at,
             image=self.image,
             dish_name=dish_name,
-            display_language=self.display_language,
             nutrition=nutrition,
             ready_at=utc_now(),
             error_message=self.error_message,
@@ -213,7 +207,6 @@ class Meal:
             created_at=self.created_at,
             image=self.image,
             dish_name=self.dish_name,
-            display_language=self.display_language,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=error_message,
@@ -244,7 +237,6 @@ class Meal:
             created_at=created_at or self.created_at,
             image=self.image,
             dish_name=dish_name,
-            display_language=self.display_language,
             nutrition=nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
@@ -269,7 +261,6 @@ class Meal:
             created_at=self.created_at,
             image=image,
             dish_name=self.dish_name,
-            display_language=self.display_language,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
@@ -299,7 +290,6 @@ class Meal:
             created_at=self.created_at,
             image=self.image,
             dish_name=self.dish_name,
-            display_language=self.display_language,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,

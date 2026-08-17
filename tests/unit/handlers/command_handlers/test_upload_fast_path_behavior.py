@@ -149,7 +149,7 @@ async def test_non_english_image_response_skips_translation_persistence(caplog):
     mock_uow.meals.find_by_id.assert_not_awaited()
     assert call_order[:2] == ["save", "commit"]
     assert "translated to" not in caplog.text
-    assert saved_state["meal"].display_language == "vi"
+    assert saved_state["meal"].dish_name == "Phở"
 
 
 @pytest.fixture

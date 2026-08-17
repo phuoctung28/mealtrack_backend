@@ -104,9 +104,9 @@ async def test_ensure_requested_translation_materializes_missing_locale():
 
 
 @pytest.mark.asyncio
-async def test_ensure_requested_translation_keeps_persisted_creation_locale():
+async def test_ensure_requested_translation_keeps_persisted_image_names():
     meal = _meal()
-    meal.display_language = "vi"
+    meal.source = "scanner"
     event_bus = _EventBus()
     translation_service = type("TranslationService", (), {})()
     translation_service.translate_meal = AsyncMock()
