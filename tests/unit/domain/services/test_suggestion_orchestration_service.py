@@ -18,6 +18,7 @@ from src.domain.model.meal_suggestion import (
     MealSuggestion,
     SuggestionSession,
 )
+from src.domain.model.translation_result import TranslationOutcome
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     IngredientMacros,
     MealMacros,
@@ -441,6 +442,40 @@ class TestSessionCreationInvariants:
         )
 
         assert session.servings == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "outcome",
+    [TranslationOutcome.PARTIAL, TranslationOutcome.UNAVAILABLE],
+)
+async def test_persist_generation_result_keeps_fallback_suggestions_for_non_english(
+    outcome,
+):
+    """Translation fallback suggestions must remain selectable from the session."""
+    from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+        SuggestionOrchestrationService,
+    )
+
+    repo = AsyncMock()
+    service = object.__new__(SuggestionOrchestrationService)
+    service._repo = repo
+
+    session = Mock()
+    session.language = "vi"
+    suggestion = Mock()
+    suggestion.id = "suggestion-1"
+    suggestion.meal_name = "Fallback meal"
+    suggestion.translation_outcome = outcome
+    suggestions = [suggestion]
+
+    await service._persist_generation_result(
+        session=session,
+        suggestions=suggestions,
+        existing_session=False,
+    )
+
+    repo.save_suggestions.assert_awaited_once_with(suggestions)
 
 
 @pytest.mark.asyncio

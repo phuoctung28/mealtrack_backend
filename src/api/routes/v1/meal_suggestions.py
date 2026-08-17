@@ -120,8 +120,11 @@ async def discover_meals(
                 )
                 if translated and len(translated) == len(meals):
                     translated_names = translated
-        except Exception as e:
-            logger.warning("Name translation failed, using English: %s", e)
+        except Exception as exc:
+            logger.warning(
+                "Name translation failed, using English error_type=%s",
+                type(exc).__name__,
+            )
 
     def _as_image_fields(x):
         """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""

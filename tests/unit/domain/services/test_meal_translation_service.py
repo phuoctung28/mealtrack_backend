@@ -9,6 +9,7 @@ from src.domain.model.meal.meal_image import MealImage
 from src.domain.model.meal.meal_translation_domain_models import MealTranslation
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import FoodItem
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 from src.domain.services.meal_analysis.meal_translation_service import (
     MealTranslationService,
 )
@@ -123,15 +124,15 @@ async def test_translate_meal_uses_cache_when_fully_cached(
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_calls_translation_provider_and_saves(
+async def test_translate_meal_calls_provider_and_saves(
     service, meal, food_items, text_translation_service, repo
 ):
-    text_translation_service.translate_texts.return_value = [
-        "Gà nướng",  # dish
-        "Ức gà",  # ingredient 1
-        "Cơm gạo lứt",  # ingredient 2
-        "Bước 1",  # instruction
-    ]
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng", "Ức gà", "Cơm gạo lứt", "Bước 1"),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
 
     result = await service.translate_meal(
         meal,
@@ -160,11 +161,12 @@ async def test_translate_meal_calls_translation_provider_and_saves(
 async def test_translate_meal_awaits_async_translation_repo(
     async_repo_service, async_repo, meal, food_items, text_translation_service
 ):
-    text_translation_service.translate_texts.return_value = [
-        "Gà nướng",
-        "Ức gà",
-        "Cơm gạo lứt",
-    ]
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng", "Ức gà", "Cơm gạo lứt"),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
 
     result = await async_repo_service.translate_meal(
         meal,
@@ -182,13 +184,12 @@ async def test_translate_meal_awaits_async_translation_repo(
 async def test_translate_meal_normalizes_instruction_dicts(
     service, meal, food_items, text_translation_service
 ):
-    text_translation_service.translate_texts.return_value = [
-        "Gà nướng",
-        "Ức gà",
-        "Cơm gạo lứt",
-        "Làm nóng chảo",
-        "Nấu gà",
-    ]
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng", "Ức gà", "Cơm gạo lứt", "Làm nóng chảo", "Nấu gà"),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
 
     result = await service.translate_meal(
         meal,
@@ -208,11 +209,13 @@ async def test_translate_meal_normalizes_instruction_dicts(
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_pads_when_translation_provider_returns_short(
-    service, meal, food_items, text_translation_service
+async def test_translate_meal_fills_canonical_when_provider_returns_partial(
+    service, meal, food_items, text_translation_service, caplog
 ):
     # Only dish name returned, rest should be padded with originals.
-    text_translation_service.translate_texts.return_value = ["Gà nướng"]
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Gà nướng",), TranslationOutcome.PARTIAL, "en", "vi"
+    )
 
     result = await service.translate_meal(
         meal,
@@ -229,15 +232,15 @@ async def test_translate_meal_pads_when_translation_provider_returns_short(
     assert result.meal_instruction == [
         {"instruction": "Step 1", "duration_minutes": None}
     ]
+    assert "Meal translation not persisted" in caplog.text
+    assert "outcome=partial" in caplog.text
 
 
 @pytest.mark.asyncio
 async def test_translate_meal_returns_none_on_exception(
     service, meal, food_items, text_translation_service, repo
 ):
-    text_translation_service.translate_texts.side_effect = Exception(
-        "translation provider down"
-    )
+    text_translation_service.translate_texts.side_effect = Exception("provider down")
 
     result = await service.translate_meal(
         meal,

@@ -16,6 +16,7 @@ from src.domain.model.meal_suggestion import (
     SuggestionSession,
     SuggestionStatus,
 )
+from src.domain.model.translation_result import TranslationOutcome
 from src.infra.repositories.meal_suggestion_repository import MealSuggestionRepository
 
 
@@ -65,6 +66,8 @@ def suggestion(session):
         recipe_steps=[RecipeStep(step=1, instruction="cook", duration_minutes=10)],
         prep_time_minutes=15,
         confidence_score=0.9,
+        english_name="Grilled Chicken",
+        translation_outcome=TranslationOutcome.UNAVAILABLE,
         status=SuggestionStatus.PENDING,
         generated_at=datetime.utcnow(),
     )
@@ -205,6 +208,8 @@ async def test_get_suggestion_uses_index_and_deserializes(session, suggestion):
     out = await repo.get_suggestion(suggestion.id)
     assert out is not None
     assert out.id == suggestion.id
+    assert out.english_name == suggestion.english_name
+    assert out.translation_outcome is TranslationOutcome.UNAVAILABLE
     redis.client.scan_iter.assert_not_called()
 
 
@@ -226,6 +231,8 @@ async def test_get_suggestion_scans_only_for_legacy_unindexed_key(session, sugge
     out = await repo.get_suggestion(suggestion.id)
     assert out is not None
     assert out.id == suggestion.id
+    assert out.english_name == suggestion.english_name
+    assert out.translation_outcome is TranslationOutcome.UNAVAILABLE
     client.scan_iter.assert_called_once_with(
         match=f"suggestion:*:{suggestion.id}", count=100
     )

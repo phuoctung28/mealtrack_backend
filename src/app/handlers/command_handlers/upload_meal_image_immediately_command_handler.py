@@ -312,12 +312,15 @@ class UploadMealImageImmediatelyHandler(
             saved_meal = await uow.meals.save(meal)
             await uow.commit()
 
-            total_elapsed = time.time() - start
-            logger.info(
-                f"[MEAL-CREATED] meal={saved_meal.meal_id} | "
-                f"image_id={image_id} | "
-                f"total_elapsed={total_elapsed:.2f}s"
-            )
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
+
+        total_elapsed = time.time() - start
+        logger.info(
+            f"[MEAL-CREATED] meal={saved_meal.meal_id} | "
+            f"image_id={image_id} | "
+            f"total_elapsed={total_elapsed:.2f}s"
+        )
 
         # Translation repository uses its own DB session, so the parent meal must
         # be committed before inserting meal_translation rows.
@@ -335,21 +338,17 @@ class UploadMealImageImmediatelyHandler(
                     food_items=nutrition.food_items,
                     target_language=command.language,
                 )
-                logger.info(
-                    f"[TRANSLATION] meal={saved_meal.meal_id} translated to {command.language}"
-                )
-            except Exception as e:
+            except Exception as exc:
                 logger.warning(
-                    f"[TRANSLATION] failed for meal={saved_meal.meal_id}: {e}"
+                    "[TRANSLATION] failed for meal=%s error_type=%s",
+                    saved_meal.meal_id,
+                    type(exc).__name__,
                 )
 
         async with self.uow as uow:
             final_meal = await uow.meals.find_by_id(
                 saved_meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
             )
-
-        if self.cache_invalidation:
-            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
 
         return final_meal
 

@@ -43,6 +43,7 @@ class OpenAILangChainAdapter:
         schema: type,
         max_tokens: int | None,
         request_kwargs: dict[str, Any] | None,
+        store_override: bool | None = None,
     ) -> LangChainOpenAIResult:
         llm = self._llm(model=model)
         structured = llm.with_structured_output(
@@ -56,7 +57,9 @@ class OpenAILangChainAdapter:
                 SystemMessage(content=system_message),
                 HumanMessage(content=prompt),
             ],
-            **self._request_kwargs(request_kwargs, max_tokens=max_tokens),
+            **self._request_kwargs(
+                request_kwargs, max_tokens=max_tokens, store_override=store_override
+            ),
         )
         parsing_error = response.get("parsing_error")
         if parsing_error is not None:
@@ -151,11 +154,14 @@ class OpenAILangChainAdapter:
         request_kwargs: dict[str, Any] | None,
         *,
         max_tokens: int | None,
+        store_override: bool | None = None,
     ) -> dict[str, Any]:
         invocation_kwargs = dict(request_kwargs or {})
         if max_tokens is not None:
             invocation_kwargs["max_tokens"] = max_tokens
-        invocation_kwargs["store"] = self._store_responses
+        invocation_kwargs["store"] = (
+            self._store_responses if store_override is None else store_override
+        )
         return invocation_kwargs
 
     @staticmethod

@@ -117,5 +117,5 @@ def test_text_translation_singleton_uses_openai_adapter(monkeypatch):
     service = deps.get_text_translation_service()
 
     assert isinstance(service, TextTranslationService)
-    assert isinstance(service._translation_port, OpenAITranslationAdapter)
-    assert service._translation_port._model == deps.settings.OPENAI_TRANSLATION_MODEL
+    assert isinstance(service._port, OpenAITranslationAdapter)
+    assert service._port._model == deps.settings.OPENAI_TRANSLATION_MODEL

@@ -383,7 +383,7 @@ _suggestion_translation_service = None
 
 
 def get_suggestion_translation_service():
-    """Get the OpenAI-backed suggestion translation service (singleton)."""
+    """Get the persisted suggestion translation service (singleton)."""
     global _suggestion_translation_service
 
     if _suggestion_translation_service is not None:
@@ -392,15 +392,16 @@ def get_suggestion_translation_service():
     # Requires text translation service
     text_service = get_text_translation_service()
     if text_service is None:
-        logger.warning("OPENAI_API_KEY not set - suggestion translation is disabled")
+        logger.warning("OPENAI_API_KEY not set - suggestion translation will be skipped")
         return None
 
-    from src.domain.services.meal_suggestion import (
-        suggestion_translation_service,
+    from src.domain.services.meal_suggestion.suggestion_translation_service import (
+        SuggestionTranslationService,
     )
 
-    service_cls = suggestion_translation_service.SuggestionTranslationService
-    _suggestion_translation_service = service_cls(text_translation_service=text_service)
+    _suggestion_translation_service = SuggestionTranslationService(
+        text_translation_service=text_service
+    )
     logger.info("OpenAI suggestion translation service initialised")
     return _suggestion_translation_service
 
@@ -463,7 +464,7 @@ def get_async_meal_translation_repository():
 
 
 def get_meal_translation_service():
-    """Get the OpenAI-backed persisted meal translation service (singleton)."""
+    """Get the persisted meal translation service (singleton)."""
     global _meal_translation_service
 
     if _meal_translation_service is not None:
@@ -472,7 +473,7 @@ def get_meal_translation_service():
     # Requires text translation service
     text_service = get_text_translation_service()
     if text_service is None:
-        logger.warning("OPENAI_API_KEY not set - meal translation is disabled")
+        logger.warning("OPENAI_API_KEY not set - meal translation will be skipped")
         return None
 
     from src.domain.services.meal_analysis.meal_translation_service import (
@@ -491,40 +492,47 @@ _text_translation_service = None
 
 
 def get_text_translation_service():
-    """Get the process-scoped OpenAI-backed text translation service."""
-    global _text_translation_service
+    """Get the neutral OpenAI-backed translation service for read paths.
 
+    Translation is optional: a missing OpenAI key leaves callers with their
+    canonical response and must never prevent event-bus startup.  The
+    provider and adapter are process-scoped so requests do not construct SDK
+    clients repeatedly.
+    """
+
+    global _text_translation_service
     if _text_translation_service is not None:
         return _text_translation_service
-
     if not settings.OPENAI_API_KEY:
-        logger.warning("OPENAI_API_KEY not set - text translation is disabled")
+        logger.warning("OPENAI_API_KEY not set - translation will be skipped")
         return None
 
     from src.domain.services.translation.text_translation_service import (
         TextTranslationService,
     )
-    from src.infra.adapters.openai_translation_adapter import (
-        OpenAITranslationAdapter,
-    )
-    from src.infra.services.ai.providers.openai_provider import OpenAIProvider
 
+    adapter_module = import_module("src.infra.adapters.openai_translation_adapter")
+    provider_module = import_module(
+        "src.infra.services.ai.providers.openai_provider"
+    )
+
+    provider = provider_module.OpenAIProvider(
+        api_key=settings.OPENAI_API_KEY,
+        request_timeout_seconds=max(1, int(settings.OPENAI_TRANSLATION_TIMEOUT_SECONDS)),
+        max_retries=settings.OPENAI_MAX_RETRIES,
+        store_responses=False,
+        prompt_cache_enabled=settings.OPENAI_PROMPT_CACHE_ENABLED,
+        prompt_cache_retention=settings.OPENAI_PROMPT_CACHE_RETENTION,
+        prompt_cache_key_prefix=settings.OPENAI_PROMPT_CACHE_KEY_PREFIX,
+    )
     _text_translation_service = TextTranslationService(
-        translation_port=OpenAITranslationAdapter(
-            provider=OpenAIProvider(
-                api_key=settings.OPENAI_API_KEY,
-                request_timeout_seconds=settings.OPENAI_REQUEST_TIMEOUT_SECONDS,
-                max_retries=settings.OPENAI_MAX_RETRIES,
-                store_responses=False,
-                prompt_cache_enabled=settings.OPENAI_PROMPT_CACHE_ENABLED,
-                prompt_cache_retention=settings.OPENAI_PROMPT_CACHE_RETENTION or None,
-                prompt_cache_key_prefix=settings.OPENAI_PROMPT_CACHE_KEY_PREFIX,
-            ),
+        adapter_module.OpenAITranslationAdapter(
+            provider=provider,
             model=settings.OPENAI_TRANSLATION_MODEL,
             timeout_seconds=settings.OPENAI_TRANSLATION_TIMEOUT_SECONDS,
-        ),
+        )
     )
-    logger.info("OpenAI text translation service initialised")
+    logger.info("OpenAI translation service initialised")
     return _text_translation_service
 
 

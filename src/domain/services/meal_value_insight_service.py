@@ -5,6 +5,7 @@ import json
 import logging
 from typing import Any
 
+from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
 from src.domain.model.ai.model_purpose import ModelPurpose
 from src.domain.model.nutrition import Nutrition
 from src.domain.ports.cache_port import CachePort
@@ -20,7 +21,7 @@ INSIGHT_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_INSIGHT_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
+SUPPORTED_INSIGHT_LANGUAGES = SUPPORTED_TRANSLATION_LANGUAGES
 
 
 class MealValueInsightService:

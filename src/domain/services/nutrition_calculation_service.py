@@ -69,7 +69,7 @@ UNIT_TRANSLATION = {
     "quả": "piece",
     "trái": "piece",
     "cái": "piece",
-    "miếng": "slice",
+    "miếng": "piece",
     "lát": "slice",
     "khúc": "piece",
     "tô": "cup",
@@ -166,6 +166,36 @@ def normalize_unit_for_manual_save(unit: str | None) -> str:
         "returning 'serving' for manual-save compatibility"
     )
     return "serving"
+
+
+def fallback_custom_serving_options(
+    unit: str,
+    food_name: str = "",
+    existing: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Keep a custom/parse-text unit saveable instead of collapsing to grams."""
+    from src.domain.services.nutrition_integrity_policy import normalize_serving_options
+
+    selected = (unit or "g").strip()
+    selected_key = selected.lower()
+    raw = [option for option in (existing or []) if isinstance(option, dict)]
+    has_selected = any(
+        str(option.get("unit") or "").strip().lower() == selected_key for option in raw
+    )
+    if selected_key not in {"", "g"} and not has_selected:
+        grams = convert_quantity_to_grams(1.0, selected, food_name)
+        if grams <= 0 or (grams == 1.0 and selected_key not in {"g", "ml"}):
+            grams = 100.0
+        raw.append(
+            {
+                "unit": selected,
+                "gram_weight": grams,
+                "description": f"1 {selected}",
+            }
+        )
+    return normalize_serving_options(raw) or [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"}
+    ]
 
 
 def convert_quantity_to_grams(quantity: float, unit: str, food_name: str = "") -> float:
@@ -483,7 +513,14 @@ class NutritionCalculationService:
                     item.unit,
                     allowed_units,
                     item_name,
-                    strict=True,
+                    # Source-less prepared custom items may come from older
+                    # clients that omit the optional unit table. Preserve the
+                    # established global unit mapping for those items; source
+                    # backed v2 items remain strict against their snapshot.
+                    strict=not (
+                        getattr(item, "origin", None) == "custom"
+                        and not allowed_units
+                    ),
                 )
             factor = quantity_grams / 100.0
             protein = item.custom_nutrition.protein_per_100g * factor

@@ -13,6 +13,7 @@ from src.app.handlers.command_handlers.recognize_ingredient_command_handler impo
     RecognizeIngredientCommandHandler,
 )
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 
 
 @pytest.mark.asyncio
@@ -95,3 +96,42 @@ async def test_recognize_ingredient_uses_ingredient_identification_strategy():
 def test_ingredient_request_rejects_oversized_base64_payload():
     with pytest.raises(ValidationError):
         IngredientRecognitionRequest(image_data="a" * (MAX_IMAGE_BASE64_LENGTH + 1))
+
+
+@pytest.mark.asyncio
+async def test_recognize_ingredient_localizes_name_without_leaking_payload_to_logs():
+    vision_service = Mock()
+    vision_service.analyze_with_strategy = AsyncMock(
+        return_value={
+            "structured_data": {
+                "name": "Broccoli",
+                "confidence": 0.92,
+                "category": "vegetable",
+            }
+        }
+    )
+    translation_service = Mock()
+
+    async def translate(texts, source_language, target_language):
+        assert source_language == "en"
+        assert target_language == "vi"
+        return TranslationResult(
+            ("Bông cải xanh",),
+            TranslationOutcome.TRANSLATED,
+            "en",
+            "vi",
+        )
+
+    translation_service.translate_texts = AsyncMock(side_effect=translate)
+    handler = RecognizeIngredientCommandHandler(
+        vision_service=vision_service,
+        translation_service=translation_service,
+    )
+
+    result = await handler.handle(
+        RecognizeIngredientCommand(
+            image_data=base64.b64encode(b"image").decode("ascii"), language="vi"
+        )
+    )
+
+    assert result["name"] == "Bông cải xanh"

@@ -3,9 +3,11 @@
 import asyncio
 import inspect
 import logging
+from typing import Any, cast
 
 from src.domain.model.meal import FoodItemTranslation, Meal, MealTranslation
 from src.domain.model.nutrition import FoodItem
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 from src.domain.ports.meal_translation_repository_port import (
     MealTranslationRepositoryPort,
 )
@@ -18,12 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class MealTranslationService:
-    """
-    Translates meal content (name, instructions, ingredients).
-
-    Uses TextTranslationService for actual provider calls.
-    Adds meal-specific caching logic on top.
-    """
+    """Translate meal content and persist only complete provider results."""
 
     def __init__(
         self,
@@ -62,7 +59,12 @@ class MealTranslationService:
             existing = await self._get_by_meal_and_language(
                 meal.meal_id, target_language
             )
-            if existing and existing.is_fully_cached():
+            if existing and existing.is_fully_cached(
+                expected_ingredient_count=len(
+                    [item for item in food_items if item.name]
+                ),
+                expected_instruction_count=len(instructions or []),
+            ):
                 logger.debug(
                     "Translation cache hit: meal=%s lang=%s",
                     meal.meal_id,
@@ -88,13 +90,12 @@ class MealTranslationService:
             # Layout: [dish_name, *ingredient_names, *instruction_texts]
             strings_to_translate = [dish_name] + ingredient_names + instruction_texts
 
-            translated = await self._text_service.translate_texts(
-                strings_to_translate, target_language
+            result = await _translate_texts(
+                self._text_service, strings_to_translate, target_language
             )
-
-            # Pad result to the expected length in case a provider returns fewer items.
-            while len(translated) < len(strings_to_translate):
-                translated.append(strings_to_translate[len(translated)])
+            translated = result.to_list()
+            if result.outcome is not TranslationOutcome.TRANSLATED:
+                translated.extend(strings_to_translate[len(translated) :])
 
             # --- Unpack results ---
             translated_dish_name = translated[0]
@@ -138,21 +139,26 @@ class MealTranslationService:
                 translated_at=utc_now(),
             )
 
+            if result.outcome is not TranslationOutcome.TRANSLATED:
+                logger.warning(
+                    "Meal translation not persisted meal=%s lang=%s outcome=%s",
+                    meal.meal_id,
+                    target_language,
+                    result.outcome.value,
+                )
+                return translation
             saved = await self._save(translation)
             logger.info(
-                "Meal translation saved: meal=%s lang=%s dish='%s'",
-                meal.meal_id,
-                target_language,
-                translated_dish_name,
+                "Meal translation saved meal=%s lang=%s", meal.meal_id, target_language
             )
             return saved
 
         except Exception as exc:
             logger.warning(
-                "Meal translation failed for meal=%s lang=%s: %s",
+                "Meal translation failed for meal=%s lang=%s error_type=%s",
                 meal.meal_id,
                 target_language,
-                exc,
+                type(exc).__name__,
             )
             return None
 
@@ -161,11 +167,18 @@ class MealTranslationService:
     ) -> MealTranslation | None:
         method = self._repo.get_by_meal_and_language
         if inspect.iscoroutinefunction(method):
-            return await method(meal_id, language)
-        return await asyncio.to_thread(method, meal_id, language)
+            return await cast(Any, method)(meal_id, language)
+        return await asyncio.to_thread(cast(Any, method), meal_id, language)
 
     async def _save(self, translation: MealTranslation) -> MealTranslation:
         method = self._repo.save
         if inspect.iscoroutinefunction(method):
-            return await method(translation)
-        return await asyncio.to_thread(method, translation)
+            return await cast(Any, method)(translation)
+        return await asyncio.to_thread(cast(Any, method), translation)
+
+
+async def _translate_texts(
+    service: TextTranslationService, texts: list[str], target_language: str
+) -> TranslationResult:
+    """Translate an ordered batch from the canonical English source."""
+    return await service.translate_texts(texts, "en", target_language)

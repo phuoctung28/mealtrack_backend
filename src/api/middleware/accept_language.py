@@ -11,11 +11,15 @@ from fastapi import Request
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from src.domain.constants.languages import (
+    DEFAULT_LANGUAGE,
+    SUPPORTED_TRANSLATION_LANGUAGES,
+)
+
 logger = logging.getLogger(__name__)
 
 # Supported languages (ISO 639-1)
-SUPPORTED_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
-DEFAULT_LANGUAGE = "en"
+SUPPORTED_LANGUAGES = SUPPORTED_TRANSLATION_LANGUAGES
 
 
 class AcceptLanguageMiddleware:

@@ -7,6 +7,7 @@ data integrity and support multiple languages.
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -22,7 +23,7 @@ class FoodItemTranslation:
 
     food_item_id: str
     name: str
-    description: str | None = None
+    description: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -60,18 +61,27 @@ class MealTranslation:
     meal_id: str
     language: str
     dish_name: str
-    food_items: list[FoodItemTranslation]
+    food_items: List[FoodItemTranslation]
     translated_at: datetime = field(default_factory=datetime.utcnow)
-    meal_instruction: list | None = None
-    meal_ingredients: list | None = None
+    meal_instruction: Optional[list] = None
+    meal_ingredients: Optional[list] = None
 
-    def is_fully_cached(self) -> bool:
-        """Return True when all translatable fields are populated."""
-        return (
-            self.dish_name is not None
-            and self.meal_instruction is not None
-            and self.meal_ingredients is not None
-        )
+    def is_fully_cached(
+        self,
+        *,
+        expected_ingredient_count: int | None = None,
+        expected_instruction_count: int | None = None,
+    ) -> bool:
+        """Return whether the row covers the available source manifest."""
+        if self.dish_name is None or self.meal_ingredients is None:
+            return False
+        if expected_ingredient_count is not None and len(self.meal_ingredients) != expected_ingredient_count:
+            return False
+        if expected_instruction_count is None:
+            return self.meal_instruction is not None
+        if expected_instruction_count == 0:
+            return self.meal_instruction in (None, [])
+        return self.meal_instruction is not None and len(self.meal_instruction) == expected_instruction_count
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -96,7 +106,7 @@ class MealTranslation:
 
     def get_food_item_translation(
         self, food_item_id: str
-    ) -> FoodItemTranslation | None:
+    ) -> Optional[FoodItemTranslation]:
         """Get translation for a specific food item."""
         for fi in self.food_items:
             if fi.food_item_id == food_item_id:

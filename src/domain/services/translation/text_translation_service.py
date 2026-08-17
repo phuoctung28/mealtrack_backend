@@ -1,103 +1,75 @@
-"""Provider-neutral text translation service."""
+"""Domain orchestration for bounded, outcome-aware text translation."""
 
-import logging
-from typing import Any
+from __future__ import annotations
 
+from collections.abc import Sequence
+
+from src.domain.constants.languages import (
+    is_supported_translation_pair,
+    normalize_language,
+)
+from src.domain.constants.translation_limits import translation_batch_within_limits
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 from src.domain.ports.text_translation_port import TextTranslationPort
-
-logger = logging.getLogger(__name__)
 
 
 class TextTranslationService:
-    """Translate text while degrading safely to the original content."""
+    """Validate translation requests and normalize provider outcomes."""
 
-    def __init__(self, translation_port: TextTranslationPort) -> None:
-        self._translation_port = translation_port
+    def __init__(self, port: TextTranslationPort) -> None:
+        self._port = port
 
-    async def translate_texts(self, texts: list[str], target_lang: str) -> list[str]:
-        """Translate English texts to the target language."""
-        if not texts or target_lang.lower() == "en":
-            return list(texts) if texts else []
+    async def translate_texts(
+        self,
+        texts: Sequence[str],
+        source_language: str | None,
+        target_language: str | None,
+    ) -> TranslationResult:
+        original = tuple(str(text) for text in texts)
+        source = normalize_language(source_language)
+        target = normalize_language(target_language)
+        if not original or source == target:
+            return TranslationResult.passthrough(
+                original, source_language=source, target_language=target
+            )
+        if not is_supported_translation_pair(
+            source, target
+        ) or not translation_batch_within_limits(list(original)):
+            return TranslationResult.unavailable(
+                original, source_language=source, target_language=target
+            )
 
-        unique = list(dict.fromkeys(text for text in texts if text))
+        # Empty fields (for example an optional recipe description) are data,
+        # not translation requests. Keep their positions while excluding them
+        # from the provider payload so a model cannot invent content for them.
+        unique = list(dict.fromkeys(text for text in original if text))
         if not unique:
-            return list(texts)
-
+            return TranslationResult.passthrough(
+                original, source_language=source, target_language=target
+            )
         try:
-            translated = await self._translation_port.translate_texts(
-                unique, target_lang
+            provider_result = await self._port.translate_texts(
+                unique, source_language=source, target_language=target
             )
-            values = list(translated)
-            while len(values) < len(unique):
-                values.append(unique[len(values)])
-            translated_by_source = dict(zip(unique, values, strict=False))
-            return [translated_by_source.get(text, text) for text in texts]
-        except Exception as exc:
-            logger.warning("Text translation failed (lang=%s): %s", target_lang, exc)
-            return list(texts)
-
-    async def translate_to_english(
-        self, texts: list[str], source_lang: str
-    ) -> list[str]:
-        """Translate source-language texts to English."""
-        if not texts or source_lang.lower() == "en":
-            return list(texts) if texts else []
-
-        unique = list(dict.fromkeys(text for text in texts if text))
-        if not unique:
-            return list(texts)
-
-        try:
-            translated = await self._translation_port.translate_to_english(
-                unique, source_lang
+        except Exception:
+            return TranslationResult.unavailable(
+                original, source_language=source, target_language=target
             )
-            values = list(translated)
-            while len(values) < len(unique):
-                values.append(unique[len(values)])
-            translated_by_source = dict(zip(unique, values, strict=False))
-            return [translated_by_source.get(text, text) for text in texts]
-        except Exception as exc:
-            logger.warning(
-                "Text translation to English failed (lang=%s): %s", source_lang, exc
-            )
-            return list(texts)
 
-    async def translate_food_names(
-        self, foods: list[dict[str, Any]], target_lang: str
-    ) -> list[dict[str, Any]]:
-        """Translate food name/description fields in place."""
-        if not foods or target_lang.lower() == "en":
-            return foods
-
-        names: list[str] = []
-        for food in foods:
-            name = food.get("description") or food.get("name", "")
-            if name and name not in names:
-                names.append(name)
-        if not names:
-            return foods
-
-        try:
-            translated = await self._translation_port.translate_texts(
-                names, target_lang
-            )
-            while len(translated) < len(names):
-                translated.append(names[len(translated)])
-            name_map = dict(zip(names, translated, strict=False))
-            for food in foods:
-                original = food.get("description") or food.get("name", "")
-                translated_name = name_map.get(original)
-                if not translated_name:
-                    continue
-                if "description" in food:
-                    food["description_original"] = original
-                    food["description"] = translated_name
-                if "name" in food:
-                    food["name_original"] = original
-                    food["name"] = translated_name
-            return foods
-        except Exception as exc:
-            logger.warning(
-                "Food-name translation failed (lang=%s): %s", target_lang, exc
-            )
-            return foods
+        provider_texts = tuple(provider_result.items)
+        expanded: list[str] = []
+        status = provider_result.outcome
+        index_map = {text: index for index, text in enumerate(unique)}
+        for text in original:
+            if not text:
+                expanded.append(text)
+                continue
+            index = index_map[text]
+            if index < len(provider_texts) and provider_texts[index]:
+                expanded.append(provider_texts[index])
+            else:
+                expanded.append(text)
+                status = TranslationOutcome.PARTIAL
+        if len(provider_texts) != len(unique):
+            status = TranslationOutcome.PARTIAL
+        return TranslationResult(tuple(expanded), status, source, target)

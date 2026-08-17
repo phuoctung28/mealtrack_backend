@@ -5,6 +5,7 @@ Per-recipe attempt logic lives in recipe_attempt_builder.py.
 """
 
 import asyncio
+import inspect
 import logging
 import time
 import uuid
@@ -12,10 +13,11 @@ from dataclasses import replace
 from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
-from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.domain.services.meal_suggestion.suggestion_translation_service import (
-    SuggestionTranslationService,
+from src.domain.model.meal_suggestion.suggestion_translation_result import (
+    SuggestionTranslationResult,
 )
+from src.domain.model.translation_result import TranslationOutcome
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_suggestion.discovery_fallback_builder import (
     build_discovery_fallback_meals,
 )
@@ -27,6 +29,9 @@ from src.domain.services.meal_suggestion.nutrition_lookup_service import (
 )
 from src.domain.services.meal_suggestion.recipe_attempt_builder import (
     attempt_recipe_generation,
+)
+from src.domain.services.meal_suggestion.suggestion_translation_service import (
+    SuggestionTranslationService,
 )
 from src.domain.services.prompts.system_prompts import SystemPrompts
 
@@ -132,7 +137,7 @@ class ParallelRecipeGenerator:
             f"[PIPELINE-COMPLETE] session={session.id} | total_elapsed={total_elapsed:.2f}s | "
             f"phase1={phase1_elapsed:.2f}s | phase2={phase2_elapsed:.2f}s | "
             f"phase3={phase3_elapsed:.2f}s | language={session.language} | "
-            f"returned={len(suggestions)} | meals={[s.meal_name for s in suggestions]}"
+            f"returned={len(suggestions)}"
         )
         return suggestions
 
@@ -190,15 +195,11 @@ class ParallelRecipeGenerator:
             )
         except Exception as e:
             attempted_models = getattr(e, "attempted_models", None)
-            last_error = getattr(e, "last_error", None)
             logger.warning(
-                "[DISCOVERY-FALLBACK] session=%s | error_type=%s | error=%s | "
-                "attempted_models=%s | last_error=%s",
+                "[DISCOVERY-FALLBACK] session=%s | error_type=%s | attempted_models=%s",
                 session.id,
                 type(e).__name__,
-                e,
                 attempted_models,
-                last_error,
             )
             return self._build_discovery_fallback(
                 session,
@@ -244,7 +245,7 @@ class ParallelRecipeGenerator:
         elapsed = time.time() - start
         logger.debug(
             f"[DISCOVERY-COMPLETE] session={session.id} | elapsed={elapsed:.2f}s | "
-            f"meals={[r['name'] for r in results]}"
+            f"returned={len(results)}"
         )
 
         if len(results) < count:
@@ -273,11 +274,10 @@ class ParallelRecipeGenerator:
             macro_validator=self._macro_validator,
         )
         logger.info(
-            "[DISCOVERY-FALLBACK-COMPLETE] session=%s | reason=%s | returned=%d | meals=%s",
+            "[DISCOVERY-FALLBACK-COMPLETE] session=%s | reason=%s | returned=%d",
             session.id,
             reason,
             len(meals),
-            [meal["name"] for meal in meals],
         )
         return meals
 
@@ -310,7 +310,7 @@ class ParallelRecipeGenerator:
             if not meal_name:
                 raise ValueError("selected meal is missing english_name/name")
             prompt = build_recipe_details_prompt(meal_name, recipe_session)
-            return await self._generate_with_retry(
+            generated = await self._generate_with_retry(
                 prompt,
                 meal_name,
                 index,
@@ -319,6 +319,14 @@ class ParallelRecipeGenerator:
                 reject_on_scale_out_of_range=False,
                 fill_missing_steps=True,
             )
+            localized_name = selected.get("name")
+            if (
+                generated is not None
+                and localized_name
+                and localized_name != meal_name
+            ):
+                generated = replace(generated, meal_name=localized_name)
+            return generated
 
         results: List[Optional[MealSuggestion]] = [None] * len(selected_meals)
 
@@ -417,12 +425,12 @@ class ParallelRecipeGenerator:
                     f"(got {len(meal_names)}, need {suggestion_count})."
                 )
             logger.debug(
-                f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}"
+                f"[PHASE-1-COMPLETE] session={session.id} | returned={len(meal_names)}"
             )
             return meal_names
         except Exception as e:
             logger.error(
-                f"[PHASE-1-FAILED] session={session.id} | {type(e).__name__}: {e}"
+                f"[PHASE-1-FAILED] session={session.id} | error_type={type(e).__name__}"
             )
             raise RuntimeError(f"Failed to generate meal names: {e}") from e
 
@@ -444,7 +452,7 @@ class ParallelRecipeGenerator:
             suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS
         )
         logger.debug(
-            f"[PHASE-2-START] session={session.id} | recipes for {meal_names} | preserve_order={preserve_order}"
+            f"[PHASE-2-START] session={session.id} | recipes={len(meal_names)} | preserve_order={preserve_order}"
         )
         recipe_system = SystemPrompts.RECIPE_GENERATION
         prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
@@ -466,7 +474,9 @@ class ParallelRecipeGenerator:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result in results:
                 if isinstance(result, Exception):
-                    logger.warning(f"[RECIPE-ERROR] {type(result).__name__}: {result}")
+                    logger.warning(
+                        "[RECIPE-ERROR] error_type=%s", type(result).__name__
+                    )
                 elif result is not None:
                     successful.append(result)
         else:
@@ -487,11 +497,11 @@ class ParallelRecipeGenerator:
                             )
                             break
                 except Exception as e:
-                    logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
+                    logger.warning("[RECIPE-ERROR] error_type=%s", type(e).__name__)
 
         logger.debug(
             f"[PHASE-2-COMPLETE] session={session.id} | "
-            f"success={len(successful)}/{total_attempts} | elapsed={time.time() - gen_start:.2f}s"
+            f"success={len(successful)}/{total_attempts} | elapsed={time.time()-gen_start:.2f}s"
         )
         if len(successful) < min_acceptable:
             if not successful:
@@ -534,7 +544,7 @@ class ParallelRecipeGenerator:
         )
         if result is not None:
             return result
-        logger.debug(f"[PHASE-2-RETRY] index={index} | meal={meal_name}")
+        logger.debug(f"[PHASE-2-RETRY] index={index}")
         return await attempt_recipe_generation(
             self._generation,
             self._macro_validator,
@@ -559,16 +569,33 @@ class ParallelRecipeGenerator:
             logger.debug("[TRANSLATE-SKIP] No translation service configured")
             return suggestion
         try:
-            results = await self._translation_service.translate_meal_suggestions_batch(
-                [suggestion], language
-            )
-            return results[0] if results else suggestion
-        except Exception as e:
+            result = await self._translate_single_result(suggestion, language)
+            return result.suggestion
+        except Exception as exc:
             logger.warning(
-                f"[TRANSLATE-SINGLE-FAILED] meal={suggestion.meal_name} | "
-                f"{type(e).__name__}: {e} | using English"
+                "[TRANSLATE-SINGLE-FAILED] suggestion_id=%s error_type=%s using_english=true",
+                getattr(suggestion, "id", "unknown"),
+                type(exc).__name__,
             )
             return suggestion
+
+    async def _translate_single_result(
+        self, suggestion: MealSuggestion, language: str
+    ) -> SuggestionTranslationResult:
+        if self._translation_service is None:
+            return SuggestionTranslationResult(suggestion, TranslationOutcome.PASSTHROUGH)
+        result_method = getattr(
+            self._translation_service, "translate_meal_suggestion_result", None
+        )
+        if result_method is not None and inspect.iscoroutinefunction(result_method):
+            return await result_method(suggestion, language)
+        results = await self._translation_service.translate_meal_suggestions_batch(
+            [suggestion], language
+        )
+        translated = results[0] if results else suggestion
+        # Legacy list-returning doubles do not carry a provider outcome, so
+        # render the result but never treat it as persistable localized data.
+        return SuggestionTranslationResult(translated, TranslationOutcome.PARTIAL)
 
     async def _phase2_and_translate(
         self,
@@ -598,7 +625,7 @@ class ParallelRecipeGenerator:
         min_acceptable = max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
 
         logger.debug(
-            f"[PHASE-2-PIPELINE-START] session={session.id} | recipes={meal_names}"
+            f"[PHASE-2-PIPELINE-START] session={session.id} | recipes={len(meal_names)}"
         )
         gen_start = time.time()
 
@@ -609,7 +636,7 @@ class ParallelRecipeGenerator:
                     gen_successes += 1
                     translate_tasks.append(
                         asyncio.create_task(
-                            self._translate_single(result, session.language)
+                            self._translate_single_result(result, session.language)
                         )
                     )
                     if gen_successes >= suggestion_count:
@@ -622,11 +649,11 @@ class ParallelRecipeGenerator:
                         )
                         break
             except Exception as e:
-                logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
+                logger.warning("[RECIPE-ERROR] error_type=%s", type(e).__name__)
 
         logger.debug(
             f"[PHASE-2-PIPELINE-COMPLETE] session={session.id} | "
-            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time() - gen_start:.2f}s"
+            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time()-gen_start:.2f}s"
         )
 
         if gen_successes < min_acceptable:
@@ -640,5 +667,5 @@ class ParallelRecipeGenerator:
                 f"Insufficient recipes: {gen_successes}/{min_acceptable} minimum"
             )
 
-        suggestions = await asyncio.gather(*translate_tasks)
-        return list(suggestions)
+        translated_results = await asyncio.gather(*translate_tasks)
+        return [result.suggestion for result in translated_results]

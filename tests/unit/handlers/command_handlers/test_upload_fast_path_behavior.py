@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -62,7 +61,8 @@ async def test_run_vision_analysis_raises_after_max_attempts():
 
 
 @pytest.mark.asyncio
-async def test_translation_called_for_non_english_language():
+async def test_translation_called_for_non_english_language(caplog):
+    caplog.set_level("INFO")
     call_order = []
     saved_state = {}
     mock_uow = MagicMock()
@@ -134,6 +134,7 @@ async def test_translation_called_for_non_english_language():
     assert translate_kwargs["food_items"] == nutrition.food_items
     assert translate_kwargs["meal"] == saved_state["meal"]
     assert call_order[:3] == ["save", "commit", "translate"]
+    assert "translated to" not in caplog.text
 
 
 @pytest.fixture

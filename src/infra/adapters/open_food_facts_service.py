@@ -86,8 +86,11 @@ class OpenFoodFactsService:
             or product.get("image_front_small_url")
         )
 
+        english_name = product.get("product_name_en")
         return {
-            "name": product.get("product_name") or product.get("product_name_en"),
+            "name": english_name or product.get("product_name"),
+            # product_name may be localized; only mark explicit English data.
+            "source_language": "en" if english_name else None,
             "brand": product.get("brands"),
             "barcode": product.get("code"),
             "calories_100g": self._safe_float(nutriments.get("energy-kcal_100g")),

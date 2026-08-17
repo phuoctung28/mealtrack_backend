@@ -270,7 +270,12 @@ class FatSecretService:
         if not foods:
             error = result.get("error")
             if error:
-                logger.warning("fatsecret API error response received")
+                error_code = (
+                    error.get("code") if isinstance(error, dict) else type(error).__name__
+                )
+                logger.warning(
+                    "fatsecret API error response received: code=%s", error_code
+                )
             else:
                 logger.warning(
                     "fatsecret returned no foods: response_keys=%s",

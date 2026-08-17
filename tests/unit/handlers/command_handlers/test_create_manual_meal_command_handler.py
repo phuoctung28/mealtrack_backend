@@ -8,6 +8,7 @@ import asyncio
 import logging
 import time
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -44,6 +45,31 @@ class _FakeUow:
     def __init__(self, fake_meal):
         self.meals = _FakeMeals(fake_meal)
         self.users = _FakeUsers()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _PreparedV2Meals:
+    async def save(self, meal):
+        return meal
+
+
+class _PreparedV2WriteOperations:
+    def __init__(self):
+        self.completed = None
+
+    async def complete(self, reservation, *, target_meal_id, response):
+        self.completed = (reservation, target_meal_id, response)
+
+
+class _PreparedV2Uow:
+    def __init__(self):
+        self.meals = _PreparedV2Meals()
+        self.meal_write_operations = _PreparedV2WriteOperations()
 
     async def __aenter__(self):
         return self
@@ -138,6 +164,104 @@ async def test_handler_timing_logs_show_cache_delay(caplog):
 
     # Result is the saved meal
     assert result is fake_meal
+
+
+@pytest.mark.asyncio
+async def test_v2_prepared_custom_nutrition_is_saved_without_resolution():
+    """A confirmed portion must not be reinterpreted as per-100g nutrition."""
+    item = ManualMealItem(
+        name="Pork rib",
+        quantity=1,
+        unit="slice",
+        origin="custom",
+        nutrition_contract_version="2",
+        custom_nutrition=CustomNutrition(
+            calories_per_100g=810,
+            protein_per_100g=90,
+            carbs_per_100g=0,
+            fat_per_100g=50,
+        ),
+    )
+    command = CreateManualMealCommand(
+        user_id=_UUID_1,
+        items=[item],
+        dish_name="Rice plate",
+        source="prompt",
+        nutrition_contract_version=2,
+        idempotency_key="write-1",
+        request_fingerprint="fingerprint-1",
+    )
+    resolver = MagicMock()
+    resolver.resolve_items = AsyncMock()
+    resolver.revalidate_local_items = AsyncMock()
+    uow = _PreparedV2Uow()
+    handler = CreateManualMealCommandHandler(
+        uow=uow,
+        uow_factory=object(),
+        nutrition_resolver=resolver,
+    )
+    handler._reserve_v2_write_short = AsyncMock(
+        return_value=SimpleNamespace(state="claimed")
+    )
+    handler._release_v2_write = AsyncMock()
+
+    meal = await handler.handle(command)
+
+    assert meal.nutrition.macros.protein == pytest.approx(27)
+    assert meal.nutrition.macros.fat == pytest.approx(15)
+    assert meal.nutrition.calories == pytest.approx(243)
+    resolver.resolve_items.assert_not_awaited()
+    resolver.revalidate_local_items.assert_not_awaited()
+    assert uow.meal_write_operations.completed[1] == meal.meal_id
+
+
+@pytest.mark.asyncio
+async def test_v2_prepared_nutrition_uses_confirmed_food_specific_unit():
+    item = ManualMealItem(
+        name="Pork rib",
+        quantity=1,
+        unit="slice",
+        origin="custom",
+        nutrition_contract_version="2",
+        allowed_units=[
+            {"unit": "g", "gram_weight": 1, "description": "1 g"},
+            {"unit": "slice", "gram_weight": 80, "description": "1 slice"},
+        ],
+        source_snapshot={"basis": "100g"},
+        custom_nutrition=CustomNutrition(
+            calories_per_100g=810,
+            protein_per_100g=90,
+            carbs_per_100g=0,
+            fat_per_100g=50,
+        ),
+    )
+    command = CreateManualMealCommand(
+        user_id=_UUID_1,
+        items=[item],
+        dish_name="Rice plate",
+        nutrition_contract_version=2,
+        idempotency_key="write-2",
+        request_fingerprint="fingerprint-2",
+    )
+    resolver = MagicMock()
+    resolver.resolve_items = AsyncMock()
+    resolver.revalidate_local_items = AsyncMock()
+    uow = _PreparedV2Uow()
+    handler = CreateManualMealCommandHandler(
+        uow=uow,
+        uow_factory=object(),
+        nutrition_resolver=resolver,
+    )
+    handler._reserve_v2_write_short = AsyncMock(
+        return_value=SimpleNamespace(state="claimed")
+    )
+
+    meal = await handler.handle(command)
+
+    assert meal.nutrition.macros.protein == pytest.approx(72)
+    assert meal.nutrition.macros.fat == pytest.approx(40)
+    assert meal.nutrition.calories == pytest.approx(648)
+    resolver.resolve_items.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

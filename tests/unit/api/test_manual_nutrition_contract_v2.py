@@ -61,6 +61,43 @@ def test_v2_custom_item_is_source_less_and_keeps_custom_nutrition():
     assert payload.items[0].origin == "custom"
 
 
+def test_v2_prepared_source_item_requires_and_keeps_snapshot():
+    nutrition = {
+        "protein_per_100g": 2.7,
+        "carbs_per_100g": 28,
+        "fat_per_100g": 0.3,
+    }
+    snapshot = {
+        "basis": "100g",
+        "protein_per_100g": 2.7,
+        "carbs_per_100g": 28,
+        "fat_per_100g": 0.3,
+    }
+
+    payload = CreateManualMealFromFoodsRequest(
+        dish_name="Rice",
+        nutrition_contract_version=2,
+        items=[
+            _v2_create_item(
+                custom_nutrition=nutrition,
+                source_snapshot=snapshot,
+                allowed_units=[
+                    {"unit": "g", "gram_weight": 1, "description": "1 g"}
+                ],
+            )
+        ],
+    )
+
+    assert payload.items[0].source_snapshot == snapshot
+
+    with pytest.raises(ValidationError, match="source_snapshot"):
+        CreateManualMealFromFoodsRequest(
+            dish_name="Rice",
+            nutrition_contract_version=2,
+            items=[_v2_create_item(custom_nutrition=nutrition)],
+        )
+
+
 @pytest.mark.parametrize(
     "payload",
     [

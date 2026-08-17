@@ -282,7 +282,7 @@ def get_food_search_event_bus() -> EventBus:
     open_food_facts_service = get_open_food_facts_service_instance()
     fat_secret_service = get_fat_secret_service_instance()
 
-    # Optional OpenAI translation service for localized food search.
+    # Translation service for localized food search (optional OpenAI-backed)
     text_translation_service = get_text_translation_service()
 
     # Barcode cascade: Brave Search is optional — None if keys are not set.
@@ -353,6 +353,7 @@ def get_configured_event_bus() -> EventBus:
         get_ai_model_manager,
         get_cache_service,
         get_daily_context_precompute_service,
+        get_meal_translation_service,
         get_fat_secret_service_instance,
         get_food_cache_service,
         get_food_data_service,
@@ -360,7 +361,6 @@ def get_configured_event_bus() -> EventBus:
         get_gpt_parser,
         get_image_store,
         get_meal_analyze_graph_settings,
-        get_meal_translation_service,
         get_parse_text_settings,
         get_suggestion_orchestration_service,
         get_text_translation_service,

@@ -73,11 +73,11 @@ class LogRecommendedMealCommandHandler(
 
         # meal_translation uses its own DB session; parent meal must be committed first.
         if saved_meal is not None:
-            await self._persist_request_language_translation(command, saved_meal)
             if self.cache_invalidation is not None and meal_date is not None:
                 await self.cache_invalidation.after_meal_write(
                     command.user_id, meal_date
                 )
+            await self._persist_request_language_translation(command, saved_meal)
 
         return result
 
@@ -86,7 +86,7 @@ class LogRecommendedMealCommandHandler(
         command: LogRecommendedMealCommand,
         meal: Meal,
     ) -> None:
-        """Persist meal translation so Today's Meals can show localized titles."""
+        """Persist localized meal translation so Today's Meals can show titles."""
 
         language = (command.language or "en").strip().lower()
         if language == "en" or self.meal_translation_service is None:
@@ -105,16 +105,11 @@ class LogRecommendedMealCommandHandler(
                 food_items=food_items,
                 target_language=language,
             )
-            logger.info(
-                "recommended meal translated meal=%s language=%s",
-                meal.meal_id,
-                language,
-            )
         except Exception as exc:
             # Logging must succeed even when translation is unavailable.
             logger.warning(
-                "recommended meal translation failed meal=%s language=%s error=%s",
+                "recommended meal translation failed meal=%s language=%s error_type=%s",
                 meal.meal_id,
                 language,
-                exc,
+                type(exc).__name__,
             )

@@ -1,10 +1,17 @@
-"""Translation service for meal suggestions."""
+"""Translation orchestration for meal suggestions."""
 
 import asyncio
 import logging
 from dataclasses import replace as dataclasses_replace
 
 from src.domain.model.meal_suggestion import MealSuggestion
+from src.domain.model.meal_suggestion.suggestion_translation_result import (
+    SuggestionTranslationResult,
+)
+from src.domain.model.translation_result import TranslationOutcome
+from src.domain.services.meal_analysis.meal_translation_service import (
+    _translate_texts,
+)
 from src.domain.services.translation.text_translation_service import (
     TextTranslationService,
 )
@@ -13,12 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class SuggestionTranslationService:
-    """
-    Translates MealSuggestion objects.
-
-    Uses TextTranslationService for actual provider calls.
-    Adds suggestion-specific dataclass handling on top.
-    """
+    """Translate suggestion fields while retaining persistence outcomes."""
 
     def __init__(self, text_translation_service: TextTranslationService) -> None:
         self._text_service = text_translation_service
@@ -30,19 +32,40 @@ class SuggestionTranslationService:
     async def translate_meal_suggestion(
         self, suggestion: MealSuggestion, target_language: str
     ) -> MealSuggestion:
-        """Translate a single suggestion; returns original on failure."""
-        if target_language == "en":
+        """Translate a single suggestion; returns canonical on failure."""
+        result = await self.translate_meal_suggestion_result(
+            suggestion, target_language
+        )
+        if result.outcome is TranslationOutcome.UNAVAILABLE:
             return suggestion
+        return result.suggestion
+
+    async def translate_meal_suggestion_result(
+        self, suggestion: MealSuggestion, target_language: str
+    ) -> SuggestionTranslationResult:
+        """Translate a suggestion while retaining the persistence outcome."""
+        if target_language == "en":
+            return SuggestionTranslationResult(
+                dataclasses_replace(
+                    suggestion, translation_outcome=TranslationOutcome.PASSTHROUGH
+                ),
+                TranslationOutcome.PASSTHROUGH,
+            )
         try:
             return await self._translate_one(suggestion, target_language)
         except Exception as exc:
             logger.warning(
-                "Suggestion translation failed for suggestion=%s lang=%s: %s",
+                "Suggestion translation failed id=%s lang=%s error_type=%s",
                 suggestion.id,
                 target_language,
-                exc,
+                type(exc).__name__,
             )
-            return suggestion
+            return SuggestionTranslationResult(
+                dataclasses_replace(
+                    suggestion, translation_outcome=TranslationOutcome.UNAVAILABLE
+                ),
+                TranslationOutcome.UNAVAILABLE,
+            )
 
     async def translate_meal_suggestions_batch(
         self, suggestions: list[MealSuggestion], target_language: str
@@ -52,21 +75,21 @@ class SuggestionTranslationService:
             return suggestions
 
         results = await asyncio.gather(
-            *[self._translate_one(s, target_language) for s in suggestions],
+            *[
+                self.translate_meal_suggestion_result(s, target_language)
+                for s in suggestions
+            ],
             return_exceptions=True,
         )
 
         translated = []
         for original, result in zip(suggestions, results, strict=True):
-            if isinstance(result, Exception):
-                logger.warning(
-                    "Suggestion translation failed for suggestion=%s: %s",
-                    original.id,
-                    result,
-                )
+            if isinstance(result, BaseException):
+                translated.append(original)
+            elif result.outcome is TranslationOutcome.UNAVAILABLE:
                 translated.append(original)
             else:
-                translated.append(result)
+                translated.append(result.suggestion)
         return translated
 
     async def translate_names(
@@ -76,9 +99,10 @@ class SuggestionTranslationService:
         if target_language == "en" or not names:
             return names
         try:
-            return await self._text_service.translate_texts(names, target_language)
+            result = await _translate_texts(self._text_service, names, target_language)
+            return result.to_list()
         except Exception as exc:
-            logger.warning("translate_names failed: %s", exc)
+            logger.warning("translate_names failed error_type=%s", type(exc).__name__)
             return names
 
     # ------------------------------------------------------------------
@@ -87,26 +111,39 @@ class SuggestionTranslationService:
 
     async def _translate_one(
         self, suggestion: MealSuggestion, target_language: str
-    ) -> MealSuggestion:
+    ) -> SuggestionTranslationResult:
         """
         Build one flat string list, call the provider once, then reconstruct the
         MealSuggestion dataclass with translated values.
         """
+        # Keep the canonical English identity as the provider source. A selected
+        # discovery meal may already have a localized display name, which is the
+        # safe fallback if this request only partially translates.
+        canonical_name = suggestion.english_name or suggestion.meal_name
+        localized_name_fallback = (
+            suggestion.meal_name
+            if suggestion.english_name
+            and suggestion.meal_name != suggestion.english_name
+            else None
+        )
         # Layout: [meal_name, description, *ingredient_names, *step_instructions]
-        strings: list[str] = [suggestion.meal_name, suggestion.description or ""]
+        strings: list[str] = [canonical_name, suggestion.description or ""]
         n_ingredients = len(suggestion.ingredients)
 
         strings.extend(ing.name for ing in suggestion.ingredients)
         strings.extend(step.instruction for step in suggestion.recipe_steps)
 
-        translated = await self._text_service.translate_texts(strings, target_language)
-
-        # Pad in case a provider returns fewer items than requested.
-        while len(translated) < len(strings):
-            translated.append(strings[len(translated)])
+        result = await _translate_texts(self._text_service, strings, target_language)
+        translated = result.to_list()
+        translated.extend(strings[len(translated) :])
 
         idx = 0
         translated_name = translated[idx]
+        if (
+            localized_name_fallback
+            and result.outcome is not TranslationOutcome.TRANSLATED
+        ):
+            translated_name = localized_name_fallback
         idx += 1
         translated_description = translated[idx]
         idx += 1
@@ -122,10 +159,14 @@ class SuggestionTranslationService:
             for i, step in enumerate(suggestion.recipe_steps)
         ]
 
-        return dataclasses_replace(
-            suggestion,
-            meal_name=translated_name,
-            description=translated_description,
-            ingredients=translated_ingredients,
-            recipe_steps=translated_steps,
+        return SuggestionTranslationResult(
+            dataclasses_replace(
+                suggestion,
+                meal_name=translated_name,
+                description=translated_description,
+                ingredients=translated_ingredients,
+                recipe_steps=translated_steps,
+                translation_outcome=result.outcome,
+            ),
+            result.outcome,
         )

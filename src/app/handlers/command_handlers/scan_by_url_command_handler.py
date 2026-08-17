@@ -342,6 +342,11 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 saved_meal = await uow.meals.save(meal)
                 await uow.commit()
 
+            if self.cache_invalidation:
+                await self.cache_invalidation.after_meal_write(
+                    command.user_id, meal_date
+                )
+
             logger.info(
                 "[SCAN-BY-URL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",
                 saved_meal.meal_id,
@@ -365,19 +370,14 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     )
                 except Exception as exc:
                     logger.warning(
-                        "[SCAN-BY-URL] translation failed meal=%s: %s",
+                        "[SCAN-BY-URL] translation failed meal=%s error_type=%s",
                         saved_meal.meal_id,
-                        exc,
+                        type(exc).__name__,
                     )
 
             async with self.uow as uow:
                 final_meal = await uow.meals.find_by_id(
                     meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
-                )
-
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(
-                    command.user_id, meal_date
                 )
 
             return final_meal

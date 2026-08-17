@@ -113,7 +113,7 @@ def _request(language: str = "en") -> Request:
 
 
 @pytest.mark.asyncio
-async def test_non_english_generates_requested_language_without_translation_provider():
+async def test_non_english_generates_requested_language_without_provider_dependency():
     ai_manager = AsyncMock()
     ai_manager.generate.return_value = {
         "meal_bullets": [

@@ -1,178 +1,104 @@
-"""Tests for TextTranslationService."""
+"""Tests for provider-neutral translation orchestration."""
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.domain.model.translation_result import TranslationOutcome, TranslationResult
 from src.domain.services.translation.text_translation_service import (
     TextTranslationService,
 )
 
 
 @pytest.fixture
-def translation_port():
-    port = MagicMock()
-    port.translate_texts = AsyncMock()
-    port.translate_to_english = AsyncMock()
-    return port
+def port():
+    adapter = MagicMock()
+    adapter.translate_texts = AsyncMock()
+    return adapter
 
 
 @pytest.fixture
-def service(translation_port):
-    return TextTranslationService(translation_port=translation_port)
+def service(port):
+    return TextTranslationService(port)
 
 
-# ─────────────────────────── translate_texts ───────────────────────────
+@pytest.mark.asyncio
+async def test_translates_and_expands_deduplicated_texts(service, port):
+    port.translate_texts.return_value = TranslationResult(
+        ("Poulet", "Riz"), TranslationOutcome.TRANSLATED, "en", "fr"
+    )
+
+    result = await service.translate_texts(
+        ["Chicken", "Rice", "Chicken"], "en", "fr"
+    )
+
+    assert result.items == ("Poulet", "Riz", "Poulet")
+    assert result.outcome is TranslationOutcome.TRANSLATED
+    port.translate_texts.assert_awaited_once_with(
+        ["Chicken", "Rice"], source_language="en", target_language="fr"
+    )
 
 
-class TestTranslateTexts:
-    @pytest.mark.asyncio
-    async def test_translates_to_target_language(self, service, translation_port):
-        translation_port.translate_texts.return_value = ["Poulet", "Riz"]
-        result = await service.translate_texts(["Chicken", "Rice"], "fr")
-        assert result == ["Poulet", "Riz"]
-        translation_port.translate_texts.assert_awaited_once_with(
-            ["Chicken", "Rice"], "fr"
-        )
+@pytest.mark.asyncio
+async def test_same_language_is_passthrough(service, port):
+    result = await service.translate_texts(["Chicken"], "en", "en")
 
-    @pytest.mark.asyncio
-    async def test_returns_original_for_english_target(self, service, translation_port):
-        result = await service.translate_texts(["Chicken", "Rice"], "en")
-        assert result == ["Chicken", "Rice"]
-        translation_port.translate_texts.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_for_empty_input(self, service, translation_port):
-        result = await service.translate_texts([], "vi")
-        assert result == []
-        translation_port.translate_texts.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_returns_original_on_error(self, service, translation_port):
-        translation_port.translate_texts.side_effect = Exception(
-            "translation provider down"
-        )
-        result = await service.translate_texts(["Chicken", "Rice"], "vi")
-        assert result == ["Chicken", "Rice"]
+    assert result.items == ("Chicken",)
+    assert result.outcome is TranslationOutcome.PASSTHROUGH
+    port.translate_texts.assert_not_called()
 
 
-# ─────────────────────────── translate_to_english ───────────────────────────
+@pytest.mark.asyncio
+async def test_empty_items_are_not_sent_to_provider(service, port):
+    port.translate_texts.return_value = TranslationResult(
+        ("Poulet",), TranslationOutcome.TRANSLATED, "en", "fr"
+    )
+
+    result = await service.translate_texts(["Chicken", "", "Chicken"], "en", "fr")
+
+    assert result.items == ("Poulet", "", "Poulet")
+    assert result.outcome is TranslationOutcome.TRANSLATED
+    port.translate_texts.assert_awaited_once_with(
+        ["Chicken"], source_language="en", target_language="fr"
+    )
 
 
-class TestTranslateToEnglish:
-    @pytest.mark.asyncio
-    async def test_translates_to_english(self, service, translation_port):
-        translation_port.translate_to_english.return_value = ["Chicken", "Rice"]
-        result = await service.translate_to_english(["Gà", "Cơm"], "vi")
-        assert result == ["Chicken", "Rice"]
-        translation_port.translate_to_english.assert_awaited_once_with(
-            ["Gà", "Cơm"], "vi"
-        )
+@pytest.mark.asyncio
+async def test_all_empty_items_bypass_provider(service, port):
+    result = await service.translate_texts(["", ""], "en", "fr")
 
-    @pytest.mark.asyncio
-    async def test_returns_original_for_english_source(self, service, translation_port):
-        result = await service.translate_to_english(["Chicken", "Rice"], "en")
-        assert result == ["Chicken", "Rice"]
-        translation_port.translate_to_english.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_for_empty_input(self, service, translation_port):
-        result = await service.translate_to_english([], "vi")
-        assert result == []
-        translation_port.translate_to_english.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_returns_original_on_error(self, service, translation_port):
-        translation_port.translate_to_english.side_effect = Exception(
-            "translation provider down"
-        )
-        result = await service.translate_to_english(["Gà", "Cơm"], "vi")
-        assert result == ["Gà", "Cơm"]
+    assert result.items == ("", "")
+    assert result.outcome is TranslationOutcome.PASSTHROUGH
+    port.translate_texts.assert_not_called()
 
 
-# ─────────────────────────── translate_food_names ───────────────────────────
+@pytest.mark.asyncio
+async def test_unsupported_pair_is_unavailable(service, port):
+    result = await service.translate_texts(["Chicken"], "en", "ko")
+
+    assert result.outcome is TranslationOutcome.UNAVAILABLE
+    assert result.items == ("Chicken",)
+    port.translate_texts.assert_not_called()
 
 
-class TestTranslateFoodNames:
-    @pytest.mark.asyncio
-    async def test_translates_food_name_and_description_fields(
-        self, service, translation_port
-    ):
-        foods = [
-            {"name": "Chicken breast", "description": "Chicken breast"},
-            {"name": "Brown rice", "description": "Brown rice"},
-        ]
-        translation_port.translate_texts.return_value = ["Ức gà", "Cơm gạo lứt"]
-        result = await service.translate_food_names(foods, "vi")
-        assert result[0]["name"] == "Ức gà"
-        assert result[0]["name_original"] == "Chicken breast"
-        assert result[0]["description"] == "Ức gà"
-        assert result[0]["description_original"] == "Chicken breast"
-        assert result[1]["name"] == "Cơm gạo lứt"
-        assert result[1]["name_original"] == "Brown rice"
+@pytest.mark.asyncio
+async def test_provider_failure_is_unavailable_and_canonical(service, port):
+    port.translate_texts.side_effect = RuntimeError("provider unavailable")
 
-    @pytest.mark.asyncio
-    async def test_preserves_originals_as_separate_keys(
-        self, service, translation_port
-    ):
-        foods = [{"name": "Chicken breast", "description": "Grilled chicken"}]
-        translation_port.translate_texts.return_value = ["Ức gà nướng"]
-        result = await service.translate_food_names(foods, "vi")
-        # description takes precedence for unique name extraction
-        assert result[0]["description_original"] == "Grilled chicken"
-        assert result[0]["description"] == "Ức gà nướng"
+    result = await service.translate_texts(["Chicken"], "en", "vi")
 
-    @pytest.mark.asyncio
-    async def test_skips_translation_for_english_target(
-        self, service, translation_port
-    ):
-        foods = [{"name": "Chicken", "description": "Grilled chicken"}]
-        result = await service.translate_food_names(foods, "en")
-        assert result == foods
-        translation_port.translate_texts.assert_not_called()
+    assert result.outcome is TranslationOutcome.UNAVAILABLE
+    assert result.items == ("Chicken",)
 
-    @pytest.mark.asyncio
-    async def test_returns_unchanged_on_error(self, service, translation_port):
-        foods = [{"name": "Chicken breast", "description": "Chicken breast"}]
-        translation_port.translate_texts.side_effect = Exception(
-            "translation provider down"
-        )
-        result = await service.translate_food_names(foods, "vi")
-        assert result == foods
-        assert "name_original" not in result[0]
 
-    @pytest.mark.asyncio
-    async def test_returns_empty_list_for_empty_foods(self, service, translation_port):
-        result = await service.translate_food_names([], "vi")
-        assert result == []
-        translation_port.translate_texts.assert_not_called()
+@pytest.mark.asyncio
+async def test_partial_provider_result_fills_missing_canonical_text(service, port):
+    port.translate_texts.return_value = TranslationResult(
+        ("Gà",), TranslationOutcome.PARTIAL, "en", "vi"
+    )
 
-    @pytest.mark.asyncio
-    async def test_pads_when_translation_provider_returns_fewer_items(
-        self, service, translation_port
-    ):
-        foods = [
-            {"name": "Chicken", "description": "Chicken"},
-            {"name": "Rice", "description": "Rice"},
-        ]
-        # translation provider returns only one item instead of two
-        translation_port.translate_texts.return_value = ["Gà"]
-        result = await service.translate_food_names(foods, "vi")
-        assert result[0]["name"] == "Gà"
-        # Second item padded with original
-        assert result[1]["name"] == "Rice"
+    result = await service.translate_texts(["Chicken", "Rice"], "en", "vi")
 
-    @pytest.mark.asyncio
-    async def test_deduplicates_names_before_translating(
-        self, service, translation_port
-    ):
-        foods = [
-            {"name": "Chicken", "description": "Chicken"},
-            {"name": "Chicken", "description": "Chicken"},
-        ]
-        translation_port.translate_texts.return_value = ["Gà"]
-        result = await service.translate_food_names(foods, "vi")
-        # Should only call translation provider once with deduplicated list
-        translation_port.translate_texts.assert_awaited_once_with(["Chicken"], "vi")
-        assert result[0]["name"] == "Gà"
-        assert result[1]["name"] == "Gà"
+    assert result.items == ("Gà", "Rice")
+    assert result.outcome is TranslationOutcome.PARTIAL
+    assert result.cacheable is False

@@ -81,9 +81,7 @@ class _ConflictPlanRepo(_PlanRepo):
 class _LogPlanRepo(_PlanRepo):
     def __init__(self, *, replayed=False):
         super().__init__()
-        self.claim_slot_log = AsyncMock(
-            return_value=(_plan(), _plan().slots[0], replayed)
-        )
+        self.claim_slot_log = AsyncMock(return_value=(_plan(), _plan().slots[0], replayed))
         self.finalize_slot_logged = AsyncMock(
             return_value=PersistedMealRecommendationSlotMutationResult(
                 plan_id="plan-1",
@@ -113,18 +111,15 @@ class _Materializer:
             {"id": "food-1", "name": "Rice"},
         )()
         nutrition = type("Nutrition", (), {"food_items": [food_item]})()
-        self.meal = (
-            meal
-            or type(
-                "Meal",
-                (),
-                {
-                    "meal_id": "meal-1",
-                    "dish_name": "Rice Bowl",
-                    "nutrition": nutrition,
-                },
-            )()
-        )
+        self.meal = meal or type(
+            "Meal",
+            (),
+            {
+                "meal_id": "meal-1",
+                "dish_name": "Rice Bowl",
+                "nutrition": nutrition,
+            },
+        )()
         self.materialize = AsyncMock(return_value=self.meal)
 
 
@@ -336,13 +331,14 @@ async def test_log_handler_claims_materializes_then_finalizes():
 
 
 @pytest.mark.asyncio
-async def test_log_handler_translates_and_invalidates_cache_for_non_english():
+async def test_log_handler_translates_and_invalidates_cache_for_non_english(caplog):
+    caplog.set_level("INFO")
     plans = _LogPlanRepo(replayed=False)
     materializer = _Materializer()
     translation_service = type(
         "TranslationService",
         (),
-        {"translate_meal": AsyncMock(return_value=None)},
+        {"translate_meal": AsyncMock(return_value={"dish_name": "Rice Bowl"})},
     )()
     cache_invalidation = type(
         "CacheInvalidation",
@@ -366,6 +362,7 @@ async def test_log_handler_translates_and_invalidates_cache_for_non_english():
     cache_invalidation.after_meal_write.assert_awaited_once_with(
         "user-1", _plan().slots[0].slot_date
     )
+    assert "recommended meal translated" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -395,11 +392,7 @@ async def test_log_handler_does_not_fail_when_translation_raises():
     translation_service = type(
         "TranslationService",
         (),
-        {
-            "translate_meal": AsyncMock(
-                side_effect=RuntimeError("translation provider down")
-            )
-        },
+        {"translate_meal": AsyncMock(side_effect=RuntimeError("provider down"))},
     )()
     handler = LogRecommendedMealCommandHandler(
         uow=_Uow(plans, _CatalogRepo()),

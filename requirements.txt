@@ -51,6 +51,8 @@ firebase-admin==6.9.0
 cachetools==7.1.4
 redis[hiredis]==8.0.0
 
+# Translation
+
 # Rate limiting
 slowapi==0.1.10
 

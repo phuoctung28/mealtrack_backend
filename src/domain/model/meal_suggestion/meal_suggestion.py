@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from src.domain.model.common.enums import MealType  # noqa: F401
+from src.domain.model.translation_result import TranslationOutcome
 from src.domain.utils.timezone_utils import utc_now
 
 
@@ -94,3 +95,4 @@ class MealSuggestion:
     english_name: str | None = None  # Original English name for image search
     status: SuggestionStatus = SuggestionStatus.PENDING
     generated_at: datetime = field(default_factory=utc_now)
+    translation_outcome: TranslationOutcome = TranslationOutcome.PASSTHROUGH

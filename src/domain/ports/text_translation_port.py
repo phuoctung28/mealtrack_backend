@@ -1,17 +1,22 @@
-"""Port for provider-backed text translation."""
+"""Neutral port for provider-backed text translation."""
+
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
+
+from src.domain.model.translation_result import TranslationResult
 
 
 class TextTranslationPort(ABC):
-    """Abstract interface for text translation."""
+    """Infrastructure contract for translating an ordered text batch."""
 
     @abstractmethod
-    async def translate_texts(self, texts: list[str], target_lang: str) -> list[str]:
-        """Translate canonical English strings to the target language."""
-
-    @abstractmethod
-    async def translate_to_english(
-        self, texts: list[str], source_lang: str
-    ) -> list[str]:
-        """Translate strings from the source language to English."""
+    async def translate_texts(
+        self,
+        texts: Sequence[str],
+        *,
+        source_language: str,
+        target_language: str,
+    ) -> TranslationResult:
+        """Translate texts while preserving order and returning an outcome."""

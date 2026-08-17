@@ -242,6 +242,9 @@ class SuggestionOrchestrationService:
             await self._repo.update_session(session)
         else:
             await self._repo.save_session(session)
+        # Keep canonical English fallbacks selectable when localization is
+        # unavailable or partial. The response and session both expose these
+        # suggestions, so dropping them here would break the follow-up flow.
         await self._repo.save_suggestions(suggestions)
 
     async def _load_existing_session(
