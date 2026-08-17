@@ -271,8 +271,7 @@ async def save_meal_suggestion(
             for i in body.ingredients
         ],
         instructions=[
-            i.model_dump() if hasattr(i, "model_dump") else i
-            for i in body.instructions
+            i.model_dump() if hasattr(i, "model_dump") else i for i in body.instructions
         ],
         portion_multiplier=body.portion_multiplier,
         meal_date=body.meal_date,

@@ -102,3 +102,20 @@ def test_meal_translation_singleton_uses_async_repository_adapter(monkeypatch):
     assert inspect.iscoroutinefunction(
         service.translation_repo.get_by_meal_and_language
     )
+
+
+def test_text_translation_singleton_uses_openai_adapter(monkeypatch):
+    import src.api.base_dependencies as deps
+    from src.domain.services.translation.text_translation_service import (
+        TextTranslationService,
+    )
+    from src.infra.adapters.openai_translation_adapter import OpenAITranslationAdapter
+
+    monkeypatch.setattr(deps, "_text_translation_service", None)
+    monkeypatch.setattr(deps.settings, "OPENAI_API_KEY", "test-key")
+
+    service = deps.get_text_translation_service()
+
+    assert isinstance(service, TextTranslationService)
+    assert isinstance(service._port, OpenAITranslationAdapter)
+    assert service._port._model == deps.settings.OPENAI_TRANSLATION_MODEL

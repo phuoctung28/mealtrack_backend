@@ -193,7 +193,7 @@ class UploadMealImageImmediatelyHandler(
 
         upload_elapsed = time.time() - start
         logger.info(
-            f"[UPLOAD-COMPLETE] image_id={image_id} | " f"elapsed={upload_elapsed:.2f}s"
+            f"[UPLOAD-COMPLETE] image_id={image_id} | elapsed={upload_elapsed:.2f}s"
         )
 
         # Step 4: Run AI analysis

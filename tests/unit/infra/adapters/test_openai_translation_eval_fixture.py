@@ -76,14 +76,17 @@ def test_active_repository_surfaces_contain_no_vendor_translation_residue() -> N
         root / "src/mealtrack_backend.egg-info",
     )
     excluded_names = {"repomix-output.xml"}
+    excluded_dir_names = {".venv", ".pytest_cache", "__pycache__"}
     source_suffixes = {".py", ".md", ".toml", ".txt", ".lock", ".example"}
     hits: list[str] = []
 
     for path in root.rglob("*"):
+        relative_parts = path.relative_to(root).parts
         if (
             not path.is_file()
             or path.name in excluded_names
             or path.suffix not in source_suffixes
+            or any(part in excluded_dir_names for part in relative_parts)
         ):
             continue
         if any(
