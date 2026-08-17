@@ -259,12 +259,12 @@ def get_food_search_event_bus() -> EventBus:
         return _food_search_event_bus
 
     from src.api.base_dependencies import (
-        get_deepl_text_translation_service,
         get_fat_secret_service_instance,
         get_food_cache_service,
         get_food_data_service,
         get_food_mapping_service,
         get_open_food_facts_service_instance,
+        get_text_translation_service,
     )
     from src.domain.services.meal_suggestion.macro_validation_service import (
         MacroValidationService,
@@ -282,8 +282,8 @@ def get_food_search_event_bus() -> EventBus:
     open_food_facts_service = get_open_food_facts_service_instance()
     fat_secret_service = get_fat_secret_service_instance()
 
-    # Translation service for localized food search (DeepL-backed)
-    text_translation_service = get_deepl_text_translation_service()
+    # Translation service for localized food search (optional OpenAI-backed)
+    text_translation_service = get_text_translation_service()
 
     # Barcode cascade: Brave Search is optional — None if keys are not set.
     macro_validation_service = MacroValidationService()
@@ -353,8 +353,7 @@ def get_configured_event_bus() -> EventBus:
         get_ai_model_manager,
         get_cache_service,
         get_daily_context_precompute_service,
-        get_deepl_meal_translation_service,
-        get_deepl_text_translation_service,
+        get_meal_translation_service,
         get_fat_secret_service_instance,
         get_food_cache_service,
         get_food_data_service,
@@ -364,6 +363,7 @@ def get_configured_event_bus() -> EventBus:
         get_meal_analyze_graph_settings,
         get_parse_text_settings,
         get_suggestion_orchestration_service,
+        get_text_translation_service,
         get_vision_service,
     )
     from src.api.dependencies.task_manager import get_optional_task_manager
@@ -437,8 +437,8 @@ def get_configured_event_bus() -> EventBus:
 
     # Register meal command handlers
     # Handlers receive AsyncUnitOfWork (concrete) and event_bus at the composition root
-    meal_translation_service = get_deepl_meal_translation_service()
-    text_translation_service = get_deepl_text_translation_service()
+    meal_translation_service = get_meal_translation_service()
+    text_translation_service = get_text_translation_service()
     from src.infra.adapters.meal_generation_service import MealGenerationService
 
     meal_generation_service = MealGenerationService()

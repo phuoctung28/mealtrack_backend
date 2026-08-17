@@ -87,6 +87,38 @@ async def test_generate_structured_text_calls_adapter_with_prompt_cache_kwargs()
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response_metadata",
+    [
+        {"status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"}},
+        {"status": "completed"},
+    ],
+)
+async def test_generate_structured_result_classifies_responses_completion_metadata(
+    response_metadata,
+):
+    provider = _provider()
+    raw_message = SimpleNamespace(response_metadata=response_metadata)
+    provider._langchain.generate_structured = AsyncMock(
+        return_value=LangChainOpenAIResult(
+            parsed={"items": []},
+            raw_message=raw_message,
+        )
+    )
+
+    result = await provider.generate_structured_result(
+        model="gpt-5.4-mini-2026-03-17",
+        prompt="Translate.",
+        system_message="Translate.",
+        schema=VisionNutritionResponse,
+        purpose_hint="translation",
+        store_responses=False,
+    )
+
+    assert result.incomplete is (response_metadata["status"] == "incomplete")
+
+
+@pytest.mark.asyncio
 async def test_generate_json_without_schema_parses_raw_content():
     provider = _provider()
     raw_message = SimpleNamespace()

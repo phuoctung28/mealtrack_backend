@@ -1,20 +1,25 @@
 """Search foods for manual logging using the configured provider."""
 
+import hashlib
 import logging
+import re
 from collections.abc import Callable, Mapping
 from time import perf_counter
 from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.app.services.food_name_localizer import (
+    translate_food_texts,
+    translated_values,
+    translation_is_cacheable,
+)
+from src.domain.model.translation_result import TranslationOutcome
+from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
-from src.domain.services.food_mapping_service import FoodMappingService
 from src.domain.services.nutrition_integrity_policy import NutritionIntegrityError
-from src.domain.services.translation.deepl_text_translation_service import (
-    DeepLTextTranslationService,
-)
 from src.observability import distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
@@ -27,9 +32,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
     def __init__(
         self,
         cache_service,
-        mapping_service: FoodMappingService,
+        mapping_service: FoodMappingServicePort,
         fat_secret_service: Any | None = None,
-        translation_service: DeepLTextTranslationService | None = None,
+        translation_service: Any | None = None,
         local_search: Callable[[str, str, int], Any] | None = None,
         integrity_context: Callable[[], Any] | None = None,
     ):
@@ -55,8 +60,13 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         is_non_english = language != "en"
         cache_context = await self._get_integrity_context()
 
-        # Language-aware cache key (prefixed to avoid collisions)
-        cache_key = f"{language}:{event.query}" if is_non_english else event.query
+        # Integrity-controlled caches are versioned by policy and generation;
+        # retain the query as the stable key for that namespace.
+        cache_key = (
+            event.query
+            if self.integrity_context is not None
+            else self._cache_key(event.query, language)
+        )
         cached = None
         if self.integrity_context is None:
             try:
@@ -87,7 +97,12 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
             )
             return {"results": mapped, "query": event.query, "total": len(mapped)}
 
-        processed_raw = await self._search_local(event)
+        canonical_query = await self._canonical_query(event.query, language)
+        processed_raw = await self._search_local(
+            event,
+            query=canonical_query,
+            region="US" if is_non_english else self._region_for_language(language),
+        )
         local_count = len(processed_raw)
         remaining_limit = max(event.limit - len(processed_raw), 0)
         provider_attempted = bool(self.fat_secret_service and remaining_limit > 0)
@@ -95,7 +110,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         if self.fat_secret_service and remaining_limit > 0:
             if is_non_english:
                 processed_raw = await self._search_localized(
-                    event.query,
+                    canonical_query,
                     remaining_limit,
                     language,
                     cache_key,
@@ -153,75 +168,76 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         local_raw: list[dict[str, Any]],
         cache_context: Mapping[str, int | str] | None,
     ) -> list[dict[str, Any]]:
-        """Search with localization: try native region first, fallback only if empty."""
-        from src.infra.adapters.fat_secret_service import LANGUAGE_TO_REGION
-
-        region = LANGUAGE_TO_REGION.get(language, "US")
-
-        # Step 1: Try fatsecret with localized region — cache and return immediately if anything found
+        """Acquire canonical provider data, then localize complete results."""
         try:
             results = await self.fat_secret_service.search_foods(
-                query,
-                max_results=limit,
-                region=region,
-                language=language,
+                query, max_results=limit
             )
             if results:
-                logger.debug(
-                    f"fatsecret region={region} returned {len(results)} results"
-                )
                 merged = self._merge_search_results(
                     local_raw, results, len(local_raw) + limit
                 )
-                await self._cache_search(cache_key, merged, cache_context)
-                return merged
-        except Exception:
-            logger.warning(f"fatsecret region={region} failed", exc_info=True)
-
-        # Step 2: Translation fallback — only on true empty response from localized search
-        if not self.translation_service:
-            try:
-                results = await self.fat_secret_service.search_foods(
-                    query, max_results=limit
+                return await self._localize_results(
+                    merged,
+                    language=language,
+                    cache_key=cache_key,
+                    cache_context=cache_context,
                 )
-                if results:
-                    merged = self._merge_search_results(
-                        local_raw,
-                        results,
-                        len(local_raw) + limit,
-                    )
-                    await self._cache_search(cache_key, merged, cache_context)
-                    return merged
-                return local_raw
-            except Exception:
-                return local_raw
-
-        try:
-            translated_queries = await self.translation_service.translate_to_english(
-                [query], language
-            )
         except Exception:
-            logger.warning("translation fallback failed", exc_info=True)
-            return local_raw
-        translated_query = translated_queries[0] if translated_queries else query
+            logger.warning("fatsecret canonical search failed", exc_info=True)
+        return local_raw
 
-        logger.info(f"Translation fallback: '{query}' -> '{translated_query}'")
+    async def _canonical_query(self, query: str, language: str) -> str:
+        if language == "en" or self.translation_service is None:
+            return query
+        result = await translate_food_texts(
+            [query],
+            source_language=language,
+            target_language="en",
+            translation_service=self.translation_service,
+        )
+        if result.outcome is TranslationOutcome.TRANSLATED and result.texts:
+            return result.texts[0]
+        return query
 
-        try:
-            results = await self.fat_secret_service.search_foods(
-                translated_query, max_results=limit
+    async def _localize_results(
+        self,
+        results: list[dict[str, Any]],
+        *,
+        language: str,
+        cache_key: str,
+        cache_context: Mapping[str, int | str] | None,
+    ) -> list[dict[str, Any]]:
+        if not results or self.translation_service is None:
+            return results
+        names: list[str] = []
+        for item in results:
+            name = str(item.get("description") or item.get("name") or "")
+            if name and name not in names:
+                names.append(name)
+        if not names:
+            return results
+        result = await translate_food_texts(
+            names,
+            target_language=language,
+            translation_service=self.translation_service,
+        )
+        translated = dict(zip(names, translated_values(names, result), strict=False))
+        localized = []
+        for item in results:
+            localized_item = item.copy()
+            original = str(
+                localized_item.get("description") or localized_item.get("name") or ""
             )
-        except Exception:
-            logger.warning("fatsecret EN fallback failed", exc_info=True)
-            return []
-
-        if not results:
-            return local_raw
-
-        results = await self.translation_service.translate_food_names(results, language)
-        merged = self._merge_search_results(local_raw, results, len(local_raw) + limit)
-        await self._cache_search(cache_key, merged, cache_context)
-        return merged
+            if original in translated:
+                if "description" in localized_item:
+                    localized_item["description"] = translated[original]
+                if "name" in localized_item:
+                    localized_item["name"] = translated[original]
+            localized.append(localized_item)
+        if translation_is_cacheable(result):
+            await self._cache_search(cache_key, localized, cache_context)
+        return localized
 
     async def _cache_search(
         self,
@@ -258,13 +274,19 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
             logger.warning("food integrity control read failed", exc_info=True)
             return None
 
-    async def _search_local(self, event: SearchFoodsQuery) -> list[dict[str, Any]]:
+    async def _search_local(
+        self,
+        event: SearchFoodsQuery,
+        *,
+        query: str | None = None,
+        region: str | None = None,
+    ) -> list[dict[str, Any]]:
         if not self.local_search:
             return []
         try:
             projections = await self.local_search(
-                event.query,
-                self._region_for_language(event.language),
+                query if query is not None else event.query,
+                region or self._region_for_language(event.language),
                 event.limit,
             )
         except Exception:
@@ -352,6 +374,12 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, dict[str, Any]]):
         if language == "vi":
             return "VN"
         return "US"
+
+    @staticmethod
+    def _cache_key(query: str, language: str) -> str:
+        normalized = re.sub(r"\s+", " ", query.strip().lower())
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        return f"food-search:v2:{language}:{digest}"
 
     def _source_label(self, local_count: int, result_count: int) -> str:
         if local_count and result_count > local_count:

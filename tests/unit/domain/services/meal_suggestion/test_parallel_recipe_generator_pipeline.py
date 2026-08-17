@@ -5,7 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
-from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
+from src.domain.model.meal_suggestion import (
+    Ingredient,
+    MacroEstimate,
+    MealSuggestion,
+    MealType,
+    RecipeStep,
+    SuggestionSession,
+)
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
 )
@@ -88,6 +95,45 @@ async def test_pipeline_translates_per_recipe_not_batch():
     # translate_meal_suggestions_batch called once per recipe (3 times), not once for all
     assert translate_svc.translate_meal_suggestions_batch.call_count == 3
     assert len(result) == 3
+
+
+@pytest.mark.asyncio
+async def test_selected_recipe_preserves_localized_name_and_english_identity():
+    gen, _ = _make_generator()
+    generated = MealSuggestion(
+        id="recipe-1",
+        session_id="test-session",
+        user_id="user-1",
+        meal_name="Chicken Rice",
+        description="A simple meal",
+        meal_type=MealType.LUNCH,
+        macros=MacroEstimate(calories=500, protein=35, carbs=50, fat=15),
+        ingredients=[Ingredient(name="chicken", amount=120, unit="g")],
+        recipe_steps=[RecipeStep(step=1, instruction="Cook", duration_minutes=10)],
+        prep_time_minutes=15,
+        confidence_score=0.9,
+        english_name="Chicken Rice",
+    )
+    gen._generate_with_retry = AsyncMock(return_value=generated)
+
+    recipes = await gen.generate_selected_recipes(
+        _make_real_session(),
+        [
+            {
+                "id": "disc-1",
+                "name": "Com ga",
+                "english_name": "Chicken Rice",
+                "calories": 500,
+                "protein": 35,
+                "carbs": 50,
+                "fat": 15,
+            }
+        ],
+    )
+
+    assert recipes[0].meal_name == "Com ga"
+    assert recipes[0].english_name == "Chicken Rice"
+    assert gen._generate_with_retry.await_args.args[1] == "Chicken Rice"
 
 
 @pytest.mark.asyncio

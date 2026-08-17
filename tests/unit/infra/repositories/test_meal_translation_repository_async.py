@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from src.domain.model.meal.meal_translation_domain_models import MealTranslation
 from src.infra.repositories.meal_translation_repository_async import (
@@ -36,6 +37,23 @@ class _AsyncSession:
 
     async def execute(self, statement):
         return self._results.pop(0)
+
+
+class _NestedTransaction:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+
+class _ConcurrentInsertSession(_AsyncSession):
+    def __init__(self, results):
+        super().__init__(results)
+        self.begin_nested = MagicMock(return_value=_NestedTransaction())
+        self.flush = AsyncMock(
+            side_effect=IntegrityError("duplicate", {}, Exception("unique"))
+        )
 
 
 def _translation_orm():
@@ -91,6 +109,19 @@ async def test_save_new_translation_flushes_without_committing():
     session.flush.assert_awaited_once()
     session.refresh.assert_awaited_once()
     assert not hasattr(session, "commit")
+
+
+@pytest.mark.asyncio
+async def test_save_returns_concurrent_unique_key_winner():
+    winner = _translation_orm()
+    session = _ConcurrentInsertSession([_Result(rows=[]), _Result(rows=[winner])])
+    repo = AsyncMealTranslationRepository(session)
+
+    result = await repo.save(_translation_domain())
+
+    assert result.dish_name == winner.dish_name
+    session.begin_nested.assert_called_once()
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio

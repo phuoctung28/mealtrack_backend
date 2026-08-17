@@ -16,8 +16,11 @@ from src.domain.model.nutrition import Macros, Nutrition
 from src.domain.services.meal_service import MealService
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
+    _convert_with_allowed_units,
+    canonicalize_authoritative_quantity,
     clamp_nutrition_values,
     convert_quantity_to_grams,
+    fallback_custom_serving_options,
     normalize_unit_for_manual_save,
     scale_per_100g_nutrition,
 )
@@ -274,6 +277,27 @@ def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():
     }
 
 
+def test_unknown_tuber_unit_uses_countable_provider_serving_not_one_gram():
+    allowed_units = [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {
+            "unit": "sweetpotato",
+            "gram_weight": 130.0,
+            "description": "1 sweetpotato",
+        },
+        {"unit": "oz", "gram_weight": 28.35, "description": "1 oz"},
+        {"unit": "cup", "gram_weight": 200.0, "description": "1 cup, mashed"},
+    ]
+
+    assert _convert_with_allowed_units(
+        1, "củ lớn", allowed_units, "Khoai lang"
+    ) == pytest.approx(130.0)
+    with pytest.raises(ValueError):
+        _convert_with_allowed_units(
+            1, "củ lớn", allowed_units, "Khoai lang", strict=True
+        )
+
+
 def _new_processing_meal() -> Meal:
     return Meal(
         meal_id=str(uuid4()),
@@ -291,3 +315,22 @@ def _new_processing_meal() -> Meal:
         ),
         created_at=datetime.now(UTC),
     )
+
+
+def test_mieng_maps_to_piece_grams_not_slice():
+    assert convert_quantity_to_grams(1, "miếng") == pytest.approx(100.0)
+    assert convert_quantity_to_grams(1, "lát") == pytest.approx(30.0)
+
+
+def test_fallback_custom_serving_options_keep_selected_countable_unit():
+    options = fallback_custom_serving_options("Miếng", "Sườn Nướng")
+    units = {option["unit"]: option["gram_weight"] for option in options}
+
+    assert units["g"] == pytest.approx(1.0)
+    assert units["miếng"] == pytest.approx(100.0)
+    quantity, unit, used_fallback = canonicalize_authoritative_quantity(
+        1, "Miếng", options, "Sườn Nướng"
+    )
+    assert quantity == pytest.approx(1.0)
+    assert unit == "Miếng"
+    assert used_fallback is False

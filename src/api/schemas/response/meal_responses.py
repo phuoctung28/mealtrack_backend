@@ -81,7 +81,7 @@ class ParsedFoodItem(BaseModel):
         None, ge=0, description="Backend-derived protein per 100g"
     )
     carbs_per_100g: float | None = Field(
-        None, ge=0, description="Backend-derived carbohydrates per 100g"
+        None, ge=0, description="Backend-derived carbs per 100g"
     )
     fat_per_100g: float | None = Field(
         None, ge=0, description="Backend-derived fat per 100g"

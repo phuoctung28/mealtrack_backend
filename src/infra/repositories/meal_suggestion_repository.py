@@ -8,6 +8,7 @@ from src.domain.exceptions.meal_suggestion_exceptions import (
     MealSuggestionSessionStoreUnavailableError,
 )
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
+from src.domain.model.translation_result import TranslationOutcome
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
@@ -251,6 +252,7 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
                 "session_id": suggestion.session_id,
                 "user_id": suggestion.user_id,
                 "meal_name": suggestion.meal_name,
+                "english_name": suggestion.english_name,
                 "description": suggestion.description,
                 "meal_type": suggestion.meal_type.value,
                 "macros": {
@@ -273,6 +275,7 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
                 ],
                 "prep_time_minutes": suggestion.prep_time_minutes,
                 "confidence_score": suggestion.confidence_score,
+                "translation_outcome": suggestion.translation_outcome.value,
                 "status": suggestion.status.value,
                 "generated_at": suggestion.generated_at.isoformat(),
             }
@@ -296,6 +299,7 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             session_id=obj["session_id"],
             user_id=obj["user_id"],
             meal_name=obj["meal_name"],
+            english_name=obj.get("english_name"),
             description=obj["description"],
             meal_type=MealType(obj["meal_type"]),
             macros=MacroEstimate(**obj["macros"]),
@@ -303,6 +307,9 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             recipe_steps=[RecipeStep(**step) for step in obj["recipe_steps"]],
             prep_time_minutes=obj["prep_time_minutes"],
             confidence_score=obj["confidence_score"],
+            translation_outcome=TranslationOutcome(
+                obj.get("translation_outcome", TranslationOutcome.PASSTHROUGH)
+            ),
             status=SuggestionStatus(obj["status"]),
             generated_at=datetime.fromisoformat(obj["generated_at"]),
         )

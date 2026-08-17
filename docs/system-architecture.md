@@ -87,6 +87,16 @@ Manual food search reads Redis cache when available, then searches verified
 translation failures degrade to bounded local results when possible. Local
 result calories are always derived from stored macros using the backend formula.
 
+### Translation boundary
+
+Read-path localization is presentation-only. The application layer owns the
+translation service used by catalog and suggestion responses; the infrastructure
+adapter uses the OpenAI Responses API with payload storage disabled. The domain
+translation service returns explicit outcomes, and only
+`TranslationOutcome.TRANSLATED` may be persisted or admitted to locale caches.
+`PARTIAL`, `PASSTHROUGH`, and `UNAVAILABLE` keep canonical text in the response
+path.
+
 ### Nutrition Integrity Policy
 Structured nutrition crosses one versioned domain policy,
 `nutrition_integrity_v1`, before it is trusted by parse finalization, search
