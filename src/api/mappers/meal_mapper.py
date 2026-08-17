@@ -15,7 +15,12 @@ from src.api.schemas.response import (
     SimpleMealResponse,
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
+from src.domain.constants.languages import normalize_language
 from src.domain.model.meal import Meal
+from src.domain.model.meal.meal_response_localization import (
+    MealResponseLocalization,
+    parse_meal_response_localization,
+)
 from src.domain.model.meal.meal_translation_domain_models import (
     CURRENT_MEAL_TRANSLATION_VERSION,
 )
@@ -101,6 +106,15 @@ class MealMapper:
         food_items = []
         total_calories = 0
         total_nutrition = None
+        requested_language = (
+            normalize_language(target_language) if target_language else None
+        )
+        canonical_dish_name, canonical_food_names = MealMapper._raw_response_canonical(
+            meal,
+            expected_food_count=(
+                len(meal.nutrition.food_items or []) if meal.nutrition else 0
+            ),
+        )
 
         if meal.nutrition:
             total_calories = effective_meal_calories(meal)
@@ -123,9 +137,14 @@ class MealMapper:
                     fat=meal.nutrition.fat,
                 )
 
-            # Map food items in source language (English)
+            # Map persisted food-item display names and retain canonical aliases.
             if meal.nutrition.food_items:
-                for item in meal.nutrition.food_items:
+                for index, item in enumerate(meal.nutrition.food_items):
+                    canonical_name = (
+                        canonical_food_names[index]
+                        if index < len(canonical_food_names)
+                        else item.name
+                    )
                     item_calories = effective_food_item_calories(
                         item,
                         meal_source=meal.source,
@@ -134,7 +153,7 @@ class MealMapper:
                     nutrition_dto = None
                     if hasattr(item, "macros") and item.macros:
                         nutrition_dto = NutritionResponse(
-                            nutrition_id=str(item.name),
+                            nutrition_id=str(canonical_name),
                             # Use effective item calories so label/overrides
                             # are not replaced by macro-derived totals.
                             calories=item_calories,
@@ -149,6 +168,7 @@ class MealMapper:
                         MealMapper._custom_nutrition_response_for_item(
                             item,
                             item_calories,
+                            canonical_name,
                         )
                     )
 
@@ -161,7 +181,7 @@ class MealMapper:
                         id=str(item.id),
                         name=item.name,
                         display_name=item.name,
-                        canonical_name=item.name,
+                        canonical_name=canonical_name,
                         category=None,
                         quantity=item.quantity,
                         unit=item.unit,
@@ -197,16 +217,60 @@ class MealMapper:
                     )
                     food_items.append(food_item_dto)
 
-        # --- Apply persisted translation if available ---
+        # Stored names are authoritative for scanner meals. The requested
+        # locale must not rewrite those names later.
         dish_name = meal.dish_name
+        persisted_image_names = MealMapper.has_persisted_image_display_names(meal)
+        translation_language = (
+            MealMapper._raw_response_localization_language(meal)
+            if persisted_image_names
+            else None
+        )
+        if (
+            not persisted_image_names
+            and requested_language == "en"
+            and canonical_dish_name
+        ):
+            dish_name = canonical_dish_name
         instructions = MealMapper._normalize_instructions(
             getattr(meal, "instructions", None)
         )
+        if not persisted_image_names:
+            direct_localization = MealMapper._raw_response_localization(
+                meal,
+                requested_language,
+                expected_food_count=len(food_items),
+            )
+        else:
+            direct_localization = None
 
-        if target_language and target_language != "en" and meal.translations:
-            tr = meal.translations.get(target_language)
+        if not persisted_image_names and requested_language == "en":
+            for food_item, canonical_name in zip(
+                food_items,
+                canonical_food_names,
+                strict=False,
+            ):
+                food_item.name = canonical_name
+                food_item.display_name = canonical_name
+        elif not persisted_image_names and direct_localization:
+            translation_language = direct_localization.language
+            dish_name = direct_localization.dish_name
+            for food_item, localized_name in zip(
+                food_items,
+                direct_localization.food_item_names,
+                strict=True,
+            ):
+                food_item.name = localized_name
+                food_item.display_name = localized_name
+        elif (
+            not persisted_image_names
+            and requested_language
+            and requested_language != "en"
+            and meal.translations
+        ):
+            tr = meal.translations.get(requested_language)
             if tr and tr.translation_version == CURRENT_MEAL_TRANSLATION_VERSION:
-                translation_language = target_language
+                translation_language = requested_language
                 # Apply each translated field independently if it exists
                 # (lenient check - scanned meals may not have instructions)
                 if tr.dish_name:
@@ -237,10 +301,6 @@ class MealMapper:
                     for i, fi in enumerate(food_items):
                         fi.name = tr.meal_ingredients[i]
                         fi.display_name = tr.meal_ingredients[i]
-            else:
-                translation_language = None
-        else:
-            translation_language = None
 
         value_insights_response = MealMapper._value_insights_response(value_insights)
 
@@ -306,6 +366,94 @@ class MealMapper:
         )
 
     @staticmethod
+    def _raw_response_localization(
+        meal: Meal,
+        target_language: str | None,
+        *,
+        expected_food_count: int,
+    ) -> MealResponseLocalization | None:
+        """Read validated same-call display fields from the stored AI payload."""
+        language = normalize_language(target_language)
+        if language == "en" or not meal.raw_gpt_json:
+            return None
+        try:
+            structured_data = json.loads(meal.raw_gpt_json)
+            return parse_meal_response_localization(
+                structured_data,
+                language,
+                expected_food_count=expected_food_count,
+            )
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _raw_response_canonical(
+        meal: Meal,
+        *,
+        expected_food_count: int,
+    ) -> tuple[str | None, tuple[str, ...]]:
+        """Read canonical English names retained in the raw analysis payload."""
+        if not meal.raw_gpt_json:
+            return None, ()
+        try:
+            structured_data = json.loads(meal.raw_gpt_json)
+        except (TypeError, ValueError):
+            return None, ()
+        if not isinstance(structured_data, dict):
+            return None, ()
+
+        dish_name = structured_data.get("dish_name")
+        canonical_dish_name = dish_name.strip() if isinstance(dish_name, str) else None
+        foods = structured_data.get("foods")
+        if not isinstance(foods, list) or len(foods) != expected_food_count:
+            return canonical_dish_name, ()
+
+        names: list[str] = []
+        for food in foods:
+            name = food.get("name") if isinstance(food, dict) else None
+            if not isinstance(name, str) or not name.strip():
+                return canonical_dish_name, ()
+            names.append(name.strip())
+        return canonical_dish_name, tuple(names)
+
+    @staticmethod
+    def has_direct_response_localization(meal: Meal, language: str) -> bool:
+        """Return whether a fresh scan can serve its same-call locale directly."""
+        food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+        return (
+            MealMapper._raw_response_localization(
+                meal,
+                language,
+                expected_food_count=len(food_items),
+            )
+            is not None
+        )
+
+    @staticmethod
+    def has_persisted_image_display_names(meal: Meal) -> bool:
+        """Return whether an image meal can trust its stored display names."""
+        return getattr(meal, "source", None) == "scanner" and not getattr(
+            meal, "translations", None
+        )
+
+    @staticmethod
+    def _raw_response_localization_language(meal: Meal) -> str | None:
+        """Read the locale used for persisted same-call display names."""
+        if not meal.raw_gpt_json:
+            return None
+        try:
+            structured_data = json.loads(meal.raw_gpt_json)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(structured_data, dict):
+            return None
+        localized_language = structured_data.get("localized_language")
+        if not isinstance(localized_language, str):
+            return None
+        language = normalize_language(localized_language)
+        return language if language != "en" else None
+
+    @staticmethod
     def _source_nutrition_response(
         source_nutrition_by_food_reference: dict[int, FoodReferenceNutritionProjection]
         | None,
@@ -360,7 +508,11 @@ class MealMapper:
         )
 
     @staticmethod
-    def _custom_nutrition_response_for_item(item: FoodItem, item_calories: float):
+    def _custom_nutrition_response_for_item(
+        item: FoodItem,
+        item_calories: float,
+        food_name: str | None = None,
+    ):
         from src.api.schemas.response.meal_responses import CustomNutritionResponse
 
         if not getattr(item, "is_custom", False) or item.quantity <= 0:
@@ -369,7 +521,7 @@ class MealMapper:
         quantity_grams = quantity_to_grams(
             item.quantity,
             item.unit,
-            item.name,
+            food_name or item.name,
             getattr(item, "allowed_units", None) or [],
         )
         if quantity_grams <= 0:
