@@ -47,4 +47,9 @@ def parsed_food_item_to_response(item) -> ParsedFoodItem:
         nutrition_basis=getattr(item, "nutrition_basis", None),
         nutrition_contract_version=getattr(item, "nutrition_contract_version", None),
         calories_per_100g=getattr(item, "calories_per_100g", None),
+        protein_per_100g=getattr(item, "protein_per_100g", None),
+        carbs_per_100g=getattr(item, "carbs_per_100g", None),
+        fat_per_100g=getattr(item, "fat_per_100g", None),
+        fiber_per_100g=getattr(item, "fiber_per_100g", None),
+        sugar_per_100g=getattr(item, "sugar_per_100g", None),
     )

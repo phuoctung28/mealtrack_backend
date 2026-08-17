@@ -30,6 +30,11 @@ class ParsedFoodItemDto:
     nutrition_basis: str | None = None
     nutrition_contract_version: str | None = None
     calories_per_100g: float | None = None
+    protein_per_100g: float | None = None
+    carbs_per_100g: float | None = None
+    fat_per_100g: float | None = None
+    fiber_per_100g: float | None = None
+    sugar_per_100g: float | None = None
 
 
 @dataclass
