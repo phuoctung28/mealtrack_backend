@@ -5,7 +5,21 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol
 
+from src.app.services.food_display_name import (
+    is_ascii_display_name,
+    needs_display_localization,
+)
 from src.domain.model.translation_result import TranslationOutcome, TranslationResult
+
+__all__ = [
+    "FoodTextTranslationService",
+    "is_ascii_display_name",
+    "needs_display_localization",
+    "translate_food_texts",
+    "translate_for_presentation",
+    "translated_values",
+    "translation_is_cacheable",
+]
 
 
 class FoodTextTranslationService(Protocol):

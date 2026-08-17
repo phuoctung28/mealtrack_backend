@@ -19,11 +19,21 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     parse_fatsecret_nutrition,
 )
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
+from src.app.services.food_display_name import (
+    apply_fail_closed_display_names,
+    apply_glossary_display_names,
+    apply_localized_display_names,
+    leftover_display_names,
+    needs_display_localization,
+)
 from src.app.services.food_name_localizer import translate_food_texts
+from src.app.services.parse_text_composition import composition_retry_feedback
 from src.domain.exceptions.ai_exceptions import AIOutputValidationError
-from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
+from src.domain.model.ai.nutrition_contracts import (
+    LocalizedFoodNameBatch,
+    MealTextNutritionResponse,
+)
 from src.domain.model.nutrition.macros import Macros
-from src.domain.model.translation_result import TranslationOutcome
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.ai_output_validation_service import (
     build_validation_retry_prompt,
@@ -145,6 +155,7 @@ class ParseMealTextHandler(
         sanitized_text = sanitize_user_description(command.text)
         if not sanitized_text:
             raise ValueError("Invalid or empty meal description.")
+        user_utterance = sanitized_text
         validated_current_items = validate_refinement_items(command.current_items)
 
         # Add refinement context if current_items provided
@@ -180,6 +191,12 @@ class ParseMealTextHandler(
             parsed_items = self._to_flat_parse_text_items(
                 validated_payload, raw_payload
             )
+            composition_feedback = composition_retry_feedback(
+                user_utterance, parsed_items
+            )
+            if composition_feedback and semantic_attempt == 0:
+                semantic_feedback = [composition_feedback]
+                continue
             if budget.deadline is None:
                 budget.deadline = (
                     time.monotonic() + _parse_text_fatsecret_timeout_seconds()
@@ -231,7 +248,7 @@ class ParseMealTextHandler(
                 item["name"] = self._extract_display_name(
                     item.get("name", "Unknown"), command.language
                 )
-            await self._translate_structured_english_names(
+            await self._localize_english_display_names(
                 enhanced_items, command.language
             )
 
@@ -921,36 +938,68 @@ class ParseMealTextHandler(
             )
         return normalize_serving_options(units, provider_100g_label=True) or []
 
-    async def _translate_structured_english_names(
+    async def _localize_english_display_names(
         self, items: list[dict[str, Any]], language: str
     ) -> None:
-        """Translate only names explicitly identified as English by the payload."""
-        if self._translation_service is None:
+        """Translate leftover English display names after bilingual stripping.
+
+        Lookup already ran against lookup_name, so translating name is
+        presentation-only. Names that are already localized stay as-is.
+        """
+        leftovers = leftover_display_names(items, language)
+        if not leftovers:
             return
-        candidates = [
-            str(item["english_name"])
-            for item in items
-            if isinstance(item.get("english_name"), str)
-            and item["english_name"].strip()
-            and item.get("name") == item.get("english_name")
-        ]
-        if not candidates:
+        if self._translation_service is not None:
+            result = await translate_food_texts(
+                leftovers,
+                target_language=language,
+                translation_service=self._translation_service,
+            )
+            apply_localized_display_names(
+                items,
+                dict(zip(leftovers, result.texts, strict=False)),
+                language,
+            )
+        apply_glossary_display_names(items, language)
+        leftovers = leftover_display_names(items, language)
+        if leftovers:
+            await self._force_translate_display_names(items, leftovers, language)
+        apply_fail_closed_display_names(items, language)
+
+    async def _force_translate_display_names(
+        self,
+        items: list[dict[str, Any]],
+        leftovers: list[str],
+        language: str,
+    ) -> None:
+        try:
+            raw = await self._meal_generation_service.generate_meal_plan_async(
+                prompt=json.dumps({"names": leftovers}, ensure_ascii=False),
+                system_message=SystemPrompts.get_food_name_localization_prompt(
+                    language
+                ),
+                response_type="json",
+                max_tokens=512,
+                schema=LocalizedFoodNameBatch,
+                model_purpose="parse_text",
+                thinking_budget=0,
+            )
+            payload = self._extract_parse_text_payload(raw)
+            validated = validate_ai_output(
+                payload,
+                schema=LocalizedFoodNameBatch,
+                purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                attempt_count=1,
+            )
+        except Exception:
+            logger.warning("parse-text leftover name localization failed", exc_info=True)
             return
-        result = await translate_food_texts(
-            candidates,
-            target_language=language,
-            translation_service=self._translation_service,
+        translated = [str(name).strip() for name in validated.get("items", [])]
+        if len(translated) != len(leftovers):
+            return
+        apply_localized_display_names(
+            items, dict(zip(leftovers, translated, strict=False)), language
         )
-        if result.outcome not in {
-            TranslationOutcome.TRANSLATED,
-            TranslationOutcome.PARTIAL,
-        }:
-            return
-        translated_by_source = dict(zip(candidates, result.texts, strict=False))
-        for item in items:
-            english_name = item.get("english_name")
-            if english_name and item.get("name") == english_name:
-                item["name"] = translated_by_source.get(english_name, english_name)
 
     @staticmethod
     def _extract_english_name(name: str) -> str:
@@ -982,9 +1031,11 @@ class ParseMealTextHandler(
         match = re.search(r"^(.+?)\s*\(([^)]+)\)$", name.strip())
         if not match:
             return name
-        before, inside = match.group(1), match.group(2)
-        # Non-ASCII part is the local language name
-        before_ascii = all(ord(c) < 256 for c in before.replace(" ", ""))
-        if before_ascii:
-            return inside  # Local name is inside parens
-        return before  # Local name is before parens
+        before, inside = match.group(1).strip(), match.group(2).strip()
+        before_english = needs_display_localization(before, language)
+        inside_english = needs_display_localization(inside, language)
+        if before_english and not inside_english:
+            return inside
+        if inside_english and not before_english:
+            return before
+        return before
