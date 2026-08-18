@@ -64,8 +64,12 @@ class SentryObservabilityConnector:
             "enable_logs": settings.SENTRY_ENABLE_LOGS,
             "enable_metrics": settings.SENTRY_ENABLE_METRICS,
             "integrations": [
-                StarletteIntegration(),
-                FastApiIntegration(),
+                StarletteIntegration(
+                    failed_request_status_codes={500, 501, 502, 504},
+                ),
+                FastApiIntegration(
+                    failed_request_status_codes={500, 501, 502, 504},
+                ),
                 SqlalchemyIntegration(),
                 LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
             ],

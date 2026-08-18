@@ -236,7 +236,14 @@ def validate_ai_fallback(
     calories = Macros.raw_total_calories(
         protein_value, carbs_value, fat_value, fiber_value
     )
+    max_calories = quantity_g * (9.5 if _is_energy_dense_food(name) else 4.5)
+    return calories <= max_calories + 20.0
+
+
+def _is_energy_dense_food(name: str) -> bool:
+    """Match oily/nut foods even when the token is compound (walnuts, almonds)."""
     normalized = normalize_food_lookup_name(name)
+    tokens = set(normalized.split())
     dense_terms = {
         "oil",
         "butter",
@@ -252,9 +259,29 @@ def validate_ai_fallback(
         "powder",
         "flour",
     }
-    is_dense_exception = bool(dense_terms & set(normalized.split()))
-    max_calories = quantity_g * (9.5 if is_dense_exception else 4.5)
-    return calories <= max_calories + 20.0
+    if tokens & dense_terms:
+        return True
+    dense_names = (
+        "walnut",
+        "almond",
+        "pecan",
+        "cashew",
+        "pistachio",
+        "hazelnut",
+        "macadamia",
+        "peanut",
+        "coconut",
+        "avocado",
+        "chocolate",
+        "cocoa",
+        "sesame",
+        "sunflower",
+        "chia",
+        "flax",
+        "mayo",
+        "mayonnaise",
+    )
+    return any(term in normalized for term in dense_names)
 
 
 class NutritionResolver:

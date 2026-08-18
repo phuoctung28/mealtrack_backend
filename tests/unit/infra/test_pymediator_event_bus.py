@@ -5,7 +5,7 @@ import pytest
 
 from src.api.exceptions import ResourceNotFoundException
 from src.domain.events.base import EventHandler, Query
-from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.exceptions.ai_exceptions import AIOutputValidationError, AIUnavailableError
 from src.infra.event_bus.pymediator_event_bus import PyMediatorEventBus
 
 
@@ -89,6 +89,35 @@ async def test_ai_unavailable_exception_is_not_logged_as_error(caplog):
         and "Application exception handling _AIUnavailableQuery" in record.message
         for record in caplog.records
     )
+
+
+class _AIOutputInvalidHandler(EventHandler[_AIUnavailableQuery, None]):
+    async def handle(self, event: _AIUnavailableQuery) -> None:
+        raise AIOutputValidationError(
+            "AI nutrition fallback failed physical validation",
+            purpose=event.purpose,
+            attempt_count=1,
+            validation_details=["unsafe_density_fallback"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_ai_output_validation_exception_is_not_logged_as_error(caplog):
+    bus = PyMediatorEventBus()
+    bus.register_handler(_AIUnavailableQuery, _AIOutputInvalidHandler())
+
+    with caplog.at_level(
+        logging.DEBUG,
+        logger="src.infra.event_bus.pymediator_event_bus",
+    ):
+        with pytest.raises(AIOutputValidationError):
+            await bus.send(_AIUnavailableQuery(purpose="parse_text"))
+
+    assert not [
+        record
+        for record in caplog.records
+        if record.levelno >= logging.ERROR and "Error handling" in record.message
+    ]
 
 
 @pytest.mark.asyncio

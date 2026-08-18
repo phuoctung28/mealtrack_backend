@@ -67,7 +67,7 @@ def extract_json_from_response(content: str) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             pass
 
-    logger.error("Could not extract JSON from AI response: length=%s", len(content))
+    logger.warning("Could not extract JSON from AI response: length=%s", len(content))
     raise ValueError("Could not parse AI response. Please try again.")
 
 

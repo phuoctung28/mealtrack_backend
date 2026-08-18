@@ -178,3 +178,18 @@ def test_ai_fallback_rejects_potato_density_but_allows_oil_exception():
         fat=10,
         quantity_g=10,
     )
+    assert validate_ai_fallback(
+        name="Walnuts",
+        protein=4.3,
+        carbs=4.0,
+        fat=18.0,
+        fiber=2.0,
+        quantity_g=30,
+    )
+    assert not validate_ai_fallback(
+        name="apple",
+        protein=0,
+        carbs=0,
+        fat=20,
+        quantity_g=30,
+    )

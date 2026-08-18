@@ -84,7 +84,7 @@ def extract_json(content: str) -> dict[str, Any]:
         or content.rstrip().endswith(('":',  '": "', '"name": "', '",'))
     )
     if is_truncated:
-        logger.error(
+        logger.warning(
             "[JSON-TRUNCATED] content_len=%d open_braces=%d close_braces=%d",
             len(content),
             open_braces,
@@ -94,7 +94,7 @@ def extract_json(content: str) -> dict[str, Any]:
             "AI response was truncated. Please try again with a simpler image."
         )
 
-    logger.error(
+    logger.warning(
         "[JSON-EXTRACT-FAILED] all attempts failed content_len=%d", len(content)
     )
     from src.observability import increment_metric  # noqa: PLC0415
