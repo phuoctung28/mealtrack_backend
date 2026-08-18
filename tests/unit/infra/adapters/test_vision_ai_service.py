@@ -92,7 +92,7 @@ def test_extract_json_failure_does_not_log_raw_ai_response(caplog):
 
     raw_response = "not json with private meal notes and user@example.com"
 
-    with caplog.at_level("ERROR"), pytest.raises(ValueError):
+    with caplog.at_level("WARNING"), pytest.raises(ValueError):
         extract_json(raw_response)
 
     assert raw_response not in caplog.text

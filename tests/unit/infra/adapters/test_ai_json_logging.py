@@ -14,7 +14,7 @@ from src.observability_connectors import SAFE_CONTEXT_KEYS, SAFE_TAG_KEYS
 def test_shared_ai_json_extractor_does_not_log_raw_response(caplog):
     raw_response = "broken json with private meal notes and user@example.com"
 
-    with caplog.at_level("ERROR"), pytest.raises(ValueError):
+    with caplog.at_level("WARNING"), pytest.raises(ValueError):
         extract_json(raw_response)
 
     assert raw_response not in caplog.text
@@ -25,7 +25,7 @@ def test_shared_ai_json_extractor_does_not_log_raw_response(caplog):
 def test_meal_text_json_extractor_does_not_log_raw_response(caplog):
     raw_response = "not an array with private meal notes and user@example.com"
 
-    with caplog.at_level("ERROR"), pytest.raises(ValueError):
+    with caplog.at_level("WARNING"), pytest.raises(ValueError):
         extract_json_from_response(raw_response)
 
     assert raw_response not in caplog.text

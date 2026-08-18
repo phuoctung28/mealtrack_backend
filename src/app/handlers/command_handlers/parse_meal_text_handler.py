@@ -409,7 +409,15 @@ class ParseMealTextHandler(
         elif isinstance(raw, list):
             payload = {"items": raw}
         else:
-            extracted = extract_json_from_response(str(raw))
+            try:
+                extracted = extract_json_from_response(str(raw))
+            except ValueError as exc:
+                raise AIOutputValidationError(
+                    "Invalid AI structured output",
+                    purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                    attempt_count=1,
+                    validation_details=["unparseable_ai_json"],
+                ) from exc
             payload = {"items": extracted} if isinstance(extracted, list) else extracted
 
         if not isinstance(payload, dict):

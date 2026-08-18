@@ -119,6 +119,9 @@ def test_initialize_configures_integrations_and_release(monkeypatch):
     assert init_kwargs["profile_session_sample_rate"] == 0.02
     assert init_kwargs["profile_lifecycle"] == "trace"
     assert len(init_kwargs["integrations"]) == 4
+    starlette, fastapi, *_ = init_kwargs["integrations"]
+    assert starlette.failed_request_status_codes == {500, 501, 502, 504}
+    assert fastapi.failed_request_status_codes == {500, 501, 502, 504}
 
 
 def test_initialize_omits_optional_profile_session_settings_when_unset(monkeypatch):

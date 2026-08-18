@@ -13,7 +13,13 @@ from pymediator import SingletonRegistry
 
 from src.api.exceptions import MealTrackException
 from src.domain.events.base import DomainEvent, Event, EventHandler
-from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
+    AIUnavailableError,
+)
+from src.domain.exceptions.meal_recommendation_exceptions import (
+    MealRecommendationCreationError,
+)
 
 from .background_task_manager import BackgroundTaskManager
 from .event_bus import EventBus
@@ -174,7 +180,12 @@ class PyMediatorEventBus(EventBus):
                         await self.publish(domain_event)
             return result
 
-        except (MealTrackException, AIUnavailableError) as e:
+        except (
+            MealTrackException,
+            AIUnavailableError,
+            AIOutputValidationError,
+            MealRecommendationCreationError,
+        ) as e:
             # Controlled application exceptions and degraded AI-provider failures
             # are converted to proper HTTP responses by the API layer. Keep this
             # at debug so routine control flow does not produce duplicate ERRORs.
