@@ -4,7 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.domain.model.ai.nutrition_contracts import VisionNutritionResponse
+from src.domain.model.ai.nutrition_contracts import (
+    FoodLabelNutritionResponse,
+    VisionNutritionResponse,
+)
 from src.infra.services.ai.langchain_openai_adapter import (
     LangChainOpenAIResult,
     OpenAILangChainAdapter,
@@ -34,7 +37,12 @@ def _parsed_vision_response() -> VisionNutritionResponse:
     )
 
 
-def _adapter(monkeypatch, *, store_responses: bool = False):
+def _adapter(
+    monkeypatch,
+    *,
+    store_responses: bool = False,
+    structured_parsed: dict | None = None,
+):
     created = []
 
     class FakeChatOpenAI:
@@ -69,7 +77,8 @@ def _adapter(monkeypatch, *, store_responses: bool = False):
             self.structured.ainvoke = AsyncMock(
                 return_value={
                     "raw": self.structured_raw_message,
-                    "parsed": _parsed_vision_response().model_dump(),
+                    "parsed": structured_parsed
+                    or _parsed_vision_response().model_dump(),
                     "parsing_error": None,
                 }
             )
@@ -254,8 +263,8 @@ async def test_vision_uses_multimodal_human_message_with_data_url(monkeypatch):
     assert isinstance(messages[1], HumanMessage)
     assert messages[1].content[0] == {"type": "text", "text": "Identify food."}
     assert messages[1].content[1]["type"] == "image_url"
-    assert messages[1].content[1]["image_url"]["url"].startswith(
-        "data:image/png;base64,"
+    assert (
+        messages[1].content[1]["image_url"]["url"].startswith("data:image/png;base64,")
     )
     assert messages[1].content[1]["image_url"]["url"].endswith("aW1hZ2UtYnl0ZXM=")
     assert messages[1].content[1]["image_url"]["detail"] == "high"
@@ -266,6 +275,41 @@ async def test_vision_uses_multimodal_human_message_with_data_url(monkeypatch):
     }
     assert created[0].structured_schema["name"] == "VisionNutritionResponse"
     assert created[0].structured_schema["strict"] is True
+
+
+@pytest.mark.asyncio
+async def test_vision_accepts_zero_food_label_serving_grams(monkeypatch):
+    adapter, _ = _adapter(
+        monkeypatch,
+        structured_parsed={
+            "is_food_label": True,
+            "product_name": "Cereal",
+            "brand": None,
+            "serving_size": {"display_text": "Unknown", "grams": 0},
+            "servings_per_package": 1,
+            "label_calories_per_serving": None,
+            "macros_per_serving": {
+                "protein_g": 3,
+                "carbs_g": 37,
+                "fat_g": 8,
+            },
+            "confidence": 0.5,
+            "label_notes": [],
+        },
+    )
+
+    result = await adapter.generate_vision_structured(
+        model="gpt-5.4-mini-2026-03-17",
+        prompt="Read label.",
+        image_data=b"image-bytes",
+        image_mime_type="image/jpeg",
+        system_message="Return canonical JSON.",
+        schema=FoodLabelNutritionResponse,
+        max_tokens=None,
+        request_kwargs=None,
+    )
+
+    assert result.parsed.serving_size.grams == pytest.approx(0)
 
 
 def test_usage_extractors_support_response_metadata_fallback(monkeypatch):

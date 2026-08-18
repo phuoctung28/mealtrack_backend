@@ -23,9 +23,9 @@ def test_all_5_strategies_return_vision_analysis_system_prompt():
     ]
     for s in strategies:
         result = s.get_analysis_prompt()
-        assert (
-            result == SystemPrompts.VISION_ANALYSIS
-        ), f"{s.__class__.__name__}.get_analysis_prompt() must return SystemPrompts.VISION_ANALYSIS"
+        assert result == SystemPrompts.VISION_ANALYSIS, (
+            f"{s.__class__.__name__}.get_analysis_prompt() must return SystemPrompts.VISION_ANALYSIS"
+        )
 
 
 def test_portion_aware_user_message_contains_portion_info():
@@ -62,6 +62,8 @@ def test_food_label_strategy_prompt_contains_multilingual_label_rules():
     assert "Return ONLY valid JSON" in prompt
     assert "Thai nutrition panel" in prompt
     assert "serving_size.display_text" in prompt
+    assert "no reliable gram weight is printed" in prompt
+    assert "preserve the visible display_text" in prompt
     assert "Scanned Food Label" in prompt
     assert "Do not use Daily Value percentages as gram values" in prompt
     assert "Do not require any pre-extracted text" in prompt

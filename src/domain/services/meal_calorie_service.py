@@ -97,15 +97,35 @@ def _scaled_label_calories(
 
     quantity = getattr(item, "quantity", None)
     unit = str(getattr(item, "unit", "") or "").strip().lower()
-    if item is None or unit not in {"g", "gram", "grams"}:
+    if item is None:
         return round(label_calories, 1)
 
     try:
-        quantity_grams = float(quantity)
+        quantity_value = float(quantity)
     except (TypeError, ValueError):
         return round(label_calories, 1)
 
-    if not serving_grams or serving_grams <= 0 or quantity_grams <= 0:
+    if quantity_value <= 0:
         return round(label_calories, 1)
 
-    return round(label_calories * (quantity_grams / serving_grams), 1)
+    if unit in {"serving", "servings"}:
+        return round(label_calories * quantity_value, 1)
+
+    if unit in {"package", "packages"}:
+        servings_per_package = None
+        if isinstance(metadata, dict):
+            try:
+                servings_per_package = float(metadata.get("servings_per_package") or 0)
+            except (TypeError, ValueError):
+                servings_per_package = None
+        if servings_per_package and servings_per_package > 0:
+            return round(label_calories * quantity_value * servings_per_package, 1)
+        return round(label_calories, 1)
+
+    if unit not in {"g", "gram", "grams"}:
+        return round(label_calories, 1)
+
+    if not serving_grams or serving_grams <= 0:
+        return round(label_calories, 1)
+
+    return round(label_calories * (quantity_value / serving_grams), 1)

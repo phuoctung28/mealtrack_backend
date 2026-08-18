@@ -390,6 +390,30 @@ def test_parse_food_label_to_nutrition_logs_one_serving(gpt_parser):
     assert nutrition.calories == pytest.approx(224)
 
 
+def test_parse_food_label_to_nutrition_preserves_count_based_serving(gpt_parser):
+    gpt_response = {
+        "structured_data": {
+            "product_name": "Protein Drink",
+            "serving_size": {"display_text": "1 can", "grams": 0},
+            "servings_per_package": 1,
+            "label_calories_per_serving": 45,
+            "macros_per_serving": {
+                "protein_g": 10,
+                "carbs_g": 2,
+                "fat_g": 0,
+            },
+            "confidence": 0.91,
+        }
+    }
+
+    nutrition = gpt_parser.parse_food_label_to_nutrition(gpt_response)
+
+    food_item = nutrition.food_items[0]
+    assert food_item.quantity == pytest.approx(1)
+    assert food_item.unit == "serving"
+    assert food_item.allowed_units is None
+
+
 def test_parse_food_label_metadata_returns_validated_label_data(gpt_parser):
     gpt_response = {
         "structured_data": {
