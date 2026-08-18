@@ -572,6 +572,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 )
                 continue
 
+            if change.action == "add":
+                raise ValueError("v2 add requires origin")
+
             existing = current_by_id[change.id]
             prepared.append(self._canonicalize_snapshot_unit(existing, change))
         if revalidate_local:

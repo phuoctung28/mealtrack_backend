@@ -1,3 +1,4 @@
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -72,8 +73,37 @@ async def test_v2_add_allows_client_generated_id_not_owned_by_meal():
     assert prepared[0].id == "client-generated-id"
     assert len(updated) == 2
     added = next(item for item in updated if item.name == "Rau Xao")
+    assert added.id != change.id
+    uuid.UUID(added.id)
     assert added.source_kind == "custom"
     assert added.macros.protein == pytest.approx(2)
+
+
+@pytest.mark.asyncio
+async def test_v2_add_without_origin_is_rejected_before_id_lookup():
+    current = FoodItem(
+        id="item-1",
+        name="Rice",
+        quantity=100,
+        unit="g",
+        macros=Macros(protein=2.7, carbs=28.0, fat=0.3),
+    )
+    change = FoodItemChange(
+        action="add",
+        id="client-generated-id",
+        name="Rau Xao",
+        quantity=100,
+        unit="g",
+    )
+    handler = EditMealCommandHandler(
+        uow=None,
+        nutrition_resolver=_PassthroughResolver(),
+    )
+
+    with pytest.raises(ValueError, match="v2 add requires origin"):
+        await handler._prepare_v2_changes(
+            [current], [change], SimpleNamespace(food_references=object())
+        )
 
 
 @pytest.mark.asyncio
