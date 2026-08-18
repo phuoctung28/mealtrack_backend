@@ -1,3 +1,4 @@
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -6,6 +7,7 @@ from src.app.commands.meal import FoodItemChange
 from src.app.handlers.command_handlers.edit_meal_command_handler import (
     EditMealCommandHandler,
 )
+from src.domain.model.meal.food_item_change import CustomNutritionData
 from src.domain.model.nutrition import FoodItem, Macros
 
 
@@ -22,6 +24,85 @@ class _References:
             fiber_100g=0.4,
             sugar_100g=0.1,
             servings=[],
+        )
+
+
+class _PassthroughResolver:
+    async def resolve_items(self, items, food_references, *, contract_version):
+        return items
+
+    async def revalidate_local_items(self, items, food_references):
+        return None
+
+
+@pytest.mark.asyncio
+async def test_v2_add_allows_client_generated_id_not_owned_by_meal():
+    current = FoodItem(
+        id="item-1",
+        name="Rice",
+        quantity=100,
+        unit="g",
+        macros=Macros(protein=2.7, carbs=28.0, fat=0.3),
+    )
+    change = FoodItemChange(
+        action="add",
+        id="client-generated-id",
+        name="Rau Xao",
+        quantity=100,
+        unit="g",
+        origin="custom",
+        custom_nutrition=CustomNutritionData(
+            calories_per_100g=51,
+            protein_per_100g=2,
+            carbs_per_100g=8,
+            fat_per_100g=1,
+            fiber_per_100g=2,
+            sugar_per_100g=1,
+        ),
+    )
+    handler = EditMealCommandHandler(
+        uow=None,
+        nutrition_resolver=_PassthroughResolver(),
+    )
+
+    prepared = await handler._prepare_v2_changes(
+        [current], [change], SimpleNamespace(food_references=object())
+    )
+    updated = await handler._apply_food_item_changes([current], prepared)
+
+    assert prepared[0].id == "client-generated-id"
+    assert len(updated) == 2
+    added = next(item for item in updated if item.name == "Rau Xao")
+    assert added.id != change.id
+    uuid.UUID(added.id)
+    assert added.source_kind == "custom"
+    assert added.macros.protein == pytest.approx(2)
+
+
+@pytest.mark.asyncio
+async def test_v2_add_without_origin_is_rejected_before_id_lookup():
+    current = FoodItem(
+        id="item-1",
+        name="Rice",
+        quantity=100,
+        unit="g",
+        macros=Macros(protein=2.7, carbs=28.0, fat=0.3),
+    )
+    change = FoodItemChange(
+        action="add",
+        id="client-generated-id",
+        name="Rau Xao",
+        quantity=100,
+        unit="g",
+    )
+    handler = EditMealCommandHandler(
+        uow=None,
+        nutrition_resolver=_PassthroughResolver(),
+    )
+
+    with pytest.raises(ValueError, match="v2 add requires origin"):
+        await handler._prepare_v2_changes(
+            [current], [change], SimpleNamespace(food_references=object())
         )
 
 
