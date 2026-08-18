@@ -461,10 +461,10 @@ class CustomNutritionRequest(BaseModel):
 class NutritionOverrideRequest(BaseModel):
     """Absolute values that intentionally bypass nutrition recalculation."""
 
-    calories: float = Field(..., ge=0, le=900)
-    protein: float = Field(..., ge=0, le=1000)
-    carbs: float = Field(..., ge=0, le=1000)
-    fat: float = Field(..., ge=0, le=1000)
+    calories: float = Field(..., ge=0, allow_inf_nan=False)
+    protein: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
+    carbs: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
+    fat: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
 
 
 class EditMealIngredientsRequest(BaseModel):

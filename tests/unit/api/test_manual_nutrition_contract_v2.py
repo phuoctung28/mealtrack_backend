@@ -246,6 +246,31 @@ def test_nutrition_override_rejects_negative_absolute_values():
         )
 
 
+def test_nutrition_override_accepts_absolute_calories_above_density_bound():
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=2,
+        override_intent="user_entered",
+        nutrition_override=NutritionOverrideRequest(
+            calories=1500,
+            protein=80,
+            carbs=120,
+            fat=70,
+        ),
+    )
+
+    assert request.nutrition_override.calories == 1500
+
+
+def test_nutrition_override_rejects_non_finite_calories():
+    with pytest.raises(ValidationError):
+        NutritionOverrideRequest(
+            calories=float("inf"),
+            protein=20,
+            carbs=30,
+            fat=15,
+        )
+
+
 def test_unknown_nutrition_contract_version_is_rejected():
     with pytest.raises(ValidationError):
         CreateManualMealFromFoodsRequest(
