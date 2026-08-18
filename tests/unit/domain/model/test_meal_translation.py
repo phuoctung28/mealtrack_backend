@@ -2,12 +2,14 @@
 Unit tests for meal translation domain models.
 """
 
-import pytest
 from datetime import datetime
 
 from src.domain.model.meal import (
-    MealTranslation,
     FoodItemTranslation,
+    MealTranslation,
+)
+from src.domain.model.meal.meal_translation_domain_models import (
+    CURRENT_MEAL_TRANSLATION_VERSION,
 )
 
 
@@ -120,6 +122,7 @@ class TestMealTranslation:
         assert translation.dish_name == "炒饭"
         assert len(translation.food_items) == 1
         assert translation.food_items[0].name == "米饭"
+        assert translation.translation_version is None
 
     def test_get_food_item_translation(self):
         """Test getting a specific food item translation."""
@@ -146,3 +149,32 @@ class TestMealTranslation:
         result = translation.get_food_item_translation("non-existent")
 
         assert result is None
+
+    def test_pre_cutover_translation_is_not_a_current_cache_hit(self):
+        translation = MealTranslation(
+            meal_id="meal-003",
+            language="vi",
+            dish_name="Banh mi",
+            food_items=[],
+            meal_ingredients=["Banh mi"],
+            translation_version=CURRENT_MEAL_TRANSLATION_VERSION - 1,
+        )
+
+        assert translation.is_fully_cached(expected_ingredient_count=1) is False
+
+    def test_current_translation_is_a_cache_hit_when_manifest_matches(self):
+        translation = MealTranslation(
+            meal_id="meal-004",
+            language="vi",
+            dish_name="Banh mi",
+            food_items=[],
+            meal_ingredients=["Banh mi"],
+            translation_version=CURRENT_MEAL_TRANSLATION_VERSION,
+        )
+
+        assert (
+            translation.is_fully_cached(
+                expected_ingredient_count=1, expected_instruction_count=0
+            )
+            is True
+        )

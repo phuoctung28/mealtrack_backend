@@ -1,4 +1,5 @@
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -6,7 +7,10 @@ import pytest
 
 from src.domain.model.meal.meal import Meal, MealStatus
 from src.domain.model.meal.meal_image import MealImage
-from src.domain.model.meal.meal_translation_domain_models import MealTranslation
+from src.domain.model.meal.meal_translation_domain_models import (
+    CURRENT_MEAL_TRANSLATION_VERSION,
+    MealTranslation,
+)
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import FoodItem
 from src.domain.model.translation_result import TranslationOutcome, TranslationResult
@@ -158,6 +162,33 @@ async def test_translate_meal_calls_provider_and_saves(
 
 
 @pytest.mark.asyncio
+async def test_translate_meal_keeps_named_items_aligned_after_filtering(
+    service, meal, food_items, text_translation_service
+):
+    unnamed_item = SimpleNamespace(id="unnamed", name=None)
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Bữa ăn", "Ức gà", "Cơm gạo lứt"),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
+
+    result = await service.translate_meal(
+        meal,
+        dish_name="Meal",
+        food_items=[unnamed_item, *food_items],
+        target_language="vi",
+    )
+
+    assert result is not None
+    assert [item.food_item_id for item in result.food_items] == [
+        str(food_items[0].id),
+        str(food_items[1].id),
+    ]
+    assert [item.name for item in result.food_items] == ["Ức gà", "Cơm gạo lứt"]
+
+
+@pytest.mark.asyncio
 async def test_translate_meal_awaits_async_translation_repo(
     async_repo_service, async_repo, meal, food_items, text_translation_service
 ):
@@ -178,6 +209,38 @@ async def test_translate_meal_awaits_async_translation_repo(
     assert result is not None
     async_repo.get_by_meal_and_language.assert_awaited_once_with(meal.meal_id, "vi")
     async_repo.save.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_retranslates_pre_cutover_cache(
+    service, meal, food_items, text_translation_service, repo
+):
+    repo.get_by_meal_and_language.return_value = MealTranslation(
+        meal_id=meal.meal_id,
+        language="vi",
+        dish_name="Bữa ăn cũ",
+        food_items=[],
+        meal_ingredients=["Bread", "Pork"],
+        translation_version=CURRENT_MEAL_TRANSLATION_VERSION - 1,
+    )
+    text_translation_service.translate_texts.return_value = TranslationResult(
+        ("Bữa ăn", "Ức gà", "Cơm gạo lứt"),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
+
+    result = await service.translate_meal(
+        meal,
+        dish_name="Meal",
+        food_items=food_items,
+        target_language="vi",
+    )
+
+    assert result is not None
+    text_translation_service.translate_texts.assert_awaited_once()
+    repo.save.assert_called_once()
+    assert result.translation_version == CURRENT_MEAL_TRANSLATION_VERSION
 
 
 @pytest.mark.asyncio

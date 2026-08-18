@@ -55,14 +55,14 @@ class MealTranslationService:
             return None
 
         try:
+            named_food_items = [item for item in food_items if item.name]
+
             # --- Cache check ---
             existing = await self._get_by_meal_and_language(
                 meal.meal_id, target_language
             )
             if existing and existing.is_fully_cached(
-                expected_ingredient_count=len(
-                    [item for item in food_items if item.name]
-                ),
+                expected_ingredient_count=len(named_food_items),
                 expected_instruction_count=len(instructions or []),
             ):
                 logger.debug(
@@ -83,7 +83,7 @@ class MealTranslationService:
                             {"instruction": step, "duration_minutes": None}
                         )
 
-            ingredient_names = [item.name for item in food_items if item.name]
+            ingredient_names = [item.name for item in named_food_items]
             instruction_texts = [s.get("instruction", "") for s in normalised_steps]
 
             # Build a single flat list so we use one provider call.
@@ -108,9 +108,8 @@ class MealTranslationService:
                     name=translated_name,
                 )
                 for item, translated_name in zip(
-                    food_items, translated_ingredients, strict=False
+                    named_food_items, translated_ingredients, strict=False
                 )
-                if item.name
             ]
 
             m = len(instruction_texts)

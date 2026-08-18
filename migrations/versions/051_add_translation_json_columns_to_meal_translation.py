@@ -1,7 +1,7 @@
 """Add meal_instruction and meal_ingredients JSON columns to meal_translation.
 
 Stores translated instructions and ingredients directly on the translation row,
-enabling the DeepL cache check without joining food_item_translation.
+enabling the translation cache check without joining food_item_translation.
 
 Revision ID: 051
 Revises: 050

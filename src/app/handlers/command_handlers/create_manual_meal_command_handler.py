@@ -123,7 +123,14 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             return saved_meal
 
     async def _handle_v2(self, event: CreateManualMealCommand):
-        """Reserve briefly, resolve outside the write UoW, then commit atomically."""
+        """Reserve briefly, then persist prepared nutrition atomically.
+
+        Parse/scan flows already produce portion nutrition for custom items.
+        Re-resolving those items here interprets their per-portion values as
+        per-100g density and can reject an otherwise valid meal. Older clients
+        that send only source identities still use the resolver compatibility
+        path until they adopt the prepared-nutrition payload.
+        """
         reservation = await self._reserve_v2_write_short(event)
         if reservation and reservation.state == "replay":
             async with self.uow_factory() as uow:
@@ -136,17 +143,36 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             return saved_meal
 
         try:
-            async with self.uow_factory() as resolve_uow:
-                resolved_items = await self.nutrition_resolver.resolve_items(
-                    event.items,
-                    resolve_uow.food_references,
-                    contract_version=2,
+            items_needing_resolution = [
+                item
+                for item in event.items
+                if not self._is_prepared_nutrition(item)
+            ]
+            if items_needing_resolution:
+                async with self.uow_factory() as resolve_uow:
+                    resolved_source_items = await self.nutrition_resolver.resolve_items(
+                        items_needing_resolution,
+                        resolve_uow.food_references,
+                        contract_version=2,
+                    )
+                resolved_items = list(event.items)
+                source_indexes = (
+                    index
+                    for index, item in enumerate(event.items)
+                    if not self._is_prepared_nutrition(item)
                 )
+                for index, resolved_item in zip(
+                    source_indexes, resolved_source_items, strict=True
+                ):
+                    resolved_items[index] = resolved_item
+            else:
+                resolved_items = list(event.items)
 
             async with self.uow as uow:
-                await self.nutrition_resolver.revalidate_local_items(
-                    resolved_items, uow.food_references
-                )
+                if items_needing_resolution:
+                    await self.nutrition_resolver.revalidate_local_items(
+                        resolved_source_items, uow.food_references
+                    )
                 saved_meal, meal_date = await self._process_meal(
                     event,
                     uow.meals,
@@ -166,6 +192,15 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         except Exception:
             await self._release_v2_write(reservation)
             raise
+
+    @staticmethod
+    def _is_prepared_nutrition(item: Any) -> bool:
+        """Recognize only the versioned nutrition payload as save-ready."""
+        return (
+            item.nutrition_contract_version == "2"
+            and item.custom_nutrition is not None
+            and (item.origin == "custom" or item.source_snapshot is not None)
+        )
 
     async def _reserve_v2_write_short(self, event):
         async with self.uow_factory() as uow:
@@ -216,17 +251,16 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         revalidate_local=True,
     ):
         items = resolved_items or event.items
-        if event.nutrition_contract_version == 2:
+        if event.nutrition_contract_version == 2 and resolved_items is None:
             if uow is None or not getattr(uow, "food_references", None):
                 raise ValueError(
                     "v2 manual saves require a database reference resolver"
                 )
-            if resolved_items is None:
-                items = await self.nutrition_resolver.resolve_items(
-                    items,
-                    uow.food_references,
-                    contract_version=event.nutrition_contract_version,
-                )
+            items = await self.nutrition_resolver.resolve_items(
+                items,
+                uow.food_references,
+                contract_version=event.nutrition_contract_version,
+            )
             if revalidate_local:
                 await self.nutrition_resolver.revalidate_local_items(
                     items, uow.food_references

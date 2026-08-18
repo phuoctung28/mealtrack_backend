@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from dataclasses import replace
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -11,6 +12,7 @@ from src.api.base_dependencies import (
     get_async_food_reference_repository,
     get_cache_service,
     get_image_store,
+    get_meal_translation_service,
 )
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -42,6 +44,98 @@ from src.infra.event_bus import BackgroundTaskManager, EventBus
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _without_requested_meal_translation(meal, language: str):
+    """Keep incomplete locale data from leaking into a read response."""
+    translations = getattr(meal, "translations", None)
+    if not translations or language not in translations:
+        return meal
+    remaining = {
+        cached_language: translation
+        for cached_language, translation in translations.items()
+        if cached_language != language
+    }
+    return replace(meal, translations=remaining or None)
+
+
+async def _ensure_requested_meal_translation(
+    *,
+    meal,
+    language: str,
+    query: GetMealByIdQuery,
+    event_bus: EventBus,
+    meal_translation_service,
+):
+    """Materialize a missing locale without serving a partial translation."""
+    if MealMapper.has_persisted_image_display_names(meal):
+        return meal
+    if language == "en":
+        return meal
+
+    food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+    instructions = getattr(meal, "instructions", None)
+    if not meal.dish_name and not food_items and not instructions:
+        return meal
+
+    if MealMapper.has_direct_response_localization(meal, language):
+        return meal
+
+    expected_ingredient_count = sum(
+        1 for item in food_items if getattr(item, "name", None)
+    )
+    expected_instruction_count = sum(
+        1 for step in (instructions or []) if isinstance(step, (dict, str))
+    )
+    cached = (meal.translations or {}).get(language)
+    if cached and cached.is_fully_cached(
+        expected_ingredient_count=expected_ingredient_count,
+        expected_instruction_count=expected_instruction_count,
+    ):
+        return meal
+    if meal_translation_service is None:
+        return _without_requested_meal_translation(meal, language)
+
+    try:
+        translation = await meal_translation_service.translate_meal(
+            meal=meal,
+            dish_name=meal.dish_name or "",
+            food_items=food_items,
+            target_language=language,
+            instructions=instructions,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Meal translation on read failed meal=%s lang=%s error_type=%s",
+            meal.meal_id,
+            language,
+            type(exc).__name__,
+        )
+        return _without_requested_meal_translation(meal, language)
+
+    if translation is None or not translation.is_fully_cached(
+        expected_ingredient_count=expected_ingredient_count,
+        expected_instruction_count=expected_instruction_count,
+    ):
+        logger.warning(
+            "Meal translation remains incomplete meal=%s lang=%s",
+            meal.meal_id,
+            language,
+        )
+        return _without_requested_meal_translation(meal, language)
+
+    # The service returns a non-persisted object for partial provider results.
+    # Reload so the mapper can only use a complete, durable translation row.
+    try:
+        return await event_bus.send(query)
+    except Exception as exc:
+        logger.warning(
+            "Meal translation reload failed meal=%s lang=%s error_type=%s",
+            meal.meal_id,
+            language,
+            type(exc).__name__,
+        )
+        return _without_requested_meal_translation(meal, language)
 
 
 async def _source_nutrition_by_food_reference(meal, food_reference_repository):
@@ -138,6 +232,7 @@ async def get_meal(
     task_manager: BackgroundTaskManager | None = Depends(get_optional_task_manager),
     ai_manager: MealInsightAIPort = Depends(get_ai_model_manager),
     food_reference_repository=Depends(get_async_food_reference_repository),
+    meal_translation_service=Depends(get_meal_translation_service),
 ):
     """Get detailed information about a specific meal.
 
@@ -152,6 +247,13 @@ async def get_meal(
         image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
     language = get_request_language(request)
+    meal = await _ensure_requested_meal_translation(
+        meal=meal,
+        language=language,
+        query=query,
+        event_bus=event_bus,
+        meal_translation_service=meal_translation_service,
+    )
     user_context = await get_meal_insight_user_context(event_bus, user_id)
     insight_service = MealValueInsightService()
     value_insights = await insight_service.get_cached_ai(

@@ -21,6 +21,7 @@ settings, wiring from adapters, and live health from OpenAPI `/docs`.
 | Cloudinary | **Best-effort media** | Degrade (fallback URL construction where coded) |
 | RevenueCat | **Billing sync** | Webhook/cache degrade; last-known subscription where available. Premium route gates are not enforced yet |
 | Redis optional caches | **Optional** | Bypass cache; continue from source of truth |
+| Redis provider budget | **Required for provider-origin manual writes** | Fail closed with `NUTRITION_PROVIDER_UNAVAILABLE` |
 | Redis meal-suggestion sessions | **Required transient state** (current design) | Session writes fail when store unavailable |
 | OpenAI translation | **Optional read-path localization** | Return canonical local/provider results without translated names; do not block startup or writes |
 | OpenAI, FatSecret, USDA, OFF, Brave, image stock APIs | **Optional enrichment** | Degrade to local/prior results when safe |
@@ -31,6 +32,10 @@ settings, wiring from adapters, and live health from OpenAPI `/docs`.
 **Redis rule:** optional caches are never the source of truth for nutrition,
 notification delivery, FCM token ownership, or write-path correctness. Cache
 admission policy: `docs/decisions/260608-2223-selective-cache-admission-policy.md`.
+Provider-origin v2 manual saves additionally require Redis and an explicit
+`NUTRITION_PROVIDER_GLOBAL_RPM` deployment setting. `CACHE_ENABLED=false` may
+disable optional cache reads, but it must not disable this shared write-path
+budget.
 
 **Privacy rule:** never log prompts, food payloads, raw AI output, base64
 images, emails, auth tokens, full barcodes, or secrets. Prefer operation name,
@@ -91,6 +96,9 @@ internal IDs, status codes, and error class.
 - The OpenAI translation adapter uses the Responses API with
   `store_responses=False`; the translation path never opts back into payload
   storage.
+- Persisted meal translation rows written before the active translation version
+  are treated as stale and excluded from responses until the next translation
+  request rewrites them.
 - Translation requests are bounded indexed batches. The adapter sends the
   indexed item text only, treats it as data rather than instructions, and
   preserves placeholders, units, and brands.

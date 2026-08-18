@@ -105,14 +105,15 @@ class _AllowedUnitsFatSecretService:
 
 
 class _NeutralTranslator:
-    def __init__(self, value="Gà"):
+    def __init__(self, value="Gà", mapping=None):
         self.value = value
+        self.mapping = mapping or {}
         self.calls = []
 
     async def translate_texts(self, texts, source_language, target_language):
         self.calls.append((list(texts), source_language, target_language))
         return TranslationResult(
-            (self.value,),
+            tuple(self.mapping.get(text, self.value) for text in texts),
             TranslationOutcome.TRANSLATED,
             source_language,
             target_language,
@@ -209,6 +210,39 @@ class _LocalizedServingFatSecretService:
                     "gram_weight": 173.0,
                     "description": "1 medium potato",
                 },
+            ],
+        }
+
+
+class _SweetPotatoFatSecretService:
+    async def search_food_candidates(self, *args, **kwargs):
+        return [
+            {
+                "food_id": "sweet-potato",
+                "food_name": "Sweetpotato, raw",
+                "food_type": "Generic",
+            }
+        ]
+
+    async def get_food_details(self, food_id, **kwargs):
+        return {
+            "food_id": food_id,
+            "food_name": "Sweetpotato, raw",
+            "protein_100g": 1.6,
+            "carbs_100g": 20.1,
+            "fat_100g": 0.1,
+            "fiber_100g": 3.0,
+            "calories_100g": 86.0,
+            "metric_serving_amount": 100.0,
+            "allowed_units": [
+                {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+                {
+                    "unit": "sweetpotato",
+                    "gram_weight": 130.0,
+                    "description": "1 sweetpotato",
+                },
+                {"unit": "oz", "gram_weight": 28.35, "description": "1 oz"},
+                {"unit": "cup", "gram_weight": 200.0, "description": "1 cup, mashed"},
             ],
         }
 
@@ -318,6 +352,28 @@ def _parse_item(name="food", quantity=100, unit="g", macros=None):
     }
 
 
+def test_parse_text_exposes_portion_density_for_confirmed_save():
+    handler = ParseMealTextHandler(meal_generation_service=_FakeMealGenerationService())
+    item = {
+        "name": "Pork rib",
+        "quantity": 1,
+        "unit": "slice",
+        "protein": 27,
+        "carbs": 0,
+        "fat": 15,
+        "fiber": 0,
+        "sugar": 0,
+    }
+
+    handler._attach_per_100g_snapshot(item)
+
+    assert item["protein_per_100g"] == pytest.approx(90)
+    assert item["fat_per_100g"] == pytest.approx(50)
+    assert item["calories_per_100g"] == pytest.approx(810)
+    assert item["source_snapshot"]["basis"] == "100g"
+    assert item["source_snapshot"]["protein_per_100g"] == pytest.approx(90)
+
+
 @pytest.mark.asyncio
 async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
     meal_generation_service = _FakeMealGenerationService()
@@ -362,6 +418,83 @@ async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
 
 
 @pytest.mark.asyncio
+async def test_parse_text_unmatched_countable_unit_is_saved_as_allowed_unit():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Sườn Nướng",
+                        "quantity": 1,
+                        "unit": "miếng",
+                        "english_unit": "piece",
+                        "calories": 298,
+                        "protein": 18,
+                        "carbs": 4,
+                        "fat": 11,
+                    }
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_FakeFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="1 miếng sườn nướng", user_id="user-1", language="vi")
+    )
+    item = response.items[0]
+    units = {option["unit"]: option["gram_weight"] for option in item.allowed_units}
+
+    assert len(meal_generation_service.calls) == 1
+    assert item.unit == "miếng"
+    assert item.quantity == 1
+    assert "miếng" in units
+    assert units["miếng"] == pytest.approx(100.0)
+    assert units["g"] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_parse_text_countable_unit_survives_provider_outage():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Sườn Nướng",
+                        "lookup_name": "grilled pork ribs",
+                        "quantity": 1,
+                        "unit": "miếng",
+                        "english_unit": "slice",
+                        "macros": {
+                            "protein_g": 18,
+                            "carbs_g": 4,
+                            "fat_g": 11,
+                        },
+                    }
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_FakeFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="1 miếng sườn nướng", user_id="user-1", language="vi")
+    )
+    item = response.items[0]
+
+    assert item.unit == "miếng"
+    assert item.quantity == 1
+    assert item.protein == pytest.approx(18)
+    assert item.data_source == "ai_estimate"
+
+
+@pytest.mark.asyncio
 async def test_parse_text_translates_only_structurally_identified_english_name():
     generation = _FakeMealGenerationService(
         responses=[
@@ -396,13 +529,14 @@ async def test_parse_text_translates_only_structurally_identified_english_name()
 
 
 @pytest.mark.asyncio
-async def test_parse_text_unknown_name_provenance_stays_canonical():
+async def test_parse_text_ascii_display_name_is_localized():
     generation = _FakeMealGenerationService(
         responses=[
             {
                 "items": [
                     {
                         "name": "Chicken",
+                        "lookup_name": "Chicken",
                         "quantity": 1,
                         "unit": "serving",
                         "protein": 20,
@@ -424,8 +558,270 @@ async def test_parse_text_unknown_name_provenance_stays_canonical():
         ParseMealTextCommand(text="chicken", user_id="user-1", language="vi")
     )
 
-    assert response.items[0].name == "Chicken"
-    assert translator.calls == []
+    assert response.items[0].name == "Gà"
+    assert translator.calls == [(["Chicken"], "en", "vi")]
+
+
+@pytest.mark.asyncio
+async def test_parse_text_keeps_localized_names_and_translates_ascii_leftovers():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Rice vermicelli",
+                        "lookup_name": "Rice vermicelli",
+                        "quantity": 200,
+                        "unit": "g",
+                        "protein": 3.6,
+                        "carbs": 45,
+                        "fat": 0.4,
+                    },
+                    {
+                        "name": "Thịt bò (Beef)",
+                        "lookup_name": "Beef",
+                        "quantity": 80,
+                        "unit": "g",
+                        "protein": 20.8,
+                        "carbs": 0,
+                        "fat": 8.8,
+                    },
+                    {
+                        "name": "Pork knuckle",
+                        "lookup_name": "Pork knuckle",
+                        "quantity": 60,
+                        "unit": "g",
+                        "protein": 11.4,
+                        "carbs": 0,
+                        "fat": 9.6,
+                    },
+                    {
+                        "name": "Nước dùng Bún bò Huế",
+                        "lookup_name": "Bun bo Hue broth",
+                        "quantity": 300,
+                        "unit": "ml",
+                        "protein": 4.5,
+                        "carbs": 3,
+                        "fat": 6,
+                    },
+                ]
+            }
+        ]
+    )
+    translator = _NeutralTranslator(
+        mapping={
+            "Rice vermicelli": "Bún gạo",
+            "Pork knuckle": "Giò heo",
+        }
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=translator,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(
+            text="bún bò Huế", user_id="user-1", language="vi"
+        )
+    )
+
+    names = [item.name for item in response.items]
+    assert names == [
+        "Bún gạo",
+        "Thịt bò",
+        "Giò heo",
+        "Nước dùng Bún bò Huế",
+    ]
+    assert translator.calls == [
+        (["Rice vermicelli", "Pork knuckle"], "en", "vi")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_parse_text_force_localizes_english_when_translator_leaves_original():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Shredded pork skin and pork",
+                        "lookup_name": "Shredded pork skin and pork",
+                        "quantity": 1,
+                        "unit": "phần",
+                        "protein": 8,
+                        "carbs": 2,
+                        "fat": 7,
+                    }
+                ]
+            },
+            {"items": ["Bì heo"]},
+        ]
+    )
+    translator = _NeutralTranslator(value="Shredded pork skin and pork")
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=translator,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(
+            text="bì heo", user_id="user-1", language="vi"
+        )
+    )
+
+    assert response.items[0].name == "Bì heo"
+    assert len(generation.calls) == 2
+
+
+class _IdentityTranslator:
+    def __init__(self):
+        self.calls = []
+
+    async def translate_texts(self, texts, source_language, target_language):
+        self.calls.append((list(texts), source_language, target_language))
+        return TranslationResult(
+            tuple(texts),
+            TranslationOutcome.TRANSLATED,
+            source_language,
+            target_language,
+        )
+
+
+def _localized_item(name: str, lookup_name: str) -> dict:
+    return {
+        "name": name,
+        "lookup_name": lookup_name,
+        "quantity": 1,
+        "unit": "phần",
+        "protein": 8,
+        "carbs": 2,
+        "fat": 7,
+    }
+
+
+@pytest.mark.asyncio
+async def test_parse_text_fail_closes_leaked_english_and_mixed_slash_names():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    _localized_item("Vietnamese Baguette", "Vietnamese Baguette"),
+                    _localized_item("Pork Pâté", "Pork Pate"),
+                    _localized_item("Cilantro", "Cilantro"),
+                    _localized_item("Bơ/mayo", "Butter"),
+                    _localized_item("Thịt", "Pork"),
+                    _localized_item("Dưa Leo Chua", "Pickled cucumber"),
+                    _localized_item("Whey Isolate", "Whey Isolate"),
+                ]
+            }
+        ]
+    )
+    translator = _IdentityTranslator()
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=translator,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="bánh mì thịt", user_id="user-1", language="vi")
+    )
+
+    assert [item.name for item in response.items] == [
+        "Bánh mì",
+        "Pate heo",
+        "Rau mùi",
+        "Bơ/Sốt mayonnaise",
+        "Thịt",
+        "Dưa Leo Chua",
+        "Nguyên liệu",
+    ]
+    assert translator.calls[0][0] == [
+        "Vietnamese Baguette",
+        "Pork Pâté",
+        "Cilantro",
+        "mayo",
+        "Whey Isolate",
+    ]
+    assert translator.calls[0][1:] == ("en", "vi")
+
+
+@pytest.mark.asyncio
+async def test_parse_text_retries_when_a_named_dish_returns_one_row():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {"items": [_localized_item("Bánh mì thịt", "Pork sandwich")]},
+            {
+                "items": [
+                    _localized_item("Bánh mì", "Baguette"),
+                    _localized_item("Thịt", "Pork"),
+                ]
+            },
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="Bánh mì thịt", user_id="user-1", language="vi")
+    )
+
+    assert len(generation.calls) == 2
+    assert "edible components" in generation.calls[1]["prompt"]
+    assert [item.name for item in response.items] == ["Bánh mì", "Thịt"]
+
+
+@pytest.mark.asyncio
+async def test_parse_text_does_not_retry_listed_ingredients():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    _localized_item("Trứng", "Egg"),
+                    _localized_item("Sữa", "Milk"),
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="trứng, sữa", user_id="user-1", language="vi")
+    )
+
+    assert len(generation.calls) == 1
+    assert [item.name for item in response.items] == ["Trứng", "Sữa"]
+
+
+@pytest.mark.asyncio
+async def test_parse_text_prefers_localized_side_of_bilingual_pate_name():
+    generation = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    _localized_item("Pork Pâté (Pate heo)", "Pork Pate"),
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=generation,
+        fat_secret_service=_FakeFatSecretService(),
+        translation_service=_IdentityTranslator(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(text="pate", user_id="user-1", language="vi")
+    )
+
+    assert response.items[0].name == "Pate heo"
 
 
 @pytest.mark.asyncio
@@ -493,16 +889,29 @@ async def test_parse_text_retries_invalid_ai_output_once():
             {
                 "items": [
                     {
-                        "name": "Pho bowl",
+                        "name": "Chicken breast",
                         "quantity": 150000,
-                        "unit": "bowl",
-                        "protein": 30,
-                        "carbs": 80,
-                        "fat": 12,
+                        "unit": "g",
+                        "protein": 31,
+                        "carbs": 0,
+                        "fat": 3.6,
                     }
                 ]
             },
-            _valid_parse_text_response(),
+            {
+                "items": [
+                    {
+                        "name": "Chicken breast",
+                        "quantity": 100,
+                        "unit": "g",
+                        "english_unit": "g",
+                        "calories": 165,
+                        "protein": 31,
+                        "carbs": 0,
+                        "fat": 3.6,
+                    }
+                ]
+            },
         ]
     )
     handler = ParseMealTextHandler(
@@ -511,7 +920,9 @@ async def test_parse_text_retries_invalid_ai_output_once():
     )
 
     response = await handler.handle(
-        ParseMealTextCommand(text="1 bowl pho", user_id="user-1", language="en")
+        ParseMealTextCommand(
+            text="100g chicken breast", user_id="user-1", language="en"
+        )
     )
 
     assert len(meal_generation_service.calls) == 2
@@ -520,9 +931,9 @@ async def test_parse_text_retries_invalid_ai_output_once():
         in meal_generation_service.calls[1]["system_message"]
     )
     assert "items.0.quantity" in meal_generation_service.calls[1]["system_message"]
-    assert response.items[0].name == "Pho bowl"
-    assert response.items[0].protein == 30
-    assert response.total_carbs == 80
+    assert response.items[0].name == "Chicken breast"
+    assert response.items[0].protein == 31
+    assert response.total_carbs == 0
 
 
 @pytest.mark.asyncio
@@ -643,6 +1054,9 @@ async def test_parse_text_uses_one_staged_detail_for_wrong_first_candidate():
     assert len(provider.detail_calls) == 1
     assert provider.detail_calls[0][0] == "generic-potato"
     assert response.items[0].data_source == "fatsecret"
+    assert response.items[0].protein_per_100g == pytest.approx(2.0)
+    assert response.items[0].carbs_per_100g == pytest.approx(17.0)
+    assert response.items[0].fat_per_100g == pytest.approx(0.1)
 
 
 @pytest.mark.asyncio
@@ -724,6 +1138,46 @@ async def test_provider_parse_falls_back_to_grams_for_unsupported_serving_unit()
         item.name,
         strict=True,
     ) == pytest.approx(180)
+
+
+@pytest.mark.asyncio
+async def test_provider_parse_emits_catalog_density_for_unknown_tuber_unit():
+    meal_generation_service = _FakeMealGenerationService(
+        responses=[
+            {
+                "items": [
+                    {
+                        "name": "Khoai lang",
+                        "lookup_name": "sweetpotato",
+                        "quantity": 1,
+                        "unit": "củ lớn",
+                        "english_unit": "serving",
+                        "protein": 2.1,
+                        "carbs": 25.6,
+                        "fat": 0.1,
+                    }
+                ]
+            }
+        ]
+    )
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_SweetPotatoFatSecretService(),
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(
+            text="1 củ lớn khoai lang", user_id="user-1", language="vi"
+        )
+    )
+    item = response.items[0]
+
+    assert item.data_source == "fatsecret"
+    assert item.protein_per_100g == pytest.approx(1.6)
+    assert item.carbs_per_100g == pytest.approx(20.1)
+    assert item.fat_per_100g == pytest.approx(0.1)
+    assert item.calories_per_100g == pytest.approx(81.7, abs=1.0)
+    assert item.unit == "g"
 
 
 @pytest.mark.parametrize(
@@ -982,7 +1436,7 @@ async def test_parse_text_rejects_fatsecret_using_backend_derived_calories(
     )
 
     response = await handler.handle(
-        ParseMealTextCommand(text="1 bowl pho", user_id="user-1", language="en")
+        ParseMealTextCommand(text="100g potato", user_id="user-1", language="en")
     )
     item = response.items[0]
 
@@ -990,3 +1444,19 @@ async def test_parse_text_rejects_fatsecret_using_backend_derived_calories(
     assert item.protein == 10
     assert item.carbs == 10
     assert item.fat == 0
+
+
+def test_canonicalize_reference_quantity_maps_gram_alias_to_g():
+    item = {"quantity": 100, "unit": "gram", "english_unit": "gram"}
+    grams = ParseMealTextHandler._canonicalize_reference_quantity(
+        item,
+        quantity_g=100,
+        allowed_units=[
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {"unit": "serving", "gram_weight": 100.0, "description": "1 serving"},
+        ],
+    )
+
+    assert grams == pytest.approx(100)
+    assert item["unit"] == "g"
+    assert item["english_unit"] == "g"

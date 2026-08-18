@@ -77,7 +77,9 @@ Do not hand-maintain file, LOC, or endpoint counts in this document.
 - Translation: OpenAI-backed read-path localization via
   `src/app/services/food_name_localizer.py` and
   `src/infra/adapters/openai_translation_adapter.py`; Responses API payload
-  storage is disabled, and only complete translations are eligible for cache or
+  storage is disabled, persisted meal translation rows are versioned against
+  the active translation contract so older rows are invalidated and
+  retranslated, and only complete translations are eligible for cache or
   persistence.
 - Event bus: singleton PyMediator from `src/api/dependencies/event_bus.py`.
 - Migrations: `migrations/versions/` via Alembic / `migrations/run.py`.

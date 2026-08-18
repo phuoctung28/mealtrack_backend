@@ -133,6 +133,28 @@ def test_meals_analyze_ai_unavailable_returns_503(client: TestClient):
     assert r.json()["detail"]["error_code"] == "AI_UNAVAILABLE"
 
 
+def test_meals_analyze_localization_error_returns_controlled_422(client: TestClient):
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
+
+    class _LocalizationErrorBus:
+        async def send(self, msg):
+            raise MealResponseLocalizationError("localized food item is missing")
+
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _LocalizationErrorBus()
+    )
+
+    r = client.post(
+        "/v1/meals/image/analyze",
+        files={"file": ("x.jpg", b"image-bytes", "image/jpeg")},
+        headers={"Accept-Language": "vi"},
+    )
+
+    assert r.status_code == 422
+    assert r.json()["detail"]["error_code"] == "AI_OUTPUT_INVALID"
+
+
 def test_meals_analyze_non_food_returns_not_food_image(client: TestClient):
     from src.api.dependencies.event_bus import get_configured_event_bus
 
@@ -168,6 +190,31 @@ def test_scan_by_url_non_food_returns_not_food_image(client: TestClient):
 
     assert r.status_code == 400
     assert r.json()["detail"]["error_code"] == "NOT_FOOD_IMAGE"
+
+
+def test_scan_by_url_localization_error_returns_controlled_422(client: TestClient):
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
+
+    class _LocalizationErrorBus:
+        async def send(self, msg):
+            raise MealResponseLocalizationError("localized food item is missing")
+
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _LocalizationErrorBus()
+    )
+
+    r = client.post(
+        "/v1/meals/scan-by-url",
+        json={
+            "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
+            "image_id": "abc",
+        },
+        headers={"Accept-Language": "vi"},
+    )
+
+    assert r.status_code == 422
+    assert r.json()["detail"]["error_code"] == "AI_OUTPUT_INVALID"
 
 
 def test_scan_by_url_rejects_food_label_mode(client: TestClient):
@@ -446,6 +493,71 @@ def test_meals_edit_ingredients_edit_group(client: TestClient):
     edit_command = next(m for m in sent if isinstance(m, EditMealCommand))
     assert edit_command.meal_id == meal_id
     assert edit_command.dish_name == "Updated Dish"
+
+
+def test_meals_edit_ingredients_v2_includes_meal_detail(client: TestClient):
+    """v2 PUT returns meal_detail so clients can skip a follow-up GET."""
+    from datetime import datetime
+    from uuid import uuid4
+
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.app.commands.meal import EditMealCommand
+    from src.domain.model.meal import Meal, MealStatus
+    from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+
+    meal_id = str(uuid4())
+    meal = Meal(
+        meal_id=meal_id,
+        user_id=str(uuid4()),
+        status=MealStatus.READY,
+        created_at=datetime(2026, 7, 2, 12, 0),
+        ready_at=datetime(2026, 7, 2, 12, 0),
+        image=None,
+        dish_name="Updated Dish",
+        source="scanner",
+        nutrition=Nutrition(
+            macros=Macros(protein=35, carbs=5, fat=20),
+            food_items=[
+                FoodItem(
+                    id="item-1",
+                    name="Salmon",
+                    quantity=200,
+                    unit="g",
+                    macros=Macros(protein=35, carbs=5, fat=20),
+                )
+            ],
+        ),
+    )
+
+    class _EditBus:
+        async def send(self, msg):
+            if isinstance(msg, EditMealCommand):
+                return {"success": True}
+            return meal
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _EditBus()
+
+    r = client.put(
+        f"/v1/meals/{meal_id}/ingredients",
+        json={
+            "dish_name": "Updated Dish",
+            "food_item_changes": [],
+            "nutrition_contract_version": 2,
+        },
+        headers={
+            "X-Nutrition-Contract-Version": "2",
+            "X-App-Version": "1.0.0",
+            "X-Platform": "ios",
+            "Idempotency-Key": "smoke-edit-v2",
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["success"] is True
+    assert body["meal_detail"]["meal_id"] == meal_id
+    assert body["meal_detail"]["dish_name"] == "Updated Dish"
+    assert body["meal_detail"]["food_items"][0]["name"] == "Salmon"
 
 
 def test_meals_streak_smoke(client: TestClient):

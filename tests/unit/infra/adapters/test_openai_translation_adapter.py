@@ -35,6 +35,71 @@ async def test_adapter_reconstructs_order_and_forces_non_storage():
     assert result.items == ("Poulet", "Riz")
     call = provider.generate_structured_result.await_args.kwargs
     assert call["store_responses"] is False
+    assert "Translate food ingredients completely" in call["system_message"]
+
+
+@pytest.mark.asyncio
+async def test_adapter_repairs_missing_items_in_a_partial_batch():
+    provider = AsyncMock()
+    provider.generate_structured_result.side_effect = [
+        OpenAIStructuredGenerationResult(
+            parsed=OpenAITranslationBatch(
+                items=[OpenAITranslationItem(index=1, text="Thịt heo")]
+            ),
+            incomplete=True,
+        ),
+        OpenAIStructuredGenerationResult(
+            parsed=OpenAITranslationBatch(
+                items=[
+                    OpenAITranslationItem(index=0, text="Bánh mì"),
+                    OpenAITranslationItem(index=2, text="Bông cải xanh"),
+                ]
+            )
+        ),
+    ]
+    adapter = OpenAITranslationAdapter(provider=provider, model="translation-model")
+
+    result = await adapter.translate_texts(
+        ["Bread", "Pork", "Broccoli"], source_language="en", target_language="vi"
+    )
+
+    assert result.outcome is TranslationOutcome.TRANSLATED
+    assert result.items == ("Bánh mì", "Thịt heo", "Bông cải xanh")
+    assert provider.generate_structured_result.await_count == 2
+    repair_prompt = provider.generate_structured_result.await_args_list[1].kwargs[
+        "prompt"
+    ]
+    assert '"index":0' in repair_prompt
+    assert '"index":2' in repair_prompt
+
+
+@pytest.mark.asyncio
+async def test_adapter_repairs_an_unchanged_english_ingredient():
+    provider = AsyncMock()
+    provider.generate_structured_result.side_effect = [
+        OpenAIStructuredGenerationResult(
+            parsed=OpenAITranslationBatch(
+                items=[
+                    OpenAITranslationItem(index=0, text="Bread"),
+                    OpenAITranslationItem(index=1, text="Thịt heo"),
+                ]
+            )
+        ),
+        OpenAIStructuredGenerationResult(
+            parsed=OpenAITranslationBatch(
+                items=[OpenAITranslationItem(index=0, text="Bánh mì")]
+            )
+        ),
+    ]
+    adapter = OpenAITranslationAdapter(provider=provider, model="translation-model")
+
+    result = await adapter.translate_texts(
+        ["Bread", "Pork"], source_language="en", target_language="vi"
+    )
+
+    assert result.outcome is TranslationOutcome.TRANSLATED
+    assert result.items == ("Bánh mì", "Thịt heo")
+    assert provider.generate_structured_result.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -111,11 +176,9 @@ async def test_adapter_rejects_structurally_unsafe_or_unchanged_output(
     source, candidate, target
 ):
     provider = AsyncMock()
-    provider.generate_structured_result.return_value = (
-        OpenAIStructuredGenerationResult(
-            parsed=OpenAITranslationBatch(
-                items=[OpenAITranslationItem(index=0, text=candidate)]
-            )
+    provider.generate_structured_result.return_value = OpenAIStructuredGenerationResult(
+        parsed=OpenAITranslationBatch(
+            items=[OpenAITranslationItem(index=0, text=candidate)]
         )
     )
     adapter = OpenAITranslationAdapter(provider=provider, model="translation-model")
@@ -140,11 +203,9 @@ async def test_adapter_accepts_valid_loanwords_and_reordered_brands(
     source, candidate, target
 ):
     provider = AsyncMock()
-    provider.generate_structured_result.return_value = (
-        OpenAIStructuredGenerationResult(
-            parsed=OpenAITranslationBatch(
-                items=[OpenAITranslationItem(index=0, text=candidate)]
-            )
+    provider.generate_structured_result.return_value = OpenAIStructuredGenerationResult(
+        parsed=OpenAITranslationBatch(
+            items=[OpenAITranslationItem(index=0, text=candidate)]
         )
     )
     adapter = OpenAITranslationAdapter(provider=provider, model="translation-model")
@@ -184,11 +245,9 @@ async def test_adapter_accepts_valid_loanwords_and_reordered_brands(
 )
 async def test_adapter_accepts_localized_equivalent_units(source, candidate, target):
     provider = AsyncMock()
-    provider.generate_structured_result.return_value = (
-        OpenAIStructuredGenerationResult(
-            parsed=OpenAITranslationBatch(
-                items=[OpenAITranslationItem(index=0, text=candidate)]
-            )
+    provider.generate_structured_result.return_value = OpenAIStructuredGenerationResult(
+        parsed=OpenAITranslationBatch(
+            items=[OpenAITranslationItem(index=0, text=candidate)]
         )
     )
     adapter = OpenAITranslationAdapter(provider=provider, model="translation-model")
@@ -202,11 +261,9 @@ async def test_adapter_accepts_localized_equivalent_units(source, candidate, tar
 @pytest.mark.asyncio
 async def test_adapter_allows_reverse_translation_to_english_food_terms():
     provider = AsyncMock()
-    provider.generate_structured_result.return_value = (
-        OpenAIStructuredGenerationResult(
-            parsed=OpenAITranslationBatch(
-                items=[OpenAITranslationItem(index=0, text="chicken")]
-            )
+    provider.generate_structured_result.return_value = OpenAIStructuredGenerationResult(
+        parsed=OpenAITranslationBatch(
+            items=[OpenAITranslationItem(index=0, text="chicken")]
         )
     )
     adapter = OpenAITranslationAdapter(provider=provider, model="translation-model")
@@ -220,11 +277,9 @@ async def test_adapter_allows_reverse_translation_to_english_food_terms():
 @pytest.mark.asyncio
 async def test_adapter_allows_invariant_only_brand_output():
     provider = AsyncMock()
-    provider.generate_structured_result.return_value = (
-        OpenAIStructuredGenerationResult(
-            parsed=OpenAITranslationBatch(
-                items=[OpenAITranslationItem(index=0, text="Coca-Cola")]
-            )
+    provider.generate_structured_result.return_value = OpenAIStructuredGenerationResult(
+        parsed=OpenAITranslationBatch(
+            items=[OpenAITranslationItem(index=0, text="Coca-Cola")]
         )
     )
     adapter = OpenAITranslationAdapter(provider=provider, model="translation-model")

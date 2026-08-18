@@ -61,6 +61,43 @@ def test_v2_custom_item_is_source_less_and_keeps_custom_nutrition():
     assert payload.items[0].origin == "custom"
 
 
+def test_v2_prepared_source_item_requires_and_keeps_snapshot():
+    nutrition = {
+        "protein_per_100g": 2.7,
+        "carbs_per_100g": 28,
+        "fat_per_100g": 0.3,
+    }
+    snapshot = {
+        "basis": "100g",
+        "protein_per_100g": 2.7,
+        "carbs_per_100g": 28,
+        "fat_per_100g": 0.3,
+    }
+
+    payload = CreateManualMealFromFoodsRequest(
+        dish_name="Rice",
+        nutrition_contract_version=2,
+        items=[
+            _v2_create_item(
+                custom_nutrition=nutrition,
+                source_snapshot=snapshot,
+                allowed_units=[
+                    {"unit": "g", "gram_weight": 1, "description": "1 g"}
+                ],
+            )
+        ],
+    )
+
+    assert payload.items[0].source_snapshot == snapshot
+
+    with pytest.raises(ValidationError, match="source_snapshot"):
+        CreateManualMealFromFoodsRequest(
+            dish_name="Rice",
+            nutrition_contract_version=2,
+            items=[_v2_create_item(custom_nutrition=nutrition)],
+        )
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -108,15 +145,76 @@ def test_v2_remove_rejects_nutrition_and_source_fields():
         )
 
 
-def test_v2_quantity_update_can_inherit_source_without_client_units():
+def test_v2_quantity_update_strips_legacy_source_echoes():
     payload = EditMealIngredientsRequest(
         nutrition_contract_version=2,
         food_item_changes=[
-            {"action": "update", "id": "item-1", "quantity": 200, "unit": "g"}
+            {
+                "action": "update",
+                "id": "item-1",
+                "name": "Echoed source name",
+                "quantity": 200,
+                "unit": "g",
+                "custom_nutrition": {
+                    "protein_per_100g": 10,
+                    "carbs_per_100g": 20,
+                    "fat_per_100g": 8,
+                },
+                "allowed_units": [
+                    {"unit": "g", "gram_weight": 1, "description": "1 g"}
+                ],
+            }
         ],
     )
 
-    assert payload.food_item_changes[0].id == "item-1"
+    change = payload.food_item_changes[0]
+    assert change.id == "item-1"
+    assert change.quantity == 200
+    assert change.unit == "g"
+    assert change.name is None
+    assert change.custom_nutrition is None
+    assert change.allowed_units == []
+
+
+def test_v2_quantity_update_rejects_identity_with_legacy_source_echoes():
+    with pytest.raises(ValidationError, match="cannot replace source"):
+        EditMealIngredientsRequest(
+            nutrition_contract_version=2,
+            food_item_changes=[
+                {
+                    "action": "update",
+                    "id": "item-1",
+                    "fdc_id": 999999,
+                    "name": "Echoed source name",
+                    "quantity": 200,
+                    "unit": "g",
+                    "custom_nutrition": {
+                        "protein_per_100g": 10,
+                        "carbs_per_100g": 20,
+                        "fat_per_100g": 8,
+                    },
+                }
+            ],
+        )
+
+
+def test_v2_source_replacement_without_portion_fields_is_still_rejected():
+    with pytest.raises(ValidationError, match="cannot replace source"):
+        EditMealIngredientsRequest(
+            nutrition_contract_version=2,
+            food_item_changes=[
+                {
+                    "action": "update",
+                    "id": "item-1",
+                    "name": "Replacement source",
+                    "custom_nutrition": {
+                        "protein_per_100g": 10,
+                        "carbs_per_100g": 20,
+                        "fat_per_100g": 8,
+                    },
+                }
+            ],
+        )
 
 
 def test_v2_override_requires_explicit_user_intent():

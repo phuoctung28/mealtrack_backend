@@ -37,7 +37,9 @@ def _make_handler(mock_uow, mock_event_bus=None):
         event_bus=mock_event_bus,
     )
     handler.image_store = MagicMock()
-    handler.image_store.save_async = AsyncMock(return_value=f"https://res.cloudinary.com/demo/image/upload/{_FAKE_IMAGE_UUID}")
+    handler.image_store.save_async = AsyncMock(
+        return_value=f"https://res.cloudinary.com/demo/image/upload/{_FAKE_IMAGE_UUID}"
+    )
     handler.vision_service = MagicMock()
     handler.vision_service.analyze = AsyncMock(return_value='{"dish_name": "Salad"}')
     handler.gpt_parser = MagicMock()
@@ -60,7 +62,6 @@ async def test_happy_path_uses_injected_uow():
     mock_uow.__aexit__ = AsyncMock(return_value=False)
     mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
     mock_uow.meals.save = AsyncMock(return_value=mock_meal)
-    mock_uow.meals.find_by_id = AsyncMock(return_value=mock_meal)
     mock_uow.commit = AsyncMock()
 
     handler = _make_handler(mock_uow)
@@ -84,7 +85,6 @@ async def test_timezone_and_initial_save_use_injected_uow():
     mock_uow.__aexit__ = AsyncMock(return_value=False)
     mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
     mock_uow.meals.save = AsyncMock(return_value=mock_meal)
-    mock_uow.meals.find_by_id = AsyncMock(return_value=mock_meal)
     mock_uow.commit = AsyncMock()
 
     handler = _make_handler(mock_uow)
@@ -97,4 +97,4 @@ async def test_timezone_and_initial_save_use_injected_uow():
     # Both operations should be on the same injected UoW
     mock_uow.users.get_user_timezone.assert_called_once()
     mock_uow.meals.save.assert_called()
-    mock_uow.meals.find_by_id.assert_called_once()
+    mock_uow.meals.find_by_id.assert_not_called()

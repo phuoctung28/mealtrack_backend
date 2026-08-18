@@ -168,6 +168,13 @@ async def create_manual_meal(
                     food_reference_id=i.food_reference_id,
                     source_namespace=i.source_namespace,
                     source_food_id=i.source_food_id,
+                    source_kind=i.origin,
+                    nutrition_contract_version=(
+                        str(payload.nutrition_contract_version)
+                        if payload.nutrition_contract_version is not None
+                        else None
+                    ),
+                    source_snapshot=i.source_snapshot,
                 )
             )
 

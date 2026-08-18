@@ -4,7 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from src.domain.model.meal.meal_translation_domain_models import MealTranslation
+from src.domain.model.meal.meal_translation_domain_models import (
+    CURRENT_MEAL_TRANSLATION_VERSION,
+    MealTranslation,
+)
 from src.infra.repositories.meal_translation_repository_async import (
     AsyncMealTranslationRepository,
 )
@@ -66,6 +69,7 @@ def _translation_orm():
     row.translated_at = datetime(2026, 6, 9, tzinfo=UTC)
     row.meal_instruction = [{"instruction": "Cook", "duration_minutes": 5}]
     row.meal_ingredients = ["ga"]
+    row.translation_version = CURRENT_MEAL_TRANSLATION_VERSION
     return row
 
 
@@ -95,6 +99,7 @@ async def test_get_by_meal_and_language_maps_domain():
     assert result is not None
     assert result.meal_id == "meal-1"
     assert result.language == "vi"
+    assert result.translation_version == CURRENT_MEAL_TRANSLATION_VERSION
 
 
 @pytest.mark.asyncio
