@@ -228,7 +228,10 @@ def _build_provider_budget(cache_service):
     """Build the required shared provider budget from the initialized Redis client."""
     if cache_service is None or settings.NUTRITION_PROVIDER_GLOBAL_RPM is None:
         return None
-    return RedisProviderBudget(cache_service.redis)
+    redis_client = getattr(cache_service, "redis", None)
+    if redis_client is None:
+        return None
+    return RedisProviderBudget(redis_client)
 
 
 async def _search_local_food_references(
