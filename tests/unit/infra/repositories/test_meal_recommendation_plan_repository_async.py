@@ -628,9 +628,7 @@ async def test_claim_slot_relog_rejects_unlogged_slot():
 
 @pytest.mark.asyncio
 async def test_claim_slot_relog_rejects_skipped_slot():
-    repo = _SlotMutationRepo(
-        selected_overrides={"skipped_at": datetime(2026, 7, 16)}
-    )
+    repo = _SlotMutationRepo(selected_overrides={"skipped_at": datetime(2026, 7, 16)})
 
     with pytest.raises(MealRecommendationTerminalStateError):
         await repo.claim_slot_relog(
@@ -704,6 +702,19 @@ async def test_finalize_slot_relogged_keeps_original_logged_meal_id():
     assert repo._session.added_rows[0].result_logged_meal_id == "meal-new"
 
 
+@pytest.mark.asyncio
+async def test_clear_links_for_deleted_meal_clears_logged_state_and_operations():
+    session = MagicMock()
+    session.execute = AsyncMock()
+    session.flush = AsyncMock()
+    repo = AsyncMealRecommendationPlanRepository(session)
+
+    await repo.clear_links_for_deleted_meal(meal_id="meal-1")
+
+    assert session.execute.await_count == 2
+    session.flush.assert_awaited_once()
+
+
 def _plan_to_candidate_rows(plan):
     rows = []
     for slot in plan.slots:
@@ -731,9 +742,13 @@ def _plan_to_candidate_rows(plan):
                     status=plan.status if candidate.id == plan.id else None,
                     timezone=plan.timezone if candidate.id == plan.id else None,
                     start_date=plan.start_date if candidate.id == plan.id else None,
-                    target_calories=plan.daily_calories if candidate.id == plan.id else None,
+                    target_calories=plan.daily_calories
+                    if candidate.id == plan.id
+                    else None,
                     operation=plan.operation if candidate.id == plan.id else None,
-                    idempotency_key=plan.idempotency_key if candidate.id == plan.id else None,
+                    idempotency_key=plan.idempotency_key
+                    if candidate.id == plan.id
+                    else None,
                     request_fingerprint=plan.request_fingerprint
                     if candidate.id == plan.id
                     else None,

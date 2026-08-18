@@ -85,7 +85,9 @@ class _ConflictPlanRepo(_PlanRepo):
 class _LogPlanRepo(_PlanRepo):
     def __init__(self, *, replayed=False):
         super().__init__()
-        self.claim_slot_log = AsyncMock(return_value=(_plan(), _plan().slots[0], replayed))
+        self.claim_slot_log = AsyncMock(
+            return_value=(_plan(), _plan().slots[0], replayed)
+        )
         self.finalize_slot_logged = AsyncMock(
             return_value=PersistedMealRecommendationSlotMutationResult(
                 plan_id="plan-1",
@@ -136,15 +138,18 @@ class _Materializer:
             {"id": "food-1", "name": "Rice"},
         )()
         nutrition = type("Nutrition", (), {"food_items": [food_item]})()
-        self.meal = meal or type(
-            "Meal",
-            (),
-            {
-                "meal_id": "meal-1",
-                "dish_name": "Rice Bowl",
-                "nutrition": nutrition,
-            },
-        )()
+        self.meal = (
+            meal
+            or type(
+                "Meal",
+                (),
+                {
+                    "meal_id": "meal-1",
+                    "dish_name": "Rice Bowl",
+                    "nutrition": nutrition,
+                },
+            )()
+        )
         self.materialize = AsyncMock(return_value=self.meal)
 
 
@@ -520,3 +525,22 @@ async def test_relog_handler_materializes_today_and_schedules_insights():
     )
     scheduler.assert_called_once()
     assert scheduler.call_args.kwargs["source"] == "catalog_relog"
+
+
+@pytest.mark.asyncio
+async def test_relog_handler_succeeds_when_insight_scheduling_raises():
+    plans = _RelogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    handler = RelogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+    )
+
+    with patch(
+        "src.app.handlers.command_handlers.meal_recommendation."
+        "relog_recommended_meal_command_handler.schedule_value_insight_generation",
+        side_effect=RuntimeError("scheduler down"),
+    ):
+        result = await handler.handle(_relog_command())
+
+    assert result.meal_id == "meal-1"
