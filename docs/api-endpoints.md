@@ -163,8 +163,10 @@ handler/schema when implementing; the bullets below are the durable WHY.
 - Catalog recommendations are separate from `/v1/meal-suggestions` (AI session
   flow). Do not treat suggestions as a recommendation fallback.
 - Create/get return compact selected-slot summaries; slot detail hydrates one
-  selected slot plus alternatives; swap/log/skip return the changed-slot shape
-  and are owner-scoped and request-id idempotent.
+  selected slot plus alternatives; swap/log/relog/skip return the changed-slot
+  shape and are owner-scoped and request-id idempotent. Relog requires the slot
+  to already be logged, returns `meal_id` for the new meal, and leaves the
+  original `logged_meal_id` in place.
 - Outcome timestamps (`shown_at`, `skipped_at`, `logged_at`) are backend-owned;
   clients must not recompute terminal state.
 - `Accept-Language` selects display language; translation failure returns

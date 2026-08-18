@@ -22,6 +22,7 @@ from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    RelogRecommendedMealCommand,
     SkipMealRecommendationSlotCommand,
     SwapMealRecommendationSlotCommand,
 )
@@ -112,6 +113,7 @@ from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
 from src.app.handlers.command_handlers.meal_recommendation import (
     CreateThreeDayMealRecommendationCommandHandler,
     LogRecommendedMealCommandHandler,
+    RelogRecommendedMealCommandHandler,
     SkipMealRecommendationSlotCommandHandler,
     SwapMealRecommendationSlotCommandHandler,
 )
@@ -665,6 +667,18 @@ def get_configured_event_bus() -> EventBus:
             uow=AsyncUnitOfWork(),
             meal_translation_service=meal_translation_service,
             cache_invalidation=cache_invalidation_service,
+        ),
+    )
+    event_bus.register_handler(
+        RelogRecommendedMealCommand,
+        RelogRecommendedMealCommandHandler(
+            uow=AsyncUnitOfWork(),
+            meal_translation_service=meal_translation_service,
+            cache_invalidation=cache_invalidation_service,
+            meal_value_insight_task_manager=task_manager,
+            meal_value_insight_cache=cache_service,
+            meal_value_insight_ai_manager=ai_manager,
+            meal_value_insight_event_bus=event_bus,
         ),
     )
     event_bus.register_handler(

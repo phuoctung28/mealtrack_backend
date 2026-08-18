@@ -66,6 +66,16 @@ def test_skip_state_is_forward_migration_not_deployed_baseline_edit() -> None:
     assert "operation_type = 'skip'" in skip_text
 
 
+def test_relog_operation_is_forward_migration() -> None:
+    relog_text = Path(
+        "migrations/versions/20260818000002_add_meal_recommendation_relog_operation.py"
+    ).read_text()
+
+    assert 'down_revision: str | None = "20260818000001"' in relog_text
+    assert "operation_type IN ('swap', 'log', 'skip', 'relog')" in relog_text
+    assert "operation_type = 'relog'" in relog_text
+
+
 def test_anchor_metadata_constraint_is_relaxed_forward() -> None:
     text = ANCHOR_METADATA_MIGRATION.read_text()
     upgrade_text = text.split("def upgrade", maxsplit=1)[1].split(

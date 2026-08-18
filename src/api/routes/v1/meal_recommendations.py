@@ -19,21 +19,25 @@ from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.routes.v1.meal_recommendation_route_support import (
     LogRecommendedMealRequest,
+    RelogRecommendedMealRequest,
     SkipMealRecommendationSlotRequest,
     SwapMealRecommendationSlotRequest,
     capture_plan_events,
     capture_slot_event,
     record_operation_latency,
+    to_relog_response,
     to_slot_detail_response,
     to_summary_response,
 )
 from src.api.schemas.response.meal_recommendation_responses import (
     MealRecommendationPlanSummaryResponse,
+    MealRecommendationRelogResponse,
     MealRecommendationSlotDetailResponse,
 )
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    RelogRecommendedMealCommand,
     SkipMealRecommendationSlotCommand,
     SwapMealRecommendationSlotCommand,
 )
@@ -253,6 +257,65 @@ async def log_recommended_meal(
     )
     metric_status = "success"
     record_operation_latency("log", started, metric_status)
+    return response
+
+
+@router.post(
+    "/{plan_id}/slots/{slot_id}/relog",
+    response_model=MealRecommendationRelogResponse,
+)
+@limiter.limit("20/minute")
+async def relog_recommended_meal(
+    request: Request,
+    plan_id: str,
+    slot_id: str,
+    body: RelogRecommendedMealRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus=Depends(get_configured_event_bus),
+    analytics_service: MealRecommendationAnalyticsService = Depends(
+        get_meal_recommendation_analytics_service
+    ),
+    task_manager=Depends(get_optional_task_manager),
+    translation_service=Depends(get_text_translation_service),
+) -> MealRecommendationRelogResponse:
+    started = perf_counter()
+    metric_status = "error"
+    try:
+        result = await event_bus.send(
+            RelogRecommendedMealCommand(
+                user_id=user_id,
+                plan_id=plan_id,
+                slot_id=slot_id,
+                request_id=body.request_id,
+                language=get_request_language(request),
+            )
+        )
+    except MealRecommendationCreationError as exc:
+        metric_status = f"http_{exc.status_code}"
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
+    if not result.meal_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to relog meal recommendation",
+        )
+    response = to_relog_response(
+        result.plan_id,
+        await localize_meal_recommendation_slot(
+            result.slot,
+            language=get_request_language(request),
+            translation_service=translation_service,
+        ),
+        result.meal_id,
+    )
+    await _capture_mutation_slot_event(
+        analytics_service=analytics_service,
+        user_id=user_id,
+        event="meal_relogged",
+        plan_id=result.plan_id,
+        task_manager=task_manager,
+    )
+    metric_status = "success"
+    record_operation_latency("relog", started, metric_status)
     return response
 
 

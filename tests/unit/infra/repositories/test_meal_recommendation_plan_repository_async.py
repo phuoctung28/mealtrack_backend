@@ -7,6 +7,7 @@ import pytest
 
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationIdempotencyConflictError,
+    MealRecommendationNotLoggedError,
     MealRecommendationTerminalStateError,
 )
 from src.domain.model.meal_recommendation import (
@@ -610,6 +611,97 @@ async def test_claim_slot_log_rejects_skipped_slot():
             slot_id="slot-1",
             request_id="log-after-skip",
         )
+
+
+@pytest.mark.asyncio
+async def test_claim_slot_relog_rejects_unlogged_slot():
+    repo = _SlotMutationRepo()
+
+    with pytest.raises(MealRecommendationNotLoggedError):
+        await repo.claim_slot_relog(
+            user_id="user-1",
+            plan_id="plan-1",
+            slot_id="slot-1",
+            request_id="relog-1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_claim_slot_relog_rejects_skipped_slot():
+    repo = _SlotMutationRepo(
+        selected_overrides={"skipped_at": datetime(2026, 7, 16)}
+    )
+
+    with pytest.raises(MealRecommendationTerminalStateError):
+        await repo.claim_slot_relog(
+            user_id="user-1",
+            plan_id="plan-1",
+            slot_id="slot-1",
+            request_id="relog-1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_claim_slot_relog_allows_already_logged_slot():
+    repo = _SlotMutationRepo(selected_overrides={"logged_meal_id": "meal-original"})
+
+    plan, slot, replayed, meal_id = await repo.claim_slot_relog(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="relog-1",
+    )
+
+    assert replayed is False
+    assert meal_id is None
+    assert slot.logged_meal_id == "meal-original"
+    assert plan.slots[0].logged_meal_id == "meal-original"
+
+
+@pytest.mark.asyncio
+async def test_claim_slot_relog_replay_returns_stored_meal_id_without_replacing_slot():
+    repo = _SlotMutationRepo(
+        replay=SimpleNamespace(
+            batch_id="plan-1",
+            slot_id="slot-1",
+            request_fingerprint=_operation_fingerprint(
+                plan_id="plan-1",
+                slot_id="slot-1",
+                meal_id="meal-replayed",
+            ),
+            result_logged_meal_id="meal-replayed",
+        ),
+        selected_overrides={"logged_meal_id": "meal-original"},
+    )
+
+    plan, slot, replayed, meal_id = await repo.claim_slot_relog(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="relog-1",
+    )
+
+    assert replayed is True
+    assert meal_id == "meal-replayed"
+    assert slot.logged_meal_id == "meal-original"
+
+
+@pytest.mark.asyncio
+async def test_finalize_slot_relogged_keeps_original_logged_meal_id():
+    repo = _SlotMutationRepo(selected_overrides={"logged_meal_id": "meal-original"})
+
+    result = await repo.finalize_slot_relogged(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="relog-1",
+        meal_id="meal-new",
+    )
+
+    assert result.meal_id == "meal-new"
+    assert result.slot.logged_meal_id == "meal-original"
+    assert repo._session.added_rows[0].operation_type == "relog"
+    assert repo._session.added_rows[0].result_logged_meal_id == "meal-new"
 
 
 def _plan_to_candidate_rows(plan):

@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_async import (
@@ -10,6 +10,7 @@ from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_asyn
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    RelogRecommendedMealCommand,
     SkipMealRecommendationSlotCommand,
 )
 from src.app.handlers.command_handlers.meal_recommendation.create_three_day_meal_recommendation_command_handler import (
@@ -18,6 +19,9 @@ from src.app.handlers.command_handlers.meal_recommendation.create_three_day_meal
 )
 from src.app.handlers.command_handlers.meal_recommendation.log_recommended_meal_command_handler import (
     LogRecommendedMealCommandHandler,
+)
+from src.app.handlers.command_handlers.meal_recommendation.relog_recommended_meal_command_handler import (
+    RelogRecommendedMealCommandHandler,
 )
 from src.app.handlers.command_handlers.meal_recommendation.skip_meal_recommendation_slot_command_handler import (
     SkipMealRecommendationSlotCommandHandler,
@@ -87,6 +91,27 @@ class _LogPlanRepo(_PlanRepo):
                 plan_id="plan-1",
                 user_id="user-1",
                 slot=_plan().slots[0],
+            )
+        )
+
+
+class _RelogPlanRepo(_PlanRepo):
+    def __init__(self, *, replayed=False):
+        super().__init__()
+        self.claim_slot_relog = AsyncMock(
+            return_value=(
+                _plan(),
+                _plan().slots[0],
+                replayed,
+                "meal-replayed" if replayed else None,
+            )
+        )
+        self.finalize_slot_relogged = AsyncMock(
+            return_value=PersistedMealRecommendationSlotMutationResult(
+                plan_id="plan-1",
+                user_id="user-1",
+                slot=_plan().slots[0],
+                meal_id="meal-1",
             )
         )
 
@@ -427,3 +452,71 @@ async def test_skip_handler_skips_slot_without_materializing_meal():
         slot_id="slot-1",
         request_id="skip-1",
     )
+
+
+def _relog_command(*, language: str = "en") -> RelogRecommendedMealCommand:
+    return RelogRecommendedMealCommand(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="relog-1",
+        language=language,
+    )
+
+
+@pytest.mark.asyncio
+async def test_relog_handler_replays_without_materializing_duplicate_meal():
+    plans = _RelogPlanRepo(replayed=True)
+    materializer = _Materializer()
+    handler = RelogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+    )
+
+    result = await handler.handle(_relog_command())
+
+    assert result.meal_id == "meal-replayed"
+    materializer.materialize.assert_not_awaited()
+    plans.finalize_slot_relogged.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_relog_handler_materializes_today_and_schedules_insights():
+    plans = _RelogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    scheduler = MagicMock(return_value=True)
+    handler = RelogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+        meal_value_insight_task_manager=object(),
+        meal_value_insight_cache=object(),
+        meal_value_insight_ai_manager=object(),
+        meal_value_insight_event_bus=object(),
+    )
+
+    with (
+        patch(
+            "src.app.handlers.command_handlers.meal_recommendation."
+            "relog_recommended_meal_command_handler.user_today",
+            return_value=date(2026, 8, 18),
+        ),
+        patch(
+            "src.app.handlers.command_handlers.meal_recommendation."
+            "relog_recommended_meal_command_handler.schedule_value_insight_generation",
+            scheduler,
+        ),
+    ):
+        result = await handler.handle(_relog_command(language="vi"))
+
+    assert result.meal_id == "meal-1"
+    materializer.materialize.assert_awaited_once()
+    assert materializer.materialize.await_args.kwargs["meal_date"] == date(2026, 8, 18)
+    plans.finalize_slot_relogged.assert_awaited_once_with(
+        user_id="user-1",
+        plan_id="plan-1",
+        slot_id="slot-1",
+        request_id="relog-1",
+        meal_id="meal-1",
+    )
+    scheduler.assert_called_once()
+    assert scheduler.call_args.kwargs["source"] == "catalog_relog"

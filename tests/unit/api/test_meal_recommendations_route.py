@@ -9,18 +9,21 @@ from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_asyn
 from src.api.routes.v1.meal_recommendation_route_support import to_response
 from src.api.routes.v1.meal_recommendations import (
     LogRecommendedMealRequest,
+    RelogRecommendedMealRequest,
     SkipMealRecommendationSlotRequest,
     SwapMealRecommendationSlotRequest,
     create_three_day_recommendations,
     get_meal_recommendation_plan,
     get_meal_recommendation_slot_detail,
     log_recommended_meal,
+    relog_recommended_meal,
     skip_meal_recommendation_slot,
     swap_meal_recommendation_slot,
 )
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
+    RelogRecommendedMealCommand,
     SkipMealRecommendationSlotCommand,
     SwapMealRecommendationSlotCommand,
 )
@@ -54,6 +57,7 @@ class _EventBus:
             (
                 SwapMealRecommendationSlotCommand,
                 LogRecommendedMealCommand,
+                RelogRecommendedMealCommand,
                 SkipMealRecommendationSlotCommand,
             ),
         ):
@@ -61,6 +65,7 @@ class _EventBus:
                 plan_id="plan-1",
                 user_id="user-1",
                 slot=_plan().slots[0],
+                meal_id="meal-relog-1",
             )
         return _plan()
 
@@ -343,6 +348,32 @@ async def test_log_route_forwards_request_language_to_command():
 
 
 @pytest.mark.asyncio
+async def test_relog_route_sends_recommended_meal_command():
+    event_bus = _EventBus()
+
+    response = await relog_recommended_meal(
+        request=_request(language="vi"),
+        plan_id="plan-1",
+        slot_id="slot-1",
+        body=RelogRecommendedMealRequest(request_id="relog-1"),
+        user_id="user-1",
+        event_bus=event_bus,
+        analytics_service=_Analytics(),
+    )
+
+    command = next(
+        item
+        for item in event_bus.commands
+        if isinstance(item, RelogRecommendedMealCommand)
+    )
+    assert command.request_id == "relog-1"
+    assert command.language == "vi"
+    assert response.plan_id == "plan-1"
+    assert response.slot.id == "slot-1"
+    assert response.meal_id == "meal-relog-1"
+
+
+@pytest.mark.asyncio
 async def test_skip_route_sends_skip_slot_command():
     event_bus = _EventBus()
 
@@ -368,6 +399,7 @@ def test_mutation_routes_have_abuse_limits():
     for route in (
         swap_meal_recommendation_slot,
         log_recommended_meal,
+        relog_recommended_meal,
         skip_meal_recommendation_slot,
     ):
         assert getattr(route, "__wrapped__", None) is not None

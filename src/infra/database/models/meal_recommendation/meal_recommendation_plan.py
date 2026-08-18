@@ -220,7 +220,7 @@ class MealRecommendationOperationORM(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "operation_type IN ('swap', 'log', 'skip')",
+            "operation_type IN ('swap', 'log', 'skip', 'relog')",
             name="ck_meal_recommendation_operations_type",
         ),
         CheckConstraint(
@@ -237,6 +237,9 @@ class MealRecommendationOperationORM(Base):
             "AND result_catalog_meal_id IS NOT NULL AND result_logged_meal_id IS NULL"
             ") OR ("
             "operation_type = 'log' AND result_logged_meal_id IS NOT NULL "
+            "AND result_catalog_meal_id IS NULL"
+            ") OR ("
+            "operation_type = 'relog' AND result_logged_meal_id IS NOT NULL "
             "AND result_catalog_meal_id IS NULL"
             ") OR ("
             "operation_type = 'skip' AND result_selection_version IS NULL "

@@ -103,6 +103,10 @@ class MealRecommendationSlotDetailResponse(BaseModel):
     slot: MealRecommendationSlotResponse
 
 
+class MealRecommendationRelogResponse(MealRecommendationSlotDetailResponse):
+    meal_id: str
+
+
 class MealRecommendationPlanResponse(BaseModel):
     id: str
     status: str

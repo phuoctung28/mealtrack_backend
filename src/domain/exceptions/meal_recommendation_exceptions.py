@@ -67,6 +67,13 @@ class MealRecommendationAlreadyLoggedError(MealRecommendationCreationError):
     status_code = 409
 
 
+class MealRecommendationNotLoggedError(MealRecommendationCreationError):
+    """Raised when relog is requested before the slot has been logged."""
+
+    public_detail = "Meal recommendation slot has not been logged yet"
+    status_code = 409
+
+
 class MealRecommendationTerminalStateError(MealRecommendationCreationError):
     """Raised when a terminal slot outcome already exists."""
 

@@ -138,6 +138,34 @@ class MealRecommendationPlanRepositoryPort(ABC):
     ) -> PersistedMealRecommendationSlotMutationResult:
         """Attach a materialized meal to a claimed slot log and return the slot."""
 
+    @abstractmethod
+    async def claim_slot_relog(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+    ) -> tuple[
+        PersistedMealRecommendationPlan,
+        PersistedMealRecommendationSlot,
+        bool,
+        str | None,
+    ]:
+        """Claim a relog request for an already logged slot."""
+
+    @abstractmethod
+    async def finalize_slot_relogged(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+        meal_id: str,
+    ) -> PersistedMealRecommendationSlotMutationResult:
+        """Record a new meal for an already logged slot without replacing it."""
+
     async def clear_links_for_deleted_meal(self, *, meal_id: str) -> None:
         """Clear recommendation links before a normal meal is hard-deleted.
 

@@ -18,6 +18,7 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationIdempotencyConflictError,
     MealRecommendationInvalidAlternativeError,
     MealRecommendationNotFoundError,
+    MealRecommendationNotLoggedError,
     MealRecommendationPersistenceConflictError,
     MealRecommendationTerminalStateError,
     MealRecommendationVersionConflictError,
@@ -518,7 +519,96 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             slot=_rows_to_slot_detail(anchor, rows),
         )
 
-    async def clear_links_for_deleted_meal(self, *, meal_id: str) -> None:
+    async def claim_slot_relog(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+    ) -> tuple[
+        PersistedMealRecommendationPlan,
+        PersistedMealRecommendationSlot,
+        bool,
+        str | None,
+    ]:
+        replay = await self._get_operation_replay(
+            user_id=user_id, operation_type="relog", request_id=request_id
+        )
+        anchor, rows = await self._load_slot_for_update(
+            user_id=user_id, batch_id=plan_id, slot_id=slot_id
+        )
+        if not rows:
+            raise MealRecommendationNotFoundError
+        slot = _rows_to_slot_detail(anchor, rows)
+        plan = _plan_from_anchor_and_slot(anchor, slot)
+        if replay is not None:
+            if (
+                cast(str, replay.batch_id) != plan_id
+                or cast(str, replay.slot_id) != slot_id
+            ):
+                raise MealRecommendationIdempotencyConflictError
+            logged_meal_id = cast(str | None, getattr(replay, "result_logged_meal_id", None))
+            if not logged_meal_id:
+                raise MealRecommendationIdempotencyConflictError
+            if (
+                cast(str | None, getattr(replay, "request_fingerprint", None))
+                != _operation_fingerprint(
+                    plan_id=plan_id,
+                    slot_id=slot_id,
+                    meal_id=logged_meal_id,
+                )
+            ):
+                raise MealRecommendationIdempotencyConflictError
+            return plan, slot, True, logged_meal_id
+        selected = _selected_row(rows, slot_id)
+        if getattr(selected, "skipped_at", None):
+            raise MealRecommendationTerminalStateError
+        if not selected.logged_meal_id:
+            raise MealRecommendationNotLoggedError
+        return plan, slot, False, None
+
+    async def finalize_slot_relogged(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        slot_id: str,
+        request_id: str,
+        meal_id: str,
+    ) -> PersistedMealRecommendationSlotMutationResult:
+        anchor, rows = await self._load_slot_for_update(
+            user_id=user_id, batch_id=plan_id, slot_id=slot_id
+        )
+        if not rows:
+            raise MealRecommendationNotFoundError
+        selected = _selected_row(rows, slot_id)
+        if getattr(selected, "skipped_at", None):
+            raise MealRecommendationTerminalStateError
+        if not selected.logged_meal_id:
+            raise MealRecommendationNotLoggedError
+        self._session.add(
+            MealRecommendationOperationORM(
+                user_id=user_id,
+                batch_id=plan_id,
+                slot_id=slot_id,
+                operation_type="relog",
+                request_id=request_id,
+                request_fingerprint=_operation_fingerprint(
+                    plan_id=plan_id,
+                    slot_id=slot_id,
+                    meal_id=meal_id,
+                ),
+                result_logged_meal_id=meal_id,
+            )
+        )
+        await self._flush_operations()
+        return PersistedMealRecommendationSlotMutationResult(
+            plan_id=plan_id,
+            user_id=user_id,
+            slot=_rows_to_slot_detail(anchor, rows),
+            meal_id=meal_id,
+        )
         """Detach recommendation state from a meal about to be hard-deleted.
 
         ``logged_meal_id`` FKs use ON DELETE SET NULL. That leaves ``logged_at``

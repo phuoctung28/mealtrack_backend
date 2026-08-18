@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import uuid4
 
 from src.domain.exceptions.meal_recommendation_exceptions import (
@@ -29,6 +30,7 @@ class RecommendedMealMaterializationService:
         *,
         plan: PersistedMealRecommendationPlan,
         slot: PersistedMealRecommendationSlot,
+        meal_date: date | None = None,
     ) -> Meal:
         if slot.selected is None or slot.selected.catalog_meal is None:
             raise MealRecommendationNotFoundError
@@ -45,7 +47,7 @@ class RecommendedMealMaterializationService:
             )
             for ingredient in catalog_meal.ingredients
         ]
-        meal_time = noon_utc_for_date(slot.slot_date, plan.timezone)
+        meal_time = noon_utc_for_date(meal_date or slot.slot_date, plan.timezone)
         # Always attach a MealImage row. Production still enforces NOT NULL on
         # meal.image_id in some environments; image-less inserts 500 there.
         # Matches manual / AI-suggestion materialization (placeholder image).

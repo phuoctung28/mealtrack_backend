@@ -176,6 +176,21 @@ async def test_materializer_attaches_catalog_image_url_when_present():
 
 
 @pytest.mark.asyncio
+async def test_materializer_uses_explicit_meal_date_for_relog():
+    plan, slot = _plan_and_slot()
+
+    meal = await RecommendedMealMaterializationService().materialize(
+        _Uow(),
+        plan=plan,
+        slot=slot,
+        meal_date=date(2026, 8, 18),
+    )
+
+    assert meal.created_at.date() == date(2026, 8, 18)
+    assert meal.created_at.date() != slot.slot_date
+
+
+@pytest.mark.asyncio
 async def test_materializer_fails_with_public_error_when_selected_meal_missing():
     plan, slot = _plan_and_slot()
     slot = PersistedMealRecommendationSlot(

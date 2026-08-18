@@ -82,3 +82,4 @@ class PersistedMealRecommendationSlotMutationResult:
     user_id: str
     slot: PersistedMealRecommendationSlot
     outcome: str = "stored_candidate"
+    meal_id: str | None = None

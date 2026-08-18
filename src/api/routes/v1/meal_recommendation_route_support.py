@@ -19,6 +19,7 @@ from src.api.schemas.response.meal_recommendation_responses import (
     MealRecommendationMacrosResponse,
     MealRecommendationPlanResponse,
     MealRecommendationPlanSummaryResponse,
+    MealRecommendationRelogResponse,
     MealRecommendationSlotDetailResponse,
     MealRecommendationSlotResponse,
     MealRecommendationSlotSummaryResponse,
@@ -56,6 +57,10 @@ class LogRecommendedMealRequest(BaseModel):
         if not normalized:
             raise ValueError("request_id is required")
         return normalized
+
+
+class RelogRecommendedMealRequest(LogRecommendedMealRequest):
+    """Idempotent request to materialize another meal from a logged slot."""
 
 
 class SkipMealRecommendationSlotRequest(BaseModel):
@@ -247,6 +252,19 @@ def to_slot_detail_response(
                 for alternative in slot.alternatives
             ],
         ),
+    )
+
+
+def to_relog_response(
+    plan_id: str,
+    slot,
+    meal_id: str,
+) -> MealRecommendationRelogResponse:
+    detail = to_slot_detail_response(plan_id, slot)
+    return MealRecommendationRelogResponse(
+        plan_id=detail.plan_id,
+        slot=detail.slot,
+        meal_id=meal_id,
     )
 
 
