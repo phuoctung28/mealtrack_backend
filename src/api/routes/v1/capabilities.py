@@ -38,6 +38,11 @@ async def durable_write_capabilities() -> dict[str, object]:
                 "header": "Idempotency-Key",
                 "exact_replay": True,
             },
+            "meal_edit": {
+                "supported": True,
+                "header": "Idempotency-Key",
+                "exact_replay": True,
+            },
             "weight_sync": {
                 "supported": False,
                 "reason": "client_entry_id_mapping_pending",
