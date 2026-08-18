@@ -510,7 +510,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 prepared.append(change)
                 continue
 
-            if change.id and change.id not in current_by_id:
+            if change.action == "update" and (
+                not change.id or change.id not in current_by_id
+            ):
                 raise ValueError("v2 update requires an owned food item id")
 
             if change.nutrition_override is not None or change.clear_nutrition_override:
