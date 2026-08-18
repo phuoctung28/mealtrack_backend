@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from tests.unit.infra.repositories.test_meal_recommendation_plan_repository_async import (
@@ -328,6 +328,78 @@ async def test_log_handler_claims_materializes_then_finalizes():
         request_id="log-1",
         meal_id="meal-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_log_handler_schedules_value_insights_for_new_meals():
+    plans = _LogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    scheduler = MagicMock(return_value=True)
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+        meal_value_insight_task_manager=object(),
+        meal_value_insight_cache=object(),
+        meal_value_insight_ai_manager=object(),
+        meal_value_insight_event_bus=object(),
+    )
+
+    with patch(
+        "src.app.handlers.command_handlers.meal_recommendation."
+        "log_recommended_meal_command_handler.schedule_value_insight_generation",
+        scheduler,
+    ):
+        await handler.handle(_log_command(language="vi"))
+
+    scheduler.assert_called_once()
+    kwargs = scheduler.call_args.kwargs
+    assert kwargs["language"] == "vi"
+    assert kwargs["user_id"] == "user-1"
+    assert kwargs["source"] == "catalog_log"
+    assert scheduler.call_args.args[1].meal_id == "meal-1"
+
+
+@pytest.mark.asyncio
+async def test_log_handler_skips_value_insights_on_idempotent_replay():
+    plans = _LogPlanRepo(replayed=True)
+    materializer = _Materializer()
+    scheduler = MagicMock(return_value=True)
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+        meal_value_insight_task_manager=object(),
+        meal_value_insight_cache=object(),
+        meal_value_insight_ai_manager=object(),
+        meal_value_insight_event_bus=object(),
+    )
+
+    with patch(
+        "src.app.handlers.command_handlers.meal_recommendation."
+        "log_recommended_meal_command_handler.schedule_value_insight_generation",
+        scheduler,
+    ):
+        await handler.handle(_log_command())
+
+    scheduler.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_log_handler_succeeds_when_insight_scheduling_raises():
+    plans = _LogPlanRepo(replayed=False)
+    materializer = _Materializer()
+    handler = LogRecommendedMealCommandHandler(
+        uow=_Uow(plans, _CatalogRepo()),
+        materializer=materializer,
+    )
+
+    with patch(
+        "src.app.handlers.command_handlers.meal_recommendation."
+        "log_recommended_meal_command_handler.schedule_value_insight_generation",
+        side_effect=RuntimeError("scheduler down"),
+    ):
+        result = await handler.handle(_log_command())
+
+    assert result.plan_id == "plan-1"
 
 
 @pytest.mark.asyncio

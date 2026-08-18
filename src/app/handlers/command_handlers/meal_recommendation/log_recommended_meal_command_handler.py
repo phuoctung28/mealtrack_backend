@@ -7,6 +7,11 @@ import logging
 from src.app.commands.meal_recommendation import LogRecommendedMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.app.services.meal_value_insight_scheduler import (
+    MealInsightEventBus,
+    MealInsightTaskScheduler,
+    schedule_value_insight_generation,
+)
 from src.app.services.recommended_meal_materialization_service import (
     RecommendedMealMaterializationService,
 )
@@ -14,6 +19,8 @@ from src.domain.model.meal import Meal
 from src.domain.model.meal_recommendation import (
     PersistedMealRecommendationSlotMutationResult,
 )
+from src.domain.ports.cache_port import CachePort
+from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.meal_analysis.meal_translation_service import (
     MealTranslationService,
 )
@@ -34,11 +41,19 @@ class LogRecommendedMealCommandHandler(
         materializer: RecommendedMealMaterializationService | None = None,
         meal_translation_service: MealTranslationService | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
+        meal_value_insight_task_manager: MealInsightTaskScheduler | None = None,
+        meal_value_insight_cache: CachePort | None = None,
+        meal_value_insight_ai_manager: MealInsightAIPort | None = None,
+        meal_value_insight_event_bus: MealInsightEventBus | None = None,
     ):
         self.uow = uow
         self.materializer = materializer or RecommendedMealMaterializationService()
         self.meal_translation_service = meal_translation_service
         self.cache_invalidation = cache_invalidation
+        self.meal_value_insight_task_manager = meal_value_insight_task_manager
+        self.meal_value_insight_cache = meal_value_insight_cache
+        self.meal_value_insight_ai_manager = meal_value_insight_ai_manager
+        self.meal_value_insight_event_bus = meal_value_insight_event_bus
 
     async def handle(
         self, command: LogRecommendedMealCommand
@@ -78,8 +93,31 @@ class LogRecommendedMealCommandHandler(
                     command.user_id, meal_date
                 )
             await self._persist_request_language_translation(command, saved_meal)
+            self._schedule_value_insights(command, saved_meal)
 
         return result
+
+    def _schedule_value_insights(
+        self, command: LogRecommendedMealCommand, meal: Meal
+    ) -> None:
+        """Best-effort insight warmup; logging still succeeds if scheduling fails."""
+        try:
+            schedule_value_insight_generation(
+                self.meal_value_insight_task_manager,
+                meal,
+                language=(command.language or "en").strip().lower() or "en",
+                cache_service=self.meal_value_insight_cache,
+                ai_manager=self.meal_value_insight_ai_manager,
+                event_bus=self.meal_value_insight_event_bus,
+                user_id=command.user_id,
+                source="catalog_log",
+            )
+        except Exception as exc:
+            logger.warning(
+                "recommended meal insight schedule failed meal=%s error_type=%s",
+                meal.meal_id,
+                type(exc).__name__,
+            )
 
     async def _persist_request_language_translation(
         self,

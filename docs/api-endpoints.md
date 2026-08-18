@@ -164,7 +164,8 @@ handler/schema when implementing; the bullets below are the durable WHY.
   flow). Do not treat suggestions as a recommendation fallback.
 - Create/get return compact selected-slot summaries; slot detail hydrates one
   selected slot plus alternatives; swap/log/skip return the changed-slot shape
-  and are owner-scoped and request-id idempotent.
+  and are owner-scoped and request-id idempotent. Catalog `log` warms
+  `GET /v1/meals/{meal_id}/value-insights` after a new meal is persisted.
 - Outcome timestamps (`shown_at`, `skipped_at`, `logged_at`) are backend-owned;
   clients must not recompute terminal state.
 - `Accept-Language` selects display language; translation failure returns
