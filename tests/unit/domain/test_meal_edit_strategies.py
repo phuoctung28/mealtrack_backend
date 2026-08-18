@@ -175,6 +175,37 @@ class TestUpdateFoodItemStrategy:
         assert updated_item.food_reference_id == 1001
 
     @pytest.mark.asyncio
+    async def test_update_count_based_serving_scales_nutrition(self):
+        strategy = UpdateFoodItemStrategy(Mock())
+        food_items_dict = {
+            "label-item": FoodItem(
+                id="label-item",
+                name="Protein Drink",
+                quantity=1.0,
+                unit="serving",
+                macros=Macros(protein=10.0, carbs=2.0, fat=0.0),
+                is_custom=True,
+            )
+        }
+
+        await strategy.apply(
+            food_items_dict,
+            FoodItemChange(
+                action="update",
+                id="label-item",
+                quantity=2.0,
+                unit="serving",
+            ),
+        )
+
+        updated_item = food_items_dict["label-item"]
+        assert updated_item.quantity == 2.0
+        assert updated_item.unit == "serving"
+        assert updated_item.macros.protein == 20.0
+        assert updated_item.macros.carbs == 4.0
+        assert updated_item.macros.fat == 0.0
+
+    @pytest.mark.asyncio
     async def test_update_keeps_manual_values_independent_from_source_macros(self):
         strategy = UpdateFoodItemStrategy(Mock())
         food_items_dict = {
