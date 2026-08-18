@@ -3,6 +3,13 @@
 **Status:** Stateful release notes — archived; not evergreen product authority  
 **Evergreen route:** see `docs/codebase-summary.md` and root `README.md`
 
+## 2026-08-18
+
+### Fixed
+
+- Versioned meal ingredient adds now allow client-generated item IDs; ownership
+  validation remains restricted to updates and removals.
+
 ## 2026-08-07
 
 ### Changed

@@ -12,3 +12,21 @@ def test_recipe_generation_has_worked_examples():
     # Must include the JSON structure
     assert "recipe_steps" in SystemPrompts.RECIPE_GENERATION
     assert "ingredients" in SystemPrompts.RECIPE_GENERATION
+
+
+def test_meal_text_parsing_prompt_requires_localized_display_names():
+    from src.domain.services.prompts.system_prompts import SystemPrompts
+
+    prompt = SystemPrompts.get_meal_text_parsing_prompt("vi")
+
+    assert "Never leave 'name' in English" in prompt
+    assert "English-only names" in prompt
+    assert "slash-separated segment" in prompt
+    assert '"lookup_name": "Eggs"' in prompt
+    assert "Trứng gà (Eggs)" not in prompt
+    assert "COMPOSITION:" in prompt
+    assert "one-for-one" in prompt
+    assert "Minimum 3 ingredients" not in prompt
+    assert "DECOMPOSITION (MANDATORY)" not in prompt
+    assert "Bánh mì" not in prompt
+    assert "Toast with butter" not in prompt

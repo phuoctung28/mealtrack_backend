@@ -13,7 +13,10 @@ from src.domain.services.meal_value_insight_contract import (
     ValueInsight,
     serialize_insights,
 )
-from src.domain.services.meal_value_insight_service import MealValueInsightService
+from src.domain.services.meal_value_insight_service import (
+    MEAL_VALUE_INSIGHT_CACHE_VERSION,
+    MealValueInsightService,
+)
 
 
 class FakeCache:
@@ -189,8 +192,49 @@ def test_versions_are_separate_per_language():
     )
 
     assert english != vietnamese
-    assert english.startswith("meal-value-insights:v10:")
-    assert vietnamese.startswith("meal-value-insights:v10:")
+    expected_prefix = f"meal-value-insights:{MEAL_VALUE_INSIGHT_CACHE_VERSION}:"
+    assert english.startswith(expected_prefix)
+    assert vietnamese.startswith(expected_prefix)
+
+
+@pytest.mark.asyncio
+async def test_previous_cache_namespace_is_not_reused():
+    service = MealValueInsightService()
+    summary = service._summary(
+        dish_name="Egg bowl",
+        nutrition=_nutrition(),
+        ingredient_names_by_id={},
+        language="vi",
+        user_context={},
+    )
+    current_key = service._cache_key(summary)
+    legacy_key = current_key.replace(
+        f"meal-value-insights:{MEAL_VALUE_INSIGHT_CACHE_VERSION}:",
+        "meal-value-insights:v10:",
+    )
+    cache = FakeCache()
+    cache.values[legacy_key] = serialize_insights(
+        MealValueInsights(
+            meal_bullets=[
+                ValueInsight(
+                    text="Legacy mixed-language insight.",
+                    category="benefit",
+                    highlights=["mixed-language"],
+                )
+            ],
+            ingredient_insights=[],
+        )
+    )
+
+    result = await service.get_cached_ai(
+        dish_name="Egg bowl",
+        nutrition=_nutrition(),
+        language="vi",
+        cache_service=cache,
+    )
+
+    assert result is None
+    assert current_key not in cache.values
 
 
 def test_summary_groups_repeated_ingredients_for_overview():

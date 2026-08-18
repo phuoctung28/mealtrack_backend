@@ -85,6 +85,7 @@ class VisionFoodEstimate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=200)
+    localized_name: str | None = Field(None, max_length=200)
     quantity_g: float = Field(
         ...,
         gt=0,
@@ -205,6 +206,8 @@ class VisionNutritionResponse(BaseModel):
 
     is_food: bool = Field(True, description="Whether the image contains edible food")
     dish_name: str | None = Field(None, max_length=200)
+    localized_language: str | None = Field(None, max_length=8)
+    localized_dish_name: str | None = Field(None, max_length=200)
     emoji: str | None = Field(None, max_length=32)
     foods: list[VisionFoodEstimate] = Field(
         default_factory=list,
@@ -287,6 +290,39 @@ class MealTextFoodEstimate(BaseModel):
     def normalize_preparation(cls, value: Any) -> str:
         normalized = str(value or "unknown").strip().lower()
         return normalized if normalized in PARSE_TEXT_PREPARATIONS else "unknown"
+
+
+class LocalizedFoodNameBatch(BaseModel):
+    """Ordered display-name translations for leftover English parse-text names."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    items: list[str] = Field(..., min_length=1, max_length=MAX_TEXT_PARSE_ITEMS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def fold_named_items(cls, data: Any) -> Any:
+        if not isinstance(data, dict) or "items" not in data:
+            return data
+        folded: list[Any] = []
+        for item in data.get("items") or []:
+            if isinstance(item, str):
+                folded.append(item)
+            elif isinstance(item, dict) and item.get("name"):
+                folded.append(item["name"])
+            else:
+                folded.append(item)
+        payload = dict(data)
+        payload["items"] = folded
+        return payload
+
+    @field_validator("items")
+    @classmethod
+    def strip_names(cls, value: list[str]) -> list[str]:
+        stripped = [str(item).strip() for item in value]
+        if any(not item for item in stripped):
+            raise ValueError("translated names must not be empty")
+        return stripped
 
 
 class MealTextNutritionResponse(BaseModel):

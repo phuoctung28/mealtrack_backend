@@ -20,6 +20,7 @@ from src.app.services.meal_value_insight_scheduler import (
     MealInsightTaskScheduler,
     schedule_value_insight_generation,
 )
+from src.domain.exceptions.ai_exceptions import MealResponseLocalizationError
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
@@ -130,6 +131,8 @@ async def _scan_by_url(
 
     try:
         meal = await event_bus.send(command)
+    except MealResponseLocalizationError as e:
+        raise handle_exception(e) from e
     except (RuntimeError, ValueError) as e:
         logger.warning("[SCAN-BY-URL] food not detected: %s", e)
         raise ValidationException(

@@ -11,6 +11,9 @@ import pytest
 from src.api.mappers.meal_mapper import STATUS_MAPPING, MealMapper
 from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
 from src.domain.model.meal import FoodItemTranslation, MealTranslation
+from src.domain.model.meal.meal_translation_domain_models import (
+    CURRENT_MEAL_TRANSLATION_VERSION,
+)
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
 )
@@ -218,6 +221,165 @@ class TestMealMapper:
         assert nutrition.carbs_per_100g == 10
         assert nutrition.fat_per_100g == 30
         assert nutrition.calories_per_100g == pytest.approx(386)
+
+    def test_to_detailed_response_uses_same_call_locale_without_translation_row(self):
+        item = FoodItem(
+            id="item-1",
+            name="Bún gạo đã nấu",
+            quantity=180,
+            unit="g",
+            macros=Macros(protein=4, carbs=50, fat=1),
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/noodles.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            source="scanner",
+            dish_name="Bún nước",
+            created_at=datetime(2025, 1, 15),
+            ready_at=datetime(2025, 1, 15),
+            raw_gpt_json=json.dumps(
+                {
+                    "dish_name": "Vietnamese rice noodle soup",
+                    "localized_language": "vi",
+                    "localized_dish_name": "Bún nước",
+                    "foods": [
+                        {
+                            "name": "Cooked rice noodles",
+                            "localized_name": "Bún gạo đã nấu",
+                        }
+                    ],
+                }
+            ),
+            nutrition=Nutrition(macros=item.macros, food_items=[item]),
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert result.dish_name == "Bún nước"
+        assert result.food_items[0].name == "Bún gạo đã nấu"
+        assert result.food_items[0].display_name == "Bún gạo đã nấu"
+        assert result.food_items[0].canonical_name == "Cooked rice noodles"
+        assert result.translation_language == "vi"
+        assert result.translations is None
+
+        english_result = MealMapper.to_detailed_response(meal, target_language="en")
+
+        assert english_result.dish_name == "Bún nước"
+        assert english_result.food_items[0].name == "Bún gạo đã nấu"
+        assert english_result.food_items[0].canonical_name == "Cooked rice noodles"
+
+    @pytest.mark.parametrize(
+        ("language", "localized_dish", "localized_food"),
+        [
+            ("de", "Reisnudelsuppe", "Reisnudeln"),
+            ("es", "Sopa de fideos de arroz", "Fideos de arroz"),
+            ("fr", "Soupe de nouilles de riz", "Nouilles de riz"),
+            ("ja", "米麺スープ", "米麺"),
+            ("vi", "Bún nước", "Bún gạo"),
+            ("zh", "米粉汤", "米粉"),
+        ],
+    )
+    def test_to_detailed_response_round_trips_every_supported_locale(
+        self, language, localized_dish, localized_food
+    ):
+        item = FoodItem(
+            id="item-1",
+            name=localized_food,
+            quantity=180,
+            unit="g",
+            macros=Macros(protein=4, carbs=50, fat=1),
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/noodles.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            source="scanner",
+            dish_name=localized_dish,
+            created_at=datetime(2025, 1, 15),
+            ready_at=datetime(2025, 1, 15),
+            raw_gpt_json=json.dumps(
+                {
+                    "dish_name": "Rice noodle soup",
+                    "localized_language": language,
+                    "localized_dish_name": localized_dish,
+                    "foods": [
+                        {
+                            "name": "Rice noodles",
+                            "localized_name": localized_food,
+                        }
+                    ],
+                }
+            ),
+            nutrition=Nutrition(macros=item.macros, food_items=[item]),
+        )
+
+        localized = MealMapper.to_detailed_response(
+            meal,
+            target_language=language,
+        )
+        english = MealMapper.to_detailed_response(meal, target_language="en")
+
+        assert localized.dish_name == localized_dish
+        assert localized.food_items[0].name == localized_food
+        assert localized.food_items[0].canonical_name == "Rice noodles"
+        assert english.dish_name == localized_dish
+        assert english.food_items[0].name == localized_food
+        assert localized.total_calories == english.total_calories
+        assert (
+            localized.total_nutrition.model_dump()
+            == english.total_nutrition.model_dump()
+        )
+        assert localized.translations is None
+
+    def test_to_detailed_response_keeps_english_image_names_for_other_locale(self):
+        item = FoodItem(
+            id="item-1",
+            name="Rice noodles",
+            quantity=180,
+            unit="g",
+            macros=Macros(protein=4, carbs=50, fat=1),
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/noodles.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            source="scanner",
+            dish_name="Rice noodle soup",
+            created_at=datetime(2025, 1, 15),
+            ready_at=datetime(2025, 1, 15),
+            raw_gpt_json=json.dumps(
+                {
+                    "dish_name": "Rice noodle soup",
+                    "foods": [{"name": "Rice noodles"}],
+                }
+            ),
+            nutrition=Nutrition(macros=item.macros, food_items=[item]),
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="de")
+
+        assert result.dish_name == "Rice noodle soup"
+        assert result.food_items[0].name == "Rice noodles"
+        assert result.translation_language is None
 
     def test_to_detailed_response_uses_item_id_translations_when_list_is_stale(self):
         """Translated food item IDs preserve locale after ingredient add/remove."""
@@ -458,6 +620,49 @@ class TestMealMapper:
         assert result.food_items[0].canonical_name == "Rice"
         assert result.translation_language == "vi"
 
+    def test_to_detailed_response_does_not_apply_pre_cutover_translation(self):
+        food_item = FoodItem(
+            id="item-2",
+            name="Rice",
+            quantity=150,
+            unit="g",
+            macros=Macros(protein=4, carbs=43, fat=0.4),
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/detailed.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            dish_name="Rice",
+            ready_at=datetime(2025, 1, 15, 14, 0),
+            created_at=datetime(2025, 1, 15, 13, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=4, carbs=43, fat=0.4),
+                food_items=[food_item],
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm",
+                    meal_ingredients=["Cơm"],
+                    food_items=[],
+                    translation_version=CURRENT_MEAL_TRANSLATION_VERSION - 1,
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert result.dish_name == "Rice"
+        assert result.food_items[0].name == "Rice"
+        assert result.translation_language is None
+
     def test_to_detailed_response_with_custom_food_item(self):
         """Test detailed response with custom food item."""
         food_items = [
@@ -696,6 +901,52 @@ class TestMealMapper:
         assert custom.protein_per_100g == pytest.approx(12.6)
         assert custom.carbs_per_100g == pytest.approx(0.7)
         assert custom.fat_per_100g == pytest.approx(9.6)
+
+    def test_to_detailed_response_custom_nutrition_does_not_treat_nhanh_as_one_gram(self):
+        """Unknown culinary units must not explode per-100g calories 100x."""
+        food_items = [
+            FoodItem(
+                id="item-cilantro",
+                name="Cilantro",
+                quantity=1,
+                unit="nhánh",
+                macros=Macros(protein=5, carbs=5, fat=0),
+                confidence=0.8,
+                is_custom=True,
+                allowed_units=[
+                    {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+                    {"unit": "nhánh", "gram_weight": 100.0, "description": "1 nhánh"},
+                ],
+            )
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/cilantro.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Herbs",
+            ready_at=datetime(2025, 1, 15, 15, 0),
+            created_at=datetime(2025, 1, 15, 14, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=5, carbs=5, fat=0),
+                food_items=food_items,
+            ),
+        )
+
+        result = MealMapper.to_detailed_response(meal)
+
+        custom = result.food_items[0].custom_nutrition
+        assert custom is not None
+        assert custom.protein_per_100g == pytest.approx(5.0)
+        assert custom.calories_per_100g == pytest.approx(40.0)
+        assert custom.calories_per_100g < 100
 
     def test_to_detailed_response_without_nutrition(self):
         """Test detailed response when nutrition is None."""

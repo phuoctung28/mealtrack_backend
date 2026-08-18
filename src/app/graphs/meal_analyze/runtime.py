@@ -20,6 +20,7 @@ from src.app.services.meal_value_insight_scheduler import (
     schedule_value_insight_generation,
 )
 from src.domain.model.meal import Meal
+from src.domain.model.meal.meal_response_localization import MealResponseLocalization
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_insight_ai_port import MealInsightAIPort
@@ -69,6 +70,7 @@ class MealAnalyzeRuntime:
     max_vision_attempts: int = 1
     acquired_image: AcquiredImage | None = None
     vision_result: dict[str, Any] | None = None
+    localization: MealResponseLocalization | None = None
     nutrition: Any | None = None
     label_metadata: dict[str, Any] | None = None
     meal_date: date | None = None

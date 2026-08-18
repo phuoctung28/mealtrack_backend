@@ -510,7 +510,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 prepared.append(change)
                 continue
 
-            if change.id and change.id not in current_by_id:
+            if change.action == "update" and (
+                not change.id or change.id not in current_by_id
+            ):
                 raise ValueError("v2 update requires an owned food item id")
 
             if change.nutrition_override is not None or change.clear_nutrition_override:
@@ -538,6 +540,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                         if change.custom_nutrition
                         else None
                     ),
+                    allowed_units=change.allowed_units,
                     origin=change.origin,
                     food_reference_id=change.food_reference_id,
                     source_namespace=change.source_namespace,
@@ -568,6 +571,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                     )
                 )
                 continue
+
+            if change.action == "add":
+                raise ValueError("v2 add requires origin")
 
             existing = current_by_id[change.id]
             prepared.append(self._canonicalize_snapshot_unit(existing, change))

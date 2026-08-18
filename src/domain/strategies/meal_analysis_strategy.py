@@ -51,13 +51,18 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
     Basic meal analysis strategy without additional context.
     """
 
-    def __init__(self, optimized_prompt_enabled: bool | None = None):
+    def __init__(
+        self,
+        optimized_prompt_enabled: bool | None = None,
+        language: str = "en",
+    ):
         if optimized_prompt_enabled is None:
             optimized_prompt_enabled = True
         self.optimized_prompt_enabled = bool(optimized_prompt_enabled)
+        self.language = language
 
     def get_analysis_prompt(self) -> str:
-        return SystemPrompts.VISION_ANALYSIS
+        return SystemPrompts.get_vision_analysis_prompt(self.language)
 
     def get_user_message(self) -> str:
         return "Analyze this food image and provide nutritional information:"
@@ -316,18 +321,19 @@ class UserContextAwareAnalysisStrategy(MealAnalysisStrategy):
     Analysis strategy that incorporates user-provided context.
     Used when user provides a description alongside their photo.
 
-    NOTE: Content is generated in English. Translation to user's
-    preferred language happens post-generation via TranslationService.
+    Canonical food identities remain English; localized display fields are
+    generated in the same structured response when a language is provided.
     """
 
-    def __init__(self, user_description: str):
+    def __init__(self, user_description: str, language: str = "en"):
         self.user_description = user_description
+        self.language = language
         logger.info(
             f"Created UserContextAwareAnalysisStrategy: desc_len={len(user_description)}"
         )
 
     def get_analysis_prompt(self) -> str:
-        return SystemPrompts.VISION_ANALYSIS
+        return SystemPrompts.get_vision_analysis_prompt(self.language)
 
     def get_user_message(self) -> str:
         return (
@@ -344,16 +350,20 @@ class AnalysisStrategyFactory:
     """
     Factory class for creating meal analysis strategies.
 
-    NOTE: Strategies generate content in English. Translation to user's
-    preferred language happens post-generation via TranslationService.
+    Strategies keep canonical food identities in English and can request
+    localized display fields in the same structured response.
     """
 
     @staticmethod
     def create_basic_strategy(
         optimized_prompt_enabled: bool | None = None,
+        language: str = "en",
     ) -> MealAnalysisStrategy:
         """Create a basic analysis strategy."""
-        return BasicAnalysisStrategy(optimized_prompt_enabled=optimized_prompt_enabled)
+        return BasicAnalysisStrategy(
+            optimized_prompt_enabled=optimized_prompt_enabled,
+            language=language,
+        )
 
     @staticmethod
     def create_portion_strategy(portion_size: float, unit: str) -> MealAnalysisStrategy:
@@ -378,7 +388,10 @@ class AnalysisStrategyFactory:
         return IngredientIdentificationStrategy()
 
     @staticmethod
-    def create_user_context_strategy(user_description: str) -> MealAnalysisStrategy:
+    def create_user_context_strategy(
+        user_description: str,
+        language: str = "en",
+    ) -> MealAnalysisStrategy:
         """Create a user-context-aware analysis strategy.
 
         Args:
@@ -387,7 +400,7 @@ class AnalysisStrategyFactory:
         Returns:
             MealAnalysisStrategy: Strategy that incorporates user context
         """
-        return UserContextAwareAnalysisStrategy(user_description)
+        return UserContextAwareAnalysisStrategy(user_description, language=language)
 
     @staticmethod
     def create_combined_strategy(

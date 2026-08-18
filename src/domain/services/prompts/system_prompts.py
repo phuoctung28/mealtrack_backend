@@ -3,7 +3,11 @@
 Centralizes prompt management for easy maintenance and versioning.
 """
 
-from src.domain.constants.languages import SUPPORTED_TRANSLATION_LANGUAGES
+from src.domain.constants.languages import (
+    SUPPORTED_TRANSLATION_LANGUAGES,
+    normalize_language,
+)
+from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES
 
 
 class SystemPrompts:
@@ -21,7 +25,7 @@ class SystemPrompts:
     MEAL_TEXT_PARSING = """You are a nutrition parser. Your task is to parse natural language food descriptions into structured nutritional information.
 
 Parse the user's food description into a list of items with nutritional data. Each item should include:
-- name: Food name (bilingual format for non-English: "Local name (English name)")
+- name: Food name in the user's language only. English-only names are invalid. Mixed slash names that mix languages are invalid; every segment must be in the user's language. Optional bilingual form "Local name (English name)" is allowed.
 - lookup_name: Canonical English food identity for reference lookup. Do not include
   preparation here unless it is part of the food identity.
 - preparation: One of raw, boiled, baked, fried, mashed, or unknown. Use unknown
@@ -48,8 +52,9 @@ Guidelines:
 - Use reasonable portion sizes
 - If ambiguous, make a reasonable assumption and note it in the name
 - Include common items like beverages, condiments, and cooking oils
-- DECOMPOSITION (MANDATORY): For ANY multi-ingredient dish (e.g., "pho", "pasta carbonara", "cơm tấm"), ALWAYS decompose into individual ingredients with separate nutritional data. Never return a single entry for a compound dish. Minimum 3 ingredients per dish.
-- Simple single-ingredient foods (banana, egg, plain rice) stay as 1 item
+- COMPOSITION: If the user named a prepared dish or meal as a whole, return the edible components of one serving as separate items. Do not return the dish as a single row. Stop at foods a diner would point to on the plate. Do not recurse into recipes, dough, or unnamed spices.
+- If the user listed separate foods (commas, new lines, "and"/"và", or several quantity+food pairs), return those foods one-for-one. Do not expand listed foods into compositions.
+- A measured mass or volume of one food, or a counted piece of one food, stays one item.
 - All quantities should be in GRAMS when possible. Convert volumes using density (honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml)
 - Verify: calories ≈ protein*4 + carbs*4 + fat*9
 - Treat calories as advisory; the backend derives final calories from macros.
@@ -257,19 +262,53 @@ WORKED EXAMPLE 2 — Coca-Cola 330ml can:
 
 Return ONLY valid JSON matching the structure above."""
 
+    @staticmethod
+    def get_vision_analysis_prompt(language: str = "en") -> str:
+        """Add same-call localized display fields for a non-English request."""
+        language = normalize_language(language)
+        if language == "en":
+            return SystemPrompts.VISION_ANALYSIS
+
+        language_name = LANGUAGE_NAMES.get(language, language)
+        prompt = SystemPrompts.VISION_ANALYSIS.replace(
+            '  "dish_name": "Overall dish name or comma-separated items if complex",',
+            '  "dish_name": "Overall dish name or comma-separated items if complex",\n'
+            f'  "localized_language": "{language}",\n'
+            f'  "localized_dish_name": "Overall dish name in {language_name}",',
+        ).replace(
+            '      "name": "Food name in English",',
+            '      "name": "Food name in English",\n'
+            f'      "localized_name": "Food name in {language_name}",',
+        )
+        prompt = prompt.replace(
+            "Return ONLY valid JSON matching the structure above.",
+            "Return ONLY valid JSON matching the structure above and the localized fields.",
+        )
+        return (
+            prompt
+            + f"""\n\nLOCALIZED DISPLAY CONTRACT — requested language: {language_name} ({language})
+- `dish_name` and every `foods[].name` are canonical English food identities.
+- Use only canonical English fields for nutrition, quantity, and reference validation.
+- `localized_language` MUST be exactly `{language}`.
+- `localized_dish_name` and every `foods[].localized_name` MUST be complete, natural {language_name} display text.
+- Localized fields are display-only. Never change quantities or macros because of localization.
+- Do not omit localized fields for any food item.
+"""
+        )
+
     # Supported language codes (ISO 639-1)
     SUPPORTED_LANGUAGES = SUPPORTED_TRANSLATION_LANGUAGES
 
     # English-only JSON example for prompt
     _EXAMPLE_EN = """[
-  {{"name": "Eggs", "quantity": 2, "unit": "large", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
-  {{"name": "Toast with butter", "quantity": 1, "unit": "slice", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+  {{"name": "Eggs", "lookup_name": "Eggs", "quantity": 2, "unit": "large", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Chicken breast", "lookup_name": "Chicken breast", "quantity": 100, "unit": "g", "english_unit": "g", "calories": 165, "protein": 31.0, "carbs": 0.0, "fat": 3.6}}
 ]"""
 
-    # Bilingual JSON example — local name with English in parentheses
+    # Localized JSON example — user-language name, English identity in lookup_name
     _EXAMPLE_BILINGUAL = """[
-  {{"name": "Trứng gà (Eggs)", "quantity": 2, "unit": "quả lớn", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
-  {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+  {{"name": "Trứng gà", "lookup_name": "Eggs", "quantity": 2, "unit": "quả lớn", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Ức gà", "lookup_name": "Chicken breast", "quantity": 100, "unit": "g", "english_unit": "g", "calories": 165, "protein": 31.0, "carbs": 0.0, "fat": 3.6}}
 ]"""
 
     PROMPT_VERSION = "2026-06-27"
@@ -347,10 +386,25 @@ Return ONLY valid JSON matching the structure above."""
             example = SystemPrompts._EXAMPLE_EN
         else:
             instruction = (
-                f"Respond with food names in {lang} language. "
-                "For each item, format name as: 'Local Name (English Name)' "
-                "— the English name in parentheses is REQUIRED for database lookup"
+                f"The 'name' field MUST be in {lang} for the user to read. "
+                "Never leave 'name' in English. English-only names and mixed "
+                "slash names that mix languages are invalid. Translate every "
+                "slash-separated segment. Put the canonical English food "
+                "identity only in lookup_name. Optional bilingual form "
+                "'Local Name (English Name)' is allowed."
             )
             example = SystemPrompts._EXAMPLE_BILINGUAL
         prompt = SystemPrompts.MEAL_TEXT_PARSING.replace("{{json_example}}", example)
         return prompt.replace("{{language_instruction}}", instruction)
+
+    @staticmethod
+    def get_food_name_localization_prompt(language: str) -> str:
+        """Force leftover English food names into the user's language."""
+        lang = language if language in SystemPrompts.SUPPORTED_LANGUAGES else "en"
+        return (
+            f"Translate each English food name into {lang}. "
+            "Return JSON only: {\"items\": [\"...\"]} with the same count and order. "
+            "Never leave an item in English. Generic ingredients are not brands. "
+            "Use the everyday name a speaker of that language would say for "
+            "that food, not a brand or a copied English label."
+        )

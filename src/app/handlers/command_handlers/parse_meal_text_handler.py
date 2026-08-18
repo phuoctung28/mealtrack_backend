@@ -19,11 +19,21 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     parse_fatsecret_nutrition,
 )
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
+from src.app.services.food_display_name import (
+    apply_fail_closed_display_names,
+    apply_glossary_display_names,
+    apply_localized_display_names,
+    leftover_display_names,
+    needs_display_localization,
+)
 from src.app.services.food_name_localizer import translate_food_texts
+from src.app.services.parse_text_composition import composition_retry_feedback
 from src.domain.exceptions.ai_exceptions import AIOutputValidationError
-from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
+from src.domain.model.ai.nutrition_contracts import (
+    LocalizedFoodNameBatch,
+    MealTextNutritionResponse,
+)
 from src.domain.model.nutrition.macros import Macros
-from src.domain.model.translation_result import TranslationOutcome
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.ai_output_validation_service import (
     build_validation_retry_prompt,
@@ -31,9 +41,14 @@ from src.domain.services.ai_output_validation_service import (
 )
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.services.nutrition_calculation_service import (
+    MASS_VOLUME_CANONICAL_UNITS,
+    UNIT_TO_GRAMS,
     _convert_with_allowed_units,
+    _normalize_unit,
+    canonicalize_mass_volume_unit,
     clamp_nutrition_values,
     convert_quantity_to_grams,
+    fallback_custom_serving_options,
     normalize_unit_for_manual_save,
     scale_per_100g_nutrition,
 )
@@ -71,21 +86,28 @@ TRUSTED_QUANTITY_UNITS = {
     "l",
     "liter",
     "litre",
-    "piece",
-    "pieces",
-    "slice",
-    "slices",
-    "cup",
-    "cups",
-    "tablespoon",
-    "tablespoons",
-    "tbsp",
-    "teaspoon",
-    "teaspoons",
-    "tsp",
-    "serving",
-    "portion",
+    "oz",
+    "ounce",
+    "ounces",
+    "lb",
+    "pound",
+    "pounds",
 }
+COUNTABLE_GRAM_UNITS = set(UNIT_TO_GRAMS) - {"kg", "lb", "oz"}
+
+
+def _preferred_parse_unit(item: dict[str, Any]) -> str:
+    """Prefer the local unit when it is a real mass, volume, or countable unit."""
+    local = str(item.get("unit") or "").strip()
+    english = str(item.get("english_unit") or "").strip()
+    if local:
+        canonical = canonicalize_mass_volume_unit(local)
+        if canonical in MASS_VOLUME_CANONICAL_UNITS:
+            return canonical
+        local_norm = _normalize_unit(local)
+        if local_norm in TRUSTED_QUANTITY_UNITS or local_norm in COUNTABLE_GRAM_UNITS:
+            return local
+    return english or local or "serving"
 
 
 @dataclass
@@ -133,6 +155,7 @@ class ParseMealTextHandler(
         sanitized_text = sanitize_user_description(command.text)
         if not sanitized_text:
             raise ValueError("Invalid or empty meal description.")
+        user_utterance = sanitized_text
         validated_current_items = validate_refinement_items(command.current_items)
 
         # Add refinement context if current_items provided
@@ -168,6 +191,12 @@ class ParseMealTextHandler(
             parsed_items = self._to_flat_parse_text_items(
                 validated_payload, raw_payload
             )
+            composition_feedback = composition_retry_feedback(
+                user_utterance, parsed_items
+            )
+            if composition_feedback and semantic_attempt == 0:
+                semantic_feedback = [composition_feedback]
+                continue
             if budget.deadline is None:
                 budget.deadline = (
                     time.monotonic() + _parse_text_fatsecret_timeout_seconds()
@@ -205,6 +234,7 @@ class ParseMealTextHandler(
         for item in enhanced_items:
             clamped = clamp_nutrition_values(item)
             item.update(clamped)
+            self._attach_per_100g_snapshot(item)
 
         # Calculate totals
         total_protein = sum(item.get("protein", 0) for item in enhanced_items)
@@ -218,7 +248,7 @@ class ParseMealTextHandler(
                 item["name"] = self._extract_display_name(
                     item.get("name", "Unknown"), command.language
                 )
-            await self._translate_structured_english_names(
+            await self._localize_english_display_names(
                 enhanced_items, command.language
             )
 
@@ -235,7 +265,11 @@ class ParseMealTextHandler(
                 sugar=item.get("sugar", 0),
                 data_source=item.get("data_source"),
                 fdc_id=item.get("fdc_id"),
-                allowed_units=item.get("allowed_units") or [],
+                allowed_units=item.get("allowed_units")
+                or fallback_custom_serving_options(
+                    item.get("unit") or "serving",
+                    item.get("name") or "",
+                ),
                 food_id=item.get("food_id"),
                 food_reference_id=item.get("food_reference_id"),
                 origin=item.get("origin"),
@@ -244,6 +278,12 @@ class ParseMealTextHandler(
                 nutrition_basis=item.get("nutrition_basis"),
                 nutrition_contract_version=item.get("nutrition_contract_version"),
                 calories_per_100g=item.get("calories_per_100g"),
+                protein_per_100g=item.get("protein_per_100g"),
+                carbs_per_100g=item.get("carbs_per_100g"),
+                fat_per_100g=item.get("fat_per_100g"),
+                fiber_per_100g=item.get("fiber_per_100g"),
+                sugar_per_100g=item.get("sugar_per_100g"),
+                source_snapshot=item.get("source_snapshot"),
             )
             for item in enhanced_items
         ]
@@ -255,6 +295,53 @@ class ParseMealTextHandler(
             total_fat=total_fat,
             emoji=emoji,
         )
+
+    def _attach_per_100g_snapshot(self, item: dict[str, Any]) -> None:
+        """Expose the validated density used to derive the displayed portion."""
+        quantity_g = item.get("quantity_g")
+        if quantity_g is None:
+            quantity_g = self._quantity_in_grams(
+                item,
+                str(item.get("lookup_name") or item.get("name") or ""),
+            )
+        quantity_g = float(quantity_g)
+        if quantity_g <= 0:
+            return
+        factor = 100.0 / quantity_g
+        for absolute, density in (
+            ("protein", "protein_per_100g"),
+            ("carbs", "carbs_per_100g"),
+            ("fat", "fat_per_100g"),
+            ("fiber", "fiber_per_100g"),
+            ("sugar", "sugar_per_100g"),
+        ):
+            if item.get(density) is None:
+                item[density] = round(float(item.get(absolute) or 0.0) * factor, 4)
+        if item.get("calories_per_100g") is None:
+            item["calories_per_100g"] = round(
+                self._derive_calories_from_macros(
+                    {
+                        "protein_g": item["protein_per_100g"],
+                        "carbs_g": item["carbs_per_100g"],
+                        "fat_g": item["fat_per_100g"],
+                        "fiber_g": item["fiber_per_100g"],
+                    }
+                ),
+                4,
+            )
+        item["source_snapshot"] = {
+            "basis": "100g",
+            "protein_per_100g": item["protein_per_100g"],
+            "carbs_per_100g": item["carbs_per_100g"],
+            "fat_per_100g": item["fat_per_100g"],
+            "fiber_per_100g": item["fiber_per_100g"],
+            "sugar_per_100g": item["sugar_per_100g"],
+            "calories_per_100g": item["calories_per_100g"],
+            "allowed_units": item.get("allowed_units") or [],
+            "origin": item.get("origin"),
+            "source_namespace": item.get("source_namespace"),
+            "source_food_id": item.get("source_food_id"),
+        }
 
     async def _generate_parse_text_payload(
         self,
@@ -322,7 +409,15 @@ class ParseMealTextHandler(
         elif isinstance(raw, list):
             payload = {"items": raw}
         else:
-            extracted = extract_json_from_response(str(raw))
+            try:
+                extracted = extract_json_from_response(str(raw))
+            except ValueError as exc:
+                raise AIOutputValidationError(
+                    "Invalid AI structured output",
+                    purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                    attempt_count=1,
+                    validation_details=["unparseable_ai_json"],
+                ) from exc
             payload = {"items": extracted} if isinstance(extracted, list) else extracted
 
         if not isinstance(payload, dict):
@@ -602,6 +697,13 @@ class ParseMealTextHandler(
                 "fiber_g": per_100g.get("fiber_100g", per_100g.get("fiber", 0)),
             }
         )
+        item["protein_per_100g"] = per_100g.get(
+            "protein_100g", per_100g.get("protein", 0)
+        )
+        item["carbs_per_100g"] = per_100g.get("carbs_100g", per_100g.get("carbs", 0))
+        item["fat_per_100g"] = per_100g.get("fat_100g", per_100g.get("fat", 0))
+        item["fiber_per_100g"] = per_100g.get("fiber_100g", per_100g.get("fiber", 0))
+        item["sugar_per_100g"] = per_100g.get("sugar_100g", per_100g.get("sugar", 0))
         return item
 
     async def _provider_call(
@@ -632,7 +734,7 @@ class ParseMealTextHandler(
         if item.get("quantity_g") is not None:
             return float(item["quantity_g"])
         quantity = float(item.get("quantity") or 1)
-        unit = item.get("english_unit") or item.get("unit", "serving")
+        unit = _preferred_parse_unit(item)
         return convert_quantity_to_grams(
             quantity, normalize_unit_for_manual_save(unit), food_name
         )
@@ -640,13 +742,24 @@ class ParseMealTextHandler(
     def _trusted_quantity_in_grams(
         self, item: dict[str, Any], food_name: str
     ) -> float | None:
-        """Return grams only when the input supplies a reliable unit basis."""
-        if item.get("quantity_g") is not None:
-            return self._quantity_in_grams(item, food_name)
-        raw_unit = str(item.get("english_unit") or item.get("unit") or "")
-        unit = raw_unit.lower().strip().split(",", 1)[0].split(" ", 1)[0]
-        if unit not in TRUSTED_QUANTITY_UNITS:
+        """Return grams only for mass/volume units, where density is meaningful.
+
+        Countable units (miếng/piece/slice) use estimated gram weights. Treating
+        those estimates as exact grams 422s parse-text whenever FatSecret is down.
+        """
+        local_raw = str(item.get("unit") or "").strip()
+        english_raw = str(item.get("english_unit") or "").strip()
+        local_norm = _normalize_unit(local_raw) if local_raw else ""
+        english_norm = _normalize_unit(english_raw) if english_raw else ""
+        if local_norm and local_norm not in TRUSTED_QUANTITY_UNITS:
             return None
+        if (
+            local_norm not in TRUSTED_QUANTITY_UNITS
+            and english_norm not in TRUSTED_QUANTITY_UNITS
+        ):
+            return None
+        if item.get("quantity_g") is not None:
+            return float(item["quantity_g"])
         return self._quantity_in_grams(item, food_name)
 
     def _local_reference_is_usable(
@@ -717,6 +830,11 @@ class ParseMealTextHandler(
                 "fiber_g": candidate.fiber_per_100g,
             }
         )
+        item["protein_per_100g"] = candidate.protein_per_100g
+        item["carbs_per_100g"] = candidate.carbs_per_100g
+        item["fat_per_100g"] = candidate.fat_per_100g
+        item["fiber_per_100g"] = candidate.fiber_per_100g
+        item["sugar_per_100g"] = candidate.sugar_per_100g
         item["allowed_units"] = allowed_units
         return item
 
@@ -729,7 +847,9 @@ class ParseMealTextHandler(
     ) -> float:
         """Keep parsed portions saveable against the same source snapshot."""
         quantity = float(item.get("quantity") or 1.0)
-        source_unit = str(item.get("english_unit") or item.get("unit") or "g")
+        source_unit = canonicalize_mass_volume_unit(
+            str(item.get("english_unit") or item.get("unit") or "g")
+        )
         try:
             authoritative_grams = _convert_with_allowed_units(
                 quantity,
@@ -826,36 +946,68 @@ class ParseMealTextHandler(
             )
         return normalize_serving_options(units, provider_100g_label=True) or []
 
-    async def _translate_structured_english_names(
+    async def _localize_english_display_names(
         self, items: list[dict[str, Any]], language: str
     ) -> None:
-        """Translate only names explicitly identified as English by the payload."""
-        if self._translation_service is None:
+        """Translate leftover English display names after bilingual stripping.
+
+        Lookup already ran against lookup_name, so translating name is
+        presentation-only. Names that are already localized stay as-is.
+        """
+        leftovers = leftover_display_names(items, language)
+        if not leftovers:
             return
-        candidates = [
-            str(item["english_name"])
-            for item in items
-            if isinstance(item.get("english_name"), str)
-            and item["english_name"].strip()
-            and item.get("name") == item.get("english_name")
-        ]
-        if not candidates:
+        if self._translation_service is not None:
+            result = await translate_food_texts(
+                leftovers,
+                target_language=language,
+                translation_service=self._translation_service,
+            )
+            apply_localized_display_names(
+                items,
+                dict(zip(leftovers, result.texts, strict=False)),
+                language,
+            )
+        apply_glossary_display_names(items, language)
+        leftovers = leftover_display_names(items, language)
+        if leftovers:
+            await self._force_translate_display_names(items, leftovers, language)
+        apply_fail_closed_display_names(items, language)
+
+    async def _force_translate_display_names(
+        self,
+        items: list[dict[str, Any]],
+        leftovers: list[str],
+        language: str,
+    ) -> None:
+        try:
+            raw = await self._meal_generation_service.generate_meal_plan_async(
+                prompt=json.dumps({"names": leftovers}, ensure_ascii=False),
+                system_message=SystemPrompts.get_food_name_localization_prompt(
+                    language
+                ),
+                response_type="json",
+                max_tokens=512,
+                schema=LocalizedFoodNameBatch,
+                model_purpose="parse_text",
+                thinking_budget=0,
+            )
+            payload = self._extract_parse_text_payload(raw)
+            validated = validate_ai_output(
+                payload,
+                schema=LocalizedFoodNameBatch,
+                purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                attempt_count=1,
+            )
+        except Exception:
+            logger.warning("parse-text leftover name localization failed", exc_info=True)
             return
-        result = await translate_food_texts(
-            candidates,
-            target_language=language,
-            translation_service=self._translation_service,
+        translated = [str(name).strip() for name in validated.get("items", [])]
+        if len(translated) != len(leftovers):
+            return
+        apply_localized_display_names(
+            items, dict(zip(leftovers, translated, strict=False)), language
         )
-        if result.outcome not in {
-            TranslationOutcome.TRANSLATED,
-            TranslationOutcome.PARTIAL,
-        }:
-            return
-        translated_by_source = dict(zip(candidates, result.texts, strict=False))
-        for item in items:
-            english_name = item.get("english_name")
-            if english_name and item.get("name") == english_name:
-                item["name"] = translated_by_source.get(english_name, english_name)
 
     @staticmethod
     def _extract_english_name(name: str) -> str:
@@ -887,9 +1039,11 @@ class ParseMealTextHandler(
         match = re.search(r"^(.+?)\s*\(([^)]+)\)$", name.strip())
         if not match:
             return name
-        before, inside = match.group(1), match.group(2)
-        # Non-ASCII part is the local language name
-        before_ascii = all(ord(c) < 256 for c in before.replace(" ", ""))
-        if before_ascii:
-            return inside  # Local name is inside parens
-        return before  # Local name is before parens
+        before, inside = match.group(1).strip(), match.group(2).strip()
+        before_english = needs_display_localization(before, language)
+        inside_english = needs_display_localization(inside, language)
+        if before_english and not inside_english:
+            return inside
+        if inside_english and not before_english:
+            return before
+        return before

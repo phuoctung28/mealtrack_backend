@@ -261,3 +261,33 @@ async def test_provider_unit_prefix_cannot_multiply_arbitrary_suffix(caplog):
     nutrition, _ = NutritionCalculationService().aggregate_from_command_items(resolved)
     assert nutrition.calories == pytest.approx(76.9)
     assert raw_unit not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_custom_parse_text_unit_is_not_canonicalized_to_grams():
+    resolved = await ManualMealNutritionResolver().resolve_items(
+        [
+            ManualMealItem(
+                name="Sườn Nướng",
+                quantity=1,
+                unit="Miếng",
+                origin="custom",
+                custom_nutrition=CustomNutrition(
+                    calories_per_100g=187.0,
+                    protein_per_100g=18.0,
+                    carbs_per_100g=4.0,
+                    fat_per_100g=11.0,
+                ),
+            )
+        ],
+        _References(),
+        contract_version=2,
+    )
+
+    assert resolved[0].quantity == pytest.approx(1.0)
+    assert resolved[0].unit == "Miếng"
+    units = {option["unit"]: option["gram_weight"] for option in resolved[0].allowed_units}
+    assert units["miếng"] == pytest.approx(100.0)
+    assert units["g"] == pytest.approx(1.0)
+    nutrition, _ = NutritionCalculationService().aggregate_from_command_items(resolved)
+    assert nutrition.macros.protein == pytest.approx(18.0)

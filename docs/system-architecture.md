@@ -110,11 +110,25 @@ result calories are always derived from stored macros using the backend formula.
 
 Read-path localization is presentation-only. The application layer owns the
 translation service used by catalog and suggestion responses; the infrastructure
-adapter uses the OpenAI Responses API with payload storage disabled. The domain
-translation service returns explicit outcomes, and only
+adapter uses the OpenAI Responses API with payload storage disabled. Persisted
+meal translation rows are versioned against the active translation contract, so
+rows written before that version are invalidated and retranslated on demand.
+The domain translation service returns explicit outcomes, and only
 `TranslationOutcome.TRANSLATED` may be persisted or admitted to locale caches.
 `PARTIAL`, `PASSTHROUGH`, and `UNAVAILABLE` keep canonical text in the response
 path.
+
+Fresh meal-image analysis uses a same-call bilingual structured response. The
+vision contract keeps English dish and food identities as the canonical source
+for nutrition and reference validation, while requested-language display names
+are validated and persisted on the `Meal` and `FoodItem` display fields. Image
+meals are identified by the existing `source="scanner"` marker and return
+those stored names on later reads regardless of the request locale. The stored
+raw analysis payload retains the English canonical fields for validation,
+nutrition, and canonical identifiers. Fresh image analysis does not create a
+`MealTranslation` row or reload the meal to obtain localized content; meals
+with existing translation rows continue through the versioned read-path
+fallback.
 
 ### Nutrition Integrity Policy
 Structured nutrition crosses one versioned domain policy,

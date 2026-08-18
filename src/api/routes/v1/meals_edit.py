@@ -39,6 +39,9 @@ from src.infra.event_bus import BackgroundTaskManager, EventBus
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Ingredient PUTs are cheap writes. 60/minute is a backstop, not an AI cap.
+MEAL_INGREDIENTS_EDIT_LIMIT = "60/minute"
+
 
 def _validate_uploaded_meal_photo_url(image_url: str, image_id: str) -> None:
     parsed = urlparse(image_url)
@@ -61,7 +64,7 @@ async def delete_meal(
 
 
 @router.put("/{meal_id}/ingredients", response_model=None)
-@limiter.limit("10/minute")
+@limiter.limit(MEAL_INGREDIENTS_EDIT_LIMIT)
 async def update_meal_ingredients(
     meal_id: str,
     payload: EditMealIngredientsRequest,

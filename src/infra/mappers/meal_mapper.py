@@ -145,6 +145,7 @@ def meal_translation_orm_to_domain(orm: MealTranslationORM) -> DomainMealTransla
         translated_at=orm.translated_at,
         meal_instruction=orm.meal_instruction,
         meal_ingredients=orm.meal_ingredients,
+        translation_version=getattr(orm, "translation_version", None),
     )
 
 
@@ -299,6 +300,7 @@ def meal_translation_domain_to_orm(domain: DomainMealTranslation) -> MealTransla
         created_at=_to_naive_utc(now),
         meal_instruction=domain.meal_instruction,
         meal_ingredients=domain.meal_ingredients,
+        translation_version=domain.translation_version,
     )
     for fi in domain.food_items:
         translation.food_items.append(

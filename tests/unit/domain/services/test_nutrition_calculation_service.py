@@ -16,9 +16,15 @@ from src.domain.model.nutrition import Macros, Nutrition
 from src.domain.services.meal_service import MealService
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
+    _convert_with_allowed_units,
+    canonicalize_authoritative_quantity,
+    canonicalize_mass_volume_unit,
     clamp_nutrition_values,
     convert_quantity_to_grams,
+    fallback_custom_serving_options,
     normalize_unit_for_manual_save,
+    quantity_to_grams,
+    reconcile_calories_per_100g,
     scale_per_100g_nutrition,
 )
 
@@ -252,6 +258,49 @@ def test_allowed_unit_logs_do_not_expose_unit_or_description(caplog):
     assert raw_unit not in caplog.text
 
 
+def test_herb_sprig_units_use_countable_serving_grams():
+    assert convert_quantity_to_grams(1, "nhánh", "Cilantro") == 100
+    assert convert_quantity_to_grams(1, "sprig", "Cilantro") == 100
+    assert quantity_to_grams(
+        1,
+        "nhánh",
+        "Cilantro",
+        [{"unit": "g", "gram_weight": 1.0}, {"unit": "nhánh", "gram_weight": 4.0}],
+    ) == 4
+
+
+def test_qualitative_garnish_units_use_countable_serving_grams():
+    assert convert_quantity_to_grams(1, "ít", "Hành Lá") == 100
+    assert convert_quantity_to_grams(1, "pinch", "Hành Lá") == 100
+    assert quantity_to_grams(
+        1,
+        "ít",
+        "Hành Lá",
+        [
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {"unit": "ít", "gram_weight": 1.0, "description": "1 ít"},
+        ],
+    ) == pytest.approx(100.0)
+
+
+def test_bowl_alias_matches_cup_serving_not_one_gram():
+    assert quantity_to_grams(
+        1,
+        "bát",
+        "Bánh Phở",
+        [
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {"unit": "cup", "gram_weight": 240.0, "description": "1 cup"},
+            {"unit": "bát", "gram_weight": 1.0, "description": "1 bát"},
+        ],
+    ) == pytest.approx(240.0)
+
+
+def test_reconcile_calories_drops_hundredfold_energy_mismatch():
+    assert reconcile_calories_per_100g(4000, 40) == 40
+    assert reconcile_calories_per_100g(123.4, 165) == 123.4
+
+
 def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():
     clamped = clamp_nutrition_values(
         {
@@ -274,6 +323,47 @@ def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():
     }
 
 
+def test_unknown_tuber_unit_uses_countable_provider_serving_not_one_gram():
+    allowed_units = [
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {
+            "unit": "sweetpotato",
+            "gram_weight": 130.0,
+            "description": "1 sweetpotato",
+        },
+        {"unit": "oz", "gram_weight": 28.35, "description": "1 oz"},
+        {"unit": "cup", "gram_weight": 200.0, "description": "1 cup, mashed"},
+    ]
+
+    assert _convert_with_allowed_units(
+        1, "củ lớn", allowed_units, "Khoai lang"
+    ) == pytest.approx(130.0)
+    with pytest.raises(ValueError):
+        _convert_with_allowed_units(
+            1, "củ lớn", allowed_units, "Khoai lang", strict=True
+        )
+
+
+def test_gram_alias_is_one_gram_even_when_a_100g_row_exists():
+    allowed_units = [
+        {"unit": "gram", "gram_weight": 100.0, "description": "100 gram"},
+        {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+        {"unit": "serving", "gram_weight": 100.0, "description": "1 serving"},
+        {"unit": "cup", "gram_weight": 120.0, "description": "1 cup"},
+    ]
+
+    assert _convert_with_allowed_units(100, "gram", allowed_units, "Beef") == 100
+    assert _convert_with_allowed_units(100, "grams", allowed_units, "Beef") == 100
+    assert convert_quantity_to_grams(100, "gram", "Beef") == 100
+
+
+def test_canonicalize_mass_volume_unit_maps_gram_aliases():
+    assert canonicalize_mass_volume_unit("gram") == "g"
+    assert canonicalize_mass_volume_unit("GRAMS") == "g"
+    assert canonicalize_mass_volume_unit("ounce") == "oz"
+    assert canonicalize_mass_volume_unit("miếng") == "miếng"
+
+
 def _new_processing_meal() -> Meal:
     return Meal(
         meal_id=str(uuid4()),
@@ -291,3 +381,22 @@ def _new_processing_meal() -> Meal:
         ),
         created_at=datetime.now(UTC),
     )
+
+
+def test_mieng_maps_to_piece_grams_not_slice():
+    assert convert_quantity_to_grams(1, "miếng") == pytest.approx(100.0)
+    assert convert_quantity_to_grams(1, "lát") == pytest.approx(30.0)
+
+
+def test_fallback_custom_serving_options_keep_selected_countable_unit():
+    options = fallback_custom_serving_options("Miếng", "Sườn Nướng")
+    units = {option["unit"]: option["gram_weight"] for option in options}
+
+    assert units["g"] == pytest.approx(1.0)
+    assert units["miếng"] == pytest.approx(100.0)
+    quantity, unit, used_fallback = canonicalize_authoritative_quantity(
+        1, "Miếng", options, "Sườn Nướng"
+    )
+    assert quantity == pytest.approx(1.0)
+    assert unit == "Miếng"
+    assert used_fallback is False
