@@ -288,7 +288,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             resolved_items: list[ManualMealItem] = []
             async with self.uow_factory() as resolve_uow:
                 prepared_changes = await self._prepare_v2_changes(
-                    preflight_meal.nutrition.food_items
+                    (preflight_meal.nutrition.food_items or [])
                     if preflight_meal.nutrition
                     else [],
                     command.food_item_changes,
