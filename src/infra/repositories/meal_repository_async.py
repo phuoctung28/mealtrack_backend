@@ -209,15 +209,24 @@ class AsyncMealRepository(MealRepositoryPort):
     async def find_by_id_for_update(
         self, meal_id: str, projection: MealProjection = MealProjection.FULL
     ) -> Meal | None:
-        """Load and row-lock a meal for the final authoritative write check."""
-        result = await self.session.execute(
-            select(MealORM)
-            .options(*_PROJECTION_OPTS[projection])
+        """Load and row-lock a meal for the final authoritative write check.
+
+        PostgreSQL forbids FOR UPDATE on the nullable side of an outer join,
+        so we first acquire the row lock with a plain single-table query, then
+        load the full projection (which may include outer-joined relations) in a
+        separate select within the same transaction.
+        """
+        # Step 1: lock the meal row without any joins.
+        lock_result = await self.session.execute(
+            select(MealORM.meal_id)
             .where(MealORM.meal_id == meal_id)
             .with_for_update()
         )
-        db_meal = result.unique().scalars().first()
-        return meal_orm_to_domain(db_meal) if db_meal else None
+        if lock_result.scalar_one_or_none() is None:
+            return None
+
+        # Step 2: load the full projection (joins are safe without FOR UPDATE).
+        return await self.find_by_id(meal_id, projection=projection)
 
     async def find_by_status(self, status: MealStatus, limit: int = 10) -> list[Meal]:
         result = await self.session.execute(
