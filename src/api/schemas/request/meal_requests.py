@@ -574,13 +574,29 @@ class EditMealIngredientsRequest(BaseModel):
             elif change.origin is not None:
                 _validate_change_origin(change)
             elif change.origin is None:
+                if any(value is not None for value in identity_fields):
+                    raise ValueError("v2 quantity update cannot replace source")
+                is_portion_update = change.action == "update" and (
+                    change.quantity is not None or change.unit is not None
+                )
+                has_legacy_source_echo = any(
+                    value is not None
+                    for value in (change.name, change.custom_nutrition)
+                ) or bool(change.allowed_units)
+                if is_portion_update and has_legacy_source_echo:
+                    # Older clients echo source fields on portion updates. They
+                    # cannot replace authoritative nutrition without an origin,
+                    # so discard the echoes before the domain strategy runs.
+                    change.name = None
+                    change.custom_nutrition = None
+                    change.allowed_units = []
+                    continue
                 if any(
                     value is not None
                     for value in (
                         change.name,
                         change.custom_nutrition,
                         change.allowed_units or None,
-                        *identity_fields,
                     )
                 ):
                     raise ValueError("v2 quantity update cannot replace source")
