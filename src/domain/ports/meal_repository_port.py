@@ -148,3 +148,12 @@ class MealRepositoryPort(ABC):
     ) -> list[dict]:
         """Return meal action rows in a strict UTC range for journey progress."""
         return []
+
+    async def list_logged_catalog_meal_ids(
+        self,
+        *,
+        user_id: str,
+        limit: int,
+    ) -> tuple[tuple[str, datetime], ...]:
+        """Unique catalog_meal_ids this user logged, most recent first."""
+        return ()

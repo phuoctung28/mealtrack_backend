@@ -98,6 +98,12 @@ class CatalogMealSnapshotService:
         self._record_snapshot_metrics(snapshot, status="returned")
         return snapshot
 
+    def invalidate(self) -> None:
+        """Drop the process snapshot so the next read rebuilds from the catalog."""
+
+        self._snapshot = None
+        self._next_refresh_after = 0.0
+
     async def _refresh_singleflight(
         self,
         uow,
