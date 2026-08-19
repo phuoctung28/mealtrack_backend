@@ -144,3 +144,18 @@ class MealRecommendationPlanRepositoryPort(ABC):
         Default no-op for lightweight fakes; production repos must implement.
         """
         return None
+
+    async def find_logable_slot_for_catalog_meal(
+        self,
+        *,
+        user_id: str,
+        catalog_meal_id: str,
+        slot_date,
+        meal_type: str,
+    ) -> tuple[str, str] | None:
+        """Return (plan_id, slot_id) for a selected unlogged slot, or None."""
+        return None
+
+    async def find_active_plan_id(self, *, user_id: str) -> str | None:
+        """Return the owner's active plan id, if any."""
+        return None

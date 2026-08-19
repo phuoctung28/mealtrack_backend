@@ -169,6 +169,7 @@ class CatalogSeedImportSummary:
         default_factory=tuple
     )
     review_required: tuple[CatalogSeedReviewRequired, ...] = field(default_factory=tuple)
+    inserted_catalog_keys: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def is_successful(self) -> bool:
@@ -373,9 +374,21 @@ class CatalogMealSeedImporter:
             updated=len(self._pending_popularity_updates),
             skipped_existing=skipped,
             dry_run=self._dry_run,
+            inserted_catalog_keys=tuple(item.seed.catalog_key for item in to_insert),
         )
         _record_seed_import_metrics(summary, started)
         return summary
+
+    async def load_meals_by_catalog_keys(
+        self, catalog_keys: tuple[str, ...]
+    ) -> list:
+        """Load hydrated catalog meals for insight warmup after import."""
+
+        if not catalog_keys:
+            return []
+        wanted = set(catalog_keys)
+        meals = await self._catalog_repository.list_active_meals()
+        return [meal for meal in meals if meal.catalog_key in wanted]
 
     async def _prepare_recipe(
         self,

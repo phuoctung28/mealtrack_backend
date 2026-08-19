@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import uuid4
 
 from src.domain.exceptions.meal_recommendation_exceptions import (
@@ -33,7 +34,25 @@ class RecommendedMealMaterializationService:
         if slot.selected is None or slot.selected.catalog_meal is None:
             raise MealRecommendationNotFoundError
         catalog_meal = slot.selected.catalog_meal
+        return await self.materialize_from_catalog(
+            uow,
+            user_id=plan.user_id,
+            catalog_meal=catalog_meal,
+            meal_date=slot.slot_date,
+            meal_type=slot.meal_type,
+            timezone=plan.timezone,
+        )
 
+    async def materialize_from_catalog(
+        self,
+        uow,
+        *,
+        user_id: str,
+        catalog_meal: CatalogMeal,
+        meal_date: date,
+        meal_type: str,
+        timezone: str,
+    ) -> Meal:
         food_items = [
             FoodItem(
                 id=str(uuid4()),
@@ -45,13 +64,10 @@ class RecommendedMealMaterializationService:
             )
             for ingredient in catalog_meal.ingredients
         ]
-        meal_time = noon_utc_for_date(slot.slot_date, plan.timezone)
-        # Always attach a MealImage row. Production still enforces NOT NULL on
-        # meal.image_id in some environments; image-less inserts 500 there.
-        # Matches manual / AI-suggestion materialization (placeholder image).
+        meal_time = noon_utc_for_date(meal_date, timezone)
         meal = Meal(
             meal_id=str(uuid4()),
-            user_id=plan.user_id,
+            user_id=user_id,
             status=MealStatus.READY,
             created_at=meal_time,
             ready_at=meal_time,
@@ -66,8 +82,9 @@ class RecommendedMealMaterializationService:
                 ),
                 food_items=food_items,
             ),
-            meal_type=slot.meal_type,
+            meal_type=meal_type,
             source="meal_recommendation",
+            catalog_meal_id=catalog_meal.id,
         )
         return await uow.meals.save(meal)
 

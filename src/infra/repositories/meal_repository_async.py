@@ -616,6 +616,30 @@ class AsyncMealRepository(MealRepositoryPort):
         result = await self.session.execute(select(func.count()).select_from(MealORM))
         return result.scalar_one()
 
+    async def list_logged_catalog_meal_ids(
+        self,
+        *,
+        user_id: str,
+        limit: int,
+    ) -> tuple[tuple[str, datetime], ...]:
+        last_logged_at = func.max(
+            func.coalesce(MealORM.ready_at, MealORM.updated_at, MealORM.created_at)
+        ).label("last_logged_at")
+        result = await self.session.execute(
+            select(MealORM.catalog_meal_id, last_logged_at)
+            .where(MealORM.user_id == user_id)
+            .where(MealORM.catalog_meal_id.is_not(None))
+            .where(MealORM.status != MealStatusEnum.INACTIVE)
+            .group_by(MealORM.catalog_meal_id)
+            .order_by(last_logged_at.desc())
+            .limit(limit)
+        )
+        return tuple(
+            (str(catalog_meal_id), logged_at)
+            for catalog_meal_id, logged_at in result.all()
+            if catalog_meal_id is not None
+        )
+
     async def _update_nutrition(
         self, db_nutrition: NutritionORM, domain_nutrition: Nutrition
     ) -> None:

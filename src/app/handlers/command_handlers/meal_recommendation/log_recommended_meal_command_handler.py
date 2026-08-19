@@ -1,12 +1,9 @@
 """Handler for logging recommended meals through normal meal persistence."""
 
-from __future__ import annotations
-
-import logging
-
 from src.app.commands.meal_recommendation import LogRecommendedMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.app.services.meal_translation_persistence import persist_meal_translation
 from src.app.services.recommended_meal_materialization_service import (
     RecommendedMealMaterializationService,
 )
@@ -17,8 +14,6 @@ from src.domain.model.meal_recommendation import (
 from src.domain.services.meal_analysis.meal_translation_service import (
     MealTranslationService,
 )
-
-logger = logging.getLogger(__name__)
 
 
 @handles(LogRecommendedMealCommand)
@@ -77,39 +72,8 @@ class LogRecommendedMealCommandHandler(
                 await self.cache_invalidation.after_meal_write(
                     command.user_id, meal_date
                 )
-            await self._persist_request_language_translation(command, saved_meal)
+            await persist_meal_translation(
+                self.meal_translation_service, saved_meal, command.language
+            )
 
         return result
-
-    async def _persist_request_language_translation(
-        self,
-        command: LogRecommendedMealCommand,
-        meal: Meal,
-    ) -> None:
-        """Persist localized meal translation so Today's Meals can show titles."""
-
-        language = (command.language or "en").strip().lower()
-        if language == "en" or self.meal_translation_service is None:
-            return
-
-        nutrition = getattr(meal, "nutrition", None)
-        food_items = list(getattr(nutrition, "food_items", None) or [])
-        dish_name = getattr(meal, "dish_name", None) or ""
-        if not dish_name and not food_items:
-            return
-
-        try:
-            await self.meal_translation_service.translate_meal(
-                meal=meal,
-                dish_name=dish_name,
-                food_items=food_items,
-                target_language=language,
-            )
-        except Exception as exc:
-            # Logging must succeed even when translation is unavailable.
-            logger.warning(
-                "recommended meal translation failed meal=%s language=%s error_type=%s",
-                meal.meal_id,
-                language,
-                type(exc).__name__,
-            )
