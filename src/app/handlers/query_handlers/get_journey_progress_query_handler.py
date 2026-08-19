@@ -13,6 +13,7 @@ from src.app.queries.progress import GetJourneyProgressQuery
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
+from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
 from src.domain.services.journey_progress_rules import (
     estimate_timeline_days,
     journey_period_start,
@@ -80,7 +81,7 @@ class GetJourneyProgressQueryHandler(
                 period_start,
                 min(now, period_end),
             )
-            water_goal_ml = profile.daily_water_goal_ml or 2000
+            water_goal_ml = resolve_hydration_goal_ml(profile)
 
         target_calories, target_protein_g = await self._load_targets(query.user_id)
         return calculate_journey_progress(

@@ -113,29 +113,31 @@ class GetDailyActivitiesQueryHandler(
                 user_id=query.user_id,
                 user_timezone=user_tz_str,
             )
-            meal_activities = [
-                (
-                    self._build_hydration_activity(item, query.language or "en")
-                    if item.meal_type == "hydration"
-                    else self._build_meal_activity(
-                        item, query.target_date, query.language
-                    )
-                )
-                for item in items
-            ]
-
-            # Include hydration_entries not already covered by a meal row (legacy_meal_id dedup).
-            # Pre-Phase-3d entries have legacy_meal_id set → skip (meal row already in feed).
-            # Post-Phase-3d LogCaloricDrink entries have legacy_meal_id=None → include.
-            meal_id_set = {item.meal_id for item in items}
             hydration_entries = await uow.hydration_entries.find_by_date(
                 local_date,
                 user_id=query.user_id,
                 user_timezone=user_tz_str,
             )
-            for entry in hydration_entries:
-                if entry.legacy_meal_id and entry.legacy_meal_id in meal_id_set:
+            covered_meal_ids = {
+                entry.legacy_meal_id
+                for entry in hydration_entries
+                if entry.legacy_meal_id
+            }
+
+            meal_activities: list[dict[str, Any]] = []
+            for item in items:
+                if item.meal_type == "hydration":
+                    if item.meal_id in covered_meal_ids:
+                        continue
+                    meal_activities.append(
+                        self._build_hydration_activity(item, query.language or "en")
+                    )
                     continue
+                meal_activities.append(
+                    self._build_meal_activity(item, query.target_date, query.language)
+                )
+
+            for entry in hydration_entries:
                 meal_activities.append(
                     self._build_hydration_entry_activity(entry, query.language or "en")
                 )
