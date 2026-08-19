@@ -193,6 +193,19 @@ async def test_replay_returns_stored_body_without_second_log():
 
 
 @pytest.mark.asyncio
+async def test_incomplete_replay_payload_is_409_not_key_error():
+    writes = _WriteOps(
+        _Reservation(state="replay", response={"meal_id": "meal-1"})
+    )
+    handler = _handler(_Uow(writes=writes), _Browse(), AsyncMock())
+
+    with pytest.raises(ConflictException) as exc_info:
+        await handler.handle(_command())
+
+    assert exc_info.value.error_code == "IDEMPOTENCY_REPLAY_INVALID"
+
+
+@pytest.mark.asyncio
 async def test_fingerprint_conflict_is_409():
     writes = _WriteOps(_Reservation(state="fingerprint_conflict"))
     handler = _handler(_Uow(writes=writes), _Browse(), AsyncMock())

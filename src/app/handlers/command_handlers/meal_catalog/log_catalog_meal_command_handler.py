@@ -120,12 +120,31 @@ class LogCatalogMealCommandHandler(EventHandler[LogCatalogMealCommand, LogCatalo
                 raise
 
 
+_REPLAY_REQUIRED_KEYS = (
+    "meal_id",
+    "catalog_meal_id",
+    "logged_via",
+    "meal_date",
+    "meal_type",
+)
+
+
+def _invalid_replay() -> ConflictException:
+    return ConflictException(
+        "Catalog log replay is missing a stored meal",
+        error_code="IDEMPOTENCY_REPLAY_INVALID",
+    )
+
+
 def _result_from_replay(payload: dict | None, catalog_meal) -> LogCatalogMealResult:
-    if not payload or not payload.get("meal_id"):
-        raise ConflictException(
-            "Catalog log replay is missing a stored meal",
-            error_code="IDEMPOTENCY_REPLAY_INVALID",
-        )
+    if not isinstance(payload, dict) or any(
+        not payload.get(key) for key in _REPLAY_REQUIRED_KEYS
+    ):
+        raise _invalid_replay()
+    try:
+        meal_date = date.fromisoformat(str(payload["meal_date"]))
+    except (TypeError, ValueError) as exc:
+        raise _invalid_replay() from exc
     meal = type(
         "ReplayMeal",
         (),
@@ -141,7 +160,7 @@ def _result_from_replay(payload: dict | None, catalog_meal) -> LogCatalogMealRes
         logged_via=str(payload["logged_via"]),
         plan_id=payload.get("plan_id"),
         slot_id=payload.get("slot_id"),
-        meal_date=date.fromisoformat(str(payload["meal_date"])),
+        meal_date=meal_date,
         meal_type=str(payload["meal_type"]),
         meal=meal,  # type: ignore[arg-type]
     )
