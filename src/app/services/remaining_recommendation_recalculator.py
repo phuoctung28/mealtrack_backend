@@ -79,12 +79,6 @@ class RemainingRecommendationRecalculator:
                         slot=slot,
                         request_id=f"{request_id}:recalc:{index}",
                     )
-                        uow,
-                        user_id=user_id,
-                        plan_id=plan.id,
-                        slot=slot,
-                        request_id=f"{request_id}:recalc:{index}",
-                    )
         except MealRecommendationCreationError:
             logger.info(
                 "recommendation_recalc_skipped user_id=%s date=%s",
