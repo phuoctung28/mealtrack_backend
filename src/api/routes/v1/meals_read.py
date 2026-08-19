@@ -150,6 +150,10 @@ async def _source_nutrition_by_food_reference(meal, food_reference_repository):
     if not food_reference_ids:
         return {}
 
+    batch_loader = getattr(food_reference_repository, "get_nutrition_projections", None)
+    if batch_loader is not None:
+        return await batch_loader(list(food_reference_ids))
+
     source_nutrition = {}
     for food_reference_id in food_reference_ids:
         reference = await food_reference_repository.get_nutrition_projection(

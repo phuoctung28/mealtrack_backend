@@ -709,6 +709,7 @@ def get_configured_event_bus() -> EventBus:
                 history_projector=recommendation_history,
             ),
             insight_scheduler=_schedule_catalog_log_insights,
+            task_manager=task_manager,
         ),
     )
     event_bus.register_handler(

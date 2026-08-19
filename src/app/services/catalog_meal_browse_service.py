@@ -111,16 +111,17 @@ class CatalogMealBrowseService:
                 items=tuple(ranked[offset : offset + limit]),
                 total=len(ranked),
                 feed=feed,
-                ranking_source="curated" if fallback or feed is CatalogFeed.POPULAR else "personalized",
+                ranking_source="curated"
+                if fallback or feed is CatalogFeed.POPULAR
+                else "personalized",
                 fallback=fallback,
             )
 
     async def get_meal(self, catalog_id: str) -> CatalogMeal:
+        """Load one catalog meal by id without rebuilding the browse snapshot."""
+
         async with self._uow_factory() as uow:
-            snapshot = await self._get_snapshot(uow)
-            meal = next(
-                (item for item in snapshot.meals if item.id == catalog_id), None
-            )
+            meal = await uow.catalog_recipes.get_meal(catalog_id)
             if meal is None:
                 raise KeyError(catalog_id)
             return meal

@@ -50,8 +50,12 @@ class _Uow:
         self.meals = SimpleNamespace(
             aggregate_linked_ingredient_history=self._aggregate_history
         )
+        self.catalog_recipes = SimpleNamespace(get_meal=self._get_meal)
         self.meal_rows = meals
         self.writes = []
+
+    async def _get_meal(self, catalog_id):
+        return next((meal for meal in self.meal_rows if meal.id == catalog_id), None)
 
     async def _aggregate_history(self, **kwargs):
         return []
@@ -241,3 +245,23 @@ async def test_cold_start_for_you_falls_back_to_popular():
     assert page.fallback is True
     assert page.ranking_source == "curated"
     assert [meal.id for meal in page.items] == ["meal-a"]
+
+
+@pytest.mark.asyncio
+async def test_get_meal_loads_one_row_without_snapshot():
+    meals = [_meal("meal-a", rank=1, food_reference_id=1)]
+    snapshot = _Snapshot(meals)
+    service = CatalogMealBrowseService(
+        uow_factory=_UowFactory(_Uow(meals)),
+        snapshot_service=snapshot,
+        history_projector=_History(),
+        scoring=_Scoring(),
+        diversity=_Diversity(),
+    )
+    snapshot.get_snapshot = None  # would fail if browse snapshot path is used
+
+    meal = await service.get_meal("meal-a")
+
+    assert meal.id == "meal-a"
+    with pytest.raises(KeyError):
+        await service.get_meal("missing")
