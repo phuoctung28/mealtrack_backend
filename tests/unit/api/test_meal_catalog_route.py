@@ -9,6 +9,7 @@ from starlette.requests import Request
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import ExternalServiceException
+from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.routes.v1 import meal_catalog as meal_catalog_route
 from src.api.routes.v1.meal_catalog import router
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
@@ -65,6 +66,7 @@ class _Service:
 
 def _app() -> FastAPI:
     app = FastAPI()
+    app.add_middleware(AcceptLanguageMiddleware)
     app.include_router(router)
     app.dependency_overrides[get_current_user_id] = lambda: "user-1"
     app.dependency_overrides[get_configured_event_bus] = lambda: object()
@@ -87,6 +89,42 @@ def test_list_returns_mobile_catalog_projection_without_list_ingredients():
     assert body["items"][0]["ingredients"] == []
     assert body["feed"] == "popular"
     assert body["ranking_source"] == "curated"
+
+
+def test_list_keeps_canonical_english_names():
+    response = TestClient(_app()).get(
+        "/v1/meal-catalog",
+        headers={"Accept-Language": "vi"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["name"] == "Japanese Egg Rice"
+
+
+def test_list_forwards_shuffle_seed():
+    captured: dict = {}
+
+    class _CapturingService(_Service):
+        async def list_meals(self, **kwargs):
+            captured.update(kwargs)
+            return await super().list_meals(**kwargs)
+
+    app = _app()
+    from src.api.base_dependencies import get_catalog_meal_browse_service
+
+    app.dependency_overrides[get_catalog_meal_browse_service] = lambda: (
+        _CapturingService()
+    )
+    response = TestClient(app).get("/v1/meal-catalog?shuffle_seed=refresh-a")
+
+    assert response.status_code == 200
+    assert captured["shuffle_seed"] == "refresh-a"
+
+
+def test_list_rejects_invalid_shuffle_seed():
+    response = TestClient(_app()).get("/v1/meal-catalog?shuffle_seed=bad seed!")
+
+    assert response.status_code == 422
 
 
 def test_popular_list_does_not_initialize_event_bus(monkeypatch):
@@ -124,7 +162,9 @@ async def test_for_you_context_marks_weekly_budget_read_only():
     )
 
     assert context[2] == 2000
-    budget_query = next(query for query in sent if isinstance(query, GetWeeklyBudgetQuery))
+    budget_query = next(
+        query for query in sent if isinstance(query, GetWeeklyBudgetQuery)
+    )
     assert budget_query.read_only is True
 
 
@@ -182,8 +222,8 @@ def test_for_you_endpoint_falls_back_to_popular_when_target_is_unavailable(monke
     from src.api.base_dependencies import get_catalog_meal_browse_service
 
     app = _app()
-    app.dependency_overrides[get_catalog_meal_browse_service] = (
-        lambda: _FallbackService()
+    app.dependency_overrides[get_catalog_meal_browse_service] = lambda: (
+        _FallbackService()
     )
     monkeypatch.setattr(meal_catalog_route, "get_configured_event_bus", lambda: _Bus())
 

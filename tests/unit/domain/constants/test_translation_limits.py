@@ -2,6 +2,7 @@ from src.domain.constants.translation_limits import (
     MAX_TRANSLATION_BATCH_BYTES,
     MAX_TRANSLATION_ITEM_BYTES,
     MAX_TRANSLATION_ITEMS,
+    iter_translation_batches,
     translation_batch_within_limits,
 )
 
@@ -14,3 +15,12 @@ def test_translation_limits_are_provider_neutral():
     assert not translation_batch_within_limits(["a" * 4097])
     assert not translation_batch_within_limits(["a"] * 129)
 
+
+def test_iter_translation_batches_splits_over_item_count():
+    texts = [f"item-{index}" for index in range(MAX_TRANSLATION_ITEMS + 2)]
+
+    batches = iter_translation_batches(texts)
+
+    assert len(batches) == 2
+    assert len(batches[0]) == MAX_TRANSLATION_ITEMS
+    assert batches[1] == ["item-128", "item-129"]

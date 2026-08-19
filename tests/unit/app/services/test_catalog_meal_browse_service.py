@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from hashlib import md5
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +17,10 @@ from src.domain.services.meal_recommendation.ingredient_affinity_service import 
     IngredientAffinityProfile,
 )
 from src.domain.services.meal_recommendation.recipe_scoring_service import RecipeScore
+
+
+def _shuffle_key(meal_id: str, seed: str) -> str:
+    return md5(f"{meal_id}:{seed}".encode()).hexdigest()
 
 
 def _meal(meal_id: str, *, rank: int | None, food_reference_id: int) -> CatalogMeal:
@@ -50,12 +55,56 @@ class _Uow:
         self.meals = SimpleNamespace(
             aggregate_linked_ingredient_history=self._aggregate_history
         )
-        self.catalog_recipes = SimpleNamespace(get_meal=self._get_meal)
+        self.catalog_recipes = SimpleNamespace(
+            get_meal=self._get_meal,
+            list_popular_page=self._list_popular_page,
+        )
         self.meal_rows = meals
         self.writes = []
 
     async def _get_meal(self, catalog_id):
         return next((meal for meal in self.meal_rows if meal.id == catalog_id), None)
+
+    async def _list_popular_page(
+        self,
+        *,
+        limit,
+        offset,
+        query=None,
+        cuisine=None,
+        meal_type=None,
+        shuffle_seed=None,
+    ):
+        from src.app.services.catalog_meal_browse_ranking import filter_meals
+        from src.domain.ports.catalog_recipe_repository_port import CatalogPopularPage
+
+        candidates = filter_meals(tuple(self.meal_rows), query, cuisine, meal_type)
+        if shuffle_seed:
+            ranked = sorted(
+                candidates,
+                key=lambda meal: (
+                    _shuffle_key(meal.id, shuffle_seed),
+                    meal.id,
+                ),
+            )
+        else:
+            ranked = sorted(
+                candidates,
+                key=lambda meal: (
+                    meal.popularity_rank is None,
+                    meal.popularity_rank or 0,
+                    meal.name.casefold(),
+                    meal.id,
+                ),
+            )
+        return CatalogPopularPage(
+            items=tuple(ranked[offset : offset + limit]),
+            total=len(candidates),
+            any_ranked=any(meal.popularity_rank is not None for meal in self.meal_rows),
+            unranked_count=sum(
+                1 for meal in candidates if meal.popularity_rank is None
+            ),
+        )
 
     async def _aggregate_history(self, **kwargs):
         return []
@@ -147,6 +196,91 @@ async def test_popular_feed_uses_curated_rank_then_stable_ties_and_paginates_aft
     assert page.total == 3
     assert page.ranking_source == "curated"
     assert page.fallback is False
+
+
+@pytest.mark.asyncio
+async def test_popular_feed_shuffle_seed_is_stable_across_pages():
+    meals = [
+        _meal("meal-a", rank=1, food_reference_id=1),
+        _meal("meal-b", rank=2, food_reference_id=2),
+        _meal("meal-c", rank=3, food_reference_id=3),
+        _meal("meal-d", rank=4, food_reference_id=4),
+        _meal("meal-e", rank=5, food_reference_id=5),
+    ]
+    service = _service(meals)
+    expected = [
+        meal_id
+        for meal_id, _ in sorted(
+            ((meal.id, _shuffle_key(meal.id, "refresh-a")) for meal in meals),
+            key=lambda item: (item[1], item[0]),
+        )
+    ]
+
+    page_one = await service.list_meals(
+        user_id="user-a",
+        feed=CatalogFeed.POPULAR,
+        limit=2,
+        offset=0,
+        query=None,
+        cuisine=None,
+        meal_type=None,
+        shuffle_seed="refresh-a",
+    )
+    page_two = await service.list_meals(
+        user_id="user-a",
+        feed=CatalogFeed.POPULAR,
+        limit=2,
+        offset=2,
+        query=None,
+        cuisine=None,
+        meal_type=None,
+        shuffle_seed="refresh-a",
+    )
+    other_seed = await service.list_meals(
+        user_id="user-a",
+        feed=CatalogFeed.POPULAR,
+        limit=20,
+        offset=0,
+        query=None,
+        cuisine=None,
+        meal_type=None,
+        shuffle_seed="refresh-b",
+    )
+
+    assert [meal.id for meal in page_one.items] + [
+        meal.id for meal in page_two.items
+    ] == expected[:4]
+    assert [meal.id for meal in other_seed.items] != expected
+
+
+@pytest.mark.asyncio
+async def test_popular_feed_does_not_load_catalog_snapshot():
+    meals = [_meal("meal-a", rank=1, food_reference_id=1)]
+    snapshot = _Snapshot(meals)
+
+    async def _fail_snapshot(_uow):
+        raise AssertionError("popular feed must not rebuild the catalog snapshot")
+
+    snapshot.get_snapshot = _fail_snapshot
+    service = CatalogMealBrowseService(
+        uow_factory=_UowFactory(_Uow(meals)),
+        snapshot_service=snapshot,
+        history_projector=_History(),
+        scoring=_Scoring(),
+        diversity=_Diversity(),
+    )
+
+    page = await service.list_meals(
+        user_id="user-a",
+        feed=CatalogFeed.POPULAR,
+        limit=20,
+        offset=0,
+        query=None,
+        cuisine=None,
+        meal_type=None,
+    )
+
+    assert [meal.id for meal in page.items] == ["meal-a"]
 
 
 @pytest.mark.asyncio

@@ -76,13 +76,13 @@ class LogCatalogMealCommandHandler(
         write_started = time.perf_counter()
         result = await self._write(command, catalog_meal)
         write_ms = (time.perf_counter() - write_started) * 1000
+        await persist_meal_translation(
+            self.meal_translation_service, result.meal, command.language
+        )
         if self.cache_invalidation is not None:
             await self.cache_invalidation.after_meal_write(
                 command.user_id, command.meal_date
             )
-        await persist_meal_translation(
-            self.meal_translation_service, result.meal, command.language
-        )
         if self.recalculator is not None:
             await self._defer(
                 f"catalog-log-recalc:{command.request_id}",

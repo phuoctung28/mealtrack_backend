@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Any, Literal
 
 from src.app.services.catalog_meal_browse_ranking import (
+    CatalogPopularityUnavailableError,
     diversity_rank,
     filter_meals,
     rank_popular,
@@ -83,37 +84,48 @@ class CatalogMealBrowseService:
         daily_calories: int | None = None,
         start_date: date | None = None,
         timezone: str | None = None,
+        shuffle_seed: str | None = None,
     ) -> CatalogBrowsePage:
         async with self._uow_factory() as uow:
+            if feed is CatalogFeed.POPULAR:
+                page = await uow.catalog_recipes.list_popular_page(
+                    limit=limit,
+                    offset=offset,
+                    query=query,
+                    cuisine=cuisine,
+                    meal_type=meal_type,
+                    shuffle_seed=shuffle_seed,
+                )
+                if not page.any_ranked or page.unranked_count > 0:
+                    raise CatalogPopularityUnavailableError
+                return CatalogBrowsePage(
+                    items=page.items,
+                    total=page.total,
+                    feed=feed,
+                    ranking_source="curated",
+                    fallback=False,
+                )
             snapshot = await self._get_snapshot(uow)
             candidates = filter_meals(snapshot.meals, query, cuisine, meal_type)
             popularity_configured = any(
                 meal.popularity_rank is not None for meal in snapshot.meals
             )
-            fallback = False
-            if feed is CatalogFeed.POPULAR:
-                ranked = rank_popular(
-                    candidates, popularity_configured=popularity_configured
-                )
-            else:
-                ranked, fallback = await self._rank_for_you(
-                    uow,
-                    snapshot,
-                    candidates,
-                    user_id=user_id,
-                    meal_type=meal_type,
-                    daily_calories=daily_calories,
-                    start_date=start_date,
-                    timezone=timezone,
-                    popularity_configured=popularity_configured,
-                )
+            ranked, fallback = await self._rank_for_you(
+                uow,
+                snapshot,
+                candidates,
+                user_id=user_id,
+                meal_type=meal_type,
+                daily_calories=daily_calories,
+                start_date=start_date,
+                timezone=timezone,
+                popularity_configured=popularity_configured,
+            )
             return CatalogBrowsePage(
                 items=tuple(ranked[offset : offset + limit]),
                 total=len(ranked),
                 feed=feed,
-                ranking_source="curated"
-                if fallback or feed is CatalogFeed.POPULAR
-                else "personalized",
+                ranking_source="personalized" if not fallback else "curated",
                 fallback=fallback,
             )
 
