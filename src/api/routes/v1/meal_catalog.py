@@ -47,6 +47,9 @@ async def list_meal_catalog(
     q: str | None = Query(None, max_length=160),
     cuisine: str | None = Query(None, max_length=80),
     meal_type: MealType | None = Query(None),
+    shuffle_seed: str | None = Query(
+        None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    ),
     user_id: str = Depends(get_current_user_id),
     service: CatalogMealBrowseService = Depends(get_catalog_meal_browse_service),
 ) -> MealCatalogListResponse:
@@ -84,6 +87,7 @@ async def list_meal_catalog(
             daily_calories=daily_calories,
             start_date=start_date,
             timezone=timezone,
+            shuffle_seed=shuffle_seed,
         )
     except CatalogPopularityUnavailableError as exc:
         raise HTTPException(
@@ -114,7 +118,10 @@ async def list_meal_catalog(
 @router.get(
     "/{catalog_id}",
     response_model=MealCatalogItemResponse,
-    responses={404: {"description": "Catalog meal not found"}, 503: {"description": "Catalog is unavailable"}},
+    responses={
+        404: {"description": "Catalog meal not found"},
+        503: {"description": "Catalog is unavailable"},
+    },
 )
 async def get_meal_catalog_detail(
     catalog_id: str,

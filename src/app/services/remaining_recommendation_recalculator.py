@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import date
 
 from src.domain.exceptions.meal_recommendation_exceptions import (
@@ -47,6 +48,7 @@ class RemainingRecommendationRecalculator:
     ) -> None:
         try:
             async with self._uow_factory() as uow:
+                started = time.perf_counter()
                 plan_id = await uow.meal_recommendation_plans.find_active_plan_id(
                     user_id=user_id
                 )
@@ -79,6 +81,14 @@ class RemainingRecommendationRecalculator:
                         slot=slot,
                         request_id=f"{request_id}:recalc:{index}",
                     )
+                logger.info(
+                    "recommendation_recalc.timing user_id=%s date=%s "
+                    "duplicates=%s elapsed_ms=%.0f",
+                    user_id,
+                    meal_date,
+                    len(duplicates),
+                    (time.perf_counter() - started) * 1000,
+                )
         except MealRecommendationCreationError:
             logger.info(
                 "recommendation_recalc_skipped user_id=%s date=%s",

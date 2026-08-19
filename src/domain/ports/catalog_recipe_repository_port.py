@@ -64,6 +64,16 @@ class CatalogMealRevision:
     food_reference_updated_at: datetime | None
 
 
+@dataclass(frozen=True)
+class CatalogPopularPage:
+    """One ranked popular-feed page plus ranking-gate counts."""
+
+    items: tuple[CatalogMeal, ...]
+    total: int
+    any_ranked: bool
+    unranked_count: int
+
+
 class CatalogMealRepositoryPort(ABC):
     """Read/write contract for catalog meals during the rework."""
 
@@ -75,6 +85,19 @@ class CatalogMealRepositoryPort(ABC):
         meal_type: str | None = None,
     ) -> list[CatalogMeal]:
         """Return active catalog meals."""
+
+    @abstractmethod
+    async def list_popular_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        query: str | None = None,
+        cuisine: str | None = None,
+        meal_type: str | None = None,
+        shuffle_seed: str | None = None,
+    ) -> CatalogPopularPage:
+        """Return one popularity-ranked page without loading the full catalog."""
 
     @abstractmethod
     async def get_active_catalog_revision(self) -> CatalogMealRevision:

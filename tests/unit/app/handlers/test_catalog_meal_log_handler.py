@@ -121,13 +121,23 @@ class _Browse:
         return self.meal
 
 
-def _handler(uow, browse, log_service, cache=None, recalculator=None):
+def _handler(
+    uow,
+    browse,
+    log_service,
+    cache=None,
+    recalculator=None,
+    task_manager=None,
+    translation=None,
+):
     return LogCatalogMealCommandHandler(
         uow=uow,
         browse_service=browse,
         log_service=log_service,
+        meal_translation_service=translation,
         cache_invalidation=cache,
         recalculator=recalculator,
+        task_manager=task_manager,
     )
 
 
@@ -167,6 +177,63 @@ async def test_prefer_slot_logs_matching_unlogged_slot():
 
 
 @pytest.mark.asyncio
+async def test_translates_before_cache_invalidation():
+    order: list[str] = []
+    log_service = AsyncMock()
+    log_service.execute = AsyncMock(return_value=_result())
+
+    class _Translation:
+        async def translate_meal(self, **kwargs):
+            order.append("translate")
+
+    class _Cache:
+        async def after_meal_write(self, user_id, meal_date):
+            order.append("cache")
+
+    handler = _handler(
+        _Uow(),
+        _Browse(),
+        log_service,
+        cache=_Cache(),
+        translation=_Translation(),
+    )
+
+    await handler.handle(_command(language="vi"))
+
+    assert order == ["translate", "cache"]
+
+
+@pytest.mark.asyncio
+async def test_recalculate_is_backgrounded_when_task_manager_present():
+    log_service = AsyncMock()
+    log_service.execute = AsyncMock(
+        return_value=_result(logged_via="slot", plan_id="plan-1", slot_id="slot-1")
+    )
+    recalculator = SimpleNamespace(recalculate=AsyncMock())
+    spawned: list[str] = []
+
+    class _Tasks:
+        def spawn(self, name, coro):
+            spawned.append(name)
+            coro.close()
+
+    handler = _handler(
+        _Uow(),
+        _Browse(),
+        log_service,
+        recalculator=recalculator,
+        task_manager=_Tasks(),
+    )
+
+    result = await handler.handle(_command())
+
+    assert result.meal_id == "meal-1"
+    assert spawned == ["catalog-log-recalc:req-1"]
+    recalculator.recalculate.assert_called_once()
+    recalculator.recalculate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_standalone_when_no_matching_slot():
     log_service = AsyncMock()
     log_service.execute = AsyncMock(return_value=_result(logged_via="catalog"))
@@ -194,9 +261,7 @@ async def test_replay_returns_stored_body_without_second_log():
 
 @pytest.mark.asyncio
 async def test_incomplete_replay_payload_is_409_not_key_error():
-    writes = _WriteOps(
-        _Reservation(state="replay", response={"meal_id": "meal-1"})
-    )
+    writes = _WriteOps(_Reservation(state="replay", response={"meal_id": "meal-1"}))
     handler = _handler(_Uow(writes=writes), _Browse(), AsyncMock())
 
     with pytest.raises(ConflictException) as exc_info:

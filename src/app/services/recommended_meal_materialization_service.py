@@ -11,14 +11,38 @@ from src.domain.exceptions.meal_recommendation_exceptions import (
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
+    CatalogMealIngredient,
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
 from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+)
+from src.domain.services.meal_recommendation.ingredient_quantity_conversion_service import (
+    IngredientQuantityConversionError,
+    IngredientQuantityConversionService,
+)
 from src.domain.utils.timezone_utils import noon_utc_for_date
 
 # mealimage.url is VARCHAR(255); keep inserts valid when catalog URLs are longer.
 _MEAL_IMAGE_URL_MAX_LEN = 255
+_CATALOG_CONVERTER = IngredientQuantityConversionService(
+    allow_unverified=True,
+    allow_unapproved_sources=True,
+    allow_implausible_macros=True,
+    allow_common_unit_fallbacks=True,
+)
+_WEIGHT_UNITS_TO_GRAMS = {
+    "g": 1.0,
+    "gram": 1.0,
+    "grams": 1.0,
+    "kg": 1000.0,
+    "oz": 28.35,
+    "lb": 453.6,
+    "ml": 1.0,
+    "l": 1000.0,
+}
 
 
 class RecommendedMealMaterializationService:
@@ -53,17 +77,16 @@ class RecommendedMealMaterializationService:
         meal_type: str,
         timezone: str,
     ) -> Meal:
+        projections = await _load_nutrition_projections(uow, catalog_meal)
         food_items = [
-            FoodItem(
-                id=str(uuid4()),
-                name=ingredient.name,
-                quantity=float(ingredient.quantity),
-                unit=ingredient.unit,
-                macros=Macros(protein=0, carbs=0, fat=0, fiber=0, sugar=0),
-                food_reference_id=ingredient.food_reference_id,
+            _food_item_for_ingredient(
+                ingredient,
+                projections.get(ingredient.food_reference_id),
             )
             for ingredient in catalog_meal.ingredients
         ]
+        if _needs_catalog_macro_fallback(food_items):
+            food_items = _distribute_catalog_macros(food_items, catalog_meal)
         meal_time = noon_utc_for_date(meal_date, timezone)
         meal = Meal(
             meal_id=str(uuid4()),
@@ -90,7 +113,7 @@ class RecommendedMealMaterializationService:
 
 
 def _meal_image_for_catalog(catalog_meal: CatalogMeal) -> MealImage:
-    """Build a mealimage row from catalog URL, or a placeholder when absent."""
+    """Build a meal image row from catalog URL, or a placeholder when absent."""
 
     raw_url = (catalog_meal.image_url or "").strip() or None
     url = raw_url if raw_url and len(raw_url) <= _MEAL_IMAGE_URL_MAX_LEN else None
@@ -100,3 +123,105 @@ def _meal_image_for_catalog(catalog_meal: CatalogMeal) -> MealImage:
         size_bytes=1,
         url=url,
     )
+
+
+async def _load_nutrition_projections(
+    uow,
+    catalog_meal: CatalogMeal,
+) -> dict[int, FoodReferenceNutritionProjection]:
+    food_reference_ids = [
+        ingredient.food_reference_id for ingredient in catalog_meal.ingredients
+    ]
+    if not food_reference_ids:
+        return {}
+    repo = getattr(uow, "food_references", None)
+    loader = getattr(repo, "get_nutrition_projections", None)
+    if loader is None:
+        return {}
+    return await loader(food_reference_ids)
+
+
+def _food_item_for_ingredient(
+    ingredient: CatalogMealIngredient,
+    projection: FoodReferenceNutritionProjection | None,
+) -> FoodItem:
+    return FoodItem(
+        id=str(uuid4()),
+        name=ingredient.name,
+        quantity=float(ingredient.quantity),
+        unit=ingredient.unit,
+        macros=_macros_from_projection(ingredient, projection),
+        food_reference_id=ingredient.food_reference_id,
+    )
+
+
+def _macros_from_projection(
+    ingredient: CatalogMealIngredient,
+    projection: FoodReferenceNutritionProjection | None,
+) -> Macros:
+    if projection is None:
+        return Macros(protein=0, carbs=0, fat=0, fiber=0, sugar=0)
+    try:
+        resolved = _CATALOG_CONVERTER.resolve(
+            reference=projection,
+            quantity=float(ingredient.quantity),
+            unit=ingredient.unit,
+            display_name=ingredient.name,
+        )
+    except IngredientQuantityConversionError:
+        return Macros(protein=0, carbs=0, fat=0, fiber=0, sugar=0)
+    return Macros(
+        protein=resolved.protein,
+        carbs=resolved.carbs,
+        fat=resolved.fat,
+        fiber=resolved.fiber,
+        sugar=resolved.sugar,
+    )
+
+
+def _needs_catalog_macro_fallback(food_items: list[FoodItem]) -> bool:
+    if not food_items:
+        return False
+    return all(
+        item.macros.protein == 0 and item.macros.carbs == 0 and item.macros.fat == 0
+        for item in food_items
+    )
+
+
+def _distribute_catalog_macros(
+    food_items: list[FoodItem],
+    catalog_meal: CatalogMeal,
+) -> list[FoodItem]:
+    total_weight = sum(_estimated_grams(item) for item in food_items)
+    if total_weight <= 0:
+        return food_items
+    protein = float(catalog_meal.protein_g)
+    carbs = float(catalog_meal.carbs_g)
+    fat = float(catalog_meal.fat_g)
+    fiber = float(catalog_meal.fiber_g)
+    sugar = float(catalog_meal.sugar_g)
+    distributed: list[FoodItem] = []
+    for item in food_items:
+        ratio = _estimated_grams(item) / total_weight
+        distributed.append(
+            FoodItem(
+                id=item.id,
+                name=item.name,
+                quantity=item.quantity,
+                unit=item.unit,
+                macros=Macros(
+                    protein=round(protein * ratio, 1),
+                    carbs=round(carbs * ratio, 1),
+                    fat=round(fat * ratio, 1),
+                    fiber=round(fiber * ratio, 1),
+                    sugar=round(sugar * ratio, 1),
+                ),
+                food_reference_id=item.food_reference_id,
+            )
+        )
+    return distributed
+
+
+def _estimated_grams(item: FoodItem) -> float:
+    unit = (item.unit or "").lower().strip()
+    return item.quantity * _WEIGHT_UNITS_TO_GRAMS.get(unit, 1.0)

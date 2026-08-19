@@ -7,7 +7,13 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any, Protocol
 
-from src.app.services.food_name_localizer import translate_for_presentation
+from cachetools import TTLCache
+
+from src.app.services.food_name_localizer import (
+    translate_for_presentation,
+    translation_is_cacheable,
+)
+from src.domain.constants.translation_limits import iter_translation_batches
 from src.domain.model.meal_recommendation import (
     CatalogMeal,
     PersistedMealRecommendationCandidate,
@@ -17,6 +23,16 @@ from src.domain.model.meal_recommendation import (
 from src.domain.model.translation_result import TranslationOutcome
 
 logger = logging.getLogger(__name__)
+
+_CATALOG_TRANSLATION_CACHE: TTLCache[tuple[str, str], str] = TTLCache(
+    maxsize=4096, ttl=6 * 3600
+)
+
+
+def clear_catalog_presentation_cache() -> None:
+    """Reset process-local catalog presentation translations. Tests only."""
+
+    _CATALOG_TRANSLATION_CACHE.clear()
 
 
 class TextTranslationService(Protocol):
@@ -36,11 +52,7 @@ async def localize_meal_recommendation_plan(
     if language == "en" or translation_service is None:
         return plan
 
-    meals = [
-        meal
-        for slot in plan.slots
-        for meal in _slot_catalog_meals(slot)
-    ]
+    meals = [meal for slot in plan.slots for meal in _slot_catalog_meals(slot)]
     localized_meals = await _localized_meals(
         meals,
         language=language,
@@ -55,6 +67,30 @@ async def localize_meal_recommendation_plan(
             _replace_slot_catalog_meals(slot, localized_meals) for slot in plan.slots
         ),
     )
+
+
+async def localize_catalog_meals(
+    meals: Iterable[CatalogMeal],
+    *,
+    language: str,
+    translation_service: TextTranslationService | None,
+    include_ingredients: bool = True,
+) -> tuple[CatalogMeal, ...]:
+    """Return localized presentation copies of catalog meals."""
+
+    original = tuple(meals)
+    if language == "en" or translation_service is None or not original:
+        return original
+
+    localized_meals = await _localized_meals(
+        list(original),
+        language=language,
+        translation_service=translation_service,
+        include_ingredients=include_ingredients,
+    )
+    if localized_meals is None:
+        return original
+    return tuple(localized_meals.get(meal.id, meal) for meal in original)
 
 
 async def localize_meal_recommendation_slot(
@@ -79,7 +115,9 @@ async def localize_meal_recommendation_slot(
     return _replace_slot_catalog_meals(slot, localized_meals)
 
 
-def _slot_catalog_meals(slot: PersistedMealRecommendationSlot) -> tuple[CatalogMeal, ...]:
+def _slot_catalog_meals(
+    slot: PersistedMealRecommendationSlot,
+) -> tuple[CatalogMeal, ...]:
     candidates = (slot.selected, *slot.alternatives)
     return tuple(
         candidate.catalog_meal
@@ -93,44 +131,74 @@ async def _localized_meals(
     *,
     language: str,
     translation_service: TextTranslationService,
+    include_ingredients: bool = True,
 ) -> dict[str, CatalogMeal] | None:
     unique_meals = {meal.id: meal for meal in meals}
-    texts = _unique_display_texts(unique_meals.values())
+    texts = _unique_display_texts(
+        unique_meals.values(), include_ingredients=include_ingredients
+    )
     if not texts:
         return dict(unique_meals)
 
-    try:
-        result = await translate_for_presentation(translation_service, texts, language)
-    except Exception as exc:
-        logger.warning(
-            "catalog response translation failed language=%s error_type=%s",
-            language,
-            type(exc).__name__,
-        )
+    translations: dict[str, str] = {}
+    missing: list[str] = []
+    for text in texts:
+        cached = _CATALOG_TRANSLATION_CACHE.get((language, text))
+        if cached is not None:
+            translations[text] = cached
+        else:
+            missing.append(text)
+
+    if missing:
+        try:
+            for batch in iter_translation_batches(missing):
+                result = await translate_for_presentation(
+                    translation_service, batch, language
+                )
+                if result.outcome is TranslationOutcome.UNAVAILABLE:
+                    continue
+                cacheable = translation_is_cacheable(result)
+                for index, text in enumerate(batch):
+                    translated = (
+                        result.items[index] if index < len(result.items) else text
+                    )
+                    translations[text] = translated
+                    if cacheable:
+                        _CATALOG_TRANSLATION_CACHE[(language, text)] = translated
+        except Exception as exc:
+            logger.warning(
+                "catalog response translation failed language=%s error_type=%s",
+                language,
+                type(exc).__name__,
+            )
+            if not translations:
+                return None
+
+    if missing and not translations:
         return None
 
-    if result.outcome is TranslationOutcome.UNAVAILABLE:
-        return None
-
-    translations = {
-        text: result.items[index] if index < len(result.items) else text
-        for index, text in enumerate(texts)
-    }
+    for text in texts:
+        translations.setdefault(text, text)
     return {
         meal_id: _replace_meal_display_text(meal, translations)
         for meal_id, meal in unique_meals.items()
     }
 
 
-def _unique_display_texts(meals: Iterable[CatalogMeal]) -> list[str]:
+def _unique_display_texts(
+    meals: Iterable[CatalogMeal],
+    *,
+    include_ingredients: bool = True,
+) -> list[str]:
     texts: list[str] = []
     for meal in meals:
         _append_unique(texts, meal.name)
         _append_unique(texts, meal.cuisine)
         if meal.description:
             _append_unique(texts, meal.description)
-        for ingredient in meal.ingredients:
-            _append_unique(texts, ingredient.display_name)
+        if include_ingredients:
+            for ingredient in meal.ingredients:
+                _append_unique(texts, ingredient.display_name)
     return texts
 
 
@@ -191,5 +259,7 @@ def _replace_candidate_catalog_meal(
         return candidate
     return replace(
         candidate,
-        catalog_meal=localized_meals.get(candidate.catalog_meal.id, candidate.catalog_meal),
+        catalog_meal=localized_meals.get(
+            candidate.catalog_meal.id, candidate.catalog_meal
+        ),
     )
