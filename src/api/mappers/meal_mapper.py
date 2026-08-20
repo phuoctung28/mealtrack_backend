@@ -432,9 +432,10 @@ class MealMapper:
     @staticmethod
     def has_persisted_image_display_names(meal: Meal) -> bool:
         """Return whether an image meal can trust its stored display names."""
-        return getattr(meal, "source", None) == "scanner" and not getattr(
-            meal, "translations", None
-        )
+        return getattr(meal, "source", None) in {
+            "scanner",
+            "food_label",
+        } and not getattr(meal, "translations", None)
 
     @staticmethod
     def _raw_response_localization_language(meal: Meal) -> str | None:

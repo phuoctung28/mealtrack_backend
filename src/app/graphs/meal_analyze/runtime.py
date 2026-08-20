@@ -53,8 +53,12 @@ class MealAnalyzeRuntime:
     image_store: ImageStorePort | None = None
     download_image_bytes: Callable[[str], Awaitable[bytes]] | None = None
     compress_image: Callable[[bytes], bytes] = default_compress_image
-    image_id_factory: Callable[[], str] = field(default_factory=lambda: lambda: str(uuid4()))
-    meal_id_factory: Callable[[], str] = field(default_factory=lambda: lambda: str(uuid4()))
+    image_id_factory: Callable[[], str] = field(
+        default_factory=lambda: lambda: str(uuid4())
+    )
+    meal_id_factory: Callable[[], str] = field(
+        default_factory=lambda: lambda: str(uuid4())
+    )
     vision_service: VisionAIServicePort | None = None
     gpt_parser: Any | None = None
     uow: Any | None = None
@@ -63,8 +67,11 @@ class MealAnalyzeRuntime:
     meal_value_insight_cache: CachePort | None = None
     meal_value_insight_ai_manager: MealInsightAIPort | None = None
     event_bus: MealInsightEventBus | None = None
-    meal_value_insight_scheduler: Callable[..., bool] = schedule_value_insight_generation
+    meal_value_insight_scheduler: Callable[..., bool] = (
+        schedule_value_insight_generation
+    )
     meal_translation_service: MealTranslationService | None = None
+    text_translation_service: Any | None = None
     food_reference_validation_service: FoodReferenceValidationService | None = None
     fatsecret_validation_enabled: bool = False
     max_vision_attempts: int = 1

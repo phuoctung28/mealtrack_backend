@@ -159,9 +159,6 @@ from src.app.handlers.query_handlers.get_activities_presence_query_handler impor
 from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
     GetCheatDaysQueryHandler,
 )
-from src.app.handlers.query_handlers.list_logged_catalog_meals_query_handler import (
-    ListLoggedCatalogMealsQueryHandler,
-)
 from src.app.handlers.query_handlers.get_meal_recommendation_plan_query_handler import (
     GetMealRecommendationPlanQueryHandler,
 )
@@ -173,6 +170,9 @@ from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
 )
 from src.app.handlers.query_handlers.get_weight_entries_query_handler import (
     GetWeightEntriesQueryHandler,
+)
+from src.app.handlers.query_handlers.list_logged_catalog_meals_query_handler import (
+    ListLoggedCatalogMealsQueryHandler,
 )
 from src.app.queries.activity import GetBulkActivitiesQuery, GetDailyActivitiesQuery
 from src.app.queries.cheat_day import GetCheatDaysQuery
@@ -481,6 +481,7 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
+            text_translation_service=text_translation_service,
             cache_invalidation=cache_invalidation_service,
             meal_value_insight_task_manager=task_manager,
             meal_value_insight_cache=cache_service,

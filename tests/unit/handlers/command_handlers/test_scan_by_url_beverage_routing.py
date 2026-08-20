@@ -3,8 +3,8 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from src.api.exceptions import ValidationException
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.handlers.command_handlers.scan_by_url_command_handler import (
     ScanByUrlCommandHandler,
@@ -196,6 +196,73 @@ async def test_scan_by_url_food_label_uses_crop_image_ai_without_ocr(
         "crop_strategy: food_label_visible_frame_v1" in call.args[1].get_user_message()
     )
     vision_service.analyze.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_food_label_localizes_english_product_name(monkeypatch):
+    _install_fake_image_download(
+        monkeypatch, responses={_IMAGE_URL: b"full-image-bytes"}
+    )
+    uow = _make_uow()
+    cache = MagicMock()
+    cache.after_meal_write = AsyncMock()
+    vision_service = MagicMock()
+    vision_service.analyze_with_strategy = AsyncMock(
+        return_value={
+            "structured_data": {
+                "is_food_label": True,
+                "product_name": "Protein Bar",
+                "brand": None,
+                "serving_size": {"display_text": "55g", "grams": 55},
+                "servings_per_package": 1,
+                "label_calories_per_serving": 230,
+                "macros_per_serving": {
+                    "protein_g": 20,
+                    "carbs_g": 20,
+                    "fat_g": 8,
+                    "fiber_g": 0,
+                    "sugar_g": 0,
+                },
+                "confidence": 0.9,
+                "label_notes": [],
+            }
+        }
+    )
+    translator = AsyncMock()
+    from src.domain.model.translation_result import (
+        TranslationOutcome,
+        TranslationResult,
+    )
+
+    translator.translate_texts.return_value = TranslationResult(
+        ("Thanh protein",),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
+    handler = ScanByUrlCommandHandler(
+        uow=uow,
+        event_bus=MagicMock(),
+        vision_service=vision_service,
+        gpt_parser=VisionResponseParser(),
+        text_translation_service=translator,
+        cache_invalidation=cache,
+    )
+
+    result = await handler.handle(
+        ScanByUrlCommand(
+            user_id=_USER_ID,
+            image_url=_IMAGE_URL,
+            public_id="mealtrack/00000000-0000-0000-0000-000000000099",
+            scan_mode="food_label",
+            language="vi",
+        )
+    )
+
+    assert result.source == "food_label"
+    assert result.food_label_metadata["product_name"] == "Thanh protein"
+    assert result.nutrition.food_items[0].name == "Thanh protein"
+    translator.translate_texts.assert_awaited_once_with(["Protein Bar"], "en", "vi")
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,7 @@ from src.app.graphs.meal_analyze.quality_gate import (
 )
 from src.app.graphs.meal_analyze.runtime import AcquiredImage, MealAnalyzeRuntime
 from src.app.graphs.meal_analyze.state import MealAnalyzeGraphState
+from src.app.services.food_label_localizer import localize_food_label_display
 from src.domain.constants import MealDefaults
 from src.domain.exceptions.ai_exceptions import (
     AIVisionError,
@@ -244,7 +245,9 @@ async def _analyze_and_validate_locale(runtime: MealAnalyzeRuntime, operation):
         runtime.localization = None
         return result
 
-    structured_data = result.get("structured_data") if isinstance(result, dict) else None
+    structured_data = (
+        result.get("structured_data") if isinstance(result, dict) else None
+    )
     if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
         runtime.localization = None
         return result
@@ -320,6 +323,12 @@ async def parse_nutrition(
                 ),
                 error_code="NOT_FOOD_LABEL_IMAGE",
             )
+        runtime.nutrition, runtime.label_metadata = await localize_food_label_display(
+            nutrition=runtime.nutrition,
+            metadata=runtime.label_metadata,
+            language=runtime.command.language,
+            translation_service=runtime.text_translation_service,
+        )
         return {"nutrition_parsed": True}
 
     if not runtime.gpt_parser.parse_is_food(runtime.vision_result):
