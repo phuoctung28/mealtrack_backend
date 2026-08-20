@@ -51,6 +51,10 @@ class IngredientNutritionResolver:
         Returns None if fatsecret returns no results, hits rate limits,
         or raises any network exception.
         """
+        if self._fs is None:
+            logger.debug("fatsecret provider unavailable for ingredient '%s'", name)
+            return None
+
         try:
             results: List[Dict[str, Any]] = await self._fs.search_foods(
                 query=name, max_results=5
