@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, noload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.meal.meal_image import MealImage as DomainMealImage
 from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition import Nutrition
 from src.domain.model.nutrition.macros import Macros
@@ -120,19 +121,7 @@ class AsyncMealRepository(MealRepositoryPort):
 
             # Update image association/URL if changed.
             if meal.image:
-                img_result = await self.session.execute(
-                    select(MealImageORM).where(
-                        MealImageORM.image_id == meal.image.image_id
-                    )
-                )
-                existing_image = img_result.scalars().first()
-                if existing_image:
-                    if existing_image.url != meal.image.url:
-                        existing_image.url = meal.image.url
-                else:
-                    existing_image = meal_image_domain_to_orm(meal.image)
-                    self.session.add(existing_image)
-                    await self.session.flush()
+                existing_image = await self._upsert_meal_image(meal.image)
                 existing_meal.image_id = str(meal.image.image_id)
                 existing_meal.image = existing_image
             else:
@@ -151,48 +140,21 @@ class AsyncMealRepository(MealRepositoryPort):
                     )
 
             await self.session.flush()
-            # Re-fetch with eager loading so mapper can access nutrition/food_items
-            result2 = await self.session.execute(
-                select(MealORM)
-                .options(
-                    selectinload(MealORM.nutrition).selectinload(
-                        NutritionORM.food_items
-                    ),
-                    selectinload(MealORM.instruction_steps),
-                )
-                .where(MealORM.meal_id == meal.meal_id)
+            return await self._reload_meal_domain(
+                meal.meal_id, fallback_image=meal.image
             )
-            existing_meal = result2.scalars().first()
-            return meal_orm_to_domain(existing_meal)
         else:
             db_meal = meal_domain_to_orm(meal)
             if meal.image:
-                img_result = await self.session.execute(
-                    select(MealImageORM).where(
-                        MealImageORM.image_id == meal.image.image_id
-                    )
-                )
-                if not img_result.scalars().first():
-                    db_image = meal_image_domain_to_orm(meal.image)
-                    self.session.add(db_image)
-                    await self.session.flush()
+                db_image = await self._upsert_meal_image(meal.image)
                 db_meal.image_id = str(meal.image.image_id)
+                db_meal.image = db_image
 
             self.session.add(db_meal)
             await self.session.flush()
-            # Re-fetch with eager loading after flush
-            result2 = await self.session.execute(
-                select(MealORM)
-                .options(
-                    selectinload(MealORM.nutrition).selectinload(
-                        NutritionORM.food_items
-                    ),
-                    selectinload(MealORM.instruction_steps),
-                )
-                .where(MealORM.meal_id == db_meal.meal_id)
+            return await self._reload_meal_domain(
+                db_meal.meal_id, fallback_image=meal.image
             )
-            db_meal = result2.scalars().first()
-            return meal_orm_to_domain(db_meal)
 
     async def find_by_id(
         self, meal_id: str, projection: MealProjection = MealProjection.FULL
@@ -218,9 +180,7 @@ class AsyncMealRepository(MealRepositoryPort):
         """
         # Step 1: lock the meal row without any joins.
         lock_result = await self.session.execute(
-            select(MealORM.meal_id)
-            .where(MealORM.meal_id == meal_id)
-            .with_for_update()
+            select(MealORM.meal_id).where(MealORM.meal_id == meal_id).with_for_update()
         )
         if lock_result.scalar_one_or_none() is None:
             return None
@@ -639,6 +599,53 @@ class AsyncMealRepository(MealRepositoryPort):
             for catalog_meal_id, logged_at in result.all()
             if catalog_meal_id is not None
         )
+
+    async def _upsert_meal_image(self, image: DomainMealImage) -> MealImageORM:
+        """Insert or update a mealimage row, always refreshing a non-empty URL."""
+        img_result = await self.session.execute(
+            select(MealImageORM).where(MealImageORM.image_id == image.image_id)
+        )
+        existing_image = img_result.scalars().first()
+        if existing_image:
+            if image.url and existing_image.url != image.url:
+                existing_image.url = image.url
+            if image.format:
+                existing_image.format = image.format
+            if image.size_bytes:
+                existing_image.size_bytes = image.size_bytes
+            if image.width is not None:
+                existing_image.width = image.width
+            if image.height is not None:
+                existing_image.height = image.height
+            return existing_image
+
+        db_image = meal_image_domain_to_orm(image)
+        self.session.add(db_image)
+        await self.session.flush()
+        return db_image
+
+    async def _reload_meal_domain(
+        self, meal_id: str, *, fallback_image: DomainMealImage | None = None
+    ) -> Meal:
+        """Reload a meal with image/nutrition eager-loaded after write."""
+        result = await self.session.execute(
+            select(MealORM)
+            .options(
+                joinedload(MealORM.image),
+                selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+                selectinload(MealORM.instruction_steps),
+            )
+            .where(MealORM.meal_id == meal_id)
+        )
+        db_meal = result.unique().scalars().first()
+        mapped = meal_orm_to_domain(db_meal)
+        # Defensive: identity-map edge cases can drop the joined image on write.
+        # Keep the caller's verified image URL so scan/detail responses stay in sync.
+        if fallback_image and (
+            mapped.image is None or (fallback_image.url and not mapped.image.url)
+        ):
+            return mapped.with_image(fallback_image)
+        return mapped
 
     async def _update_nutrition(
         self, db_nutrition: NutritionORM, domain_nutrition: Nutrition

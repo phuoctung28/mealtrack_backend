@@ -189,8 +189,10 @@ async def update_meal_ingredients(
     )
     if payload.nutrition_contract_version == 2:
         result = dict(result)
+        image_url = getattr(getattr(meal, "image", None), "url", None)
         result["meal_detail"] = MealMapper.to_detailed_response(
             meal,
+            image_url,
             target_language=get_request_language(request),
         )
     return result

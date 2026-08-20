@@ -88,7 +88,9 @@ class MealMapper:
 
         Args:
             meal: Meal domain model
-            image_url: Optional image URL
+            image_url: Optional image URL. When omitted, falls back to the
+                persisted ``meal.image.url`` so callers cannot accidentally drop
+                the photo on meal-detail responses.
             target_language: ISO 639-1 code; if provided and a cached
                 translation exists, translated fields are applied to the response.
 
@@ -101,6 +103,11 @@ class MealMapper:
             NutritionOverrideResponse,
             TranslatedFoodItemResponse,
         )
+
+        if not image_url:
+            persisted_image = getattr(meal, "image", None)
+            if persisted_image is not None:
+                image_url = getattr(persisted_image, "url", None)
 
         # Map food items from nutrition if available
         food_items = []
