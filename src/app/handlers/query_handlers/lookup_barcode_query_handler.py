@@ -10,6 +10,7 @@ from typing import Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.services.food_name_localizer import (
+    needs_display_localization,
     translate_food_texts,
     translated_values,
 )
@@ -25,6 +26,7 @@ from src.infra.adapters.open_food_facts_service import OpenFoodFactsService
 logger = logging.getLogger(__name__)
 
 TRUSTED_CACHE_SOURCES = {"fatsecret", "openfoodfacts", "usda_fdc", "cache", None}
+ENGLISH_CANONICAL_CACHE_SOURCES = frozenset({"fatsecret", "usda_fdc"})
 
 
 def _gs1_prefix_hint(barcode: str) -> str:
@@ -32,7 +34,9 @@ def _gs1_prefix_hint(barcode: str) -> str:
 
 
 @handles(LookupBarcodeQuery)
-class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] | None]):
+class LookupBarcodeQueryHandler(
+    EventHandler[LookupBarcodeQuery, dict[str, Any] | None]
+):
     """Handler for looking up product by barcode with fallback providers."""
 
     def __init__(
@@ -85,15 +89,26 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         partial_name: str | None = None
 
         cached = await self._get_cached_product(aliases)
-        if cached and self._has_nutrition(cached) and self._is_trusted_cached_row(cached):
+        if (
+            cached
+            and self._has_nutrition(cached)
+            and self._is_trusted_cached_row(cached)
+        ):
             provider_source = cached.get("source")
             cached["provider_source"] = provider_source
             cached["source"] = "cache"
             cached["barcode"] = scanned_barcode
             log_hit("cache", cached)
-            # Cached rows have no source-locale provenance.  They remain
-            # canonical rather than being mislabeled as English.
-            return await self._maybe_translate(cached, query.language)
+            # FatSecret/USDA rows are acquired in English. Other cached rows may
+            # lack provenance, so only localize leftover English display text.
+            cache_source_language = (
+                "en" if provider_source in ENGLISH_CANONICAL_CACHE_SOURCES else None
+            )
+            return await self._maybe_translate(
+                cached,
+                query.language,
+                source_language=cache_source_language,
+            )
         if cached:
             partial_name = cached.get("name")
             reason = (
@@ -121,13 +136,19 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                 language="en",
             ),
         )
-        if fat_secret_result and self._has_nutrition(fat_secret_result) and self._has_name(fat_secret_result):
+        if (
+            fat_secret_result
+            and self._has_nutrition(fat_secret_result)
+            and self._has_name(fat_secret_result)
+        ):
             result = self._trusted_provider_result(
                 fat_secret_result, query.barcode, scanned_barcode, "fatsecret"
             )
             await self._cache_result(result, cache_barcode=query.barcode)
             log_hit("fatsecret", result)
-            return await self._maybe_translate(result, query.language, source_language="en")
+            return await self._maybe_translate(
+                result, query.language, source_language="en"
+            )
         if fat_secret_result:
             partial_name = partial_name or fat_secret_result.get("name")
             miss_reasons.append(
@@ -139,7 +160,11 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
             miss_reasons.append("fatsecret_empty")
 
         off_result = await self._first_barcode_hit(aliases, self.off.get_product)
-        if off_result and self._has_nutrition(off_result) and self._has_name(off_result):
+        if (
+            off_result
+            and self._has_nutrition(off_result)
+            and self._has_name(off_result)
+        ):
             off_result = dict(off_result)
             source_language = off_result.pop("source_language", None)
             result = self._trusted_provider_result(
@@ -160,8 +185,14 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         else:
             miss_reasons.append("openfoodfacts_empty")
 
-        fdc_result = await self._get_fdc_product(aliases, query.barcode, scanned_barcode)
-        if fdc_result and self._has_nutrition(fdc_result) and self._has_name(fdc_result):
+        fdc_result = await self._get_fdc_product(
+            aliases, query.barcode, scanned_barcode
+        )
+        if (
+            fdc_result
+            and self._has_nutrition(fdc_result)
+            and self._has_name(fdc_result)
+        ):
             await self._cache_result(fdc_result, cache_barcode=query.barcode)
             log_hit("usda_fdc", fdc_result)
             return await self._maybe_translate(
@@ -201,13 +232,17 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
                 return estimate
 
         if brave_result and self._has_nutrition(brave_result):
-            estimate = self._estimate_result(brave_result, scanned_barcode, "brave_search")
+            estimate = self._estimate_result(
+                brave_result, scanned_barcode, "brave_search"
+            )
             log_hit("brave_search", estimate)
             return estimate
         if self.brave_search and not brave_result:
             miss_reasons.append("brave_empty")
 
-        estimate = await self._ai_estimate(scanned_barcode, query.language, partial_name)
+        estimate = await self._ai_estimate(
+            scanned_barcode, query.language, partial_name
+        )
         if estimate:
             log_hit("ai_estimate", estimate)
             return estimate
@@ -240,7 +275,10 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
 
     @staticmethod
     def _is_trusted_cached_row(result: dict[str, Any]) -> bool:
-        return bool(result.get("is_verified")) or result.get("source") in TRUSTED_CACHE_SOURCES
+        return (
+            bool(result.get("is_verified"))
+            or result.get("source") in TRUSTED_CACHE_SOURCES
+        )
 
     async def _first_barcode_hit(self, aliases, fetch):
         for alias in aliases:
@@ -296,7 +334,9 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         for item in fs_results or []:
             if self._has_nutrition(item):
                 item["name"] = brave_name or item.get("name")
-                return self._estimate_result(item, scanned_barcode, "fatsecret_name_search")
+                return self._estimate_result(
+                    item, scanned_barcode, "fatsecret_name_search"
+                )
         return None
 
     def _trusted_provider_result(
@@ -381,16 +421,21 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
         language: str,
         source_language: str | None = None,
     ) -> dict[str, Any]:
-        """Translate a known-English provider projection for presentation only."""
-        if (
-            language == "en"
-            or source_language != "en"
-            or not self.translation_service
-            or not result.get("name")
+        """Translate known-English or leftover-English names for presentation."""
+        name = result.get("name")
+        if language == "en" or not self.translation_service or not name:
+            return result
+
+        # Proven English sources always localize. Unknown provenance only
+        # localizes when the display name still looks like leftover English,
+        # so printed non-English product names are not mangled.
+        if source_language != "en" and not (
+            source_language is None and needs_display_localization(str(name), language)
         ):
             return result
+
         translated = await translate_food_texts(
-            [str(result["name"])],
+            [str(name)],
             target_language=language,
             translation_service=self.translation_service,
         )
@@ -399,11 +444,13 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
             TranslationOutcome.PARTIAL,
         }:
             localized = dict(result)
-            localized["name"] = translated_values([str(result["name"])], translated)[0]
+            localized["name"] = translated_values([str(name)], translated)[0]
             return localized
         return result
 
-    async def _get_cached_product(self, aliases: tuple[str, ...]) -> dict[str, Any] | None:
+    async def _get_cached_product(
+        self, aliases: tuple[str, ...]
+    ) -> dict[str, Any] | None:
         candidates: list[dict[str, Any]] = []
         for barcode in aliases:
             cached = await self._get_cached_product_by_barcode(barcode)

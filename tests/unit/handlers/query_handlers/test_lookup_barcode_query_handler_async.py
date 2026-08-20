@@ -172,7 +172,7 @@ async def test_non_english_openfoodfacts_english_name_is_localized_without_persi
 
 
 @pytest.mark.asyncio
-async def test_cached_barcode_without_source_provenance_stays_canonical():
+async def test_cached_english_barcode_name_is_localized_for_non_english_request():
     repo = _FoodReferenceRepo(
         {
             "123": {
@@ -181,6 +181,31 @@ async def test_cached_barcode_without_source_provenance_stays_canonical():
                 "protein_100g": 2.7,
                 "carbs_100g": 28,
                 "fat_100g": 0.3,
+                "source": "fatsecret",
+                "is_verified": True,
+            }
+        }
+    )
+    handler = _handler(repo, translation_service=_NeutralTranslator())
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    assert result["name"] == "Cơm gạo lứt"
+    assert result["source"] == "cache"
+
+
+@pytest.mark.asyncio
+async def test_cached_non_english_barcode_name_stays_canonical():
+    repo = _FoodReferenceRepo(
+        {
+            "123": {
+                "barcode": "123",
+                "name": "Cơm gạo lứt",
+                "protein_100g": 2.7,
+                "carbs_100g": 28,
+                "fat_100g": 0.3,
+                "source": "openfoodfacts",
+                "is_verified": True,
             }
         }
     )
@@ -189,7 +214,7 @@ async def test_cached_barcode_without_source_provenance_stays_canonical():
 
     result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
 
-    assert result["name"] == "Brown Rice"
+    assert result["name"] == "Cơm gạo lứt"
     translator.translate_texts.assert_not_awaited()
 
 

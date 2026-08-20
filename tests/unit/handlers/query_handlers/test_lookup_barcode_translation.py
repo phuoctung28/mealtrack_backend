@@ -53,3 +53,46 @@ async def test_non_english_first_scan_keeps_english_cache_for_later_english_read
 
     assert english["name"] == "Brown Rice"
     assert english["source"] == "cache"
+
+
+@pytest.mark.asyncio
+async def test_cached_fatsecret_hit_localizes_for_vietnamese_request():
+    repo = _FoodReferenceRepo(
+        {
+            "123": {
+                "barcode": "123",
+                "name": "Brown Rice",
+                "protein_100g": 2.7,
+                "carbs_100g": 28,
+                "fat_100g": 0.3,
+                "source": "fatsecret",
+                "is_verified": True,
+            }
+        }
+    )
+    handler = _handler(repo, translation_service=_NeutralTranslator())
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    assert result["source"] == "cache"
+    assert result["name"] == "Cơm gạo lứt"
+
+
+@pytest.mark.asyncio
+async def test_cached_unknown_source_english_name_still_localizes():
+    repo = _FoodReferenceRepo(
+        {
+            "123": {
+                "barcode": "123",
+                "name": "Brown Rice",
+                "protein_100g": 2.7,
+                "carbs_100g": 28,
+                "fat_100g": 0.3,
+            }
+        }
+    )
+    handler = _handler(repo, translation_service=_NeutralTranslator())
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    assert result["name"] == "Cơm gạo lứt"
