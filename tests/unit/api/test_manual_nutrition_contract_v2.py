@@ -81,9 +81,7 @@ def test_v2_prepared_source_item_requires_and_keeps_snapshot():
             _v2_create_item(
                 custom_nutrition=nutrition,
                 source_snapshot=snapshot,
-                allowed_units=[
-                    {"unit": "g", "gram_weight": 1, "description": "1 g"}
-                ],
+                allowed_units=[{"unit": "g", "gram_weight": 1, "description": "1 g"}],
             )
         ],
     )
@@ -217,20 +215,70 @@ def test_v2_source_replacement_without_portion_fields_is_still_rejected():
         )
 
 
-def test_v2_item_override_requires_explicit_user_intent():
-    with pytest.raises(ValidationError):
+def test_v2_item_override_defaults_user_intent():
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=2,
+        food_item_changes=[
+            {
+                "action": "update",
+                "id": "item-1",
+                "nutrition_override": {
+                    "calories": 500,
+                    "protein": 20,
+                    "carbs": 30,
+                    "fat": 15,
+                },
+            }
+        ],
+    )
+
+    assert request.food_item_changes[0].override_intent == "user_entered"
+
+
+def test_v2_clear_item_override_defaults_user_intent():
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=2,
+        food_item_changes=[
+            {
+                "action": "update",
+                "id": "item-1",
+                "clear_nutrition_override": True,
+            }
+        ],
+    )
+
+    assert request.food_item_changes[0].override_intent == "user_entered"
+
+
+@pytest.mark.parametrize(
+    "nutrition_contract_version",
+    [None, 2],
+)
+@pytest.mark.parametrize(
+    "override_fields",
+    [
+        {
+            "nutrition_override": {
+                "calories": 500,
+                "protein": 20,
+                "carbs": 30,
+                "fat": 15,
+            }
+        },
+        {"clear_nutrition_override": True},
+    ],
+)
+def test_item_override_actions_reject_non_update(
+    nutrition_contract_version, override_fields
+):
+    with pytest.raises(ValidationError, match="owned item update"):
         EditMealIngredientsRequest(
-            nutrition_contract_version=2,
+            nutrition_contract_version=nutrition_contract_version,
             food_item_changes=[
                 {
-                    "action": "update",
-                    "id": "item-1",
-                    "nutrition_override": {
-                        "calories": 500,
-                        "protein": 20,
-                        "carbs": 30,
-                        "fat": 15,
-                    },
+                    "action": "add",
+                    "id": "client-generated-id",
+                    **override_fields,
                 }
             ],
         )

@@ -81,15 +81,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
                 if meal.status != MealStatus.READY:
                     raise ValidationException("Meal must be in READY status to edit")
-                if command.nutrition_contract_version == 2:
-                    if (
-                        command.nutrition_override
-                        and command.override_intent != "user_entered"
-                    ):
-                        raise ValidationException(
-                            "meal nutrition override requires explicit user intent"
-                        )
-
+                for change in command.food_item_changes:
+                    self._validate_item_override_action(change)
                 reservation = await self._reserve_v2_write(command, uow)
                 if reservation and reservation.state == "replay":
                     if reservation.target_meal_id != command.meal_id:
@@ -442,10 +435,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             )
         if meal.status != MealStatus.READY:
             raise ValidationException("Meal must be in READY status to edit")
-        if command.nutrition_override and command.override_intent != "user_entered":
-            raise ValidationException(
-                "meal nutrition override requires explicit user intent"
-            )
         return meal
 
     async def _reserve_v2_write_short(self, command):
@@ -457,6 +446,13 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                     limit=100,
                 )
             return await self._reserve_v2_write(command, uow)
+
+    @staticmethod
+    def _validate_item_override_action(change):
+        if change.action != "update" and (
+            change.nutrition_override is not None or change.clear_nutrition_override
+        ):
+            raise ValueError("nutrition override requires an owned item update")
 
     async def _release_v2_write(self, reservation):
         async with self.uow_factory() as uow:
@@ -504,6 +500,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         prepared = []
         resolved_items = []
         for change in changes:
+            self._validate_item_override_action(change)
             if change.action == "remove":
                 if change.id not in current_by_id:
                     raise ValueError("v2 remove requires an owned food item id")
@@ -517,13 +514,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
             if change.nutrition_override is not None or change.clear_nutrition_override:
                 if not change.id:
-                    raise ValueError(
-                        "nutrition override requires an owned food item id"
-                    )
-                if change.override_intent != "user_entered":
-                    raise ValueError(
-                        "food item nutrition override requires explicit user intent"
-                    )
+                    raise ValueError("nutrition override requires an owned item update")
                 prepared.append(change)
                 continue
 

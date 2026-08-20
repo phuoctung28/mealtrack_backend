@@ -514,18 +514,18 @@ class EditMealIngredientsRequest(BaseModel):
         )
         if self.nutrition_contract_version not in (None, 2):
             raise ValueError("unsupported nutrition_contract_version")
+        for change in self.food_item_changes:
+            if change.action != "update" and (
+                change.nutrition_override is not None or change.clear_nutrition_override
+            ):
+                raise ValueError("nutrition override requires an owned item update")
         if self.nutrition_contract_version != 2:
             if has_v2_fields or self.override_intent is not None:
                 raise ValueError("v2 fields require nutrition_contract_version=2")
             return self
         if self.nutrition_override is not None:
-            # Older v2 clients sent the absolute meal values but did not yet
-            # serialize the intent marker. The override payload itself is the
-            # explicit user action for this legacy shape.
-            if self.override_intent is None:
-                self.override_intent = "user_entered"
-            elif self.override_intent != "user_entered":
-                raise ValueError("meal override requires override_intent=user_entered")
+            # The absolute override payload is itself the user's intent.
+            self.override_intent = "user_entered"
 
         for change in self.food_item_changes:
             identity_fields = (
@@ -554,12 +554,18 @@ class EditMealIngredientsRequest(BaseModel):
             if not change.id and change.action == "update":
                 raise ValueError("v2 update requires an owned item id")
             if change.nutrition_override is not None:
-                if change.override_intent != "user_entered" or any(
-                    value is not None for value in identity_fields
-                ):
+                change.override_intent = "user_entered"
+                if change.action != "update" or not change.id:
+                    raise ValueError(
+                        "v2 nutrition override requires an owned item update"
+                    )
+                if any(value is not None for value in identity_fields):
                     raise ValueError("item override cannot replace source nutrition")
             elif change.clear_nutrition_override:
-                if change.override_intent != "user_entered" or any(
+                change.override_intent = "user_entered"
+                if change.action != "update" or not change.id:
+                    raise ValueError("v2 clear-override requires an owned item update")
+                if any(
                     value is not None
                     for value in (
                         change.name,
