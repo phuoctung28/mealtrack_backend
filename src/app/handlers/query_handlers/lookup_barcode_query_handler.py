@@ -229,14 +229,14 @@ class LookupBarcodeQueryHandler(
             )
             if estimate:
                 log_hit("fatsecret_name_estimate", estimate)
-                return estimate
+                return await self._maybe_translate(estimate, query.language)
 
         if brave_result and self._has_nutrition(brave_result):
             estimate = self._estimate_result(
                 brave_result, scanned_barcode, "brave_search"
             )
             log_hit("brave_search", estimate)
-            return estimate
+            return await self._maybe_translate(estimate, query.language)
         if self.brave_search and not brave_result:
             miss_reasons.append("brave_empty")
 
@@ -245,7 +245,7 @@ class LookupBarcodeQueryHandler(
         )
         if estimate:
             log_hit("ai_estimate", estimate)
-            return estimate
+            return await self._maybe_translate(estimate, query.language)
 
         miss_reasons.append("ai_estimate_empty")
         logger.warning(
