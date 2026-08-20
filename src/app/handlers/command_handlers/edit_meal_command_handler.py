@@ -485,8 +485,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         resolved_items_out=None,
     ):
         """Resolve source changes from backend references before strategies run."""
-        if len(changes) > 50:
-            raise ValueError("meal edits cannot contain more than 50 item changes")
         current_by_id = {item.id: item for item in current_food_items}
         prepared = []
         resolved_items = []

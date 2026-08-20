@@ -488,7 +488,6 @@ class EditMealIngredientsRequest(BaseModel):
     override_intent: Optional[Literal["user_entered"]] = Field(None)
     food_item_changes: list[FoodItemChangeRequest] = Field(
         default_factory=list,
-        max_length=50,
         description="List of ingredient changes",
     )
 

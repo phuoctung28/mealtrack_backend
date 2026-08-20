@@ -444,6 +444,15 @@ class TestEditMealIngredientsRequest:
         with pytest.raises(ValidationError):
             EditMealIngredientsRequest()
 
+    def test_accepts_more_than_fifty_item_changes(self):
+        request = EditMealIngredientsRequest(
+            food_item_changes=[
+                {"action": "remove", "id": str(index)} for index in range(51)
+            ]
+        )
+
+        assert len(request.food_item_changes) == 51
+
     def test_dish_name_too_long(self):
         """Test dish name too long validation."""
         # Arrange & Act & Assert
