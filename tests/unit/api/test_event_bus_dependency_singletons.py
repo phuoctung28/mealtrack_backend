@@ -3,6 +3,10 @@ import importlib
 import pytest
 
 
+class _CacheStub:
+    redis = object()
+
+
 def test_provider_budget_does_not_depend_on_optional_cache_flag(monkeypatch):
     mod = importlib.import_module("src.api.dependencies.event_bus")
 
@@ -20,6 +24,16 @@ def test_provider_budget_does_not_depend_on_optional_cache_flag(monkeypatch):
     budget = mod._build_provider_budget(_Cache())
 
     assert isinstance(budget, _Budget)
+
+
+def test_development_uses_memory_budget_when_redis_cache_missing(monkeypatch):
+    mod = importlib.import_module("src.api.dependencies.event_bus")
+    monkeypatch.setattr(mod.settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(mod.settings, "NUTRITION_PROVIDER_GLOBAL_RPM", 10)
+
+    budget = mod._build_provider_budget(None)
+
+    assert isinstance(budget, mod.MemoryProviderBudget)
 
 
 def test_get_food_search_event_bus_is_singleton(monkeypatch):
@@ -100,7 +114,7 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
     monkeypatch.setattr(deps, "get_food_data_service", lambda: object())
     monkeypatch.setattr(deps, "get_food_mapping_service", lambda: object())
     monkeypatch.setattr(deps, "get_fat_secret_service_instance", lambda: object())
-    monkeypatch.setattr(deps, "get_cache_service", lambda: object())
+    monkeypatch.setattr(deps, "get_cache_service", lambda: _CacheStub())
     monkeypatch.setattr(deps, "get_suggestion_orchestration_service", lambda: object())
     monkeypatch.setattr(deps, "get_meal_translation_service", lambda: object())
 
@@ -217,7 +231,7 @@ def test_configured_event_bus_wires_meal_analyze_validation(monkeypatch):
     monkeypatch.setattr(deps, "get_food_data_service", lambda: object())
     monkeypatch.setattr(deps, "get_food_mapping_service", lambda: object())
     monkeypatch.setattr(deps, "get_fat_secret_service_instance", lambda: object())
-    monkeypatch.setattr(deps, "get_cache_service", lambda: object())
+    monkeypatch.setattr(deps, "get_cache_service", lambda: _CacheStub())
     monkeypatch.setattr(deps, "get_suggestion_orchestration_service", lambda: object())
     monkeypatch.setattr(deps, "get_meal_translation_service", lambda: object())
     monkeypatch.setattr(deps, "get_text_translation_service", lambda: object())
@@ -351,7 +365,7 @@ async def test_configured_event_bus_can_send_movement_catalog_query(monkeypatch)
     monkeypatch.setattr(deps, "get_food_data_service", lambda: object())
     monkeypatch.setattr(deps, "get_food_mapping_service", lambda: object())
     monkeypatch.setattr(deps, "get_fat_secret_service_instance", lambda: object())
-    monkeypatch.setattr(deps, "get_cache_service", lambda: object())
+    monkeypatch.setattr(deps, "get_cache_service", lambda: _CacheStub())
     monkeypatch.setattr(deps, "get_suggestion_orchestration_service", lambda: object())
     monkeypatch.setattr(deps, "get_meal_translation_service", lambda: object())
 
