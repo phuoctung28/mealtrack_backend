@@ -535,23 +535,26 @@ class FatSecretService:
 
 
 _fat_secret_service: FatSecretService | None = None
+_fat_secret_service_initialized = False
 
 
 def get_fat_secret_service() -> FatSecretService | None:
     """Get the optional FatSecret service when credentials are configured."""
-    global _fat_secret_service
-    if _fat_secret_service is None:
-        client_id = settings.FATSECRET_CLIENT_ID
-        client_secret = settings.FATSECRET_CLIENT_SECRET
+    global _fat_secret_service, _fat_secret_service_initialized
+    if _fat_secret_service_initialized:
+        return _fat_secret_service
 
-        if not client_id or not client_secret:
-            logger.warning(
-                "fatsecret credentials not configured; provider will be skipped"
-            )
-            return None
+    client_id = settings.FATSECRET_CLIENT_ID
+    client_secret = settings.FATSECRET_CLIENT_SECRET
 
-        _fat_secret_service = FatSecretService(
-            client_id=client_id,
-            client_secret=client_secret,
-        )
+    if not client_id or not client_secret:
+        logger.warning("fatsecret credentials not configured; provider will be skipped")
+        _fat_secret_service_initialized = True
+        return None
+
+    _fat_secret_service = FatSecretService(
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+    _fat_secret_service_initialized = True
     return _fat_secret_service
