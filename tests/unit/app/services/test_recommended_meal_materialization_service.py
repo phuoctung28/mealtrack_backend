@@ -233,6 +233,45 @@ async def test_materializer_attaches_catalog_image_url_when_present():
 
 
 @pytest.mark.asyncio
+async def test_materializer_keeps_long_catalog_image_urls():
+    plan, slot = _plan_and_slot()
+    catalog_meal = slot.selected.catalog_meal
+    assert catalog_meal is not None
+    long_url = (
+        "https://res.cloudinary.com/demo/image/upload/"
+        "c_fill,w_1200,h_1200,q_auto:good,f_auto,fl_progressive/"
+        "v1720000000/mealtrack/" + ("catalog-meal-" + "x" * 200) + ".jpg"
+    )
+    assert len(long_url) > 255
+    assert len(long_url) <= 1024
+    slot = PersistedMealRecommendationSlot(
+        **{
+            **slot.__dict__,
+            "selected": PersistedMealRecommendationCandidate(
+                **{
+                    **slot.selected.__dict__,
+                    "catalog_meal": CatalogMeal(
+                        **{
+                            **catalog_meal.__dict__,
+                            "image_url": long_url,
+                        }
+                    ),
+                }
+            ),
+        }
+    )
+
+    meal = await RecommendedMealMaterializationService().materialize(
+        _Uow(),
+        plan=plan,
+        slot=slot,
+    )
+
+    assert meal.image is not None
+    assert meal.image.url == long_url
+
+
+@pytest.mark.asyncio
 async def test_materializer_fails_with_public_error_when_selected_meal_missing():
     plan, slot = _plan_and_slot()
     slot = PersistedMealRecommendationSlot(**{**slot.__dict__, "selected": None})

@@ -25,8 +25,8 @@ from src.domain.services.meal_recommendation.ingredient_quantity_conversion_serv
 )
 from src.domain.utils.timezone_utils import noon_utc_for_date
 
-# mealimage.url is VARCHAR(255); keep inserts valid when catalog URLs are longer.
-_MEAL_IMAGE_URL_MAX_LEN = 255
+# mealimage.url is VARCHAR(1024); keep inserts valid if a URL somehow exceeds it.
+_MEAL_IMAGE_URL_MAX_LEN = 1024
 _CATALOG_CONVERTER = IngredientQuantityConversionService(
     allow_unverified=True,
     allow_unapproved_sources=True,
