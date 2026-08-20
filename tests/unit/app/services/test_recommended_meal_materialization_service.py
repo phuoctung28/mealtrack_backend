@@ -240,10 +240,9 @@ async def test_materializer_keeps_long_catalog_image_urls():
     long_url = (
         "https://res.cloudinary.com/demo/image/upload/"
         "c_fill,w_1200,h_1200,q_auto:good,f_auto,fl_progressive/"
-        "v1720000000/mealtrack/" + ("catalog-meal-" + "x" * 200) + ".jpg"
+        "v1720000000/mealtrack/" + ("catalog-meal-" + "x" * 1200) + ".jpg"
     )
-    assert len(long_url) > 255
-    assert len(long_url) <= 1024
+    assert len(long_url) > 1024
     slot = PersistedMealRecommendationSlot(
         **{
             **slot.__dict__,

@@ -2,7 +2,7 @@
 Meal image model for storing image metadata.
 """
 
-from sqlalchemy import Column, String, Integer
+from sqlalchemy import Column, Integer, String, Text
 
 from src.infra.database.base import Base
 from src.infra.database.models.base import TimestampMixin
@@ -19,4 +19,4 @@ class MealImageORM(Base, TimestampMixin):
     size_bytes = Column(Integer, nullable=False)
     width = Column(Integer, nullable=True)  # Changed to nullable
     height = Column(Integer, nullable=True)  # Changed to nullable
-    url = Column(String(1024), nullable=True)  # Cloudinary / CDN image URL
+    url = Column(Text, nullable=True)  # Cloudinary / CDN image URL

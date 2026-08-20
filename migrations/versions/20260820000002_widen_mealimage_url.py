@@ -1,4 +1,4 @@
-"""Widen mealimage.url so Cloudinary / CDN URLs are not truncated.
+"""Widen mealimage.url to Text so CDN URLs are not truncated.
 
 Revision ID: 20260820000002
 Revises: 20260819000001
@@ -21,7 +21,7 @@ def upgrade() -> None:
         "mealimage",
         "url",
         existing_type=sa.String(length=255),
-        type_=sa.String(length=1024),
+        type_=sa.Text(),
         existing_nullable=True,
     )
 
@@ -30,7 +30,7 @@ def downgrade() -> None:
     op.alter_column(
         "mealimage",
         "url",
-        existing_type=sa.String(length=1024),
+        existing_type=sa.Text(),
         type_=sa.String(length=255),
         existing_nullable=True,
     )

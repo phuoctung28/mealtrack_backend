@@ -25,8 +25,6 @@ from src.domain.services.meal_recommendation.ingredient_quantity_conversion_serv
 )
 from src.domain.utils.timezone_utils import noon_utc_for_date
 
-# mealimage.url is VARCHAR(1024); keep inserts valid if a URL somehow exceeds it.
-_MEAL_IMAGE_URL_MAX_LEN = 1024
 _CATALOG_CONVERTER = IngredientQuantityConversionService(
     allow_unverified=True,
     allow_unapproved_sources=True,
@@ -115,8 +113,7 @@ class RecommendedMealMaterializationService:
 def _meal_image_for_catalog(catalog_meal: CatalogMeal) -> MealImage:
     """Build a meal image row from catalog URL, or a placeholder when absent."""
 
-    raw_url = (catalog_meal.image_url or "").strip() or None
-    url = raw_url if raw_url and len(raw_url) <= _MEAL_IMAGE_URL_MAX_LEN else None
+    url = (catalog_meal.image_url or "").strip() or None
     return MealImage(
         image_id=str(uuid4()),
         format="jpeg",
