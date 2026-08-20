@@ -308,6 +308,7 @@ async def test_upload_uses_workflow_only_when_graph_enabled():
         meal_analyze_workflow=workflow,
         meal_analyze_graph_enabled=True,
     )
+    handler._remember_upload = AsyncMock()
     command = UploadMealImageImmediatelyCommand(
         user_id="00000000-0000-0000-0000-000000000001",
         file_contents=b"fake-image-bytes",
@@ -335,6 +336,7 @@ async def test_upload_graph_disabled_keeps_legacy_path():
         meal_analyze_graph_enabled=False,
     )
     handler._handle_parallel_upload = AsyncMock(return_value="legacy-result")
+    handler._remember_upload = AsyncMock()
     command = UploadMealImageImmediatelyCommand(
         user_id="00000000-0000-0000-0000-000000000001",
         file_contents=b"fake-image-bytes",

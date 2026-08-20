@@ -59,6 +59,9 @@ async def test_scan_by_url_handler_propagates_ai_validation_error():
     mock_uow.__aexit__ = AsyncMock(return_value=False)
     mock_uow.users = MagicMock()
     mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.meals = MagicMock()
+    mock_uow.meals.find_ready_by_user_and_image_id = AsyncMock(return_value=None)
+    mock_uow.meals.find_by_id = AsyncMock(return_value=None)
 
     handler = ScanByUrlCommandHandler(
         uow=mock_uow,

@@ -21,6 +21,7 @@ def _uow_with_timezone() -> MagicMock:
     uow.meals = MagicMock()
     uow.meals.save = AsyncMock()
     uow.meals.find_by_id = AsyncMock()
+    uow.meals.find_ready_by_user_and_image_id = AsyncMock(return_value=None)
     uow.commit = AsyncMock()
     return uow
 
