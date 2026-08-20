@@ -76,6 +76,30 @@ def _build_hydration_activity(meal: Meal, language: str = "en") -> dict[str, Any
     }
 
 
+def _build_hydration_entry_activity(entry, language: str = "en") -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "type": "hydration",
+        "timestamp": format_iso_utc(entry.logged_at),
+        "title": localized_name_for_catalog_name(entry.drink_name_snapshot, language)
+        or entry.drink_name_snapshot
+        or "Water",
+        "emoji": entry.emoji_snapshot or "💧",
+        "meal_type": "hydration",
+        "calories": round(entry.calories, 1),
+        "macros": {
+            "protein": round(entry.protein_g or 0, 1),
+            "carbs": round(entry.carbs_g or 0, 1),
+            "fat": round(entry.fat_g or 0, 1),
+        },
+        "quantity": entry.credited_ml,
+        "volume_ml": entry.volume_ml,
+        "status": "completed",
+        "image_url": entry.image_url,
+        "source": entry.source,
+    }
+
+
 @handles(GetBulkActivitiesQuery)
 class GetBulkActivitiesQueryHandler(
     EventHandler[GetBulkActivitiesQuery, dict[str, list[dict[str, Any]]]]
@@ -99,9 +123,18 @@ class GetBulkActivitiesQueryHandler(
                 user_timezone=user_tz_str,
                 projection=MealProjection.FULL_WITH_TRANSLATIONS,
             )
+            hydration_entries = await uow.hydration_entries.find_by_date_range(
+                user_id=query.user_id,
+                start_date=query.start_date,
+                end_date=query.end_date,
+                user_timezone=user_tz_str,
+            )
 
         language = query.language or "en"
         result: dict[str, list[dict[str, Any]]] = {}
+        covered_meal_ids = {
+            entry.legacy_meal_id for entry in hydration_entries if entry.legacy_meal_id
+        }
 
         for meal in meals:
             if meal.status not in _ACTIVE_STATUSES:
@@ -110,8 +143,16 @@ class GetBulkActivitiesQueryHandler(
             if local_date not in result:
                 result[local_date] = []
             if meal.meal_type == "hydration":
+                if meal.meal_id in covered_meal_ids:
+                    continue
                 result[local_date].append(_build_hydration_activity(meal, language))
             else:
                 result[local_date].append(_build_meal_activity(meal, language))
+
+        for entry in hydration_entries:
+            local_date = entry.logged_at.astimezone(tz).date().isoformat()
+            if local_date not in result:
+                result[local_date] = []
+            result[local_date].append(_build_hydration_entry_activity(entry, language))
 
         return result
