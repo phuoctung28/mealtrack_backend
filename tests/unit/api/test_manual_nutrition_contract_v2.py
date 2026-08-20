@@ -217,7 +217,7 @@ def test_v2_source_replacement_without_portion_fields_is_still_rejected():
         )
 
 
-def test_v2_override_requires_explicit_user_intent():
+def test_v2_item_override_requires_explicit_user_intent():
     with pytest.raises(ValidationError):
         EditMealIngredientsRequest(
             nutrition_contract_version=2,
@@ -234,6 +234,20 @@ def test_v2_override_requires_explicit_user_intent():
                 }
             ],
         )
+
+
+def test_v2_meal_override_without_intent_is_compatible_with_legacy_clients():
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=2,
+        nutrition_override={
+            "calories": 500,
+            "protein": 20,
+            "carbs": 30,
+            "fat": 15,
+        },
+    )
+
+    assert request.override_intent == "user_entered"
 
 
 def test_nutrition_override_rejects_negative_absolute_values():

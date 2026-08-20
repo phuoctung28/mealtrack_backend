@@ -150,6 +150,9 @@ handler/schema when implementing; the bullets below are the durable WHY.
   `nutrition_override` and per-item `nutrition_override` /
   `clear_nutrition_override`. Overrides are absolute user values while set;
   clearing restores source/macro-derived nutrition without rewriting source rows.
+- `override_intent` omission is normalized only for top-level meal overrides
+  from legacy v2 clients; item-level overrides still require nested explicit
+  intent.
 - `custom_nutrition` on non-USDA ingredients is per-100g macros; calories stay
   macro-derived (fiber-aware), which is distinct from absolute overrides.
 - Manual meal v2 save failures now split between validation and provider trust

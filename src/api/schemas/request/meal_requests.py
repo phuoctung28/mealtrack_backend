@@ -518,11 +518,14 @@ class EditMealIngredientsRequest(BaseModel):
             if has_v2_fields or self.override_intent is not None:
                 raise ValueError("v2 fields require nutrition_contract_version=2")
             return self
-        if (
-            self.nutrition_override is not None
-            and self.override_intent != "user_entered"
-        ):
-            raise ValueError("meal override requires override_intent=user_entered")
+        if self.nutrition_override is not None:
+            # Older v2 clients sent the absolute meal values but did not yet
+            # serialize the intent marker. The override payload itself is the
+            # explicit user action for this legacy shape.
+            if self.override_intent is None:
+                self.override_intent = "user_entered"
+            elif self.override_intent != "user_entered":
+                raise ValueError("meal override requires override_intent=user_entered")
 
         for change in self.food_item_changes:
             identity_fields = (
