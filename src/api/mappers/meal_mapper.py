@@ -104,8 +104,10 @@ class MealMapper:
             TranslatedFoodItemResponse,
         )
 
-        if not image_url and meal.image and meal.image.url:
-            image_url = meal.image.url
+        if not image_url:
+            persisted_image = getattr(meal, "image", None)
+            if persisted_image is not None:
+                image_url = getattr(persisted_image, "url", None)
 
         # Map food items from nutrition if available
         food_items = []

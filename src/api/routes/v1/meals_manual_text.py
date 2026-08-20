@@ -223,7 +223,7 @@ async def create_manual_meal(
             created_at=meal.created_at,
             meal_detail=MealMapper.to_detailed_response(
                 meal,
-                image_url=meal.image.url if meal.image else None,
+                image_url=getattr(getattr(meal, "image", None), "url", None),
                 target_language=get_request_language(request),
             ),
         )
