@@ -260,6 +260,58 @@ async def test_v2_item_override_rejects_add_action_in_handler(clear_override):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("clear_override", [False, True])
+async def test_v2_item_override_allows_remove_action_in_handler(clear_override):
+    change = FoodItemChange(
+        action="remove",
+        id="item-1",
+        clear_nutrition_override=clear_override,
+        nutrition_override=(
+            None
+            if clear_override
+            else NutritionOverride(calories=500, protein=20, carbs=30, fat=15)
+        ),
+    )
+    handler = EditMealCommandHandler(uow=None)
+
+    handler._validate_item_override_action(change)
+
+
+@pytest.mark.asyncio
+async def test_v2_remove_ignores_extra_override_fields_when_applying():
+    current = FoodItem(
+        id="item-1",
+        name="Rice",
+        quantity=100,
+        unit="g",
+        macros=Macros(protein=2.7, carbs=28.0, fat=0.3),
+    )
+    change = FoodItemChange(
+        action="remove",
+        id="item-1",
+        quantity=200,
+        nutrition_override=NutritionOverride(
+            calories=500,
+            protein=20,
+            carbs=30,
+            fat=15,
+        ),
+    )
+    handler = EditMealCommandHandler(
+        uow=None,
+        nutrition_resolver=_PassthroughResolver(),
+    )
+
+    prepared = await handler._prepare_v2_changes(
+        [current], [change], SimpleNamespace(food_references=object())
+    )
+    updated = await handler._apply_food_item_changes([current], prepared)
+
+    assert prepared == [change]
+    assert updated == []
+
+
+@pytest.mark.asyncio
 async def test_v2_meal_override_does_not_require_intent_in_preflight():
     class _Meals:
         async def find_by_id(self, meal_id, projection=None):

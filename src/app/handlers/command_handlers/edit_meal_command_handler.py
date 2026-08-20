@@ -449,7 +449,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
     @staticmethod
     def _validate_item_override_action(change):
-        if change.action != "update" and (
+        if change.action == "add" and (
             change.nutrition_override is not None or change.clear_nutrition_override
         ):
             raise ValueError("nutrition override requires an owned item update")

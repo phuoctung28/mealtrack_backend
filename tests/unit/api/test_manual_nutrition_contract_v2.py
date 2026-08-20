@@ -129,18 +129,52 @@ def test_v2_create_rejects_missing_version_mismatched_ids_and_missing_custom_dat
         CreateManualMealFromFoodsRequest.model_validate(payload)
 
 
-def test_v2_remove_rejects_nutrition_and_source_fields():
-    with pytest.raises(ValidationError):
-        EditMealIngredientsRequest(
-            nutrition_contract_version=2,
-            food_item_changes=[
-                {
-                    "action": "remove",
-                    "id": "item-1",
-                    "quantity": 100,
-                }
-            ],
-        )
+def test_v2_remove_accepts_extra_edit_fields():
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=2,
+        food_item_changes=[
+            {
+                "action": "remove",
+                "id": "item-1",
+                "name": "Ignored name",
+                "quantity": 100,
+                "unit": "g",
+                "nutrition_override": {
+                    "calories": 500,
+                    "protein": 20,
+                    "carbs": 30,
+                    "fat": 15,
+                },
+                "clear_nutrition_override": True,
+                "food_reference_id": 42,
+            }
+        ],
+    )
+
+    assert request.food_item_changes[0].id == "item-1"
+
+
+@pytest.mark.parametrize("nutrition_contract_version", [None, 2])
+def test_remove_override_is_accepted_for_legacy_and_v2_clients(
+    nutrition_contract_version,
+):
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=nutrition_contract_version,
+        food_item_changes=[
+            {
+                "action": "remove",
+                "id": "item-1",
+                "nutrition_override": {
+                    "calories": 500,
+                    "protein": 20,
+                    "carbs": 30,
+                    "fat": 15,
+                },
+            }
+        ],
+    )
+
+    assert request.food_item_changes[0].id == "item-1"
 
 
 def test_v2_quantity_update_strips_legacy_source_echoes():
@@ -248,6 +282,25 @@ def test_v2_clear_item_override_defaults_user_intent():
     )
 
     assert request.food_item_changes[0].override_intent == "user_entered"
+
+
+def test_v2_clear_item_override_accepts_quantity_edit():
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=2,
+        food_item_changes=[
+            {
+                "action": "update",
+                "id": "item-1",
+                "quantity": 200,
+                "unit": "g",
+                "clear_nutrition_override": True,
+            }
+        ],
+    )
+
+    change = request.food_item_changes[0]
+    assert change.quantity == 200
+    assert change.override_intent == "user_entered"
 
 
 @pytest.mark.parametrize(

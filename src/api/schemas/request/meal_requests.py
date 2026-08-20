@@ -515,7 +515,7 @@ class EditMealIngredientsRequest(BaseModel):
         if self.nutrition_contract_version not in (None, 2):
             raise ValueError("unsupported nutrition_contract_version")
         for change in self.food_item_changes:
-            if change.action != "update" and (
+            if change.action == "add" and (
                 change.nutrition_override is not None or change.clear_nutrition_override
             ):
                 raise ValueError("nutrition override requires an owned item update")
@@ -536,19 +536,8 @@ class EditMealIngredientsRequest(BaseModel):
                 change.food_id,
             )
             if change.action == "remove":
-                if (
-                    not change.id
-                    or change.name is not None
-                    or change.quantity is not None
-                    or change.unit is not None
-                    or change.custom_nutrition is not None
-                    or change.nutrition_override is not None
-                    or change.clear_nutrition_override
-                    or change.override_intent is not None
-                    or change.allowed_units
-                    or any(value is not None for value in identity_fields)
-                ):
-                    raise ValueError("v2 remove accepts only the owned item id")
+                if not change.id:
+                    raise ValueError("v2 remove requires an owned food item id")
                 continue
 
             if not change.id and change.action == "update":
@@ -565,17 +554,8 @@ class EditMealIngredientsRequest(BaseModel):
                 change.override_intent = "user_entered"
                 if change.action != "update" or not change.id:
                     raise ValueError("v2 clear-override requires an owned item update")
-                if any(
-                    value is not None
-                    for value in (
-                        change.name,
-                        change.quantity,
-                        change.unit,
-                        change.custom_nutrition,
-                        *identity_fields,
-                    )
-                ):
-                    raise ValueError("v2 clear-override accepts only the owned item id")
+                if any(value is not None for value in identity_fields):
+                    raise ValueError("item clear cannot replace source nutrition")
             elif change.action == "add":
                 if change.origin is None:
                     raise ValueError("v2 add requires origin")
