@@ -420,17 +420,19 @@ class CustomNutritionRequest(BaseModel):
     """
 
     protein_per_100g: float = Field(
-        ..., ge=0, le=100, description="Protein per 100g in grams"
+        ..., ge=0, allow_inf_nan=False, description="Protein per 100g in grams"
     )
     carbs_per_100g: float = Field(
-        ..., ge=0, le=100, description="Carbohydrates per 100g in grams"
+        ..., ge=0, allow_inf_nan=False, description="Carbohydrates per 100g in grams"
     )
-    fat_per_100g: float = Field(..., ge=0, le=100, description="Fat per 100g in grams")
+    fat_per_100g: float = Field(
+        ..., ge=0, allow_inf_nan=False, description="Fat per 100g in grams"
+    )
     fiber_per_100g: float = Field(
-        0.0, ge=0, le=100, description="Fiber per 100g in grams"
+        0.0, ge=0, allow_inf_nan=False, description="Fiber per 100g in grams"
     )
     sugar_per_100g: float = Field(
-        0.0, ge=0, le=100, description="Sugar per 100g in grams"
+        0.0, ge=0, allow_inf_nan=False, description="Sugar per 100g in grams"
     )
 
     @property
@@ -462,9 +464,9 @@ class NutritionOverrideRequest(BaseModel):
     """Absolute values that intentionally bypass nutrition recalculation."""
 
     calories: float = Field(..., ge=0, allow_inf_nan=False)
-    protein: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
-    carbs: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
-    fat: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
+    protein: float = Field(..., ge=0, allow_inf_nan=False)
+    carbs: float = Field(..., ge=0, allow_inf_nan=False)
+    fat: float = Field(..., ge=0, allow_inf_nan=False)
 
 
 class EditMealIngredientsRequest(BaseModel):
@@ -486,7 +488,6 @@ class EditMealIngredientsRequest(BaseModel):
     override_intent: Optional[Literal["user_entered"]] = Field(None)
     food_item_changes: list[FoodItemChangeRequest] = Field(
         default_factory=list,
-        max_length=50,
         description="List of ingredient changes",
     )
 
@@ -518,13 +519,13 @@ class EditMealIngredientsRequest(BaseModel):
             if has_v2_fields or self.override_intent is not None:
                 raise ValueError("v2 fields require nutrition_contract_version=2")
             return self
-        if (
-            self.nutrition_override is not None
-            and self.override_intent != "user_entered"
-        ):
-            raise ValueError("meal override requires override_intent=user_entered")
+        if self.nutrition_override is not None:
+            # The absolute override payload is itself the user's intent.
+            self.override_intent = "user_entered"
 
         for change in self.food_item_changes:
+            if change.nutrition_override is not None or change.clear_nutrition_override:
+                change.override_intent = "user_entered"
             identity_fields = (
                 change.food_reference_id,
                 change.fdc_id,
@@ -533,44 +534,24 @@ class EditMealIngredientsRequest(BaseModel):
                 change.food_id,
             )
             if change.action == "remove":
-                if (
-                    not change.id
-                    or change.name is not None
-                    or change.quantity is not None
-                    or change.unit is not None
-                    or change.custom_nutrition is not None
-                    or change.nutrition_override is not None
-                    or change.clear_nutrition_override
-                    or change.override_intent is not None
-                    or change.allowed_units
-                    or any(value is not None for value in identity_fields)
-                ):
-                    raise ValueError("v2 remove accepts only the owned item id")
+                if not change.id:
+                    raise ValueError("v2 remove requires an owned food item id")
                 continue
 
             if not change.id and change.action == "update":
                 raise ValueError("v2 update requires an owned item id")
-            if change.nutrition_override is not None:
-                if change.override_intent != "user_entered" or any(
-                    value is not None for value in identity_fields
-                ):
-                    raise ValueError("item override cannot replace source nutrition")
-            elif change.clear_nutrition_override:
-                if change.override_intent != "user_entered" or any(
-                    value is not None
-                    for value in (
-                        change.name,
-                        change.quantity,
-                        change.unit,
-                        change.custom_nutrition,
-                        *identity_fields,
-                    )
-                ):
-                    raise ValueError("v2 clear-override accepts only the owned item id")
-            elif change.action == "add":
+            if change.action == "add":
                 if change.origin is None:
                     raise ValueError("v2 add requires origin")
                 _validate_change_origin(change)
+                continue
+
+            if change.nutrition_override is not None:
+                if any(value is not None for value in identity_fields):
+                    raise ValueError("item override cannot replace source nutrition")
+            elif change.clear_nutrition_override:
+                if any(value is not None for value in identity_fields):
+                    raise ValueError("item clear cannot replace source nutrition")
             elif change.origin is not None:
                 _validate_change_origin(change)
             elif change.origin is None:

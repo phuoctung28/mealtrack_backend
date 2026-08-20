@@ -204,23 +204,20 @@ class TestCustomNutritionRequest:
         assert request.carbs_per_100g == 25.0
         assert request.fat_per_100g == 8.0
 
-    def test_negative_protein(self):
-        """Test negative protein validation."""
-        # Arrange & Act & Assert
+    def test_negative_protein_is_rejected(self):
         with pytest.raises(ValidationError):
             CustomNutritionRequest(
                 protein_per_100g=-5.0, carbs_per_100g=25.0, fat_per_100g=8.0
             )
 
-    def test_protein_too_high(self):
-        """Test protein too high validation."""
-        # Arrange & Act & Assert
-        with pytest.raises(ValidationError):
-            CustomNutritionRequest(
-                protein_per_100g=150.0,  # Over 100 limit
-                carbs_per_100g=25.0,
-                fat_per_100g=8.0,
-            )
+    def test_protein_above_density_limit_is_user_editable(self):
+        request = CustomNutritionRequest(
+            protein_per_100g=150.0,
+            carbs_per_100g=25.0,
+            fat_per_100g=8.0,
+        )
+
+        assert request.protein_per_100g == 150.0
 
 
 @pytest.mark.unit
@@ -446,6 +443,15 @@ class TestEditMealIngredientsRequest:
         """Test empty edit requests are rejected."""
         with pytest.raises(ValidationError):
             EditMealIngredientsRequest()
+
+    def test_accepts_more_than_fifty_item_changes(self):
+        request = EditMealIngredientsRequest(
+            food_item_changes=[
+                {"action": "remove", "id": str(index)} for index in range(51)
+            ]
+        )
+
+        assert len(request.food_item_changes) == 51
 
     def test_dish_name_too_long(self):
         """Test dish name too long validation."""

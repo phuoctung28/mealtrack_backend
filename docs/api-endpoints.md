@@ -150,6 +150,14 @@ handler/schema when implementing; the bullets below are the durable WHY.
   `nutrition_override` and per-item `nutrition_override` /
   `clear_nutrition_override`. Overrides are absolute user values while set;
   clearing restores source/macro-derived nutrition without rewriting source rows.
+- `override_intent` is compatibility metadata. When a meal-level or item-level
+  override is present, the override payload itself implies user intent and the
+  backend normalizes the marker automatically. Nutrition values and owned-item
+  constraints remain validated.
+- Meal ingredient updates and removals accept override metadata without requiring
+  a separate intent marker. Removal is identified by the owned item id; extra
+  edit fields do not change the removal operation. Adds with override metadata
+  remain rejected because an add does not target an owned item.
 - `custom_nutrition` on non-USDA ingredients is per-100g macros; calories stay
   macro-derived (fiber-aware), which is distinct from absolute overrides.
 - Manual meal v2 save failures now split between validation and provider trust
