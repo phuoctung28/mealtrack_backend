@@ -204,12 +204,11 @@ class TestCustomNutritionRequest:
         assert request.carbs_per_100g == 25.0
         assert request.fat_per_100g == 8.0
 
-    def test_negative_protein_is_user_editable(self):
-        request = CustomNutritionRequest(
-            protein_per_100g=-5.0, carbs_per_100g=25.0, fat_per_100g=8.0
-        )
-
-        assert request.protein_per_100g == -5.0
+    def test_negative_protein_is_rejected(self):
+        with pytest.raises(ValidationError):
+            CustomNutritionRequest(
+                protein_per_100g=-5.0, carbs_per_100g=25.0, fat_per_100g=8.0
+            )
 
     def test_protein_above_density_limit_is_user_editable(self):
         request = CustomNutritionRequest(

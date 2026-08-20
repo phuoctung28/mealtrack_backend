@@ -388,16 +388,26 @@ def test_v2_meal_override_without_intent_is_compatible_with_legacy_clients():
     assert request.override_intent == "user_entered"
 
 
-def test_nutrition_override_accepts_user_entered_values_without_range_guards():
+def test_nutrition_override_rejects_negative_values():
+    with pytest.raises(ValidationError):
+        NutritionOverrideRequest(
+            calories=500,
+            protein=-1,
+            carbs=3000,
+            fat=1500,
+        )
+
+
+def test_nutrition_override_accepts_large_nonnegative_values():
     request = NutritionOverrideRequest(
-        calories=-500,
-        protein=-1,
+        calories=100000,
+        protein=5000,
         carbs=3000,
         fat=1500,
     )
 
-    assert request.calories == -500
-    assert request.protein == -1
+    assert request.calories == 100000
+    assert request.protein == 5000
     assert request.carbs == 3000
     assert request.fat == 1500
 
