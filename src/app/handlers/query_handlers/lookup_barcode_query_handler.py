@@ -92,14 +92,17 @@ class LookupBarcodeQueryHandler(
             and self._has_nutrition(cached)
             and self._is_trusted_cached_row(cached)
         ):
-            provider_source = cached.get("source")
-            cached["provider_source"] = provider_source
-            cached["source"] = "cache"
-            cached["barcode"] = scanned_barcode
-            log_hit("cache", cached)
-            # Cached rows have no source-locale provenance.  They remain
-            # canonical rather than being mislabeled as English.
-            return await self._maybe_translate(cached, query.language)
+            cached_product = self._canonicalize_cached_product(cached)
+            if cached_product is not None:
+                provider_source = cached_product.get("source")
+                cached_product["provider_source"] = provider_source
+                cached_product["source"] = "cache"
+                cached_product["barcode"] = scanned_barcode
+                log_hit("cache", cached_product)
+                # Cached rows have no source-locale provenance.  They remain
+                # canonical rather than being mislabeled as English.
+                return await self._maybe_translate(cached_product, query.language)
+            miss_reasons.append("cache_missing_source_identity")
         if cached:
             partial_name = cached.get("name")
             reason = (
@@ -276,6 +279,34 @@ class LookupBarcodeQueryHandler(
             bool(result.get("is_verified"))
             or result.get("source") in TRUSTED_CACHE_SOURCES
         )
+
+    @staticmethod
+    def _canonicalize_cached_product(
+        result: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Attach a durable identity before returning a cached barcode row."""
+        cached = dict(result)
+        reference_id = cached.get("id") or cached.get("food_reference_id")
+        if reference_id is not None:
+            try:
+                reference_id = int(reference_id)
+            except (TypeError, ValueError):
+                reference_id = None
+        if reference_id is not None:
+            cached.update(
+                {
+                    "food_reference_id": reference_id,
+                    "origin": "local",
+                    "source_namespace": "food_reference",
+                    "source_food_id": str(reference_id),
+                }
+            )
+            return cached
+
+        if cached.get("source_namespace") and cached.get("source_food_id"):
+            cached["origin"] = "provider"
+            return cached
+        return None
 
     async def _first_barcode_hit(self, aliases, fetch):
         for alias in aliases:

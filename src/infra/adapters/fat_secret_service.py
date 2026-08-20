@@ -193,7 +193,12 @@ class FatSecretService:
             if not food_details:
                 return None
 
-            return self._map_product(food_details, normalized_barcode)
+            food_data = food_details.get("food", food_details)
+            return self._map_product(
+                food_data,
+                normalized_barcode,
+                source_food_id=str(food_id),
+            )
         except Exception as e:
             logger.warning(
                 "fatsecret API error for barcode lookup: %s", type(e).__name__
@@ -420,14 +425,30 @@ class FatSecretService:
             provider_100g_label=True,
         ) or [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
-    def _map_product(self, food: dict[str, Any], barcode: str) -> dict[str, Any]:
+    def _map_product(
+        self,
+        food: dict[str, Any],
+        barcode: str,
+        source_food_id: str | None = None,
+    ) -> dict[str, Any]:
         """Map fatsecret response to clean dict."""
+        resolved_source_food_id = str(
+            source_food_id or food.get("food_id") or ""
+        ).strip()
+        provider_identity: dict[str, str] = {}
+        if resolved_source_food_id:
+            provider_identity = {
+                "origin": "provider",
+                "source_namespace": "fatsecret",
+                "source_food_id": resolved_source_food_id,
+            }
         serving = self._select_per_100g_serving(food)
         if not isinstance(serving, dict):
             return {
                 "name": food.get("food_name", ""),
                 "brand": food.get("brand_name"),
                 "barcode": barcode,
+                **provider_identity,
                 "calories_100g": None,
                 "protein_100g": None,
                 "carbs_100g": None,
@@ -443,6 +464,7 @@ class FatSecretService:
                 "name": food.get("food_name", ""),
                 "brand": food.get("brand_name"),
                 "barcode": barcode,
+                **provider_identity,
                 "calories_100g": self._calc_per_100g(
                     serving.get("calories"), metric_amount
                 ),
