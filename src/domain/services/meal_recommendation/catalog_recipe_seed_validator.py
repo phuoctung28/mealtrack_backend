@@ -9,6 +9,8 @@ from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.domain.ports.catalog_recipe_repository_port import MAX_CATALOG_POPULARITY_RANK
+
 REQUIRED_CUISINES = ("vietnamese", "japanese", "korean")
 ALLOWED_MEAL_TYPES = ("breakfast", "lunch", "dinner", "snack")
 REQUIRED_COVERAGE_MEAL_TYPES = ("breakfast", "lunch", "dinner")
@@ -171,6 +173,16 @@ def _validate_recipe(
 
     if _string(recipe.get("name")) is None:
         errors.append(f"recipes[{index}].name is required")
+
+    popularity_rank = recipe.get("popularity_rank")
+    if popularity_rank is not None and (
+        isinstance(popularity_rank, bool)
+        or not isinstance(popularity_rank, int)
+        or not 0 <= popularity_rank <= MAX_CATALOG_POPULARITY_RANK
+    ):
+        errors.append(
+            f"recipes[{index}].popularity_rank must fit a non-negative PostgreSQL INTEGER or null"
+        )
 
     _validate_absent_derived_recipe_fields(recipe, index, errors)
     _validate_ingredients(recipe.get("ingredients"), index, errors)

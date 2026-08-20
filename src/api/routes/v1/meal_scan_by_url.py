@@ -149,7 +149,10 @@ async def _scan_by_url(
             details={"error_message": error_message},
         )
 
-    response_image_url = meal.image.url if meal.image else None
+    response_image_url = getattr(getattr(meal, "image", None), "url", None)
+    # Prefer the just-validated request URL if persistence dropped it.
+    if not response_image_url:
+        response_image_url = image_url
     if not getattr(meal, "_meal_value_insight_scheduled", False):
         schedule_value_insight_generation(
             task_manager,

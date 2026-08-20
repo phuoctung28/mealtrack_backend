@@ -35,6 +35,7 @@ class AdminMealCatalogItemResponse(BaseModel):
     cuisine: str
     description: str | None = None
     image_url: str | None = None
+    popularity_rank: int | None = None
     meal_types: list[str]
     calories: int
     protein_g: float
@@ -130,6 +131,7 @@ class AdminMealCatalogImportResponse(BaseModel):
     recipe_count: int
     coverage: dict[str, dict[str, int]]
     inserted: int
+    updated: int = 0
     skipped_existing: int
     dry_run: bool
     applied: bool

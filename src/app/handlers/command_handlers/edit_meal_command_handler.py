@@ -279,7 +279,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             resolved_items: list[ManualMealItem] = []
             async with self.uow_factory() as resolve_uow:
                 prepared_changes = await self._prepare_v2_changes(
-                    preflight_meal.nutrition.food_items
+                    (preflight_meal.nutrition.food_items or [])
                     if preflight_meal.nutrition
                     else [],
                     command.food_item_changes,
@@ -296,7 +296,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                     resolved_items, uow.food_references
                 )
                 updated_food_items = await self._apply_food_item_changes(
-                    meal.nutrition.food_items if meal.nutrition else [],
+                    (meal.nutrition.food_items or []) if meal.nutrition else [],
                     prepared_changes,
                     food_reference_repository=getattr(uow, "food_references", None),
                 )

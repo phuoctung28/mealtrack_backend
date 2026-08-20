@@ -19,6 +19,7 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
+from src.app.commands.meal_catalog import LogCatalogMealCommand
 from src.app.commands.meal_recommendation import (
     CreateThreeDayMealRecommendationCommand,
     LogRecommendedMealCommand,
@@ -109,6 +110,9 @@ from src.app.handlers.command_handlers.delete_weight_entry_command_handler impor
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
     MarkCheatDayCommandHandler,
 )
+from src.app.handlers.command_handlers.meal_catalog import (
+    LogCatalogMealCommandHandler,
+)
 from src.app.handlers.command_handlers.meal_recommendation import (
     CreateThreeDayMealRecommendationCommandHandler,
     LogRecommendedMealCommandHandler,
@@ -167,6 +171,9 @@ from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
 from src.app.handlers.query_handlers.get_weight_entries_query_handler import (
     GetWeightEntriesQueryHandler,
 )
+from src.app.handlers.query_handlers.list_logged_catalog_meals_query_handler import (
+    ListLoggedCatalogMealsQueryHandler,
+)
 from src.app.queries.activity import GetBulkActivitiesQuery, GetDailyActivitiesQuery
 from src.app.queries.cheat_day import GetCheatDaysQuery
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
@@ -182,6 +189,7 @@ from src.app.queries.meal import (
     GetMealsByDateQuery,
     GetStreakQuery,
 )
+from src.app.queries.meal_catalog import ListLoggedCatalogMealsQuery
 from src.app.queries.meal_recommendation import (
     GetMealRecommendationPlanQuery,
     GetMealRecommendationSlotDetailQuery,
@@ -205,7 +213,6 @@ from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
 from src.app.queries.weight import GetWeightEntriesQuery
-from src.app.services.catalog_meal_snapshot_service import CatalogMealSnapshotService
 from src.app.services.meal_recommendation_history_projector import (
     MealRecommendationHistoryProjector,
 )
@@ -229,7 +236,10 @@ def _build_provider_budget(cache_service):
     """Build the required shared provider budget from the initialized Redis client."""
     if cache_service is None or settings.NUTRITION_PROVIDER_GLOBAL_RPM is None:
         return None
-    return RedisProviderBudget(cache_service.redis)
+    redis_client = getattr(cache_service, "redis", None)
+    if redis_client is None:
+        return None
+    return RedisProviderBudget(redis_client)
 
 
 async def _search_local_food_references(
@@ -411,7 +421,9 @@ def get_configured_event_bus() -> EventBus:
     nutrition_integrity_policy = NutritionIntegrityPolicy()
 
     event_bus = PyMediatorEventBus()
-    recommendation_snapshot = CatalogMealSnapshotService()
+    from src.api.base_dependencies import get_catalog_meal_snapshot_service
+
+    recommendation_snapshot = get_catalog_meal_snapshot_service()
     recommendation_history = MealRecommendationHistoryProjector()
     graph_settings = get_meal_analyze_graph_settings()
 
@@ -469,6 +481,7 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
+            text_translation_service=text_translation_service,
             cache_invalidation=cache_invalidation_service,
             meal_value_insight_task_manager=task_manager,
             meal_value_insight_cache=cache_service,
@@ -661,6 +674,50 @@ def get_configured_event_bus() -> EventBus:
             uow=AsyncUnitOfWork(),
             meal_translation_service=meal_translation_service,
             cache_invalidation=cache_invalidation_service,
+        ),
+    )
+    from src.api.base_dependencies import get_catalog_meal_browse_service
+    from src.app.services.meal_value_insight_scheduler import (
+        schedule_value_insight_generation,
+    )
+    from src.app.services.remaining_recommendation_recalculator import (
+        RemainingRecommendationRecalculator,
+    )
+
+    def _schedule_catalog_log_insights(meal, command) -> None:
+        schedule_value_insight_generation(
+            task_manager,
+            meal,
+            language=command.language or "en",
+            cache_service=cache_service,
+            ai_manager=ai_manager,
+            event_bus=event_bus,
+            user_id=command.user_id,
+            source="catalog_log",
+        )
+
+    event_bus.register_handler(
+        LogCatalogMealCommand,
+        LogCatalogMealCommandHandler(
+            uow=AsyncUnitOfWork(),
+            browse_service=get_catalog_meal_browse_service(),
+            meal_translation_service=meal_translation_service,
+            cache_invalidation=cache_invalidation_service,
+            recalculator=RemainingRecommendationRecalculator(
+                AsyncUnitOfWork,
+                optimizer=ThreeDayPlanOptimizer(),
+                snapshot_service=recommendation_snapshot,
+                history_projector=recommendation_history,
+            ),
+            insight_scheduler=_schedule_catalog_log_insights,
+            task_manager=task_manager,
+        ),
+    )
+    event_bus.register_handler(
+        ListLoggedCatalogMealsQuery,
+        ListLoggedCatalogMealsQueryHandler(
+            AsyncUnitOfWork,
+            recommendation_snapshot,
         ),
     )
     event_bus.register_handler(

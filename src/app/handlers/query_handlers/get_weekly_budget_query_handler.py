@@ -84,16 +84,26 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
                 if not weekly_budget:
                     # Lazy init: create weekly budget
                     weekly_budget, bmr = await self._create_weekly_budget(
-                        uow, query.user_id, week_start, target_date
+                        uow,
+                        query.user_id,
+                        week_start,
+                        target_date,
+                        persist=not query.read_only,
                     )
                 else:
                     # Check if targets are stale and sync if needed
                     weekly_budget, bmr = await self._sync_targets_if_stale(
-                        uow, weekly_budget, query.user_id
+                        uow,
+                        weekly_budget,
+                        query.user_id,
+                        persist=not query.read_only,
                     )
                 if weekly_budget.target_revision != profile_revision:
                     weekly_budget, bmr = await self._sync_targets_if_stale(
-                        uow, weekly_budget, query.user_id
+                        uow,
+                        weekly_budget,
+                        query.user_id,
+                        persist=not query.read_only,
                     )
 
                 # Load cheat days for this week (pre-loaded, passed to shared method)
@@ -144,7 +154,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
                 weekly_budget.consumed_protein = consumed["protein"]
                 weekly_budget.consumed_carbs = consumed["carbs"]
                 weekly_budget.consumed_fat = consumed["fat"]
-                await uow.weekly_budgets.update(weekly_budget)
+                if not query.read_only:
+                    await uow.weekly_budgets.update(weekly_budget)
 
                 # --- Tomorrow Preview ---
                 # Shows real impact of today's consumption on tomorrow's target.
@@ -328,7 +339,13 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
         )
 
     async def _create_weekly_budget(
-        self, uow: AsyncUnitOfWork, user_id: str, week_start: date, target_date: date
+        self,
+        uow: AsyncUnitOfWork,
+        user_id: str,
+        week_start: date,
+        target_date: date,
+        *,
+        persist: bool = True,
     ) -> tuple[WeeklyMacroBudget, float]:
         """Create a new weekly budget for the user. Returns (budget, bmr)."""
         import uuid
@@ -351,7 +368,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
             weekly_targets = self._weekly_targets_from_daily_macros(daily_macros)
         except Exception as exc:
             raise ExternalServiceException(
-                "Authoritative target calculation is unavailable", "target_unavailable"
+                "Authoritative target calculation is unavailable",
+                "target_unavailable" if persist else "target_service_unavailable",
             ) from exc
 
         # Create domain object
@@ -364,12 +382,18 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
         )
 
         # Save to DB
-        await uow.weekly_budgets.create(budget)
+        if persist:
+            await uow.weekly_budgets.create(budget)
 
         return budget, bmr
 
     async def _sync_targets_if_stale(
-        self, uow: AsyncUnitOfWork, weekly_budget: WeeklyMacroBudget, user_id: str
+        self,
+        uow: AsyncUnitOfWork,
+        weekly_budget: WeeklyMacroBudget,
+        user_id: str,
+        *,
+        persist: bool = True,
     ) -> tuple[WeeklyMacroBudget, float]:
         """Check if weekly targets match current TDEE; update if stale. Returns (budget, bmr)."""
         try:
@@ -411,13 +435,15 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, dict[str, A
                 weekly_budget.target_carbs = expected_targets["target_carbs"]
                 weekly_budget.target_fat = expected_targets["target_fat"]
                 weekly_budget.target_revision = target_revision
-                await uow.weekly_budgets.update(weekly_budget)
+                if persist:
+                    await uow.weekly_budgets.update(weekly_budget)
                 logger.info("Updated stale weekly nutrition targets for user")
 
             return weekly_budget, bmr
         except Exception as exc:
             raise ExternalServiceException(
-                "Authoritative target calculation is unavailable", "target_unavailable"
+                "Authoritative target calculation is unavailable",
+                "target_unavailable" if persist else "target_service_unavailable",
             ) from exc
 
     @staticmethod

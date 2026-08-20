@@ -23,6 +23,9 @@ class _Result:
         self._rows = rows or []
         self._one = one
 
+    def one(self):
+        return self._one
+
     def scalars(self):
         return _Scalars(self._rows)
 
@@ -74,6 +77,7 @@ def _meal_row():
     row.dinner_eligible = False
     row.snack_eligible = False
     row.is_active = True
+    row.popularity_rank = 1
     row.ingredients = [ingredient]
     return row
 
@@ -96,6 +100,44 @@ async def test_list_active_meals_filters_by_cuisine_and_meal_type():
     assert "meal_catalog.is_active" in statement
     assert "meal_catalog.cuisine" in statement
     assert "meal_catalog.breakfast_eligible" in statement
+
+
+@pytest.mark.asyncio
+async def test_list_popular_page_orders_by_rank_and_skips_snapshot_scan():
+    session = _AsyncSession([_Result(one=(True, 1, 0)), _Result(rows=[_meal_row()])])
+    repo = AsyncCatalogMealRepository(session)
+
+    page = await repo.list_popular_page(
+        limit=20,
+        offset=0,
+        query="rice",
+        cuisine="vietnamese",
+        meal_type="breakfast",
+    )
+
+    assert page.total == 1
+    assert page.any_ranked is True
+    assert page.unranked_count == 0
+    assert page.items[0].id == "catalog-1"
+    statement = str(session.statement)
+    assert "meal_catalog.popularity_rank" in statement
+    assert "LIMIT" in statement.upper() or "limit" in statement
+
+
+@pytest.mark.asyncio
+async def test_list_popular_page_orders_by_shuffle_seed_when_provided():
+    session = _AsyncSession([_Result(one=(True, 1, 0)), _Result(rows=[_meal_row()])])
+    repo = AsyncCatalogMealRepository(session)
+
+    page = await repo.list_popular_page(
+        limit=20,
+        offset=0,
+        shuffle_seed="refresh-a",
+    )
+
+    assert page.items[0].id == "catalog-1"
+    statement = str(session.statement)
+    assert "md5" in statement.lower()
 
 
 @pytest.mark.asyncio

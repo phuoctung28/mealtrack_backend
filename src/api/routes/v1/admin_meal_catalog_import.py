@@ -6,11 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.base_dependencies import (
+    get_ai_model_manager,
     get_async_db,
+    get_cache_service,
     get_catalog_food_reference_review_service,
     get_catalog_meal_seed_importer,
+    get_catalog_meal_snapshot_service,
 )
 from src.api.dependencies.auth import require_admin_or_local
+from src.api.dependencies.task_manager import get_optional_task_manager
 from src.api.schemas.response.admin_meal_catalog_responses import (
     AdminMealCatalogApproveFoodReferenceRequest,
     AdminMealCatalogApproveFoodReferenceResponse,
@@ -105,6 +109,8 @@ async def import_admin_meal_catalog(
     db: AsyncSession = Depends(get_async_db),
     importer: CatalogMealSeedImporter = Depends(get_catalog_meal_seed_importer),
     _admin: str = Depends(require_admin_or_local),
+    task_manager=Depends(get_optional_task_manager),
+    cache_service=Depends(get_cache_service),
 ) -> AdminMealCatalogImportResponse:
     """Import a validated manifest, or preview it when ``dry_run`` is true."""
 
@@ -128,6 +134,13 @@ async def import_admin_meal_catalog(
         await db.rollback()
         return _response(validation, summary, applied=False)
     await db.commit()
+    get_catalog_meal_snapshot_service().invalidate()
+    await _schedule_imported_catalog_insights(
+        importer,
+        summary.inserted_catalog_keys,
+        task_manager=task_manager,
+        cache_service=cache_service,
+    )
     return _response(validation, summary, applied=True)
 
 
@@ -190,6 +203,7 @@ def _response(validation, summary, *, applied: bool) -> AdminMealCatalogImportRe
         recipe_count=validation.recipe_count,
         coverage=validation.coverage,
         inserted=summary.inserted,
+        updated=summary.updated,
         skipped_existing=summary.skipped_existing,
         dry_run=summary.dry_run,
         applied=applied,
@@ -197,6 +211,32 @@ def _response(validation, summary, *, applied: bool) -> AdminMealCatalogImportRe
         issues=report["issues"],
         unverified_references=report["unverified_references"],
         review_required=report["review_required"],
+    )
+
+
+async def _schedule_imported_catalog_insights(
+    importer: CatalogMealSeedImporter,
+    inserted_catalog_keys: tuple[str, ...],
+    *,
+    task_manager,
+    cache_service,
+) -> None:
+    if not inserted_catalog_keys:
+        return
+    from src.app.services.catalog_meal_insight_scheduler import (
+        schedule_catalog_import_insights,
+    )
+
+    try:
+        ai_manager = get_ai_model_manager()
+    except Exception:
+        ai_manager = None
+    meals = await importer.load_meals_by_catalog_keys(inserted_catalog_keys)
+    schedule_catalog_import_insights(
+        task_manager,
+        meals,
+        cache_service=cache_service,
+        ai_manager=ai_manager,
     )
 
 

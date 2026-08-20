@@ -175,6 +175,33 @@ class TestMealMapper:
         # total_weight_grams is calculated from food items
         assert result.total_weight_grams == 350 or result.total_weight_grams is None
 
+    def test_to_detailed_response_falls_back_to_meal_image_url(self):
+        """Meal detail must keep the photo when callers omit image_url."""
+        image = MealImage(
+            url="https://res.cloudinary.com/demo/image/upload/v1/mealtrack/abc.jpg",
+            image_id=str(uuid.uuid4()),
+            format="jpeg",
+            size_bytes=2048,
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=image,
+            dish_name="Pho",
+            ready_at=datetime(2025, 1, 15, 14, 0),
+            created_at=datetime(2025, 1, 15, 13, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=20, carbs=40, fat=10),
+                food_items=[],
+            ),
+            source="scanner",
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="en")
+
+        assert result.image_url == image.url
+
     def test_to_detailed_response_includes_canonical_source_nutrition(self):
         item = FoodItem(
             id="item-1",
@@ -902,7 +929,9 @@ class TestMealMapper:
         assert custom.carbs_per_100g == pytest.approx(0.7)
         assert custom.fat_per_100g == pytest.approx(9.6)
 
-    def test_to_detailed_response_custom_nutrition_does_not_treat_nhanh_as_one_gram(self):
+    def test_to_detailed_response_custom_nutrition_does_not_treat_nhanh_as_one_gram(
+        self,
+    ):
         """Unknown culinary units must not explode per-100g calories 100x."""
         food_items = [
             FoodItem(

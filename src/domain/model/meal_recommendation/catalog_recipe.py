@@ -44,6 +44,7 @@ class CatalogMeal:
     meal_types: tuple[str, ...] = field(default_factory=tuple)
     ingredients: tuple[CatalogMealIngredient, ...] = field(default_factory=tuple)
     is_active: bool = True
+    popularity_rank: int | None = None
 
     @property
     def calories(self) -> int:

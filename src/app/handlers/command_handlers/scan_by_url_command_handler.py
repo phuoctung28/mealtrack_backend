@@ -13,6 +13,7 @@ from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.app.services.food_label_localizer import localize_food_label_display
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
 from src.domain.constants import MealDefaults
 from src.domain.model.meal import Meal, MealImage, MealStatus
@@ -59,6 +60,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         meal_translation_service: MealTranslationService | None = None,
+        text_translation_service: Any | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
         meal_value_insight_task_manager: Any | None = None,
         meal_value_insight_cache: CachePort | None = None,
@@ -71,6 +73,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.meal_translation_service = meal_translation_service
+        self.text_translation_service = text_translation_service
         self.cache_invalidation = cache_invalidation
         self.meal_value_insight_task_manager = meal_value_insight_task_manager
         self.meal_value_insight_cache = meal_value_insight_cache
@@ -265,6 +268,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                         ),
                         error_code="NOT_FOOD_LABEL_IMAGE",
                     )
+                nutrition, label_metadata = await localize_food_label_display(
+                    nutrition=nutrition,
+                    metadata=label_metadata,
+                    language=command.language,
+                    translation_service=self.text_translation_service,
+                )
 
                 meal = Meal(
                     meal_id=str(uuid4()),
@@ -405,6 +414,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     meal_value_insight_ai_manager=self.meal_value_insight_ai_manager,
                     event_bus=self.event_bus,
                     meal_translation_service=self.meal_translation_service,
+                    text_translation_service=self.text_translation_service,
                 ),
             )
 

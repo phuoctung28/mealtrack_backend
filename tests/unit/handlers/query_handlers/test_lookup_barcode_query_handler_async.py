@@ -242,14 +242,63 @@ async def test_cached_barcode_uses_reference_identity_without_provider_metadata(
             }
         }
     )
+    handler = _handler(repo, translation_service=_NeutralTranslator())
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    # Main: durable local identity. Delivery: leftover English still localizes.
+    assert result["name"] == "Cơm gạo lứt"
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 17
+    assert result["source"] == "cache"
+
+
+@pytest.mark.asyncio
+async def test_cached_english_barcode_name_is_localized_for_non_english_request():
+    repo = _FoodReferenceRepo(
+        {
+            "123": {
+                "id": 17,
+                "barcode": "123",
+                "name": "Brown Rice",
+                "protein_100g": 2.7,
+                "carbs_100g": 28,
+                "fat_100g": 0.3,
+                "source": "fatsecret",
+                "is_verified": True,
+            }
+        }
+    )
+    handler = _handler(repo, translation_service=_NeutralTranslator())
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    assert result["name"] == "Cơm gạo lứt"
+    assert result["source"] == "cache"
+
+
+@pytest.mark.asyncio
+async def test_cached_non_english_barcode_name_stays_canonical():
+    repo = _FoodReferenceRepo(
+        {
+            "123": {
+                "id": 18,
+                "barcode": "123",
+                "name": "Cơm gạo lứt",
+                "protein_100g": 2.7,
+                "carbs_100g": 28,
+                "fat_100g": 0.3,
+                "source": "openfoodfacts",
+                "is_verified": True,
+            }
+        }
+    )
     translator = AsyncMock()
     handler = _handler(repo, translation_service=translator)
 
     result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
 
-    assert result["name"] == "Brown Rice"
-    assert result["origin"] == "local"
-    assert result["food_reference_id"] == 17
+    assert result["name"] == "Cơm gạo lứt"
     translator.translate_texts.assert_not_awaited()
 
 

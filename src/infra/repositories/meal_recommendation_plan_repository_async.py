@@ -11,7 +11,7 @@ from typing import cast
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from src.domain.exceptions.meal_recommendation_exceptions import (
     MealRecommendationAlreadyLoggedError,
@@ -517,6 +517,48 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             user_id=user_id,
             slot=_rows_to_slot_detail(anchor, rows),
         )
+
+    async def find_logable_slot_for_catalog_meal(
+        self,
+        *,
+        user_id: str,
+        catalog_meal_id: str,
+        slot_date,
+        meal_type: str,
+    ) -> tuple[str, str] | None:
+        anchor = aliased(MealRecommendationORM)
+        candidate = aliased(MealRecommendationORM)
+        result = await self._session.execute(
+            select(anchor.id, candidate.slot_id)
+            .select_from(anchor)
+            .join(candidate, candidate.batch_id == anchor.id)
+            .where(anchor.id == anchor.batch_id)
+            .where(anchor.user_id == user_id)
+            .where(anchor.status == "active")
+            .where(candidate.recommendation_date == slot_date)
+            .where(candidate.catalog_meal_id == catalog_meal_id)
+            .where(candidate.meal_type == meal_type)
+            .where(candidate.is_selected.is_(True))
+            .where(candidate.logged_meal_id.is_(None))
+            .where(candidate.skipped_at.is_(None))
+            .where(candidate.retired_at.is_(None))
+            .limit(1)
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return str(row[0]), str(row[1])
+
+    async def find_active_plan_id(self, *, user_id: str) -> str | None:
+        result = await self._session.execute(
+            select(MealRecommendationORM.id)
+            .where(MealRecommendationORM.user_id == user_id)
+            .where(MealRecommendationORM.status == "active")
+            .where(MealRecommendationORM.id == MealRecommendationORM.batch_id)
+            .limit(1)
+        )
+        plan_id = result.scalar_one_or_none()
+        return str(plan_id) if plan_id is not None else None
 
     async def clear_links_for_deleted_meal(self, *, meal_id: str) -> None:
         """Detach recommendation state from a meal about to be hard-deleted.

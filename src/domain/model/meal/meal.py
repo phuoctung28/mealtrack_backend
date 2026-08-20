@@ -52,6 +52,7 @@ class Meal:
     translations: dict[str, MealTranslation] | None = None
     # Source tracking (scanner, prompt, food_search, manual)
     source: str | None = None
+    catalog_meal_id: str | None = None
     # Recipe details (populated for AI suggestions)
     description: str | None = None
     instructions: list | None = (
@@ -110,6 +111,7 @@ class Meal:
             "cuisine_type": self.cuisine_type,
             "origin_country": self.origin_country,
             "emoji": self.emoji,
+            "catalog_meal_id": self.catalog_meal_id,
         }
 
     def mark_analyzing(self) -> "Meal":
@@ -196,6 +198,7 @@ class Meal:
             cuisine_type=self.cuisine_type,
             origin_country=self.origin_country,
             emoji=emoji if emoji is not None else self.emoji,
+            catalog_meal_id=self.catalog_meal_id,
         )
 
     def mark_failed(self, error_message: str) -> "Meal":

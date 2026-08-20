@@ -50,6 +50,7 @@ and derives nutrition from `food_reference`.
 | `name` | Yes | Display name shown in the app. |
 | `description` | No | Short display-only text. |
 | `image_url` | No | Public image URL. |
+| `popularity_rank` | No | Optional curated order signal for the public `popular` browse feed. Non-negative PostgreSQL `INTEGER` when present; null means the meal is unranked. |
 | `meal_types` | Yes | Any of `breakfast`, `lunch`, `dinner`, `snack`. |
 | `ingredients[].food_reference_id` | No | Prefer exact ID. If `null`, importer matches by normalized `name`. |
 | `ingredients[].name` | Yes | Used for display and lookup when ID is `null`. |
@@ -196,6 +197,8 @@ Production import requires exactly 180 reviewed meals:
 - Zero schema validation errors.
 - Zero unresolved ingredient `issues`.
 - Zero unreviewed near-duplicate `review_required` items.
+- If the public `popular` browse feed is expected to ship, seed explicit
+  `popularity_rank` values for the reviewed catalog rows before release.
 
 For every near duplicate, record one explicit disposition outside the importer:
 `approve_distinct` when the meals are intentionally separate catalog entries, or

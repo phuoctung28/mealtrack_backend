@@ -126,6 +126,28 @@ async def test_ensure_requested_translation_keeps_persisted_image_names():
 
 
 @pytest.mark.asyncio
+async def test_ensure_requested_translation_keeps_persisted_food_label_names():
+    meal = _meal()
+    meal.source = "food_label"
+    event_bus = _EventBus()
+    translation_service = type("TranslationService", (), {})()
+    translation_service.translate_meal = AsyncMock()
+    query = GetMealByIdQuery(meal_id=meal.meal_id, user_id=meal.user_id)
+
+    result = await meals_read._ensure_requested_meal_translation(
+        meal=meal,
+        language="vi",
+        query=query,
+        event_bus=event_bus,
+        meal_translation_service=translation_service,
+    )
+
+    assert result is meal
+    translation_service.translate_meal.assert_not_awaited()
+    assert event_bus.queries == []
+
+
+@pytest.mark.asyncio
 async def test_ensure_requested_translation_does_not_call_provider_for_current_cache():
     meal = _meal()
     meal_translation = _translation(meal)

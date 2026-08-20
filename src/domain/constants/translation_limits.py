@@ -16,3 +16,27 @@ def translation_batch_within_limits(texts: list[str] | tuple[str, ...]) -> bool:
         all(size <= MAX_TRANSLATION_ITEM_BYTES for size in item_sizes)
         and sum(item_sizes) <= MAX_TRANSLATION_BATCH_BYTES
     )
+
+
+def iter_translation_batches(texts: list[str] | tuple[str, ...]) -> list[list[str]]:
+    """Split texts into provider-safe batches without dropping in-limit items."""
+
+    batches: list[list[str]] = []
+    current: list[str] = []
+    current_bytes = 0
+    for text in texts:
+        size = len(text.encode("utf-8"))
+        if size > MAX_TRANSLATION_ITEM_BYTES:
+            continue
+        if current and (
+            len(current) >= MAX_TRANSLATION_ITEMS
+            or current_bytes + size > MAX_TRANSLATION_BATCH_BYTES
+        ):
+            batches.append(current)
+            current = []
+            current_bytes = 0
+        current.append(text)
+        current_bytes += size
+    if current:
+        batches.append(current)
+    return batches

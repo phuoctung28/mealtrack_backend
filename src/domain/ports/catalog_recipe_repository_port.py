@@ -8,6 +8,8 @@ from datetime import datetime
 
 from src.domain.model.meal_recommendation.catalog_recipe import CatalogMeal
 
+MAX_CATALOG_POPULARITY_RANK = 2_147_483_647
+
 
 @dataclass(frozen=True)
 class CatalogMealSeedIngredientWrite:
@@ -31,6 +33,7 @@ class CatalogMealSeedWrite:
     image_url: str | None
     meal_types: tuple[str, ...]
     ingredients: tuple[CatalogMealSeedIngredientWrite, ...]
+    popularity_rank: int | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,16 @@ class CatalogMealRevision:
     food_reference_updated_at: datetime | None
 
 
+@dataclass(frozen=True)
+class CatalogPopularPage:
+    """One ranked popular-feed page plus ranking-gate counts."""
+
+    items: tuple[CatalogMeal, ...]
+    total: int
+    any_ranked: bool
+    unranked_count: int
+
+
 class CatalogMealRepositoryPort(ABC):
     """Read/write contract for catalog meals during the rework."""
 
@@ -72,6 +85,19 @@ class CatalogMealRepositoryPort(ABC):
         meal_type: str | None = None,
     ) -> list[CatalogMeal]:
         """Return active catalog meals."""
+
+    @abstractmethod
+    async def list_popular_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        query: str | None = None,
+        cuisine: str | None = None,
+        meal_type: str | None = None,
+        shuffle_seed: str | None = None,
+    ) -> CatalogPopularPage:
+        """Return one popularity-ranked page without loading the full catalog."""
 
     @abstractmethod
     async def get_active_catalog_revision(self) -> CatalogMealRevision:
@@ -93,6 +119,12 @@ class CatalogMealRepositoryPort(ABC):
     @abstractmethod
     async def add_seed_meal(self, seed: CatalogMealSeedWrite) -> None:
         """Add one display-only catalog seed meal without owning commit."""
+
+    @abstractmethod
+    async def update_popularity_rank(
+        self, *, catalog_key: str, popularity_rank: int | None
+    ) -> None:
+        """Update the editorial rank for an existing catalog seed."""
 
     @abstractmethod
     async def lock_seed_import(self) -> None:

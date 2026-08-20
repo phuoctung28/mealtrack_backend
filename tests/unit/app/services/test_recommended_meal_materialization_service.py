@@ -16,6 +16,9 @@ from src.domain.model.meal_recommendation import (
     PersistedMealRecommendationPlan,
     PersistedMealRecommendationSlot,
 )
+from src.domain.ports.food_reference_repository_port import (
+    FoodReferenceNutritionProjection,
+)
 
 
 class _CatalogRepo:
@@ -58,10 +61,24 @@ class _MealRepo:
         return meal
 
 
+class _FoodRefRepo:
+    def __init__(self, projections: dict[int, FoodReferenceNutritionProjection]):
+        self._projections = projections
+
+    async def get_nutrition_projections(self, food_reference_ids, *, for_update=False):
+        return {
+            food_id: self._projections[food_id]
+            for food_id in food_reference_ids
+            if food_id in self._projections
+        }
+
+
 class _Uow:
-    def __init__(self, catalog_recipes=None):
+    def __init__(self, catalog_recipes=None, food_references=None):
         self.catalog_recipes = catalog_recipes or _CatalogRepo()
         self.meals = _MealRepo()
+        if food_references is not None:
+            self.food_references = food_references
 
 
 def _plan_and_slot():
@@ -137,10 +154,50 @@ async def test_materializer_preserves_food_reference_ids_and_macro_snapshot():
     assert meal.nutrition is not None
     assert meal.nutrition.macros.protein == 30
     assert meal.nutrition.food_items[0].food_reference_id == 123
+    item = meal.nutrition.food_items[0]
+    assert item.macros.protein == 30
+    assert item.macros.carbs == 50
+    assert item.macros.fat == 10
+    assert item.macros.fiber == 5
+    assert item.calories > 0
     # Placeholder image keeps inserts valid when meal.image_id is NOT NULL.
     assert meal.image is not None
     assert meal.image.url is None
     assert meal.image.size_bytes == 1
+
+
+@pytest.mark.asyncio
+async def test_materializer_scales_food_reference_macros_onto_items():
+    plan, slot = _plan_and_slot()
+    uow = _Uow(
+        food_references=_FoodRefRepo(
+            {
+                123: FoodReferenceNutritionProjection(
+                    id=123,
+                    name="Ingredient",
+                    source="catalog_seed",
+                    is_verified=True,
+                    protein_100g=31.0,
+                    carbs_100g=0.0,
+                    fat_100g=3.6,
+                    fiber_100g=0.0,
+                    sugar_100g=0.0,
+                    density_g_ml=1.0,
+                )
+            }
+        )
+    )
+
+    meal = await RecommendedMealMaterializationService().materialize(
+        uow,
+        plan=plan,
+        slot=slot,
+    )
+
+    item = meal.nutrition.food_items[0]
+    assert item.macros.protein == pytest.approx(31.0)
+    assert item.macros.fat == pytest.approx(3.6)
+    assert item.calories == pytest.approx(31.0 * 4 + 3.6 * 9)
 
 
 @pytest.mark.asyncio
@@ -176,11 +233,47 @@ async def test_materializer_attaches_catalog_image_url_when_present():
 
 
 @pytest.mark.asyncio
+async def test_materializer_keeps_long_catalog_image_urls():
+    plan, slot = _plan_and_slot()
+    catalog_meal = slot.selected.catalog_meal
+    assert catalog_meal is not None
+    long_url = (
+        "https://res.cloudinary.com/demo/image/upload/"
+        "c_fill,w_1200,h_1200,q_auto:good,f_auto,fl_progressive/"
+        "v1720000000/mealtrack/" + ("catalog-meal-" + "x" * 1200) + ".jpg"
+    )
+    assert len(long_url) > 1024
+    slot = PersistedMealRecommendationSlot(
+        **{
+            **slot.__dict__,
+            "selected": PersistedMealRecommendationCandidate(
+                **{
+                    **slot.selected.__dict__,
+                    "catalog_meal": CatalogMeal(
+                        **{
+                            **catalog_meal.__dict__,
+                            "image_url": long_url,
+                        }
+                    ),
+                }
+            ),
+        }
+    )
+
+    meal = await RecommendedMealMaterializationService().materialize(
+        _Uow(),
+        plan=plan,
+        slot=slot,
+    )
+
+    assert meal.image is not None
+    assert meal.image.url == long_url
+
+
+@pytest.mark.asyncio
 async def test_materializer_fails_with_public_error_when_selected_meal_missing():
     plan, slot = _plan_and_slot()
-    slot = PersistedMealRecommendationSlot(
-        **{**slot.__dict__, "selected": None}
-    )
+    slot = PersistedMealRecommendationSlot(**{**slot.__dict__, "selected": None})
 
     with pytest.raises(MealRecommendationNotFoundError):
         await RecommendedMealMaterializationService().materialize(

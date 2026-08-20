@@ -6,7 +6,7 @@ import unicodedata
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +20,7 @@ from src.domain.ports.catalog_recipe_repository_port import (
     CatalogMealSeedExisting,
     CatalogMealSeedSignature,
     CatalogMealSeedWrite,
+    CatalogPopularPage,
 )
 from src.domain.services.meal_recommendation.ingredient_quantity_conversion_service import (
     IngredientQuantityConversionService,
@@ -68,6 +69,55 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
 
         result = await self._session.execute(stmt)
         return [_meal_to_domain(row) for row in result.scalars().unique().all()]
+
+    async def list_popular_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        query: str | None = None,
+        cuisine: str | None = None,
+        meal_type: str | None = None,
+        shuffle_seed: str | None = None,
+    ) -> CatalogPopularPage:
+        match = _browse_match_clause(query=query, cuisine=cuisine, meal_type=meal_type)
+        stats = await self._session.execute(
+            select(
+                func.coalesce(
+                    func.bool_or(MealCatalogORM.popularity_rank.is_not(None)), False
+                ),
+                func.count().filter(match),
+                func.count().filter(
+                    and_(match, MealCatalogORM.popularity_rank.is_(None))
+                ),
+            ).where(MealCatalogORM.is_active.is_(True))
+        )
+        any_ranked, total, unranked_count = stats.one()
+        if not any_ranked or int(unranked_count or 0) > 0:
+            return CatalogPopularPage(
+                items=(),
+                total=int(total or 0),
+                any_ranked=bool(any_ranked),
+                unranked_count=int(unranked_count or 0),
+            )
+
+        result = await self._session.execute(
+            select(MealCatalogORM)
+            .where(MealCatalogORM.is_active.is_(True))
+            .where(match)
+            .options(_catalog_meal_load_options())
+            .order_by(*_popular_order(shuffle_seed))
+            .offset(offset)
+            .limit(limit)
+        )
+        return CatalogPopularPage(
+            items=tuple(
+                _meal_to_domain(row) for row in result.scalars().unique().all()
+            ),
+            total=int(total or 0),
+            any_ranked=True,
+            unranked_count=0,
+        )
 
     async def get_active_catalog_revision(self) -> CatalogMealRevision:
         result = await self._session.execute(
@@ -133,6 +183,7 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
             cuisine=seed.cuisine,
             description=seed.description,
             image_url=seed.image_url,
+            popularity_rank=seed.popularity_rank,
             breakfast_eligible="breakfast" in seed.meal_types,
             lunch_eligible="lunch" in seed.meal_types,
             dinner_eligible="dinner" in seed.meal_types,
@@ -151,9 +202,21 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
         self._session.add(row)
         await self._session.flush()
 
+    async def update_popularity_rank(
+        self, *, catalog_key: str, popularity_rank: int | None
+    ) -> None:
+        await self._session.execute(
+            update(MealCatalogORM)
+            .where(MealCatalogORM.catalog_key == catalog_key)
+            .values(popularity_rank=popularity_rank)
+        )
+        await self._session.flush()
+
     async def lock_seed_import(self) -> None:
         await self._session.execute(
-            select(func.pg_advisory_xact_lock(func.hashtext("meal_catalog_seed_import")))
+            select(
+                func.pg_advisory_xact_lock(func.hashtext("meal_catalog_seed_import"))
+            )
         )
 
     async def list_seed_signatures(self) -> list[CatalogMealSeedSignature]:
@@ -175,6 +238,43 @@ class AsyncCatalogMealRepository(CatalogMealRepositoryPort):
             )
             for row in result.scalars().unique().all()
         ]
+
+
+def _browse_match_clause(
+    *, query: str | None, cuisine: str | None, meal_type: str | None
+):
+    clauses = []
+    if cuisine is not None:
+        clauses.append(func.lower(MealCatalogORM.cuisine) == cuisine.strip().casefold())
+    if meal_type is not None:
+        clauses.append(_meal_type_column(meal_type).is_(True))
+    needle = (query or "").strip().casefold()
+    if needle:
+        pattern = f"%{_escape_like(needle)}%"
+        clauses.append(
+            or_(
+                func.lower(MealCatalogORM.name).like(pattern, escape="\\"),
+                func.lower(MealCatalogORM.cuisine).like(pattern, escape="\\"),
+            )
+        )
+    return and_(*clauses) if clauses else true()
+
+
+def _popular_order(shuffle_seed: str | None):
+    if shuffle_seed:
+        return (
+            func.md5(func.concat(MealCatalogORM.id, ":", shuffle_seed)).asc(),
+            MealCatalogORM.id.asc(),
+        )
+    return (
+        MealCatalogORM.popularity_rank.asc(),
+        func.lower(MealCatalogORM.name).asc(),
+        MealCatalogORM.id.asc(),
+    )
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _meal_type_column(meal_type: str):
@@ -207,6 +307,7 @@ def _meal_to_domain(row: MealCatalogORM) -> CatalogMeal:
         cuisine=cast(str, row.cuisine),
         description=cast(str | None, row.description),
         image_url=cast(str | None, row.image_url),
+        popularity_rank=_optional_int(getattr(row, "popularity_rank", None)),
         protein_g=_decimal(nutrition.protein),
         carbs_g=_decimal(nutrition.carbs),
         fat_g=_decimal(nutrition.fat),
@@ -282,6 +383,10 @@ def _meal_types(row: MealCatalogORM) -> tuple[str, ...]:
     if row.snack_eligible:
         values.append("snack")
     return tuple(values)
+
+
+def _optional_int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _decimal(value) -> Decimal:

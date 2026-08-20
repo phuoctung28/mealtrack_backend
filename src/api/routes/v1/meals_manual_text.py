@@ -74,18 +74,14 @@ async def create_manual_meal(
     ),
     x_app_version: str | None = Header(default=None, alias="X-App-Version"),
     x_platform: str | None = Header(default=None, alias="X-Platform"),
-    idempotency_key_header: str | None = Header(
-        default=None, alias="Idempotency-Key"
-    ),
+    idempotency_key_header: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> ManualMealCreationResponse:
     """
     Create a manual meal from USDA FDC items.
 
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
-    x_nutrition_contract_version = _unwrap_direct_header(
-        x_nutrition_contract_version
-    )
+    x_nutrition_contract_version = _unwrap_direct_header(x_nutrition_contract_version)
     x_app_version = _unwrap_direct_header(x_app_version)
     x_platform = _unwrap_direct_header(x_platform)
     idempotency_key = _unwrap_direct_header(idempotency_key_header)
@@ -227,6 +223,7 @@ async def create_manual_meal(
             created_at=meal.created_at,
             meal_detail=MealMapper.to_detailed_response(
                 meal,
+                image_url=getattr(getattr(meal, "image", None), "url", None),
                 target_language=get_request_language(request),
             ),
         )

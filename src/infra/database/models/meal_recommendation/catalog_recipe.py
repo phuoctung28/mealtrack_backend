@@ -38,6 +38,7 @@ class MealCatalogORM(Base):
     cuisine = Column(String(80), nullable=False)
     description = Column(Text, nullable=True)
     image_url = Column(Text, nullable=True)
+    popularity_rank = Column(Integer, nullable=True)
     breakfast_eligible = Column(Boolean, nullable=False, default=False)
     lunch_eligible = Column(Boolean, nullable=False, default=False)
     dinner_eligible = Column(Boolean, nullable=False, default=False)
@@ -62,10 +63,21 @@ class MealCatalogORM(Base):
         CheckConstraint("length(name) > 0", name="ck_meal_catalog_name"),
         CheckConstraint("length(cuisine) > 0", name="ck_meal_catalog_cuisine"),
         CheckConstraint(
+            "popularity_rank IS NULL OR popularity_rank >= 0",
+            name="ck_meal_catalog_popularity_rank_non_negative",
+        ),
+        CheckConstraint(
             "breakfast_eligible OR lunch_eligible OR dinner_eligible OR snack_eligible",
             name="ck_meal_catalog_has_eligible_meal_type",
         ),
         Index("idx_meal_catalog_active_cuisine", "is_active", "cuisine"),
+        Index(
+            "idx_meal_catalog_active_popularity",
+            "is_active",
+            "popularity_rank",
+            "name",
+            "id",
+        ),
     )
 
 

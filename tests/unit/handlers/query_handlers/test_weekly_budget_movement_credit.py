@@ -230,6 +230,49 @@ async def test_weekly_create_and_stale_sync_derive_calories_from_macros(
 
 
 @pytest.mark.asyncio
+async def test_read_only_budget_projection_does_not_create_or_update_budget():
+    handler = GetWeeklyBudgetQueryHandler()
+    uow = MagicMock()
+    uow.weekly_budgets.create = AsyncMock()
+    uow.weekly_budgets.update = AsyncMock()
+    target = {
+        "macros": {"protein": 100.0, "carbs": 200.0, "fat": 66.7},
+        "bmr": 1600.0,
+        "profile_target_revision": 2,
+        "macro_preset": "standard",
+        "is_custom": False,
+    }
+
+    with patch(
+        "src.app.handlers.query_handlers.get_user_tdee_query_handler."
+        "GetUserTdeeQueryHandler.handle",
+        new_callable=AsyncMock,
+        return_value=target,
+    ):
+        created, _ = await handler._create_weekly_budget(
+            uow,
+            "u1",
+            date(2026, 3, 9),
+            date(2026, 3, 9),
+            persist=False,
+        )
+        stale = WeeklyMacroBudget(
+            weekly_budget_id="stale",
+            user_id="u1",
+            week_start_date=date(2026, 3, 9),
+            target_calories=13300.0,
+            target_protein=created.target_protein,
+            target_carbs=created.target_carbs,
+            target_fat=created.target_fat,
+            target_revision=1,
+        )
+        await handler._sync_targets_if_stale(uow, stale, "u1", persist=False)
+
+    uow.weekly_budgets.create.assert_not_awaited()
+    uow.weekly_budgets.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_unavailable_authoritative_target_writes_no_weekly_budget():
     handler = GetWeeklyBudgetQueryHandler()
     uow = MagicMock()

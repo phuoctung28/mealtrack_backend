@@ -10,6 +10,7 @@ from typing import Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.services.food_name_localizer import (
+    needs_display_localization,
     translate_food_texts,
     translated_values,
 )
@@ -25,6 +26,7 @@ from src.infra.adapters.open_food_facts_service import OpenFoodFactsService
 logger = logging.getLogger(__name__)
 
 TRUSTED_CACHE_SOURCES = {"fatsecret", "openfoodfacts", "usda_fdc", "cache", None}
+ENGLISH_CANONICAL_CACHE_SOURCES = frozenset({"fatsecret", "usda_fdc"})
 
 
 def _gs1_prefix_hint(barcode: str) -> str:
@@ -99,9 +101,16 @@ class LookupBarcodeQueryHandler(
                 cached_product["source"] = "cache"
                 cached_product["barcode"] = scanned_barcode
                 log_hit("cache", cached_product)
-                # Cached rows have no source-locale provenance.  They remain
-                # canonical rather than being mislabeled as English.
-                return await self._maybe_translate(cached_product, query.language)
+                # FatSecret/USDA rows are acquired in English. Other cached rows may
+                # lack provenance, so only localize leftover English display text.
+                cache_source_language = (
+                    "en" if provider_source in ENGLISH_CANONICAL_CACHE_SOURCES else None
+                )
+                return await self._maybe_translate(
+                    cached_product,
+                    query.language,
+                    source_language=cache_source_language,
+                )
             miss_reasons.append("cache_missing_source_identity")
         if cached:
             partial_name = cached.get("name")
@@ -229,14 +238,14 @@ class LookupBarcodeQueryHandler(
             )
             if estimate:
                 log_hit("fatsecret_name_estimate", estimate)
-                return estimate
+                return await self._maybe_translate(estimate, query.language)
 
         if brave_result and self._has_nutrition(brave_result):
             estimate = self._estimate_result(
                 brave_result, scanned_barcode, "brave_search"
             )
             log_hit("brave_search", estimate)
-            return estimate
+            return await self._maybe_translate(estimate, query.language)
         if self.brave_search and not brave_result:
             miss_reasons.append("brave_empty")
 
@@ -245,7 +254,7 @@ class LookupBarcodeQueryHandler(
         )
         if estimate:
             log_hit("ai_estimate", estimate)
-            return estimate
+            return await self._maybe_translate(estimate, query.language)
 
         miss_reasons.append("ai_estimate_empty")
         logger.warning(
@@ -451,16 +460,21 @@ class LookupBarcodeQueryHandler(
         language: str,
         source_language: str | None = None,
     ) -> dict[str, Any]:
-        """Translate a known-English provider projection for presentation only."""
-        if (
-            language == "en"
-            or source_language != "en"
-            or not self.translation_service
-            or not result.get("name")
+        """Translate known-English or leftover-English names for presentation."""
+        name = result.get("name")
+        if language == "en" or not self.translation_service or not name:
+            return result
+
+        # Proven English sources always localize. Unknown provenance only
+        # localizes when the display name still looks like leftover English,
+        # so printed non-English product names are not mangled.
+        if source_language != "en" and not (
+            source_language is None and needs_display_localization(str(name), language)
         ):
             return result
+
         translated = await translate_food_texts(
-            [str(result["name"])],
+            [str(name)],
             target_language=language,
             translation_service=self.translation_service,
         )
@@ -469,7 +483,7 @@ class LookupBarcodeQueryHandler(
             TranslationOutcome.PARTIAL,
         }:
             localized = dict(result)
-            localized["name"] = translated_values([str(result["name"])], translated)[0]
+            localized["name"] = translated_values([str(name)], translated)[0]
             return localized
         return result
 

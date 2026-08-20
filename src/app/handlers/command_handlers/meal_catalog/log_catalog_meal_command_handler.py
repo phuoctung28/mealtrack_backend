@@ -1,0 +1,195 @@
+"""Handler for logging a catalog meal with prefer-slot."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import time
+from collections.abc import Coroutine
+from datetime import date
+from typing import Any
+
+from src.api.exceptions import ConflictException, ResourceNotFoundException
+from src.app.commands.meal_catalog import LogCatalogMealCommand
+from src.app.events.base import EventHandler, handles
+from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.app.services.catalog_meal_log_service import (
+    CatalogMealLogService,
+    LogCatalogMealResult,
+)
+from src.app.services.meal_translation_persistence import persist_meal_translation
+from src.app.services.remaining_recommendation_recalculator import (
+    RemainingRecommendationRecalculator,
+)
+from src.domain.services.meal_analysis.meal_translation_service import (
+    MealTranslationService,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def catalog_log_fingerprint(
+    catalog_meal_id: str, meal_date: date, meal_type: str
+) -> str:
+    payload = {
+        "catalog_meal_id": catalog_meal_id,
+        "meal_date": meal_date.isoformat(),
+        "meal_type": meal_type,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+@handles(LogCatalogMealCommand)
+class LogCatalogMealCommandHandler(
+    EventHandler[LogCatalogMealCommand, LogCatalogMealResult]
+):
+    def __init__(
+        self,
+        uow,
+        browse_service,
+        *,
+        log_service: CatalogMealLogService | None = None,
+        meal_translation_service: MealTranslationService | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
+        recalculator: RemainingRecommendationRecalculator | None = None,
+        insight_scheduler=None,
+        task_manager=None,
+    ) -> None:
+        self.uow = uow
+        self.browse_service = browse_service
+        self.log_service = log_service or CatalogMealLogService()
+        self.meal_translation_service = meal_translation_service
+        self.cache_invalidation = cache_invalidation
+        self.recalculator = recalculator
+        self.insight_scheduler = insight_scheduler
+        self.task_manager = task_manager
+
+    async def handle(self, command: LogCatalogMealCommand) -> LogCatalogMealResult:
+        try:
+            catalog_meal = await self.browse_service.get_meal(command.catalog_meal_id)
+        except KeyError as exc:
+            raise ResourceNotFoundException("Catalog meal not found") from exc
+
+        write_started = time.perf_counter()
+        result = await self._write(command, catalog_meal)
+        write_ms = (time.perf_counter() - write_started) * 1000
+        await persist_meal_translation(
+            self.meal_translation_service, result.meal, command.language
+        )
+        if self.cache_invalidation is not None:
+            await self.cache_invalidation.after_meal_write(
+                command.user_id, command.meal_date
+            )
+        if self.recalculator is not None:
+            await self._defer(
+                f"catalog-log-recalc:{command.request_id}",
+                self.recalculator.recalculate(
+                    user_id=command.user_id,
+                    meal_date=command.meal_date,
+                    logged_catalog_meal_id=command.catalog_meal_id,
+                    logged_slot_id=result.slot_id,
+                    request_id=command.request_id,
+                ),
+            )
+        if self.insight_scheduler is not None:
+            self.insight_scheduler(result.meal, command)
+        logger.info(
+            "catalog_log.timing meal_id=%s write_ms=%.0f background=%s",
+            result.meal_id,
+            write_ms,
+            self.task_manager is not None,
+        )
+        return result
+
+    async def _defer(self, name: str, coro: Coroutine[Any, Any, Any]) -> None:
+        """Run isolated post-log work in the background when a task manager exists."""
+
+        if self.task_manager is not None:
+            self.task_manager.spawn(name, coro)
+            return
+        await coro
+
+    async def _write(self, command, catalog_meal) -> LogCatalogMealResult:
+        async with self.uow as uow:
+            reservation = await uow.meal_write_operations.reserve(
+                user_id=command.user_id,
+                operation="catalog_meal_log",
+                idempotency_key=command.request_id,
+                request_fingerprint=catalog_log_fingerprint(
+                    command.catalog_meal_id,
+                    command.meal_date,
+                    command.meal_type,
+                ),
+            )
+            if reservation.state == "replay":
+                return _result_from_replay(reservation.response, catalog_meal)
+            if reservation.state == "fingerprint_conflict":
+                raise ConflictException(
+                    "Idempotency-Key was already used for a different request",
+                    error_code="IDEMPOTENCY_KEY_REUSED",
+                )
+            if reservation.state == "in_progress":
+                raise ConflictException(
+                    "The same meal write is already in progress",
+                    error_code="IDEMPOTENCY_IN_PROGRESS",
+                )
+            try:
+                result = await self.log_service.execute(uow, command, catalog_meal)
+                await uow.meal_write_operations.complete(
+                    reservation,
+                    target_meal_id=result.meal_id,
+                    response=result.to_replay_payload(),
+                )
+                return result
+            except Exception:
+                await uow.meal_write_operations.release(reservation)
+                raise
+
+
+_REPLAY_REQUIRED_KEYS = (
+    "meal_id",
+    "catalog_meal_id",
+    "logged_via",
+    "meal_date",
+    "meal_type",
+)
+
+
+def _invalid_replay() -> ConflictException:
+    return ConflictException(
+        "Catalog log replay is missing a stored meal",
+        error_code="IDEMPOTENCY_REPLAY_INVALID",
+    )
+
+
+def _result_from_replay(payload: dict | None, catalog_meal) -> LogCatalogMealResult:
+    if not isinstance(payload, dict) or any(
+        not payload.get(key) for key in _REPLAY_REQUIRED_KEYS
+    ):
+        raise _invalid_replay()
+    try:
+        meal_date = date.fromisoformat(str(payload["meal_date"]))
+    except (TypeError, ValueError) as exc:
+        raise _invalid_replay() from exc
+    meal = type(
+        "ReplayMeal",
+        (),
+        {
+            "meal_id": payload["meal_id"],
+            "dish_name": getattr(catalog_meal, "name", None),
+            "nutrition": None,
+        },
+    )()
+    return LogCatalogMealResult(
+        meal_id=str(payload["meal_id"]),
+        catalog_meal_id=str(payload["catalog_meal_id"]),
+        logged_via=str(payload["logged_via"]),
+        plan_id=payload.get("plan_id"),
+        slot_id=payload.get("slot_id"),
+        meal_date=meal_date,
+        meal_type=str(payload["meal_type"]),
+        meal=meal,  # type: ignore[arg-type]
+    )

@@ -54,6 +54,11 @@ class MealORM(Base, TimestampMixin):
 
     # Source tracking (scanner, prompt, food_search, manual)
     source = Column(String(20), nullable=True)
+    catalog_meal_id = Column(
+        String(36),
+        ForeignKey("meal_catalog.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Generic serving quantity: grams for food meals, ml for hydration meals
     quantity = Column(Integer, nullable=True)

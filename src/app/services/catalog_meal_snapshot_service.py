@@ -56,7 +56,25 @@ class CatalogMealSnapshotService:
             self._record_snapshot_metrics(snapshot, status="warm")
             return snapshot
 
-        revision = await uow.catalog_recipes.get_active_catalog_revision()
+        try:
+            revision = await uow.catalog_recipes.get_active_catalog_revision()
+        except Exception:
+            if snapshot is not None:
+                self._next_refresh_after = now + self._failure_retry_seconds
+                increment_metric(
+                    "meal_recommendation.catalog_snapshot.refresh",
+                    attributes={"status": "last_good"},
+                )
+                increment_metric(
+                    "meal_catalog.snapshot.refresh",
+                    attributes={"status": "last_good"},
+                )
+                increment_metric(
+                    "meal_catalog.snapshot.last_good",
+                    attributes={"status": "last_good"},
+                )
+                return snapshot
+            raise
         snapshot = self._snapshot
         if (
             snapshot is not None
@@ -79,6 +97,12 @@ class CatalogMealSnapshotService:
         snapshot = await self._refresh_singleflight(uow, expected_revision=revision)
         self._record_snapshot_metrics(snapshot, status="returned")
         return snapshot
+
+    def invalidate(self) -> None:
+        """Drop the process snapshot so the next read rebuilds from the catalog."""
+
+        self._snapshot = None
+        self._next_refresh_after = 0.0
 
     async def _refresh_singleflight(
         self,
