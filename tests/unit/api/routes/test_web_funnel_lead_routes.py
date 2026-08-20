@@ -26,15 +26,26 @@ class FakeSession:
 
 
 class CreateSession(FakeSession):
-    def __init__(self, existing: WebFunnelLead | None, *, conflict: bool = False):
+    def __init__(
+        self,
+        existing: WebFunnelLead | None,
+        *,
+        conflict: bool = False,
+        registered_user_id: str | None = None,
+    ):
         super().__init__(existing)
         self.conflict = conflict
+        self.registered_user_id = registered_user_id
         self.added: list[object] = []
         self.scalar_calls = 0
 
     async def scalar(self, _statement):
         self.scalar_calls += 1
-        return self.lead
+        if self.scalar_calls == 1:
+            return self.lead
+        if self.scalar_calls == 2:
+            return self.registered_user_id
+        return None
 
     def add(self, item):
         self.added.append(item)
@@ -43,7 +54,7 @@ class CreateSession(FakeSession):
         return None
 
     async def commit(self):
-        if self.conflict and self.scalar_calls == 1:
+        if self.conflict and self.scalar_calls <= 2:
             raise IntegrityError("insert", {}, Exception("duplicate"))
         self.committed = True
 
@@ -58,7 +69,7 @@ class ConcurrentCreateSession(CreateSession):
 
     async def scalar(self, _statement):
         self.scalar_calls += 1
-        return self.winner if self.scalar_calls > 1 else None
+        return self.winner if self.scalar_calls > 2 else None
 
 
 class CorrelationSession(FakeSession):
@@ -195,6 +206,35 @@ async def test_create_hides_replayed_request_from_another_capability(monkeypatch
             CreateSession(_lead()),
         )
     assert error.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_registered_email_before_checkout(monkeypatch):
+    monkeypatch.setattr(
+        web_funnel.settings, "WEB_FUNNEL_BFF_ORIGIN", "https://web.example"
+    )
+    monkeypatch.setattr(
+        web_funnel.settings, "WEB_FUNNEL_BFF_SHARED_SECRET", "bff-secret"
+    )
+    session = CreateSession(None, registered_user_id="user-1")
+
+    with pytest.raises(HTTPException) as error:
+        await web_funnel.create_lead(
+            _request(),
+            _payload(),
+            "a" * 32,
+            "request-1",
+            "https://web.example",
+            "bff-secret",
+            session,
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == (
+        "This email is already registered. Please sign in to continue."
+    )
+    assert session.added == []
+    assert not session.committed
 
 
 @pytest.mark.asyncio
