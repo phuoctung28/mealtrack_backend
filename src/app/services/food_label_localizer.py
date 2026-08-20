@@ -15,6 +15,18 @@ from src.domain.model.translation_result import TranslationOutcome
 
 __all__ = ["localize_food_label_display"]
 
+_MAX_FOOD_LABEL_DISPLAY_NAME_LENGTH = 200
+
+
+def _bounded_display_name(value: Any) -> str | None:
+    """Return a non-empty display name within the FoodItem name contract."""
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped or len(stripped) > _MAX_FOOD_LABEL_DISPLAY_NAME_LENGTH:
+        return None
+    return stripped
+
 
 async def localize_food_label_display(
     *,
@@ -28,7 +40,8 @@ async def localize_food_label_display(
     Printed non-English product names stay as-is. English leftovers are
     translated for presentation and persisted on the meal so Today's Meals
     and meal detail can trust the stored display names (same contract as
-    scanner meals).
+    scanner meals). Oversized translations are skipped so localization never
+    fails the parent food-label scan.
     """
 
     normalized = (language or "en").strip().lower()
@@ -75,16 +88,20 @@ async def localize_food_label_display(
     )
 
     if metadata_dict is not None and product_name in localized_by_source:
-        localized_product = localized_by_source[product_name]
-        if isinstance(localized_product, str) and localized_product.strip():
-            metadata_dict["product_name"] = localized_product.strip()
+        localized_product = _bounded_display_name(localized_by_source[product_name])
+        if localized_product is not None:
+            metadata_dict["product_name"] = localized_product
 
     localized_items: list[FoodItem] = []
     for item in food_items:
         name = getattr(item, "name", None)
-        replacement = localized_by_source.get(name) if isinstance(name, str) else None
-        if isinstance(replacement, str) and replacement.strip():
-            localized_items.append(replace(item, name=replacement.strip()))
+        replacement = (
+            _bounded_display_name(localized_by_source.get(name))
+            if isinstance(name, str)
+            else None
+        )
+        if replacement is not None:
+            localized_items.append(replace(item, name=replacement))
         else:
             localized_items.append(item)
 
