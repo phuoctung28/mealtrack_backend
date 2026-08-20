@@ -220,7 +220,7 @@ from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
 from src.domain.services.nutrition_integrity_policy import NutritionIntegrityPolicy
-from src.infra.cache.provider_budget import RedisProviderBudget
+from src.infra.cache.provider_budget import MemoryProviderBudget, RedisProviderBudget
 from src.infra.config.settings import settings
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.event_bus import EventBus, PyMediatorEventBus
@@ -233,13 +233,26 @@ _configured_event_bus: EventBus | None = None
 
 
 def _build_provider_budget(cache_service):
-    """Build the required shared provider budget from the initialized Redis client."""
-    if cache_service is None or settings.NUTRITION_PROVIDER_GLOBAL_RPM is None:
+    """Build the shared provider budget. Production fail-closes without Redis."""
+    if settings.NUTRITION_PROVIDER_GLOBAL_RPM is None:
+        logger.error(
+            "NUTRITION_PROVIDER_GLOBAL_RPM is unset; provider-origin meal saves "
+            "will return NUTRITION_PROVIDER_UNAVAILABLE"
+        )
         return None
     redis_client = getattr(cache_service, "redis", None)
-    if redis_client is None:
-        return None
-    return RedisProviderBudget(redis_client)
+    if redis_client is not None:
+        return RedisProviderBudget(redis_client)
+    if settings.ENVIRONMENT.lower() == "development":
+        logger.warning(
+            "Redis cache unavailable; using process-local provider budget in development"
+        )
+        return MemoryProviderBudget()
+    logger.error(
+        "Redis cache unavailable; provider-origin meal saves will return "
+        "NUTRITION_PROVIDER_UNAVAILABLE"
+    )
+    return None
 
 
 async def _search_local_food_references(
