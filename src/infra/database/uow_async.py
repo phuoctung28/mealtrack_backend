@@ -32,6 +32,9 @@ from src.infra.repositories.meal_recommendation_plan_repository_async import (
     AsyncMealRecommendationPlanRepository,
 )
 from src.infra.repositories.meal_repository_async import AsyncMealRepository
+from src.infra.repositories.meal_scan_visual_identity_repository_async import (
+    AsyncMealScanVisualIdentityRepository,
+)
 from src.infra.repositories.meal_translation_repository_async import (
     AsyncMealTranslationRepository,
 )
@@ -142,6 +145,9 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.referrals = ReferralRepository(session)
         self.affiliate_outbox = AffiliateEventOutboxRepository(session)
         self.meal_write_operations = AsyncMealWriteOperationRepository(session)
+        self.meal_scan_visual_identities = AsyncMealScanVisualIdentityRepository(
+            session
+        )
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         session = self.session

@@ -300,6 +300,25 @@ class Settings(BaseSettings):
         default="v1",
         description="Meal analysis graph version emitted in workflow state.",
     )
+    MEAL_SCAN_VISUAL_CACHE_ENABLED: bool = Field(
+        default=False,
+        description=(
+            "Reuse a prior READY meal when a new scan looks like the same food "
+            "at a different camera angle (AI visual identity + scene signature)."
+        ),
+    )
+    MEAL_SCAN_VISUAL_CACHE_MATCH_THRESHOLD: float = Field(
+        default=0.82,
+        ge=0.5,
+        le=1.0,
+        description="Minimum combined score to reuse a prior scanned meal.",
+    )
+    MEAL_SCAN_VISUAL_CACHE_MIN_IDENTITY_CONFIDENCE: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="Minimum AI identity confidence required before matching.",
+    )
     PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED: bool = Field(
         default=False,
         description="Enable structured local/FatSecret resolution for parse-text.",

@@ -14,6 +14,10 @@ from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+from src.app.services.meal_scan_visual_cache_service import (
+    MealScanVisualCacheService,
+    scan_source_for_mode,
+)
 from src.domain.constants import MealDefaults
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal.meal_response_localization import (
@@ -43,6 +47,7 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
+from src.infra.config.settings import get_settings
 from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
@@ -65,6 +70,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         meal_value_insight_ai_manager: MealInsightAIPort | None = None,
         meal_analyze_workflow: MealAnalyzeWorkflow | None = None,
         meal_analyze_graph_enabled: bool = False,
+        meal_scan_visual_cache: MealScanVisualCacheService | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -77,6 +83,19 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.meal_value_insight_ai_manager = meal_value_insight_ai_manager
         self.meal_analyze_workflow = meal_analyze_workflow
         self.meal_analyze_graph_enabled = meal_analyze_graph_enabled
+        if meal_scan_visual_cache is not None:
+            self.meal_scan_visual_cache = meal_scan_visual_cache
+        else:
+            settings = get_settings()
+            self.meal_scan_visual_cache = MealScanVisualCacheService(
+                uow,
+                vision_service,
+                enabled=bool(settings.MEAL_SCAN_VISUAL_CACHE_ENABLED),
+                match_threshold=float(settings.MEAL_SCAN_VISUAL_CACHE_MATCH_THRESHOLD),
+                min_identity_confidence=float(
+                    settings.MEAL_SCAN_VISUAL_CACHE_MIN_IDENTITY_CONFIDENCE
+                ),
+            )
 
     def _record_food_label_metric(
         self,
@@ -387,9 +406,25 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         if not all([self.vision_service, self.gpt_parser]):
             raise RuntimeError("Required dependencies not configured")
 
+        source = scan_source_for_mode(command.scan_mode)
+        raw_bytes: bytes | None = None
+        if (
+            command.scan_mode != "food_label"
+            and not command.user_description
+            and self.meal_scan_visual_cache.enabled
+        ):
+            raw_bytes = await self._download_image_bytes(command.image_url)
+            cached = await self.meal_scan_visual_cache.try_resolve(
+                user_id=command.user_id,
+                image_bytes=raw_bytes,
+                source=source,
+            )
+            if cached is not None:
+                return cached
+
         if self.meal_analyze_graph_enabled:
             workflow = self.meal_analyze_workflow or MealAnalyzeWorkflow()
-            return await workflow.run_scan_by_url(
+            meal = await workflow.run_scan_by_url(
                 command,
                 self._handle_legacy_scan_by_url,
                 runtime=MealAnalyzeRuntime(
@@ -407,5 +442,22 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     meal_translation_service=self.meal_translation_service,
                 ),
             )
+        else:
+            meal = await self._handle_legacy_scan_by_url(command)
 
-        return await self._handle_legacy_scan_by_url(command)
+        if self.meal_scan_visual_cache.enabled:
+            if raw_bytes is None:
+                try:
+                    raw_bytes = await self._download_image_bytes(command.image_url)
+                except Exception as exc:
+                    logger.warning(
+                        "[MEAL-VISUAL-CACHE] remember download failed: %s", exc
+                    )
+                    return meal
+            await self.meal_scan_visual_cache.remember(
+                user_id=command.user_id,
+                meal=meal,
+                image_bytes=raw_bytes,
+                source=source,
+            )
+        return meal
