@@ -135,3 +135,25 @@ async def test_dedupes_identical_product_and_food_item_names():
     )
 
     service.translate_texts.assert_awaited_once_with(["Protein Bar"], "en", "vi")
+
+
+@pytest.mark.asyncio
+async def test_oversized_translated_name_keeps_canonical_and_does_not_raise():
+    service = AsyncMock()
+    oversized = "A" * 201
+    service.translate_texts.return_value = TranslationResult(
+        (oversized,),
+        TranslationOutcome.TRANSLATED,
+        "en",
+        "vi",
+    )
+
+    nutrition, metadata = await localize_food_label_display(
+        nutrition=_nutrition(),
+        metadata=_metadata(),
+        language="vi",
+        translation_service=service,
+    )
+
+    assert nutrition.food_items[0].name == "Protein Bar"
+    assert metadata["product_name"] == "Protein Bar"
