@@ -206,6 +206,33 @@ class AsyncMealRepository(MealRepositoryPort):
         db_meal = result.unique().scalars().first()
         return meal_orm_to_domain(db_meal) if db_meal else None
 
+    async def find_ready_by_user_and_image_id(
+        self,
+        *,
+        user_id: str,
+        image_id: str,
+        source: str | None = None,
+        projection: MealProjection = MealProjection.FULL,
+    ) -> Meal | None:
+        stmt = (
+            select(MealORM)
+            .options(*_PROJECTION_OPTS[projection])
+            .where(
+                MealORM.user_id == user_id,
+                MealORM.image_id == image_id,
+                MealORM.status == MealStatusEnum.READY,
+                MealORM.ready_at.is_not(None),
+                MealORM.nutrition.has(),
+            )
+            .order_by(MealORM.ready_at.desc(), MealORM.created_at.desc())
+            .limit(1)
+        )
+        if source is not None:
+            stmt = stmt.where(MealORM.source == source)
+        result = await self.session.execute(stmt)
+        db_meal = result.unique().scalars().first()
+        return meal_orm_to_domain(db_meal) if db_meal else None
+
     async def find_by_id_for_update(
         self, meal_id: str, projection: MealProjection = MealProjection.FULL
     ) -> Meal | None:
@@ -218,9 +245,7 @@ class AsyncMealRepository(MealRepositoryPort):
         """
         # Step 1: lock the meal row without any joins.
         lock_result = await self.session.execute(
-            select(MealORM.meal_id)
-            .where(MealORM.meal_id == meal_id)
-            .with_for_update()
+            select(MealORM.meal_id).where(MealORM.meal_id == meal_id).with_for_update()
         )
         if lock_result.scalar_one_or_none() is None:
             return None

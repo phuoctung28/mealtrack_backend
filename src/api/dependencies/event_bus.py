@@ -532,6 +532,7 @@ def get_configured_event_bus() -> EventBus:
         DeleteMealCommandHandler(
             uow=AsyncUnitOfWork(),
             cache_invalidation=cache_invalidation_service,
+            cache=cache_service,
         ),
     )
 

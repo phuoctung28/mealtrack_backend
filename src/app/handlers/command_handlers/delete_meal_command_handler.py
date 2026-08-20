@@ -13,7 +13,9 @@ from src.api.exceptions import AuthorizationException
 from src.app.commands.meal import DeleteMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
+from src.app.services.meal_scan_cache_service import MealScanCacheService
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
+from src.domain.ports.cache_port import CachePort
 from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -27,13 +29,18 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
         self,
         uow: AsyncUnitOfWorkPort,
         cache_invalidation: CacheInvalidationService | None = None,
+        meal_scan_cache: MealScanCacheService | None = None,
+        cache: CachePort | None = None,
     ):
         self.uow = uow
         self.cache_invalidation = cache_invalidation
+        self.meal_scan_cache = meal_scan_cache or MealScanCacheService(uow, cache)
 
     async def handle(self, command: DeleteMealCommand) -> dict[str, Any]:
         """Handle meal deletion with data preservation."""
         deleted_kind = "meal"
+        scan_image_id: str | None = None
+        scan_source: str | None = None
         async with self.uow as uow:
             meal = await uow.meals.find_by_id(command.meal_id)
             if meal is not None:
@@ -41,6 +48,8 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
                     raise AuthorizationException(
                         "You do not have permission to delete this meal"
                     )
+                scan_image_id = meal.image.image_id if meal.image else None
+                scan_source = meal.source
                 # Recommended-meal logs set meal_recommendations.logged_meal_id
                 # with ON DELETE SET NULL. Clearing only the FK leaves logged_at
                 # set and violates ck_meal_recommendations_logged_coherent.
@@ -78,7 +87,16 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
                     command.user_id, log_date
                 )
             else:
-                await self.cache_invalidation.after_meal_write(command.user_id, log_date)
+                await self.cache_invalidation.after_meal_write(
+                    command.user_id, log_date
+                )
+
+        if deleted_kind == "meal":
+            await self.meal_scan_cache.invalidate(
+                user_id=command.user_id,
+                image_id=scan_image_id,
+                source=scan_source,
+            )
 
         return {
             "meal_id": command.meal_id,

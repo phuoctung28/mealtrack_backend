@@ -22,6 +22,33 @@ class FakeMealRepository(MealRepositoryPort):
         """Find a meal by ID."""
         return self._meals.get(meal_id)
 
+    async def find_ready_by_user_and_image_id(
+        self,
+        *,
+        user_id: str,
+        image_id: str,
+        source: str | None = None,
+        projection: Any = None,
+    ) -> Optional[Meal]:
+        """Return newest READY meal for a user+image scan."""
+        matches = [
+            meal
+            for meal in self._meals.values()
+            if meal.user_id == user_id
+            and meal.status == MealStatus.READY
+            and meal.nutrition is not None
+            and meal.image is not None
+            and meal.image.image_id == image_id
+            and (source is None or meal.source == source)
+        ]
+        if not matches:
+            return None
+        matches.sort(
+            key=lambda meal: meal.ready_at or meal.created_at,
+            reverse=True,
+        )
+        return matches[0]
+
     async def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
         """Find meals by status."""
         return [meal for meal in self._meals.values() if meal.status == status][:limit]

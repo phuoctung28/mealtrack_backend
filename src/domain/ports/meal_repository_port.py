@@ -39,6 +39,21 @@ class MealRepositoryPort(ABC):
         """
         pass
 
+    async def find_ready_by_user_and_image_id(
+        self,
+        *,
+        user_id: str,
+        image_id: str,
+        source: str | None = None,
+        projection: Any = None,
+    ) -> Meal | None:
+        """Return the newest READY meal for a user+image scan, if any.
+
+        Used so repeat scans of the same Cloudinary asset return the same meal
+        instead of re-running vision and creating duplicates.
+        """
+        return None
+
     @abstractmethod
     async def find_by_status(self, status: MealStatus, limit: int = 10) -> list[Meal]:
         """

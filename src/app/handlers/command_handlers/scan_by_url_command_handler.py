@@ -14,6 +14,11 @@ from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+from src.app.services.meal_scan_cache_service import (
+    MealScanCacheService,
+    mark_scan_cache_hit,
+    scan_source_for_mode,
+)
 from src.domain.constants import MealDefaults
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal.meal_response_localization import (
@@ -65,6 +70,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         meal_value_insight_ai_manager: MealInsightAIPort | None = None,
         meal_analyze_workflow: MealAnalyzeWorkflow | None = None,
         meal_analyze_graph_enabled: bool = False,
+        meal_scan_cache: MealScanCacheService | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -77,6 +83,9 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.meal_value_insight_ai_manager = meal_value_insight_ai_manager
         self.meal_analyze_workflow = meal_analyze_workflow
         self.meal_analyze_graph_enabled = meal_analyze_graph_enabled
+        self.meal_scan_cache = meal_scan_cache or MealScanCacheService(
+            uow, meal_value_insight_cache
+        )
 
     def _record_food_label_metric(
         self,
@@ -383,13 +392,43 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         except Exception:
             raise
 
+    async def _try_cached_scan(self, command: ScanByUrlCommand) -> Meal | None:
+        # User description changes analysis intent — do not reuse prior results.
+        if command.user_description:
+            return None
+        image_id = command.public_id.split("/")[-1]
+        source = scan_source_for_mode(command.scan_mode)
+        meal = await self.meal_scan_cache.get_by_image_id(
+            user_id=command.user_id,
+            image_id=image_id,
+            source=source,
+        )
+        if meal is None:
+            return None
+        return mark_scan_cache_hit(meal)
+
+    async def _remember_scan(self, command: ScanByUrlCommand, meal: Meal) -> None:
+        if meal.status != MealStatus.READY or meal.nutrition is None:
+            return
+        image_id = command.public_id.split("/")[-1]
+        await self.meal_scan_cache.remember_image_scan(
+            user_id=command.user_id,
+            image_id=image_id,
+            source=scan_source_for_mode(command.scan_mode),
+            meal_id=meal.meal_id,
+        )
+
     async def handle(self, command: ScanByUrlCommand) -> Meal:
         if not all([self.vision_service, self.gpt_parser]):
             raise RuntimeError("Required dependencies not configured")
 
+        cached = await self._try_cached_scan(command)
+        if cached is not None:
+            return cached
+
         if self.meal_analyze_graph_enabled:
             workflow = self.meal_analyze_workflow or MealAnalyzeWorkflow()
-            return await workflow.run_scan_by_url(
+            meal = await workflow.run_scan_by_url(
                 command,
                 self._handle_legacy_scan_by_url,
                 runtime=MealAnalyzeRuntime(
@@ -407,5 +446,8 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     meal_translation_service=self.meal_translation_service,
                 ),
             )
+        else:
+            meal = await self._handle_legacy_scan_by_url(command)
 
-        return await self._handle_legacy_scan_by_url(command)
+        await self._remember_scan(command, meal)
+        return meal

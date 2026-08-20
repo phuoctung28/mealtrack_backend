@@ -174,5 +174,19 @@ class CacheKeys:
         return (f"user:{user_id}:metrics", CacheKeys.TTL_1_DAY)
 
     @staticmethod
+    def user_meal_scan(
+        user_id: str, cache_identity: str, source: str
+    ) -> tuple[str, int]:
+        """Cache key for a user's scanned meal by image/content identity.
+
+        Maps to meal_id so repeat scans return the same READY meal without
+        re-running vision. 30-day TTL; durable fallback is the meal row.
+        """
+        return (
+            f"user:{user_id}:meal_scan:{source}:{cache_identity}",
+            CacheKeys.TTL_30_DAYS,
+        )
+
+    @staticmethod
     def pattern_for_user(user_id: str) -> str:
         return f"user:{user_id}:*"

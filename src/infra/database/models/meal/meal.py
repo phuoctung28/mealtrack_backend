@@ -9,9 +9,11 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -24,6 +26,15 @@ class MealORM(Base, TimestampMixin):
     """Database model for meals."""
 
     __tablename__ = "meal"
+    __table_args__ = (
+        Index(
+            "ix_meal_user_image_source",
+            "user_id",
+            "image_id",
+            "source",
+            postgresql_where=text("image_id IS NOT NULL"),
+        ),
+    )
 
     # Primary key
     meal_id = Column(String(36), primary_key=True)

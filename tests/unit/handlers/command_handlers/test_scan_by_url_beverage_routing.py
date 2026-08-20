@@ -31,6 +31,7 @@ def _make_uow() -> MagicMock:
 
     uow.meals.save = AsyncMock(side_effect=capture_meal)
     uow.meals.find_by_id = AsyncMock(side_effect=lambda mid, **kw: saved_meals[-1])
+    uow.meals.find_ready_by_user_and_image_id = AsyncMock(return_value=None)
     uow.hydration_entries = MagicMock()
     uow.hydration_entries.add = AsyncMock(side_effect=lambda entry: entry)
     uow.commit = AsyncMock()
