@@ -47,7 +47,6 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.infra.config.settings import get_settings
 from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
@@ -86,15 +85,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         if meal_scan_visual_cache is not None:
             self.meal_scan_visual_cache = meal_scan_visual_cache
         else:
-            settings = get_settings()
+            # DI should inject a configured cache; default keeps the feature off
+            # so app handlers do not import infra settings.
             self.meal_scan_visual_cache = MealScanVisualCacheService(
                 uow,
                 vision_service,
-                enabled=bool(settings.MEAL_SCAN_VISUAL_CACHE_ENABLED),
-                match_threshold=float(settings.MEAL_SCAN_VISUAL_CACHE_MATCH_THRESHOLD),
-                min_identity_confidence=float(
-                    settings.MEAL_SCAN_VISUAL_CACHE_MIN_IDENTITY_CONFIDENCE
-                ),
+                enabled=False,
             )
 
     def _record_food_label_metric(

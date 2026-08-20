@@ -92,15 +92,10 @@ class UploadMealImageImmediatelyHandler(
         if meal_scan_visual_cache is not None:
             self.meal_scan_visual_cache = meal_scan_visual_cache
         else:
-            settings = get_settings()
             self.meal_scan_visual_cache = MealScanVisualCacheService(
                 uow,
                 vision_service,
-                enabled=bool(settings.MEAL_SCAN_VISUAL_CACHE_ENABLED),
-                match_threshold=float(settings.MEAL_SCAN_VISUAL_CACHE_MATCH_THRESHOLD),
-                min_identity_confidence=float(
-                    settings.MEAL_SCAN_VISUAL_CACHE_MIN_IDENTITY_CONFIDENCE
-                ),
+                enabled=False,
             )
         if fast_path_policy is None:
             self._fast_path_policy = MealAnalyzeFastPathPolicy.from_settings(
