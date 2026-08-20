@@ -172,6 +172,54 @@ async def test_non_english_openfoodfacts_english_name_is_localized_without_persi
 
 
 @pytest.mark.asyncio
+async def test_lookup_barcode_uses_openfoodfacts_when_fatsecret_is_unavailable():
+    repo = _FoodReferenceRepo()
+    fat_secret = None
+    off = AsyncMock()
+    off.get_product.return_value = {
+        "name": "Brown Rice",
+        "barcode": "0036000291452",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(
+        repo,
+        fat_secret_service=fat_secret,
+        open_food_facts_service=off,
+    )
+
+    result = await handler.handle(_query())
+
+    assert result is not None
+    assert result["source"] == "openfoodfacts"
+    assert result["name"] == "Brown Rice"
+
+
+@pytest.mark.asyncio
+async def test_lookup_barcode_rejects_openfoodfacts_result_without_name():
+    repo = _FoodReferenceRepo()
+    off = AsyncMock()
+    off.get_product.return_value = {
+        "name": None,
+        "barcode": "0036000291452",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(
+        repo,
+        fat_secret_service=None,
+        open_food_facts_service=off,
+    )
+
+    result = await handler.handle(_query())
+
+    assert result is None
+    assert repo.upserts == []
+
+
+@pytest.mark.asyncio
 async def test_cached_barcode_without_source_provenance_stays_canonical():
     repo = _FoodReferenceRepo(
         {

@@ -271,7 +271,9 @@ class FatSecretService:
             error = result.get("error")
             if error:
                 error_code = (
-                    error.get("code") if isinstance(error, dict) else type(error).__name__
+                    error.get("code")
+                    if isinstance(error, dict)
+                    else type(error).__name__
                 )
                 logger.warning(
                     "fatsecret API error response received: code=%s", error_code
@@ -533,27 +535,26 @@ class FatSecretService:
 
 
 _fat_secret_service: FatSecretService | None = None
+_fat_secret_service_initialized = False
 
 
-def get_fat_secret_service() -> FatSecretService:
-    """Get singleton instance of FatSecretService."""
-    global _fat_secret_service
-    if _fat_secret_service is None:
-        # Use OAuth 2.0 credentials if available, otherwise fall back to OAuth 1.0
-        client_id = settings.FATSECRET_CLIENT_ID
-        client_secret = settings.FATSECRET_CLIENT_SECRET
+def get_fat_secret_service() -> FatSecretService | None:
+    """Get the optional FatSecret service when credentials are configured."""
+    global _fat_secret_service, _fat_secret_service_initialized
+    if _fat_secret_service_initialized:
+        return _fat_secret_service
 
-        if not client_id or not client_secret:
-            # Fall back to OAuth 1.0 (legacy)
-            logger.warning(
-                "fatsecret OAuth 2.0 credentials not configured, OAuth 1.0 not supported"
-            )
-            raise ValueError(
-                "FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET must be set for OAuth 2.0"
-            )
+    client_id = settings.FATSECRET_CLIENT_ID
+    client_secret = settings.FATSECRET_CLIENT_SECRET
 
-        _fat_secret_service = FatSecretService(
-            client_id=client_id,
-            client_secret=client_secret,
-        )
+    if not client_id or not client_secret:
+        logger.warning("fatsecret credentials not configured; provider will be skipped")
+        _fat_secret_service_initialized = True
+        return None
+
+    _fat_secret_service = FatSecretService(
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+    _fat_secret_service_initialized = True
     return _fat_secret_service
