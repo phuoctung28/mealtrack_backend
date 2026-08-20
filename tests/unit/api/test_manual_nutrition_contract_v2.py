@@ -304,9 +304,36 @@ def test_v2_clear_item_override_accepts_quantity_edit():
 
 
 @pytest.mark.parametrize(
-    "nutrition_contract_version",
-    [None, 2],
+    "override_fields",
+    [
+        {
+            "nutrition_override": {
+                "calories": 500,
+                "protein": 20,
+                "carbs": 30,
+                "fat": 15,
+            }
+        },
+        {"clear_nutrition_override": True},
+    ],
 )
+def test_legacy_add_accepts_item_override_actions(override_fields):
+    request = EditMealIngredientsRequest(
+        food_item_changes=[
+            {
+                "action": "add",
+                "id": "client-generated-id",
+                "name": "Rau xao",
+                "quantity": 100,
+                "unit": "g",
+                **override_fields,
+            }
+        ]
+    )
+
+    assert request.food_item_changes[0].id == "client-generated-id"
+
+
 @pytest.mark.parametrize(
     "override_fields",
     [
@@ -321,20 +348,30 @@ def test_v2_clear_item_override_accepts_quantity_edit():
         {"clear_nutrition_override": True},
     ],
 )
-def test_item_override_actions_reject_non_update(
-    nutrition_contract_version, override_fields
-):
-    with pytest.raises(ValidationError, match="owned item update"):
-        EditMealIngredientsRequest(
-            nutrition_contract_version=nutrition_contract_version,
-            food_item_changes=[
-                {
-                    "action": "add",
-                    "id": "client-generated-id",
-                    **override_fields,
-                }
-            ],
-        )
+def test_v2_add_accepts_item_override_actions(override_fields):
+    request = EditMealIngredientsRequest(
+        nutrition_contract_version=2,
+        food_item_changes=[
+            {
+                "action": "add",
+                "id": "client-generated-id",
+                "origin": "custom",
+                "name": "Rau xao",
+                "quantity": 100,
+                "unit": "g",
+                "custom_nutrition": {
+                    "protein_per_100g": 2,
+                    "carbs_per_100g": 8,
+                    "fat_per_100g": 1,
+                },
+                **override_fields,
+            }
+        ],
+    )
+
+    change = request.food_item_changes[0]
+    assert change.id == "client-generated-id"
+    assert change.override_intent == "user_entered"
 
 
 def test_v2_meal_override_without_intent_is_compatible_with_legacy_clients():

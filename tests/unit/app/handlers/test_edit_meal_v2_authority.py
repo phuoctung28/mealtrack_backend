@@ -242,10 +242,27 @@ async def test_v2_item_override_does_not_require_intent_in_handler():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("clear_override", [False, True])
-async def test_v2_item_override_rejects_add_action_in_handler(clear_override):
+async def test_v2_item_override_allows_add_action_in_handler(clear_override):
+    current = FoodItem(
+        id="item-1",
+        name="Rice",
+        quantity=100,
+        unit="g",
+        macros=Macros(protein=2.7, carbs=28.0, fat=0.3),
+    )
     change = FoodItemChange(
         action="add",
         id="client-generated-id",
+        name="Rau xao",
+        quantity=100,
+        unit="g",
+        origin="custom",
+        custom_nutrition=CustomNutritionData(
+            calories_per_100g=51,
+            protein_per_100g=2,
+            carbs_per_100g=8,
+            fat_per_100g=1,
+        ),
         clear_nutrition_override=clear_override,
         nutrition_override=(
             None
@@ -253,10 +270,21 @@ async def test_v2_item_override_rejects_add_action_in_handler(clear_override):
             else NutritionOverride(calories=500, protein=20, carbs=30, fat=15)
         ),
     )
-    handler = EditMealCommandHandler(uow=None)
+    handler = EditMealCommandHandler(
+        uow=None,
+        nutrition_resolver=_PassthroughResolver(),
+    )
 
-    with pytest.raises(ValueError, match="owned item update"):
-        handler._validate_item_override_action(change)
+    prepared = await handler._prepare_v2_changes(
+        [current], [change], SimpleNamespace(food_references=object())
+    )
+    updated = await handler._apply_food_item_changes([current], prepared)
+    added = next(item for item in updated if item.name == "Rau xao")
+
+    if clear_override:
+        assert added.nutrition_override is None
+    else:
+        assert added.nutrition_override.calories == 500
 
 
 @pytest.mark.asyncio
@@ -272,9 +300,7 @@ async def test_v2_item_override_allows_remove_action_in_handler(clear_override):
             else NutritionOverride(calories=500, protein=20, carbs=30, fat=15)
         ),
     )
-    handler = EditMealCommandHandler(uow=None)
-
-    handler._validate_item_override_action(change)
+    assert change.action == "remove"
 
 
 @pytest.mark.asyncio
