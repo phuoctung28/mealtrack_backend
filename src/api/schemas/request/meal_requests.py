@@ -420,17 +420,19 @@ class CustomNutritionRequest(BaseModel):
     """
 
     protein_per_100g: float = Field(
-        ..., ge=0, le=100, description="Protein per 100g in grams"
+        ..., allow_inf_nan=False, description="Protein per 100g in grams"
     )
     carbs_per_100g: float = Field(
-        ..., ge=0, le=100, description="Carbohydrates per 100g in grams"
+        ..., allow_inf_nan=False, description="Carbohydrates per 100g in grams"
     )
-    fat_per_100g: float = Field(..., ge=0, le=100, description="Fat per 100g in grams")
+    fat_per_100g: float = Field(
+        ..., allow_inf_nan=False, description="Fat per 100g in grams"
+    )
     fiber_per_100g: float = Field(
-        0.0, ge=0, le=100, description="Fiber per 100g in grams"
+        0.0, allow_inf_nan=False, description="Fiber per 100g in grams"
     )
     sugar_per_100g: float = Field(
-        0.0, ge=0, le=100, description="Sugar per 100g in grams"
+        0.0, allow_inf_nan=False, description="Sugar per 100g in grams"
     )
 
     @property
@@ -461,10 +463,10 @@ class CustomNutritionRequest(BaseModel):
 class NutritionOverrideRequest(BaseModel):
     """Absolute values that intentionally bypass nutrition recalculation."""
 
-    calories: float = Field(..., ge=0, allow_inf_nan=False)
-    protein: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
-    carbs: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
-    fat: float = Field(..., ge=0, le=1000, allow_inf_nan=False)
+    calories: float = Field(..., allow_inf_nan=False)
+    protein: float = Field(..., allow_inf_nan=False)
+    carbs: float = Field(..., allow_inf_nan=False)
+    fat: float = Field(..., allow_inf_nan=False)
 
 
 class EditMealIngredientsRequest(BaseModel):
