@@ -286,13 +286,14 @@ async def test_scan_by_url_uses_workflow_only_when_graph_enabled():
     workflow = MagicMock()
     workflow.run_scan_by_url = AsyncMock(return_value=expected_meal)
     handler = ScanByUrlCommandHandler(
-        uow=MagicMock(),
+        uow=_make_uow(),
         event_bus=MagicMock(),
         vision_service=MagicMock(),
         gpt_parser=MagicMock(),
         meal_analyze_workflow=workflow,
         meal_analyze_graph_enabled=True,
     )
+    handler._remember_scan = AsyncMock()
     command = ScanByUrlCommand(
         user_id=_USER_ID,
         image_url=_IMAGE_URL,
@@ -311,7 +312,7 @@ async def test_scan_by_url_graph_disabled_keeps_legacy_path():
     workflow = MagicMock()
     workflow.run_scan_by_url = AsyncMock()
     handler = ScanByUrlCommandHandler(
-        uow=MagicMock(),
+        uow=_make_uow(),
         event_bus=MagicMock(),
         vision_service=MagicMock(),
         gpt_parser=MagicMock(),
@@ -319,6 +320,7 @@ async def test_scan_by_url_graph_disabled_keeps_legacy_path():
         meal_analyze_graph_enabled=False,
     )
     handler._handle_legacy_scan_by_url = AsyncMock(return_value="legacy-result")
+    handler._remember_scan = AsyncMock()
     command = ScanByUrlCommand(
         user_id=_USER_ID,
         image_url=_IMAGE_URL,
