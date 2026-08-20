@@ -79,6 +79,7 @@ class _NeutralTranslator:
 async def test_lookup_barcode_returns_cached_product_from_async_uow():
     repo = _FoodReferenceRepo(
         {
+            "id": 42,
             "barcode": "123",
             "name": "Rice",
             "protein_100g": 2.7,
@@ -93,6 +94,8 @@ async def test_lookup_barcode_returns_cached_product_from_async_uow():
 
     assert result is not None
     assert result["source"] == "cache"
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 42
     fat_secret.get_product.assert_not_awaited()
 
 
@@ -103,6 +106,9 @@ async def test_lookup_barcode_caches_fatsecret_hit_with_async_uow():
     fat_secret.get_product.return_value = {
         "barcode": "123",
         "name": "Rice",
+        "origin": "provider",
+        "source_namespace": "fatsecret",
+        "source_food_id": "50953",
         "protein_100g": 2.7,
         "carbs_100g": 28,
         "fat_100g": 0.3,
@@ -115,6 +121,9 @@ async def test_lookup_barcode_caches_fatsecret_hit_with_async_uow():
     assert result["source"] == "fatsecret"
     assert repo.upserts[0]["barcode"] == "00036000291452"
     assert result["barcode"] == "036000291452"
+    assert result["origin"] == "provider"
+    assert result["source_namespace"] == "fatsecret"
+    assert result["source_food_id"] == "50953"
 
 
 @pytest.mark.asyncio
@@ -172,10 +181,84 @@ async def test_non_english_openfoodfacts_english_name_is_localized_without_persi
 
 
 @pytest.mark.asyncio
+async def test_lookup_barcode_uses_openfoodfacts_when_fatsecret_is_unavailable():
+    repo = _FoodReferenceRepo()
+    fat_secret = None
+    off = AsyncMock()
+    off.get_product.return_value = {
+        "name": "Brown Rice",
+        "barcode": "0036000291452",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(
+        repo,
+        fat_secret_service=fat_secret,
+        open_food_facts_service=off,
+    )
+
+    result = await handler.handle(_query())
+
+    assert result is not None
+    assert result["source"] == "openfoodfacts"
+    assert result["name"] == "Brown Rice"
+
+
+@pytest.mark.asyncio
+async def test_lookup_barcode_rejects_openfoodfacts_result_without_name():
+    repo = _FoodReferenceRepo()
+    off = AsyncMock()
+    off.get_product.return_value = {
+        "name": None,
+        "barcode": "0036000291452",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(
+        repo,
+        fat_secret_service=None,
+        open_food_facts_service=off,
+    )
+
+    result = await handler.handle(_query())
+
+    assert result is None
+    assert repo.upserts == []
+
+
+@pytest.mark.asyncio
+async def test_cached_barcode_uses_reference_identity_without_provider_metadata():
+    repo = _FoodReferenceRepo(
+        {
+            "123": {
+                "id": 17,
+                "barcode": "123",
+                "name": "Brown Rice",
+                "protein_100g": 2.7,
+                "carbs_100g": 28,
+                "fat_100g": 0.3,
+            }
+        }
+    )
+    handler = _handler(repo, translation_service=_NeutralTranslator())
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+
+    # Main: durable local identity. Delivery: leftover English still localizes.
+    assert result["name"] == "Cơm gạo lứt"
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 17
+    assert result["source"] == "cache"
+
+
+@pytest.mark.asyncio
 async def test_cached_english_barcode_name_is_localized_for_non_english_request():
     repo = _FoodReferenceRepo(
         {
             "123": {
+                "id": 17,
                 "barcode": "123",
                 "name": "Brown Rice",
                 "protein_100g": 2.7,
@@ -199,6 +282,7 @@ async def test_cached_non_english_barcode_name_stays_canonical():
     repo = _FoodReferenceRepo(
         {
             "123": {
+                "id": 18,
                 "barcode": "123",
                 "name": "Cơm gạo lứt",
                 "protein_100g": 2.7,

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.routes.v1 import feature_flags, foods
+from src.api.schemas.response.barcode_product_response import BarcodeProductResponse
 
 
 def _app(*, authenticated: bool) -> FastAPI:
@@ -45,3 +46,19 @@ def test_provider_backed_food_routes_are_limiter_wrapped():
         foods.lookup_barcode,
     ):
         assert getattr(route, "__wrapped__", None) is not None
+
+
+def test_barcode_response_preserves_provider_identity():
+    response = BarcodeProductResponse(
+        name="Whole Grain Cheerios",
+        barcode="036000291452",
+        origin="provider",
+        source_namespace="fatsecret",
+        source_food_id="50953",
+    )
+
+    payload = response.model_dump()
+
+    assert payload["origin"] == "provider"
+    assert payload["source_namespace"] == "fatsecret"
+    assert payload["source_food_id"] == "50953"

@@ -16,6 +16,7 @@ from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.user import MacroPreset, MacroTargets
 from src.domain.ports.cache_port import CachePort
+from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
 from src.domain.services.meal_calorie_service import effective_meal_calories
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
@@ -168,14 +169,10 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any
                         user_id=query.user_id,
                         user_timezone=user_tz_str,
                     )
-                # Get water goal from profile (default 2000 if not set)
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
                 water_goal_ml = (
-                    user_profile.daily_water_goal_ml
+                    resolve_hydration_goal_ml(user_profile)
                     if user_profile
-                    and hasattr(user_profile, "daily_water_goal_ml")
-                    and user_profile.daily_water_goal_ml is not None
-                    and user_profile.daily_water_goal_ml > 0
                     else 2000
                 )
             except Exception as exc:

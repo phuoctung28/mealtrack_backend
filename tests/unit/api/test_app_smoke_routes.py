@@ -529,8 +529,11 @@ def test_meals_edit_ingredients_v2_includes_meal_detail(client: TestClient):
         ),
     )
 
+    sent = []
+
     class _EditBus:
         async def send(self, msg):
+            sent.append(msg)
             if isinstance(msg, EditMealCommand):
                 return {"success": True}
             return meal
@@ -543,6 +546,12 @@ def test_meals_edit_ingredients_v2_includes_meal_detail(client: TestClient):
             "dish_name": "Updated Dish",
             "food_item_changes": [],
             "nutrition_contract_version": 2,
+            "nutrition_override": {
+                "calories": 500,
+                "protein": 20,
+                "carbs": 30,
+                "fat": 15,
+            },
         },
         headers={
             "X-Nutrition-Contract-Version": "2",
@@ -558,6 +567,8 @@ def test_meals_edit_ingredients_v2_includes_meal_detail(client: TestClient):
     assert body["meal_detail"]["meal_id"] == meal_id
     assert body["meal_detail"]["dish_name"] == "Updated Dish"
     assert body["meal_detail"]["food_items"][0]["name"] == "Salmon"
+    edit_command = next(m for m in sent if isinstance(m, EditMealCommand))
+    assert edit_command.override_intent == "user_entered"
 
 
 def test_meals_streak_smoke(client: TestClient):

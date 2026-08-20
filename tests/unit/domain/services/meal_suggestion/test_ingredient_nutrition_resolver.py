@@ -77,6 +77,16 @@ def resolver(mock_fatsecret, mock_repo):
 
 
 @pytest.mark.asyncio
+async def test_resolve_returns_none_when_fatsecret_is_unavailable(mock_repo):
+    resolver = IngredientNutritionResolver(fatsecret=None, food_ref_repo=mock_repo)
+
+    result = await resolver.resolve("chicken breast")
+
+    assert result is None
+    mock_repo.upsert_by_normalized_name.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_resolve_chicken_breast_returns_macros(
     resolver, mock_fatsecret, mock_repo
 ):

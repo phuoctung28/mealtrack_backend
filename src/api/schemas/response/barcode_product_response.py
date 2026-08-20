@@ -35,6 +35,13 @@ class BarcodeProductResponse(BaseModel):
     food_reference_id: Optional[int] = Field(
         None, description="Food reference table ID"
     )
+    origin: str | None = Field(None, description="Canonical nutrition origin")
+    source_namespace: str | None = Field(
+        None, description="Opaque provider source namespace"
+    )
+    source_food_id: str | None = Field(
+        None, description="Opaque provider food identifier"
+    )
     is_estimate: bool = Field(
         False, description="True when macros are AI-estimated, user should verify"
     )

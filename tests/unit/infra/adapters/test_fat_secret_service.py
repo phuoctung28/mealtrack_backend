@@ -1,7 +1,8 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+import src.infra.adapters.fat_secret_service as fat_secret_module
 from src.infra.adapters.fat_secret_service import FatSecretService
 
 
@@ -22,6 +23,22 @@ class _Client:
     async def post(self, *args, **kwargs):
         self.post_calls.append((args, kwargs))
         return _Response()
+
+
+@pytest.mark.unit
+def test_fatsecret_provider_is_optional_when_credentials_are_missing(monkeypatch):
+    monkeypatch.setattr(fat_secret_module, "_fat_secret_service", None)
+    monkeypatch.setattr(fat_secret_module, "_fat_secret_service_initialized", False)
+    monkeypatch.setattr(fat_secret_module.settings, "FATSECRET_CLIENT_ID", None)
+    monkeypatch.setattr(fat_secret_module.settings, "FATSECRET_CLIENT_SECRET", None)
+    warning = Mock()
+    monkeypatch.setattr(fat_secret_module.logger, "warning", warning)
+
+    assert fat_secret_module.get_fat_secret_service() is None
+    assert fat_secret_module.get_fat_secret_service() is None
+    warning.assert_called_once_with(
+        "fatsecret credentials not configured; provider will be skipped"
+    )
 
 
 @pytest.mark.unit
@@ -336,6 +353,10 @@ async def test_fatsecret_barcode_lookup_uses_method_based_endpoint():
     assert barcode_call.kwargs["params"]["method"] == "food.find_id_for_barcode"
     assert detail_call.args[0] == "POST"
     assert detail_params["method"] == "food.get.v5"
+    assert result["name"] == "Whole Grain Cheerios"
+    assert result["origin"] == "provider"
+    assert result["source_namespace"] == "fatsecret"
+    assert result["source_food_id"] == "50953"
     assert result["allowed_units"][0] == {
         "unit": "g",
         "gram_weight": 1.0,
