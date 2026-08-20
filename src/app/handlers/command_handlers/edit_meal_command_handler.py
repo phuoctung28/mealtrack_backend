@@ -81,15 +81,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
                 if meal.status != MealStatus.READY:
                     raise ValidationException("Meal must be in READY status to edit")
-                if command.nutrition_contract_version == 2:
-                    if (
-                        command.nutrition_override
-                        and command.override_intent != "user_entered"
-                    ):
-                        raise ValidationException(
-                            "meal nutrition override requires explicit user intent"
-                        )
-
                 reservation = await self._reserve_v2_write(command, uow)
                 if reservation and reservation.state == "replay":
                     if reservation.target_meal_id != command.meal_id:
@@ -442,10 +433,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             )
         if meal.status != MealStatus.READY:
             raise ValidationException("Meal must be in READY status to edit")
-        if command.nutrition_override and command.override_intent != "user_entered":
-            raise ValidationException(
-                "meal nutrition override requires explicit user intent"
-            )
         return meal
 
     async def _reserve_v2_write_short(self, command):
@@ -498,8 +485,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
         resolved_items_out=None,
     ):
         """Resolve source changes from backend references before strategies run."""
-        if len(changes) > 50:
-            raise ValueError("meal edits cannot contain more than 50 item changes")
         current_by_id = {item.id: item for item in current_food_items}
         prepared = []
         resolved_items = []
@@ -515,17 +500,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             ):
                 raise ValueError("v2 update requires an owned food item id")
 
-            if change.nutrition_override is not None or change.clear_nutrition_override:
-                if not change.id:
-                    raise ValueError(
-                        "nutrition override requires an owned food item id"
-                    )
-                if change.override_intent != "user_entered":
-                    raise ValueError(
-                        "food item nutrition override requires explicit user intent"
-                    )
-                prepared.append(change)
-                continue
+            if change.action == "add" and change.origin is None:
+                raise ValueError("v2 add requires origin")
 
             if change.origin is not None:
                 existing = current_by_id.get(change.id)
@@ -572,8 +548,11 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 )
                 continue
 
-            if change.action == "add":
-                raise ValueError("v2 add requires origin")
+            if change.nutrition_override is not None or change.clear_nutrition_override:
+                if change.action == "update" and not change.id:
+                    raise ValueError("nutrition override requires an owned item update")
+                prepared.append(change)
+                continue
 
             existing = current_by_id[change.id]
             prepared.append(self._canonicalize_snapshot_unit(existing, change))

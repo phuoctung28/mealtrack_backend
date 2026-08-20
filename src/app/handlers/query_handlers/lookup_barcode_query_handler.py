@@ -42,7 +42,7 @@ class LookupBarcodeQueryHandler(
     def __init__(
         self,
         open_food_facts_service: OpenFoodFactsService,
-        fat_secret_service: FatSecretService,
+        fat_secret_service: FatSecretService | None,
         food_reference_repository: Any | None = None,
         async_uow_factory: Any | None = None,
         translation_service: Any | None = None,
@@ -94,21 +94,24 @@ class LookupBarcodeQueryHandler(
             and self._has_nutrition(cached)
             and self._is_trusted_cached_row(cached)
         ):
-            provider_source = cached.get("source")
-            cached["provider_source"] = provider_source
-            cached["source"] = "cache"
-            cached["barcode"] = scanned_barcode
-            log_hit("cache", cached)
-            # FatSecret/USDA rows are acquired in English. Other cached rows may
-            # lack provenance, so only localize leftover English display text.
-            cache_source_language = (
-                "en" if provider_source in ENGLISH_CANONICAL_CACHE_SOURCES else None
-            )
-            return await self._maybe_translate(
-                cached,
-                query.language,
-                source_language=cache_source_language,
-            )
+            cached_product = self._canonicalize_cached_product(cached)
+            if cached_product is not None:
+                provider_source = cached_product.get("source")
+                cached_product["provider_source"] = provider_source
+                cached_product["source"] = "cache"
+                cached_product["barcode"] = scanned_barcode
+                log_hit("cache", cached_product)
+                # FatSecret/USDA rows are acquired in English. Other cached rows may
+                # lack provenance, so only localize leftover English display text.
+                cache_source_language = (
+                    "en" if provider_source in ENGLISH_CANONICAL_CACHE_SOURCES else None
+                )
+                return await self._maybe_translate(
+                    cached_product,
+                    query.language,
+                    source_language=cache_source_language,
+                )
+            miss_reasons.append("cache_missing_source_identity")
         if cached:
             partial_name = cached.get("name")
             reason = (
@@ -128,14 +131,16 @@ class LookupBarcodeQueryHandler(
         # A global barcode row must always be acquired in canonical English.
         # Request-locale provider output cannot safely be persisted globally.
         region = "US"
-        fat_secret_result = await self._first_barcode_hit(
-            aliases,
-            lambda alias: self.fat_secret.get_product(
-                alias,
-                region=region,
-                language="en",
-            ),
-        )
+        fat_secret_result = None
+        if self.fat_secret is not None:
+            fat_secret_result = await self._first_barcode_hit(
+                aliases,
+                lambda alias: self.fat_secret.get_product(
+                    alias,
+                    region=region,
+                    language="en",
+                ),
+            )
         if (
             fat_secret_result
             and self._has_nutrition(fat_secret_result)
@@ -157,7 +162,11 @@ class LookupBarcodeQueryHandler(
                 else "fatsecret_partial_no_name"
             )
         else:
-            miss_reasons.append("fatsecret_empty")
+            miss_reasons.append(
+                "fatsecret_empty"
+                if self.fat_secret is not None
+                else "fatsecret_not_configured"
+            )
 
         off_result = await self._first_barcode_hit(aliases, self.off.get_product)
         if (
@@ -280,6 +289,34 @@ class LookupBarcodeQueryHandler(
             or result.get("source") in TRUSTED_CACHE_SOURCES
         )
 
+    @staticmethod
+    def _canonicalize_cached_product(
+        result: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Attach a durable identity before returning a cached barcode row."""
+        cached = dict(result)
+        reference_id = cached.get("id") or cached.get("food_reference_id")
+        if reference_id is not None:
+            try:
+                reference_id = int(reference_id)
+            except (TypeError, ValueError):
+                reference_id = None
+        if reference_id is not None:
+            cached.update(
+                {
+                    "food_reference_id": reference_id,
+                    "origin": "local",
+                    "source_namespace": "food_reference",
+                    "source_food_id": str(reference_id),
+                }
+            )
+            return cached
+
+        if cached.get("source_namespace") and cached.get("source_food_id"):
+            cached["origin"] = "provider"
+            return cached
+        return None
+
     async def _first_barcode_hit(self, aliases, fetch):
         for alias in aliases:
             result = await fetch(alias)
@@ -316,6 +353,8 @@ class LookupBarcodeQueryHandler(
         scanned_barcode: str,
         barcode_ref: str,
     ) -> dict[str, Any] | None:
+        if self.fat_secret is None:
+            return None
         try:
             fs_results = await self.fat_secret.search_foods(
                 brave_name,

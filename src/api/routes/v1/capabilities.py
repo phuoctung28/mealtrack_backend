@@ -9,6 +9,7 @@ from src.infra.services.durable_write_service import (
 
 router = APIRouter(prefix="/v1/capabilities", tags=["capabilities"])
 
+
 @router.get("/durable-writes")
 async def durable_write_capabilities() -> dict[str, object]:
     """Advertise v2 writes only when their durable storage is migrated."""
@@ -34,6 +35,11 @@ async def durable_write_capabilities() -> dict[str, object]:
         "retention_days": RETENTION_DAYS,
         "actions": {
             "manual_meal_create": {
+                "supported": True,
+                "header": "Idempotency-Key",
+                "exact_replay": True,
+            },
+            "barcode_meal_create": {
                 "supported": True,
                 "header": "Idempotency-Key",
                 "exact_replay": True,

@@ -196,13 +196,13 @@ DRINK_CATALOG["scanned"] = Drink(
 _DRINK_TRANSLATIONS: dict[str, dict[str, dict[str, str | None]]] = {
     "vi": {
         "water": {"name": "Nước lọc", "sub": None},
-        "sparkling": {"name": "Nước soda", "sub": "Có ga"},
+        "sparkling": {"name": "Nước có ga", "sub": "Có ga"},
         "tea": {"name": "Trà", "sub": None},
         "coffee": {"name": "Cà phê", "sub": None},
         "electrolyte": {"name": "Nước điện giải", "sub": "Nước thể thao"},
         "milk-tea": {"name": "Trà sữa", "sub": "Trân châu"},
         "coke": {"name": "Nước ngọt", "sub": "Có ga"},
-        "coke-zero": {"name": "Coke Zero", "sub": "Không đường"},
+        "coke-zero": {"name": "Coca/Pepsi Zero", "sub": "Không đường"},
         "oj": {"name": "Nước ép", "sub": "Ép tươi"},
         "smoothie": {"name": "Sinh tố", "sub": "Hỗn hợp Açaí"},
         "energy": {"name": "Nước tăng lực", "sub": "Red Bull"},
@@ -214,6 +214,12 @@ _DRINK_TRANSLATIONS: dict[str, dict[str, dict[str, str | None]]] = {
 _DRINK_IDS_BY_ENGLISH_NAME: dict[str, str] = {
     drink.name.lower(): drink.id for drink in _DRINKS
 }
+_DRINK_IDS_BY_ENGLISH_NAME.update(
+    {
+        "coke zero": "coke-zero",
+        "coca/pepsi zero": "coke-zero",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
