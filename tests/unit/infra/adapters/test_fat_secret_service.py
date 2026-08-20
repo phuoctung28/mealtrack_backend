@@ -353,6 +353,10 @@ async def test_fatsecret_barcode_lookup_uses_method_based_endpoint():
     assert barcode_call.kwargs["params"]["method"] == "food.find_id_for_barcode"
     assert detail_call.args[0] == "POST"
     assert detail_params["method"] == "food.get.v5"
+    assert result["name"] == "Whole Grain Cheerios"
+    assert result["origin"] == "provider"
+    assert result["source_namespace"] == "fatsecret"
+    assert result["source_food_id"] == "50953"
     assert result["allowed_units"][0] == {
         "unit": "g",
         "gram_weight": 1.0,
