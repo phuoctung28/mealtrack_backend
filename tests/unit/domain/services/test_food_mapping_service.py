@@ -34,6 +34,8 @@ def test_map_fdc_barcode_product_returns_flat_barcode_shape():
     assert result["fiber_100g"] == 6
     assert result["sugar_100g"] == 18
     assert result["source"] == "usda_fdc"
+    assert result["source_namespace"] == "usda_fdc"
+    assert result["source_food_id"] == "1"
     assert result["is_verified"] is True
     assert result["allowed_units"] == [
         {"unit": "g", "gram_weight": 1.0, "description": "1 g"},

@@ -3,8 +3,8 @@ OpenFoodFacts API HTTP client.
 Provides product lookup by barcode for packaged foods.
 """
 
-from typing import Dict, Any, Optional
 import re
+from typing import Any
 
 import httpx
 
@@ -17,7 +17,7 @@ class OpenFoodFactsService:
     # Barcode validation pattern (8-14 digits)
     BARCODE_PATTERN = re.compile(r"^\d{8,14}$")
 
-    def __init__(self, client: Optional[httpx.AsyncClient] = None):
+    def __init__(self, client: httpx.AsyncClient | None = None):
         self._client = client
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -32,7 +32,7 @@ class OpenFoodFactsService:
             await self._client.aclose()
             self._client = None
 
-    async def get_product(self, barcode: str) -> Optional[Dict[str, Any]]:
+    async def get_product(self, barcode: str) -> dict[str, Any] | None:
         """
         Fetch product by barcode from OpenFoodFacts.
 
@@ -67,7 +67,7 @@ class OpenFoodFactsService:
         except httpx.HTTPError:
             return None
 
-    def _map_product(self, product: Dict[str, Any]) -> Dict[str, Any]:
+    def _map_product(self, product: dict[str, Any]) -> dict[str, Any]:
         """Map OpenFoodFacts response to clean dict."""
         nutriments = product.get("nutriments", {})
 
@@ -87,12 +87,15 @@ class OpenFoodFactsService:
         )
 
         english_name = product.get("product_name_en")
+        source_food_id = str(product.get("code") or "").strip() or None
         return {
             "name": english_name or product.get("product_name"),
             # product_name may be localized; only mark explicit English data.
             "source_language": "en" if english_name else None,
             "brand": product.get("brands"),
             "barcode": product.get("code"),
+            "source_namespace": "openfoodfacts",
+            "source_food_id": source_food_id,
             "calories_100g": self._safe_float(nutriments.get("energy-kcal_100g")),
             "protein_100g": self._safe_float(nutriments.get("proteins_100g")),
             "carbs_100g": self._safe_float(nutriments.get("carbohydrates_100g")),
@@ -104,7 +107,7 @@ class OpenFoodFactsService:
             "image_url": image_url,
         }
 
-    def _allowed_units(self, serving_size: Optional[str]) -> list[dict[str, Any]]:
+    def _allowed_units(self, serving_size: str | None) -> list[dict[str, Any]]:
         units = [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
         grams = self._serving_grams(serving_size)
         if grams:
@@ -117,7 +120,7 @@ class OpenFoodFactsService:
             )
         return units
 
-    def _serving_grams(self, serving_size: Optional[str]) -> Optional[float]:
+    def _serving_grams(self, serving_size: str | None) -> float | None:
         if not serving_size:
             return None
         match = re.search(
@@ -129,7 +132,7 @@ class OpenFoodFactsService:
             return None
         return self._safe_float(match.group(1).replace(",", "."))
 
-    def _safe_float(self, value: Any) -> Optional[float]:
+    def _safe_float(self, value: Any) -> float | None:
         """Safely convert value to float."""
         if value is None:
             return None
@@ -140,7 +143,7 @@ class OpenFoodFactsService:
 
 
 # Singleton instance
-_open_food_facts_service: Optional[OpenFoodFactsService] = None
+_open_food_facts_service: OpenFoodFactsService | None = None
 
 
 def get_open_food_facts_service() -> OpenFoodFactsService:

@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from src.api.exceptions import ExternalServiceException
 from src.app.handlers.query_handlers.lookup_barcode_query_handler import (
     LookupBarcodeQueryHandler,
 )
@@ -11,8 +12,9 @@ from src.infra.adapters.open_food_facts_service import OpenFoodFactsService
 
 
 class _FoodReferenceRepo:
-    def __init__(self, cached=None):
+    def __init__(self, cached=None, cached_after_upsert=None):
         self.cached = cached
+        self.cached_after_upsert = cached_after_upsert
         self.lookups = []
         self.upserts = []
 
@@ -24,6 +26,8 @@ class _FoodReferenceRepo:
 
     async def upsert(self, data):
         self.upserts.append(data)
+        if self.cached_after_upsert is not None:
+            self.cached = self.cached_after_upsert
 
 
 class _Uow:
@@ -101,7 +105,20 @@ async def test_lookup_barcode_returns_cached_product_from_async_uow():
 
 @pytest.mark.asyncio
 async def test_lookup_barcode_caches_fatsecret_hit_with_async_uow():
-    repo = _FoodReferenceRepo()
+    repo = _FoodReferenceRepo(
+        cached_after_upsert={
+            "id": 72,
+            "barcode": "00036000291452",
+            "name": "Rice",
+            "protein_100g": 2.7,
+            "carbs_100g": 28,
+            "fat_100g": 0.3,
+            "is_verified": True,
+            "source": "fatsecret",
+            "source_namespace": "fatsecret",
+            "source_food_id": "50953",
+        }
+    )
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = {
         "barcode": "123",
@@ -121,6 +138,33 @@ async def test_lookup_barcode_caches_fatsecret_hit_with_async_uow():
     assert result["source"] == "fatsecret"
     assert repo.upserts[0]["barcode"] == "00036000291452"
     assert result["barcode"] == "036000291452"
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 72
+    assert result["source_namespace"] == "food_reference"
+    assert result["source_food_id"] == "72"
+    assert repo.upserts[0]["origin"] == "provider"
+    assert repo.upserts[0]["source_namespace"] == "fatsecret"
+    assert repo.upserts[0]["source_food_id"] == "50953"
+
+
+@pytest.mark.asyncio
+async def test_fatsecret_provider_identity_survives_cache_unavailability():
+    repo = _FoodReferenceRepo()
+    fat_secret = AsyncMock()
+    fat_secret.get_product.return_value = {
+        "barcode": "123",
+        "name": "Rice",
+        "origin": "provider",
+        "source_namespace": "fatsecret",
+        "source_food_id": "50953",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(repo, fat_secret_service=fat_secret)
+
+    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="en"))
+
     assert result["origin"] == "provider"
     assert result["source_namespace"] == "fatsecret"
     assert result["source_food_id"] == "50953"
@@ -128,7 +172,16 @@ async def test_lookup_barcode_caches_fatsecret_hit_with_async_uow():
 
 @pytest.mark.asyncio
 async def test_non_english_barcode_fetches_and_stores_english_then_localizes_response():
-    repo = _FoodReferenceRepo()
+    repo = _FoodReferenceRepo(
+        cached_after_upsert={
+            "id": 75,
+            "barcode": "123",
+            "name": "Brown Rice",
+            "protein_100g": 2.7,
+            "carbs_100g": 28,
+            "fat_100g": 0.3,
+        }
+    )
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = {
         "barcode": "123",
@@ -152,7 +205,16 @@ async def test_non_english_barcode_fetches_and_stores_english_then_localizes_res
 
 @pytest.mark.asyncio
 async def test_non_english_openfoodfacts_english_name_is_localized_without_persisting_metadata():
-    repo = _FoodReferenceRepo()
+    repo = _FoodReferenceRepo(
+        cached_after_upsert={
+            "id": 76,
+            "barcode": "123",
+            "name": "Brown Rice",
+            "protein_100g": 2.7,
+            "carbs_100g": 28,
+            "fat_100g": 0.3,
+        }
+    )
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
     off = AsyncMock()
@@ -160,6 +222,7 @@ async def test_non_english_openfoodfacts_english_name_is_localized_without_persi
         {
             "product_name": "Riz brun",
             "product_name_en": "Brown Rice",
+            "code": "123",
             "nutriments": {
                 "proteins_100g": 2.7,
                 "carbohydrates_100g": 28,
@@ -178,11 +241,24 @@ async def test_non_english_openfoodfacts_english_name_is_localized_without_persi
 
     assert result["name"] == "Cơm gạo lứt"
     assert "source_language" not in repo.upserts[0]
+    assert repo.upserts[0]["source_namespace"] == "openfoodfacts"
+    assert repo.upserts[0]["source_food_id"] == "123"
 
 
 @pytest.mark.asyncio
 async def test_lookup_barcode_uses_openfoodfacts_when_fatsecret_is_unavailable():
-    repo = _FoodReferenceRepo()
+    repo = _FoodReferenceRepo(
+        cached_after_upsert={
+            "id": 73,
+            "barcode": "00036000291452",
+            "name": "Brown Rice",
+            "protein_100g": 2.7,
+            "carbs_100g": 28,
+            "fat_100g": 0.3,
+            "is_verified": True,
+            "source": "openfoodfacts",
+        }
+    )
     fat_secret = None
     off = AsyncMock()
     off.get_product.return_value = {
@@ -203,6 +279,70 @@ async def test_lookup_barcode_uses_openfoodfacts_when_fatsecret_is_unavailable()
     assert result is not None
     assert result["source"] == "openfoodfacts"
     assert result["name"] == "Brown Rice"
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 73
+    assert result["source_namespace"] == "food_reference"
+    assert result["source_food_id"] == "73"
+
+
+@pytest.mark.asyncio
+async def test_lookup_barcode_returns_persisted_projection_after_provider_upsert():
+    repo = _FoodReferenceRepo(
+        cached_after_upsert={
+            "id": 77,
+            "barcode": "00036000291452",
+            "name": "Canonical Brown Rice",
+            "protein_100g": 3.1,
+            "carbs_100g": 27,
+            "fat_100g": 0.4,
+            "source": "openfoodfacts",
+            "is_verified": True,
+        }
+    )
+    off = AsyncMock()
+    off.get_product.return_value = {
+        "name": "Provider Brown Rice",
+        "barcode": "0036000291452",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(
+        repo,
+        fat_secret_service=None,
+        open_food_facts_service=off,
+    )
+
+    result = await handler.handle(_query())
+
+    assert result["name"] == "Canonical Brown Rice"
+    assert result["protein_100g"] == 3.1
+    assert result["barcode"] == "036000291452"
+    assert result["food_reference_id"] == 77
+
+
+@pytest.mark.asyncio
+async def test_lookup_barcode_fails_closed_when_openfoodfacts_identity_cannot_be_cached():
+    repo = _FoodReferenceRepo()
+    fat_secret = None
+    off = AsyncMock()
+    off.get_product.return_value = {
+        "name": "Brown Rice",
+        "barcode": "0036000291452",
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+    }
+    handler = _handler(
+        repo,
+        fat_secret_service=fat_secret,
+        open_food_facts_service=off,
+    )
+
+    with pytest.raises(ExternalServiceException) as exc_info:
+        await handler.handle(_query())
+
+    assert exc_info.value.error_code == "BARCODE_SOURCE_IDENTITY_UNAVAILABLE"
 
 
 @pytest.mark.asyncio
@@ -332,7 +472,18 @@ async def test_lookup_barcode_skips_untrusted_brave_cache_row():
 
 @pytest.mark.asyncio
 async def test_lookup_barcode_uses_fdc_exact_hit_caches_verified_and_localizes():
-    repo = _FoodReferenceRepo()
+    repo = _FoodReferenceRepo(
+        cached_after_upsert={
+            "id": 74,
+            "barcode": "00036000291452",
+            "name": "Test Cereal",
+            "protein_100g": 8,
+            "carbs_100g": 72,
+            "fat_100g": 2.5,
+            "is_verified": True,
+            "source": "usda_fdc",
+        }
+    )
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
     off = AsyncMock()
@@ -381,6 +532,10 @@ async def test_lookup_barcode_uses_fdc_exact_hit_caches_verified_and_localizes()
     assert result["source"] == "usda_fdc"
     assert result["barcode"] == "036000291452"
     assert result["name"] == "Cơm gạo lứt"
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 74
+    assert result["source_namespace"] == "food_reference"
+    assert result["source_food_id"] == "74"
     assert repo.upserts[0]["barcode"] == "00036000291452"
     assert repo.upserts[0]["is_verified"] is True
 
