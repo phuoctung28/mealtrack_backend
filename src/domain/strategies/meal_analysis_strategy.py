@@ -346,6 +346,52 @@ class UserContextAwareAnalysisStrategy(MealAnalysisStrategy):
         return "UserContextAware"
 
 
+class FoodVisualIdentityStrategy(MealAnalysisStrategy):
+    """Cheap vision pass for angle-tolerant meal identity matching.
+
+    Ignores camera angle / zoom and focuses on the dish, ingredients, container,
+    and background so re-scans of the same plated food can reuse prior analysis.
+    """
+
+    def get_analysis_prompt(self) -> str:
+        return """You identify plated food for cache matching across camera angles.
+Return JSON only. No markdown.
+
+GOAL:
+Decide whether two photos show the SAME physical serving of food even if the
+camera angle, zoom, or framing changed. Background context matters.
+
+RESPONSE FORMAT:
+{
+  "is_food": true,
+  "dish_slug": "chicken_rice_bowl",
+  "ingredients": ["chicken", "rice", "broccoli"],
+  "container": "white_bowl",
+  "background": "wooden_table",
+  "confidence": 0.86
+}
+
+RULES:
+- dish_slug: lowercase snake_case English name for the dish. Stable across angles.
+- ingredients: 1-8 lowercase English ingredient tokens, sorted alphabetically.
+- container: short snake_case token (white_plate, ceramic_bowl, takeout_box, …) or null.
+- background: short snake_case token for the dominant surface/setting
+  (wooden_table, marble_counter, restaurant_booth, outdoor_picnic, …) or null.
+- Ignore hand position, slight shadows, and camera rotation.
+- If the image is not food, set is_food=false, dish_slug="not_food", ingredients=[],
+  confidence<=0.2.
+"""
+
+    def get_user_message(self) -> str:
+        return (
+            "Identify this plated food for cache matching. "
+            "Ignore camera angle; keep dish, ingredients, container, and background stable."
+        )
+
+    def get_strategy_name(self) -> str:
+        return "FoodVisualIdentity"
+
+
 class AnalysisStrategyFactory:
     """
     Factory class for creating meal analysis strategies.

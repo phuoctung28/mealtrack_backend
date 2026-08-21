@@ -216,6 +216,7 @@ from src.app.queries.weight import GetWeightEntriesQuery
 from src.app.services.meal_recommendation_history_projector import (
     MealRecommendationHistoryProjector,
 )
+from src.app.services.meal_scan_visual_cache_service import MealScanVisualCacheService
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceSearchProjection,
 )
@@ -484,6 +485,15 @@ def get_configured_event_bus() -> EventBus:
             meal_value_insight_ai_manager=ai_manager,
             meal_analyze_workflow=meal_analyze_workflow,
             meal_analyze_graph_enabled=graph_settings["graph_enabled"],
+            meal_scan_visual_cache=MealScanVisualCacheService(
+                AsyncUnitOfWork(),
+                vision_service,
+                enabled=bool(settings.MEAL_SCAN_VISUAL_CACHE_ENABLED),
+                match_threshold=float(settings.MEAL_SCAN_VISUAL_CACHE_MATCH_THRESHOLD),
+                min_identity_confidence=float(
+                    settings.MEAL_SCAN_VISUAL_CACHE_MIN_IDENTITY_CONFIDENCE
+                ),
+            ),
         ),
     )
     event_bus.register_handler(
@@ -501,6 +511,15 @@ def get_configured_event_bus() -> EventBus:
             meal_value_insight_ai_manager=ai_manager,
             meal_analyze_workflow=meal_analyze_workflow,
             meal_analyze_graph_enabled=graph_settings["graph_enabled"],
+            meal_scan_visual_cache=MealScanVisualCacheService(
+                AsyncUnitOfWork(),
+                vision_service,
+                enabled=bool(settings.MEAL_SCAN_VISUAL_CACHE_ENABLED),
+                match_threshold=float(settings.MEAL_SCAN_VISUAL_CACHE_MATCH_THRESHOLD),
+                min_identity_confidence=float(
+                    settings.MEAL_SCAN_VISUAL_CACHE_MIN_IDENTITY_CONFIDENCE
+                ),
+            ),
         ),
     )
 

@@ -13,6 +13,10 @@ from src.app.events.base import EventHandler, handles
 from src.app.graphs.meal_analyze.runtime import MealAnalyzeRuntime
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_analyze_workflow import MealAnalyzeWorkflow
+from src.app.services.meal_scan_visual_cache_service import (
+    MealScanVisualCacheService,
+    scan_source_for_mode,
+)
 from src.domain.exceptions.ai_exceptions import (
     AIVisionError,
     AIVisionFailureKind,
@@ -71,6 +75,7 @@ class UploadMealImageImmediatelyHandler(
         meal_value_insight_ai_manager: MealInsightAIPort | None = None,
         meal_analyze_workflow: MealAnalyzeWorkflow | None = None,
         meal_analyze_graph_enabled: bool = False,
+        meal_scan_visual_cache: MealScanVisualCacheService | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -84,6 +89,14 @@ class UploadMealImageImmediatelyHandler(
         self.meal_value_insight_ai_manager = meal_value_insight_ai_manager
         self.meal_analyze_workflow = meal_analyze_workflow
         self.meal_analyze_graph_enabled = meal_analyze_graph_enabled
+        if meal_scan_visual_cache is not None:
+            self.meal_scan_visual_cache = meal_scan_visual_cache
+        else:
+            self.meal_scan_visual_cache = MealScanVisualCacheService(
+                uow,
+                vision_service,
+                enabled=False,
+            )
         if fast_path_policy is None:
             self._fast_path_policy = MealAnalyzeFastPathPolicy.from_settings(
                 get_settings()
@@ -174,8 +187,13 @@ class UploadMealImageImmediatelyHandler(
         """Reject incomplete same-call locale output before meal persistence."""
         if language == "en" or not isinstance(result, dict):
             return
-        structured_data = result.get("structured_data") if isinstance(result, dict) else None
-        if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
+        structured_data = (
+            result.get("structured_data") if isinstance(result, dict) else None
+        )
+        if (
+            isinstance(structured_data, dict)
+            and structured_data.get("is_food") is False
+        ):
             return
         parse_meal_response_localization(
             structured_data,
@@ -390,9 +408,19 @@ class UploadMealImageImmediatelyHandler(
         if not all([self.image_store, self.vision_service, self.gpt_parser]):
             raise RuntimeError("Required dependencies not configured")
 
+        source = scan_source_for_mode(command.scan_mode)
+        if not command.user_description and self.meal_scan_visual_cache.enabled:
+            cached = await self.meal_scan_visual_cache.try_resolve(
+                user_id=command.user_id,
+                image_bytes=command.file_contents,
+                source=source,
+            )
+            if cached is not None:
+                return cached
+
         if self.meal_analyze_graph_enabled:
             workflow = self.meal_analyze_workflow or MealAnalyzeWorkflow()
-            return await workflow.run_uploaded(
+            meal = await workflow.run_uploaded(
                 command,
                 self._handle_parallel_upload,
                 runtime=MealAnalyzeRuntime(
@@ -410,5 +438,13 @@ class UploadMealImageImmediatelyHandler(
                     max_vision_attempts=max(1, self._fast_path_policy.max_attempts),
                 ),
             )
+        else:
+            meal = await self._handle_parallel_upload(command)
 
-        return await self._handle_parallel_upload(command)
+        await self.meal_scan_visual_cache.remember(
+            user_id=command.user_id,
+            meal=meal,
+            image_bytes=command.file_contents,
+            source=source,
+        )
+        return meal

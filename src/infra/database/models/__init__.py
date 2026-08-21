@@ -47,6 +47,7 @@ from .meal_recommendation import (
     MealRecommendationOperationORM,
     MealRecommendationORM,
 )
+from .meal_scan_visual_identity import MealScanVisualIdentityORM
 from .meal_write_operation import MealWriteOperationORM
 
 # Notification models
@@ -137,6 +138,7 @@ __all__ = [
     "MealImageORM",
     "MealInstructionStepORM",
     "MealWriteOperationORM",
+    "MealScanVisualIdentityORM",
     "MealTranslationORM",
     "FoodItemTranslationORM",
     # Test models
