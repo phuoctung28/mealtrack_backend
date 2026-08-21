@@ -58,6 +58,9 @@ async def test_hit_log_uses_controlled_provider_source(caplog):
     fat_secret.get_product.return_value = {
         "barcode": raw_barcode,
         "name": "Rice",
+        "origin": "provider",
+        "source_namespace": "fatsecret",
+        "source_food_id": "50953",
         "protein_100g": 2.7,
         "carbs_100g": 28,
         "fat_100g": 0.3,

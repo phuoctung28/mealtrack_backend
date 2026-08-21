@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api.dependencies.auth import get_current_user_id
+from src.api.exception_handlers import register_exception_handlers
+from src.api.exceptions import ExternalServiceException
 from src.api.routes.v1 import feature_flags, foods
 from src.api.schemas.response.barcode_product_response import BarcodeProductResponse
 
@@ -62,3 +64,25 @@ def test_barcode_response_preserves_provider_identity():
     assert payload["origin"] == "provider"
     assert payload["source_namespace"] == "fatsecret"
     assert payload["source_food_id"] == "50953"
+
+
+def test_barcode_identity_failure_is_retryable_503(monkeypatch):
+    app = _app(authenticated=True)
+    register_exception_handlers(app)
+
+    class _EventBus:
+        async def send(self, _query):
+            raise ExternalServiceException(
+                "Barcode nutrition identity is temporarily unavailable. Please retry.",
+                error_code="BARCODE_SOURCE_IDENTITY_UNAVAILABLE",
+            )
+
+    monkeypatch.setattr(foods, "get_food_search_event_bus", lambda: _EventBus())
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/v1/foods/barcode/036000291452")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["error_code"] == (
+        "BARCODE_SOURCE_IDENTITY_UNAVAILABLE"
+    )

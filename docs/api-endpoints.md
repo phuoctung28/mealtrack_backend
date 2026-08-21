@@ -207,8 +207,14 @@ handler/schema when implementing; the bullets below are the durable WHY.
 - Search order: optional Redis cache → local `food_reference` → provider fill.
   Local results first; optional cache failures are misses.
 - Barcode accepts valid GTIN check digits; malformed → 400 before external
-  calls; valid miss → 404. Estimate sources stay `is_estimate=true` and are not
-  written to the global catalog.
+  calls; valid miss → 404. Verified hits return a durable logging identity:
+  cached/provider results use the local `food_reference_id` when the verified
+  row is written, while FatSecret can fall back to its provider identity when
+  caching is unavailable. If OpenFoodFacts or USDA cannot materialize a local
+  identity, the endpoint fails with a retryable 503 rather than returning an
+  unsaveable verified result. Estimate sources stay `is_estimate=true`, are not
+  written to the global catalog, and are not eligible for canonical meal
+  creation.
 
 ### Onboarding TDEE preview
 

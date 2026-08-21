@@ -358,6 +358,10 @@ class FoodMappingService(FoodMappingServicePort):
             "fdc_id": item.get("fdcId"),
             "source": "usda_fdc",
             "provider_source": "usda_fdc",
+            "source_namespace": "usda_fdc",
+            "source_food_id": (
+                str(item["fdcId"]) if item.get("fdcId") is not None else None
+            ),
             "is_verified": True,
             "is_estimate": False,
             "allowed_units": self._barcode_allowed_units(

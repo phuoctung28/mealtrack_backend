@@ -71,6 +71,8 @@ def _food_row(
     row.nutrient_rows = []
     row.extra_nutrients = None
     row.source = "seed"
+    row.source_namespace = None
+    row.source_food_id = None
     row.is_verified = verified
     row.image_url = None
     row.name_normalized = name_normalized
@@ -394,7 +396,7 @@ async def test_upsert_by_barcode_uses_on_conflict_and_flushes_children():
 async def test_upsert_by_barcode_persists_verified_flag():
     row = _food_row()
     row.barcode = "00036000291452"
-    session = _AsyncSession([_Result(), _Result(rows=[row])])
+    session = _AsyncSession([_Result(), _Result(), _Result(), _Result(rows=[row])])
     repo = AsyncFoodReferenceRepository(session)
     statement = MagicMock()
     statement.values.return_value = statement
@@ -412,13 +414,20 @@ async def test_upsert_by_barcode_persists_verified_flag():
                 "carbs_100g": 72,
                 "fat_100g": 2.5,
                 "source": "usda_fdc",
+                "source_namespace": "usda_fdc",
+                "source_food_id": "12345",
                 "is_verified": True,
             }
         )
 
     values = statement.values.call_args.kwargs
     assert values["is_verified"] is True
+    assert values["source_namespace"] == "usda_fdc"
+    assert values["source_food_id"] == "12345"
     statement.on_conflict_do_update.assert_called_once()
+    update_fields = statement.on_conflict_do_update.call_args.kwargs["set_"]
+    assert update_fields["source_namespace"] == "usda_fdc"
+    assert update_fields["source_food_id"] == "12345"
     assert "where" not in statement.on_conflict_do_update.call_args.kwargs
 
 
