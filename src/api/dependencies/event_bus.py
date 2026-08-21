@@ -427,9 +427,11 @@ def get_configured_event_bus() -> EventBus:
     )
     from src.infra.database.uow_async import AsyncUnitOfWork
 
-    # Synchronous invalidation service — handlers await this before returning,
-    # eliminating the fire-and-forget race condition.
-    cache_invalidation_service = CacheInvalidationService(cache_service)
+    # Meal/hydration handlers still await invalidation. Movement handlers
+    # schedule it on the task manager so log/delete can return after persist.
+    cache_invalidation_service = CacheInvalidationService(
+        cache_service, task_manager=task_manager
+    )
     provider_budget = _build_provider_budget(cache_service)
     nutrition_integrity_policy = NutritionIntegrityPolicy()
 
