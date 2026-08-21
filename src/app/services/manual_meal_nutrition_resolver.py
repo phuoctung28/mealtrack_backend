@@ -440,6 +440,38 @@ class ManualMealNutritionResolver:
         )
 
     @staticmethod
+    def ensure_source_snapshot(item: ManualMealItem) -> ManualMealItem:
+        """Fill a missing snapshot from already-prepared custom density.
+
+        Prepared custom items skip reference resolution so portion nutrition is
+        not reinterpreted as per-100g. They still need an immutable snapshot
+        or later v2 quantity/unit edits fail closed.
+        """
+        if item.source_snapshot:
+            return item
+        nutrition = item.custom_nutrition
+        if nutrition is None:
+            return item
+        return replace(
+            item,
+            nutrition_contract_version=item.nutrition_contract_version or "2",
+            source_snapshot={
+                "origin": item.origin,
+                "source_namespace": item.source_namespace,
+                "source_food_id": item.source_food_id,
+                "basis": "100g",
+                "protein_per_100g": nutrition.protein_per_100g,
+                "carbs_per_100g": nutrition.carbs_per_100g,
+                "fat_per_100g": nutrition.fat_per_100g,
+                "fiber_per_100g": nutrition.fiber_per_100g,
+                "sugar_per_100g": nutrition.sugar_per_100g,
+                "calories_per_100g": nutrition.calories_per_100g,
+                "allowed_units": item.allowed_units
+                or [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}],
+            },
+        )
+
+    @staticmethod
     def _snapshot(result, origin, namespace, source_id, allowed_units=None):
         return {
             "origin": origin,

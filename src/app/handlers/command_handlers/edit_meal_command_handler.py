@@ -30,6 +30,7 @@ from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
 from src.domain.services.nutrition_calculation_service import (
+    authoritative_units_match,
     canonicalize_authoritative_quantity,
 )
 from src.domain.utils.timezone_utils import utc_now
@@ -593,12 +594,17 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
     @staticmethod
     def _canonicalize_snapshot_unit(existing_item, change):
         unit = change.unit
-        if unit is None or unit.lower().strip() == existing_item.unit.lower().strip():
+        if unit is None:
             return change
-        snapshot = existing_item.source_snapshot
-        if not snapshot:
+        existing_unit = existing_item.unit or "g"
+        if authoritative_units_match(unit, existing_unit):
+            if unit.strip() != existing_unit:
+                return replace(change, unit=existing_unit)
+            return change
+        snapshot = existing_item.source_snapshot or {}
+        allowed_units = snapshot.get("allowed_units") or existing_item.allowed_units or []
+        if not allowed_units:
             raise ValueError("v2 quantity updates require an immutable source snapshot")
-        allowed_units = snapshot.get("allowed_units") or []
         quantity = (
             change.quantity if change.quantity is not None else existing_item.quantity
         )

@@ -213,6 +213,62 @@ async def test_v2_quantity_update_canonicalizes_arbitrary_unit_before_strategy()
 
 
 @pytest.mark.asyncio
+async def test_v2_quantity_update_treats_translated_unit_as_unchanged():
+    current = FoodItem(
+        id="item-1",
+        name="Thịt",
+        quantity=1,
+        unit="serving",
+        macros=Macros(protein=20, carbs=0, fat=16),
+        nutrition_contract_version="2",
+    )
+    change = FoodItemChange(
+        action="update",
+        id="item-1",
+        quantity=2,
+        unit="phần",
+    )
+    handler = EditMealCommandHandler(uow=None)
+
+    prepared = await handler._prepare_v2_changes(
+        [current], [change], SimpleNamespace(food_references=object())
+    )
+
+    assert prepared[0].quantity == pytest.approx(2)
+    assert prepared[0].unit == "serving"
+
+
+@pytest.mark.asyncio
+async def test_v2_quantity_update_uses_item_units_when_snapshot_missing():
+    current = FoodItem(
+        id="item-1",
+        name="Pork rib",
+        quantity=1,
+        unit="slice",
+        macros=Macros(protein=27, carbs=0, fat=15),
+        nutrition_contract_version="2",
+        allowed_units=[
+            {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
+            {"unit": "slice", "gram_weight": 80.0, "description": "1 slice"},
+        ],
+    )
+    change = FoodItemChange(
+        action="update",
+        id="item-1",
+        quantity=100,
+        unit="unknown-unit",
+    )
+    handler = EditMealCommandHandler(uow=None)
+
+    prepared = await handler._prepare_v2_changes(
+        [current], [change], SimpleNamespace(food_references=object())
+    )
+
+    assert prepared[0].quantity == pytest.approx(100)
+    assert prepared[0].unit == "g"
+
+
+@pytest.mark.asyncio
 async def test_v2_item_override_does_not_require_intent_in_handler():
     current = FoodItem(
         id="item-1",

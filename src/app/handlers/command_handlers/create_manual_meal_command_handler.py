@@ -168,6 +168,11 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             else:
                 resolved_items = list(event.items)
 
+            resolved_items = [
+                ManualMealNutritionResolver.ensure_source_snapshot(item)
+                for item in resolved_items
+            ]
+
             async with self.uow as uow:
                 if items_needing_resolution:
                     await self.nutrition_resolver.revalidate_local_items(
