@@ -10,6 +10,10 @@ from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
+# native_enum=False stores enum *names* (GOOGLE, EMAIL_LINK). Fresh DBs used
+# VARCHAR(6) from GOOGLE/APPLE; EMAIL_LINK is 10 chars and must still fit.
+AUTH_PROVIDER_VARCHAR_LENGTH = 32
+
 
 class User(Base, BaseMixin):
     """Core user table for authentication and account management."""
@@ -32,10 +36,14 @@ class User(Base, BaseMixin):
     display_name = Column(String(100), nullable=True)
     photo_url = Column(Text, nullable=True)
     provider = Column(
-        Enum(AuthProviderEnum, native_enum=False),
+        Enum(
+            AuthProviderEnum,
+            native_enum=False,
+            length=AUTH_PROVIDER_VARCHAR_LENGTH,
+        ),
         nullable=False,
         default=AuthProviderEnum.GOOGLE,
-    )  # phone, google
+    )
 
     # Status & Activity
     is_active = Column(Boolean, default=True, nullable=False)
