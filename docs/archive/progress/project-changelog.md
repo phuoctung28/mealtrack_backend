@@ -3,6 +3,15 @@
 **Status:** Stateful release notes — archived; not evergreen product authority  
 **Evergreen route:** see `docs/codebase-summary.md` and root `README.md`
 
+## 2026-08-21
+
+### Fixed
+
+- Barcode lookup now returns the durable local `food_reference_id` created by a
+  verified provider cache write, preventing first-time OpenFoodFacts and USDA
+  barcode logs from falling through the canonical nutrition identity guard. It
+  now fails closed with a retryable 503 when that identity cannot be materialized.
+
 ## 2026-08-18
 
 ### Fixed

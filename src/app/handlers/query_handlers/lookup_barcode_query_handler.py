@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any
 
+from src.api.exceptions import ExternalServiceException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.services.food_name_localizer import (
@@ -149,7 +150,12 @@ class LookupBarcodeQueryHandler(
             result = self._trusted_provider_result(
                 fat_secret_result, query.barcode, scanned_barcode, "fatsecret"
             )
-            await self._cache_result(result, cache_barcode=query.barcode)
+            cached_reference = await self._cache_result(
+                result, cache_barcode=query.barcode
+            )
+            result = self._resolve_verified_identity(
+                result, cached_reference, provider_source="fatsecret"
+            )
             log_hit("fatsecret", result)
             return await self._maybe_translate(
                 result, query.language, source_language="en"
@@ -179,7 +185,12 @@ class LookupBarcodeQueryHandler(
             result = self._trusted_provider_result(
                 off_result, query.barcode, scanned_barcode, "openfoodfacts"
             )
-            await self._cache_result(result, cache_barcode=query.barcode)
+            cached_reference = await self._cache_result(
+                result, cache_barcode=query.barcode
+            )
+            result = self._resolve_verified_identity(
+                result, cached_reference, provider_source="openfoodfacts"
+            )
             log_hit("openfoodfacts", result)
             return await self._maybe_translate(
                 result, query.language, source_language=source_language
@@ -202,7 +213,12 @@ class LookupBarcodeQueryHandler(
             and self._has_nutrition(fdc_result)
             and self._has_name(fdc_result)
         ):
-            await self._cache_result(fdc_result, cache_barcode=query.barcode)
+            cached_reference = await self._cache_result(
+                fdc_result, cache_barcode=query.barcode
+            )
+            fdc_result = self._resolve_verified_identity(
+                fdc_result, cached_reference, provider_source="usda_fdc"
+            )
             log_hit("usda_fdc", fdc_result)
             return await self._maybe_translate(
                 fdc_result, query.language, source_language="en"
@@ -316,6 +332,70 @@ class LookupBarcodeQueryHandler(
             cached["origin"] = "provider"
             return cached
         return None
+
+    @staticmethod
+    def _attach_cached_identity(
+        result: dict[str, Any], cached_reference: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """Prefer the durable local identity created by a verified cache write."""
+        if cached_reference is None:
+            return result
+        canonical = LookupBarcodeQueryHandler._canonicalize_cached_product(
+            cached_reference
+        )
+        if canonical is None or canonical.get("food_reference_id") is None:
+            return result
+        enriched = dict(canonical)
+        for field in (
+            "barcode",
+            "source",
+            "provider_source",
+            "is_estimate",
+            "calories_100g",
+            "calories_per_100g",
+            "nutrition_basis",
+            "nutrition_contract_version",
+        ):
+            if field in result:
+                enriched[field] = result[field]
+        enriched.update(
+            {
+                "food_reference_id": canonical["food_reference_id"],
+                "origin": "local",
+                "source_namespace": "food_reference",
+                "source_food_id": canonical["source_food_id"],
+            }
+        )
+        return enriched
+
+    @classmethod
+    def _resolve_verified_identity(
+        cls,
+        result: dict[str, Any],
+        cached_reference: dict[str, Any] | None,
+        *,
+        provider_source: str,
+    ) -> dict[str, Any]:
+        """Return an identity the meal-creation contract can resolve."""
+        enriched = cls._attach_cached_identity(result, cached_reference)
+        if enriched.get("food_reference_id") is not None:
+            return enriched
+
+        # FatSecret has a provider-backed resolver in the meal path. OFF and
+        # USDA identities must be materialized locally before they are shown as
+        # verified barcode results, otherwise the client cannot create a meal.
+        if (
+            provider_source == "fatsecret"
+            and enriched.get("origin") == "provider"
+            and enriched.get("source_namespace")
+            and enriched.get("source_food_id")
+        ):
+            return enriched
+
+        raise ExternalServiceException(
+            "Barcode nutrition identity is temporarily unavailable. Please retry.",
+            error_code="BARCODE_SOURCE_IDENTITY_UNAVAILABLE",
+        )
 
     async def _first_barcode_hit(self, aliases, fetch):
         for alias in aliases:
@@ -520,29 +600,41 @@ class LookupBarcodeQueryHandler(
 
     async def _cache_result(
         self, result: dict[str, Any], cache_barcode: str | None = None
-    ) -> None:
-        """Cache verified API result to food_reference table."""
+    ) -> dict[str, Any] | None:
+        """Cache a verified result and return its durable reference row."""
         if not result.get("name"):
             logger.warning(
                 "Skipping barcode cache: name is required",
             )
-            return
+            return None
         payload = dict(result)
         if cache_barcode:
             payload["barcode"] = cache_barcode
         payload.pop("cache_barcode", None)
+        lookup_barcode = payload.get("barcode")
         try:
             if self.async_uow_factory is not None:
                 async with self.async_uow_factory() as uow:
                     await uow.food_references.upsert(payload)
-                return
+                    if lookup_barcode:
+                        return await uow.food_references.get_by_barcode(lookup_barcode)
+                return None
             if self.repo is None:
-                return
+                return None
             upserted = self.repo.upsert(payload)
             if hasattr(upserted, "__await__"):
                 await upserted
+            if lookup_barcode:
+                get_by_barcode = getattr(self.repo, "get_by_barcode", None)
+                if get_by_barcode is not None:
+                    cached = get_by_barcode(lookup_barcode)
+                    if hasattr(cached, "__await__"):
+                        return await cached
+                    return cached
+            return None
         except Exception as exc:
             logger.warning(
                 "Failed to cache barcode result error=%s",
                 type(exc).__name__,
             )
+            return None

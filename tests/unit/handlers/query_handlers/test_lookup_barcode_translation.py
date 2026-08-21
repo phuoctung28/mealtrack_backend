@@ -15,7 +15,18 @@ from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 @pytest.mark.asyncio
 async def test_non_english_first_scan_keeps_english_cache_for_later_english_read():
     """Vietnamese first-writer must not poison the global barcode cache."""
-    repo = _FoodReferenceRepo()
+    repo = _FoodReferenceRepo(
+        cached_after_upsert={
+            "id": 17,
+            "barcode": "123",
+            "name": "Brown Rice",
+            "protein_100g": 2.7,
+            "carbs_100g": 28,
+            "fat_100g": 0.3,
+            "source": "fatsecret",
+            "is_verified": True,
+        }
+    )
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = {
         "barcode": "123",
