@@ -213,6 +213,10 @@ async def test_v2_prepared_custom_nutrition_is_saved_without_resolution():
     resolver.resolve_items.assert_not_awaited()
     resolver.revalidate_local_items.assert_not_awaited()
     assert uow.meal_write_operations.completed[1] == meal.meal_id
+    saved_item = meal.nutrition.food_items[0]
+    assert saved_item.source_snapshot["basis"] == "100g"
+    assert saved_item.source_snapshot["protein_per_100g"] == 90
+    assert saved_item.source_snapshot["origin"] == "custom"
 
 
 @pytest.mark.asyncio
