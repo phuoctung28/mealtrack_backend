@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.api.exceptions import ExternalServiceException
+from src.api.exceptions import BusinessLogicException, ExternalServiceException
 from src.app.handlers.query_handlers.lookup_barcode_query_handler import (
     LookupBarcodeQueryHandler,
 )
@@ -541,7 +541,7 @@ async def test_lookup_barcode_uses_fdc_exact_hit_caches_verified_and_localizes()
 
 
 @pytest.mark.asyncio
-async def test_lookup_barcode_fdc_error_falls_through_to_brave_estimate():
+async def test_lookup_barcode_brave_estimate_requires_description():
     repo = _FoodReferenceRepo()
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
@@ -566,9 +566,8 @@ async def test_lookup_barcode_fdc_error_falls_through_to_brave_estimate():
         brave_search_service=brave,
     )
 
-    result = await handler.handle(_query())
+    with pytest.raises(BusinessLogicException) as exc_info:
+        await handler.handle(_query())
 
-    assert result is not None
-    assert result["source"] == "brave_search"
-    assert result["is_estimate"] is True
+    assert exc_info.value.error_code == "BARCODE_ESTIMATE_REQUIRES_DESCRIPTION"
     assert repo.upserts == []

@@ -81,7 +81,7 @@ async def lookup_barcode(
     barcode: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Look up product by barcode from structured providers and estimates."""
+    """Look up product by barcode from providers with durable food identities."""
     event_bus = get_food_search_event_bus()
     language = get_request_language(request)
     try:

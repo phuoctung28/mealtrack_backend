@@ -9,6 +9,7 @@ from tests.unit.handlers.query_handlers.test_lookup_barcode_query_handler_async 
     _NeutralTranslator,
 )
 
+from src.api.exceptions import BusinessLogicException
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 
 
@@ -113,7 +114,7 @@ async def test_cached_unknown_source_english_name_still_localizes():
 
 
 @pytest.mark.asyncio
-async def test_brave_estimate_localizes_leftover_english_name():
+async def test_brave_estimate_requires_description_without_translation():
     repo = _FoodReferenceRepo()
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
@@ -135,15 +136,14 @@ async def test_brave_estimate_localizes_leftover_english_name():
         translation_service=_NeutralTranslator(),
     )
 
-    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+    with pytest.raises(BusinessLogicException) as exc_info:
+        await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
 
-    assert result["source"] == "brave_search"
-    assert result["name"] == "Cơm gạo lứt"
-    assert result["is_estimate"] is True
+    assert exc_info.value.error_code == "BARCODE_ESTIMATE_REQUIRES_DESCRIPTION"
 
 
 @pytest.mark.asyncio
-async def test_brave_estimate_keeps_already_localized_name():
+async def test_localized_brave_estimate_still_requires_description():
     repo = _FoodReferenceRepo()
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
@@ -166,14 +166,15 @@ async def test_brave_estimate_keeps_already_localized_name():
         translation_service=translator,
     )
 
-    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+    with pytest.raises(BusinessLogicException) as exc_info:
+        await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
 
-    assert result["name"] == "Cơm gạo lứt"
+    assert exc_info.value.error_code == "BARCODE_ESTIMATE_REQUIRES_DESCRIPTION"
     translator.translate_texts.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_ai_estimate_localizes_leftover_english_name():
+async def test_ai_estimate_requires_description_without_translation():
     repo = _FoodReferenceRepo()
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
@@ -196,14 +197,14 @@ async def test_ai_estimate_localizes_leftover_english_name():
         translation_service=_NeutralTranslator(),
     )
 
-    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+    with pytest.raises(BusinessLogicException) as exc_info:
+        await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
 
-    assert result["source"] == "ai_estimate"
-    assert result["name"] == "Cơm gạo lứt"
+    assert exc_info.value.error_code == "BARCODE_ESTIMATE_REQUIRES_DESCRIPTION"
 
 
 @pytest.mark.asyncio
-async def test_fatsecret_name_estimate_localizes_leftover_english_brave_name():
+async def test_fatsecret_name_estimate_requires_description_without_translation():
     repo = _FoodReferenceRepo()
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
@@ -232,7 +233,7 @@ async def test_fatsecret_name_estimate_localizes_leftover_english_brave_name():
         translation_service=_NeutralTranslator(),
     )
 
-    result = await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
+    with pytest.raises(BusinessLogicException) as exc_info:
+        await handler.handle(LookupBarcodeQuery(barcode="123", language="vi"))
 
-    assert result["source"] == "fatsecret_name_search"
-    assert result["name"] == "Cơm gạo lứt"
+    assert exc_info.value.error_code == "BARCODE_ESTIMATE_REQUIRES_DESCRIPTION"

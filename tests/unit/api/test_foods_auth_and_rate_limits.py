@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.exception_handlers import register_exception_handlers
-from src.api.exceptions import ExternalServiceException
+from src.api.exceptions import BusinessLogicException, ExternalServiceException
 from src.api.routes.v1 import feature_flags, foods
 from src.api.schemas.response.barcode_product_response import BarcodeProductResponse
 
@@ -85,4 +85,27 @@ def test_barcode_identity_failure_is_retryable_503(monkeypatch):
     assert response.status_code == 503
     assert response.json()["detail"]["error_code"] == (
         "BARCODE_SOURCE_IDENTITY_UNAVAILABLE"
+    )
+
+
+def test_barcode_estimate_requires_description(monkeypatch):
+    app = _app(authenticated=True)
+    register_exception_handlers(app)
+
+    class _EventBus:
+        async def send(self, _query):
+            raise BusinessLogicException(
+                "This barcode could not be matched to a verified food. "
+                "Describe the meal to continue.",
+                error_code="BARCODE_ESTIMATE_REQUIRES_DESCRIPTION",
+            )
+
+    monkeypatch.setattr(foods, "get_food_search_event_bus", lambda: _EventBus())
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/v1/foods/barcode/036000291452")
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["error_code"] == (
+        "BARCODE_ESTIMATE_REQUIRES_DESCRIPTION"
     )

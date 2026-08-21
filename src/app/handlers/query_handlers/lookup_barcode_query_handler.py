@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-from src.api.exceptions import ExternalServiceException
+from src.api.exceptions import BusinessLogicException, ExternalServiceException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.services.food_name_localizer import (
@@ -85,6 +85,21 @@ class LookupBarcodeQueryHandler(
                 elapsed_ms(),
                 bool(result.get("name")),
                 bool(result.get("is_estimate")),
+            )
+
+        def reject_estimate(source: str, result: dict[str, Any]) -> None:
+            logger.info(
+                "Barcode lookup requires description barcode_ref=%s source=%s "
+                "elapsed_ms=%d name_present=%s",
+                barcode_ref,
+                source,
+                elapsed_ms(),
+                bool(result.get("name")),
+            )
+            raise BusinessLogicException(
+                "This barcode could not be matched to a verified food. "
+                "Describe the meal to continue.",
+                error_code="BARCODE_ESTIMATE_REQUIRES_DESCRIPTION",
             )
 
         partial_name: str | None = None
@@ -253,15 +268,13 @@ class LookupBarcodeQueryHandler(
                 brave_name, region, query.language, scanned_barcode, barcode_ref
             )
             if estimate:
-                log_hit("fatsecret_name_estimate", estimate)
-                return await self._maybe_translate(estimate, query.language)
+                reject_estimate("fatsecret_name_estimate", estimate)
 
         if brave_result and self._has_nutrition(brave_result):
             estimate = self._estimate_result(
                 brave_result, scanned_barcode, "brave_search"
             )
-            log_hit("brave_search", estimate)
-            return await self._maybe_translate(estimate, query.language)
+            reject_estimate("brave_search", estimate)
         if self.brave_search and not brave_result:
             miss_reasons.append("brave_empty")
 
@@ -269,8 +282,7 @@ class LookupBarcodeQueryHandler(
             scanned_barcode, query.language, partial_name
         )
         if estimate:
-            log_hit("ai_estimate", estimate)
-            return await self._maybe_translate(estimate, query.language)
+            reject_estimate("ai_estimate", estimate)
 
         miss_reasons.append("ai_estimate_empty")
         logger.warning(
