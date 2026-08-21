@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.api.exceptions import BusinessLogicException, ExternalServiceException
+from src.api.exceptions import ExternalServiceException
 from src.app.handlers.query_handlers.lookup_barcode_query_handler import (
     LookupBarcodeQueryHandler,
 )
@@ -68,6 +68,21 @@ def _query():
         aliases=("036000291452", "0036000291452", "00036000291452"),
         language="en",
     )
+
+
+def _estimated_cached_reference(name: str = "Brown Rice"):
+    return {
+        "id": 74,
+        "barcode": "00036000291452",
+        "name": name,
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+        "is_verified": True,
+        "source": "ai_estimate",
+        "source_namespace": "ai_estimate",
+        "source_food_id": "00036000291452",
+    }
 
 
 class _NeutralTranslator:
@@ -541,8 +556,8 @@ async def test_lookup_barcode_uses_fdc_exact_hit_caches_verified_and_localizes()
 
 
 @pytest.mark.asyncio
-async def test_lookup_barcode_brave_estimate_requires_description():
-    repo = _FoodReferenceRepo()
+async def test_lookup_barcode_materializes_brave_estimate_for_legacy_clients():
+    repo = _FoodReferenceRepo(cached_after_upsert=_estimated_cached_reference())
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
     fat_secret.search_foods.return_value = []
@@ -566,8 +581,13 @@ async def test_lookup_barcode_brave_estimate_requires_description():
         brave_search_service=brave,
     )
 
-    with pytest.raises(BusinessLogicException) as exc_info:
-        await handler.handle(_query())
+    result = await handler.handle(_query())
 
-    assert exc_info.value.error_code == "BARCODE_ESTIMATE_REQUIRES_DESCRIPTION"
-    assert repo.upserts == []
+    assert result["source"] == "brave_search"
+    assert result["is_estimate"] is True
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 74
+    assert repo.upserts[0]["source"] == "brave_search"
+    assert repo.upserts[0]["is_verified"] is True
+    assert repo.upserts[0]["source_namespace"] == "ai_estimate"
+    assert repo.upserts[0]["source_food_id"] == "00036000291452"

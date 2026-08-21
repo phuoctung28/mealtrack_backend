@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-from src.api.exceptions import BusinessLogicException, ExternalServiceException
+from src.api.exceptions import ExternalServiceException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.services.food_name_localizer import (
@@ -85,21 +85,6 @@ class LookupBarcodeQueryHandler(
                 elapsed_ms(),
                 bool(result.get("name")),
                 bool(result.get("is_estimate")),
-            )
-
-        def reject_estimate(source: str, result: dict[str, Any]) -> None:
-            logger.info(
-                "Barcode lookup requires description barcode_ref=%s source=%s "
-                "elapsed_ms=%d name_present=%s",
-                barcode_ref,
-                source,
-                elapsed_ms(),
-                bool(result.get("name")),
-            )
-            raise BusinessLogicException(
-                "This barcode could not be matched to a verified food. "
-                "Describe the meal to continue.",
-                error_code="BARCODE_ESTIMATE_REQUIRES_DESCRIPTION",
             )
 
         partial_name: str | None = None
@@ -268,13 +253,23 @@ class LookupBarcodeQueryHandler(
                 brave_name, region, query.language, scanned_barcode, barcode_ref
             )
             if estimate:
-                reject_estimate("fatsecret_name_estimate", estimate)
+                estimate = await self._materialize_estimate_identity(
+                    estimate,
+                    cache_barcode=query.barcode,
+                )
+                log_hit("fatsecret_name_estimate", estimate)
+                return await self._maybe_translate(estimate, query.language)
 
         if brave_result and self._has_nutrition(brave_result):
             estimate = self._estimate_result(
                 brave_result, scanned_barcode, "brave_search"
             )
-            reject_estimate("brave_search", estimate)
+            estimate = await self._materialize_estimate_identity(
+                estimate,
+                cache_barcode=query.barcode,
+            )
+            log_hit("brave_search", estimate)
+            return await self._maybe_translate(estimate, query.language)
         if self.brave_search and not brave_result:
             miss_reasons.append("brave_empty")
 
@@ -282,7 +277,12 @@ class LookupBarcodeQueryHandler(
             scanned_barcode, query.language, partial_name
         )
         if estimate:
-            reject_estimate("ai_estimate", estimate)
+            estimate = await self._materialize_estimate_identity(
+                estimate,
+                cache_barcode=query.barcode,
+            )
+            log_hit("ai_estimate", estimate)
+            return await self._maybe_translate(estimate, query.language)
 
         miss_reasons.append("ai_estimate_empty")
         logger.warning(
@@ -407,6 +407,31 @@ class LookupBarcodeQueryHandler(
         raise ExternalServiceException(
             "Barcode nutrition identity is temporarily unavailable. Please retry.",
             error_code="BARCODE_SOURCE_IDENTITY_UNAVAILABLE",
+        )
+
+    async def _materialize_estimate_identity(
+        self,
+        result: dict[str, Any],
+        *,
+        cache_barcode: str,
+    ) -> dict[str, Any]:
+        """Create the local identity required by released barcode clients."""
+        payload = dict(result)
+        payload.update(
+            {
+                "is_verified": True,
+                "source_namespace": "ai_estimate",
+                "source_food_id": cache_barcode,
+            }
+        )
+        cached_reference = await self._cache_result(
+            payload,
+            cache_barcode=cache_barcode,
+        )
+        return self._resolve_verified_identity(
+            payload,
+            cached_reference,
+            provider_source=str(payload["source"]),
         )
 
     async def _first_barcode_hit(self, aliases, fetch):
