@@ -253,12 +253,20 @@ class LookupBarcodeQueryHandler(
                 brave_name, region, query.language, scanned_barcode, barcode_ref
             )
             if estimate:
+                estimate = await self._materialize_estimate_identity(
+                    estimate,
+                    cache_barcode=query.barcode,
+                )
                 log_hit("fatsecret_name_estimate", estimate)
                 return await self._maybe_translate(estimate, query.language)
 
         if brave_result and self._has_nutrition(brave_result):
             estimate = self._estimate_result(
                 brave_result, scanned_barcode, "brave_search"
+            )
+            estimate = await self._materialize_estimate_identity(
+                estimate,
+                cache_barcode=query.barcode,
             )
             log_hit("brave_search", estimate)
             return await self._maybe_translate(estimate, query.language)
@@ -269,6 +277,10 @@ class LookupBarcodeQueryHandler(
             scanned_barcode, query.language, partial_name
         )
         if estimate:
+            estimate = await self._materialize_estimate_identity(
+                estimate,
+                cache_barcode=query.barcode,
+            )
             log_hit("ai_estimate", estimate)
             return await self._maybe_translate(estimate, query.language)
 
@@ -395,6 +407,31 @@ class LookupBarcodeQueryHandler(
         raise ExternalServiceException(
             "Barcode nutrition identity is temporarily unavailable. Please retry.",
             error_code="BARCODE_SOURCE_IDENTITY_UNAVAILABLE",
+        )
+
+    async def _materialize_estimate_identity(
+        self,
+        result: dict[str, Any],
+        *,
+        cache_barcode: str,
+    ) -> dict[str, Any]:
+        """Create the local identity required by released barcode clients."""
+        payload = dict(result)
+        payload.update(
+            {
+                "is_verified": True,
+                "source_namespace": "ai_estimate",
+                "source_food_id": cache_barcode,
+            }
+        )
+        cached_reference = await self._cache_result(
+            payload,
+            cache_barcode=cache_barcode,
+        )
+        return self._resolve_verified_identity(
+            payload,
+            cached_reference,
+            provider_source=str(payload["source"]),
         )
 
     async def _first_barcode_hit(self, aliases, fetch):

@@ -70,6 +70,21 @@ def _query():
     )
 
 
+def _estimated_cached_reference(name: str = "Brown Rice"):
+    return {
+        "id": 74,
+        "barcode": "00036000291452",
+        "name": name,
+        "protein_100g": 2.7,
+        "carbs_100g": 28,
+        "fat_100g": 0.3,
+        "is_verified": True,
+        "source": "ai_estimate",
+        "source_namespace": "ai_estimate",
+        "source_food_id": "00036000291452",
+    }
+
+
 class _NeutralTranslator:
     async def translate_texts(self, texts, source_language, target_language):
         assert source_language == "en"
@@ -541,8 +556,8 @@ async def test_lookup_barcode_uses_fdc_exact_hit_caches_verified_and_localizes()
 
 
 @pytest.mark.asyncio
-async def test_lookup_barcode_fdc_error_falls_through_to_brave_estimate():
-    repo = _FoodReferenceRepo()
+async def test_lookup_barcode_materializes_brave_estimate_for_legacy_clients():
+    repo = _FoodReferenceRepo(cached_after_upsert=_estimated_cached_reference())
     fat_secret = AsyncMock()
     fat_secret.get_product.return_value = None
     fat_secret.search_foods.return_value = []
@@ -568,7 +583,11 @@ async def test_lookup_barcode_fdc_error_falls_through_to_brave_estimate():
 
     result = await handler.handle(_query())
 
-    assert result is not None
     assert result["source"] == "brave_search"
     assert result["is_estimate"] is True
-    assert repo.upserts == []
+    assert result["origin"] == "local"
+    assert result["food_reference_id"] == 74
+    assert repo.upserts[0]["source"] == "brave_search"
+    assert repo.upserts[0]["is_verified"] is True
+    assert repo.upserts[0]["source_namespace"] == "ai_estimate"
+    assert repo.upserts[0]["source_food_id"] == "00036000291452"
