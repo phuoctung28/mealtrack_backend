@@ -95,31 +95,40 @@ class VisionResponseParser:
                 fiber=float(canonical.macros_per_serving.fiber_g),
                 sugar=float(canonical.macros_per_serving.sugar_g),
             )
-            food_item = FoodItem(
-                id=str(uuid.uuid4()),
-                name=canonical.product_name,
-                quantity=float(canonical.serving_size.grams),
-                unit="g",
-                macros=macros,
-                micros=None,
-                confidence=min(max(0.0, float(canonical.confidence)), 1.0),
-                is_custom=True,
-                allowed_units=[
+            serving_grams = float(canonical.serving_size.grams)
+            if serving_grams > 0:
+                quantity = serving_grams
+                unit = "g"
+                allowed_units = [
                     {
                         "unit": "serving",
-                        "gram_weight": float(canonical.serving_size.grams),
+                        "gram_weight": serving_grams,
                         "description": (
                             f"1 serving ({canonical.serving_size.display_text})"
                         ),
                     },
                     {
                         "unit": "package",
-                        "gram_weight": float(canonical.serving_size.grams)
+                        "gram_weight": serving_grams
                         * float(canonical.servings_per_package),
                         "description": "1 package",
                     },
                     {"unit": "g", "gram_weight": 1.0, "description": "1 g"},
-                ],
+                ]
+            else:
+                quantity = 1.0
+                unit = "serving"
+                allowed_units = None
+            food_item = FoodItem(
+                id=str(uuid.uuid4()),
+                name=canonical.product_name,
+                quantity=quantity,
+                unit=unit,
+                macros=macros,
+                micros=None,
+                confidence=min(max(0.0, float(canonical.confidence)), 1.0),
+                is_custom=True,
+                allowed_units=allowed_units,
             )
             return Nutrition(
                 macros=macros,

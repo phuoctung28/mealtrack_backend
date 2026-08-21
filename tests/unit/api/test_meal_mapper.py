@@ -886,6 +886,55 @@ class TestMealMapper:
         assert result.food_label_metadata.servings_per_package == 8
         assert result.food_label_metadata.label_notes == ["Stored metadata"]
 
+    def test_to_detailed_response_scales_count_based_food_label_servings(self):
+        """Scale printed calories without projecting an unknown gram basis."""
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/can.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            dish_name="Protein Drink",
+            ready_at=datetime(2025, 1, 15, 15, 0),
+            created_at=datetime(2025, 1, 15, 14, 30),
+            source="food_label",
+            food_label_metadata={
+                "product_name": "Protein Drink",
+                "brand": None,
+                "serving_size": {"display_text": "1 can", "grams": 0},
+                "servings_per_package": 1,
+                "label_calories_per_serving": 45,
+                "confidence": 0.91,
+                "label_notes": ["Serving weight not provided on label."],
+            },
+            nutrition=Nutrition(
+                macros=Macros(protein=20, carbs=4, fat=0),
+                food_items=[
+                    FoodItem(
+                        id="can-item",
+                        name="Protein Drink",
+                        quantity=2,
+                        unit="serving",
+                        macros=Macros(protein=20, carbs=4, fat=0),
+                        is_custom=True,
+                    )
+                ],
+            ),
+        )
+
+        result = MealMapper.to_detailed_response(meal)
+
+        assert result.total_calories == pytest.approx(90)
+        assert result.food_items[0].quantity == pytest.approx(2)
+        assert result.food_items[0].nutrition.calories == pytest.approx(90)
+        assert result.food_items[0].custom_nutrition is None
+        assert result.food_label_metadata is not None
+        assert result.food_label_metadata.serving_size.grams == pytest.approx(0)
+
     def test_to_detailed_response_custom_nutrition_uses_grams_for_large_units(self):
         """Custom nutrition is projected per 100g, not per serving count."""
         food_items = [

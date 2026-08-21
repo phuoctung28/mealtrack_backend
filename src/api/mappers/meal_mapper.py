@@ -172,7 +172,9 @@ class MealMapper:
                         )
 
                     custom_nutrition_dto = (
-                        MealMapper._custom_nutrition_response_for_item(
+                        None
+                        if not MealMapper._food_label_has_gram_basis(meal)
+                        else MealMapper._custom_nutrition_response_for_item(
                             item,
                             item_calories,
                             canonical_name,
@@ -557,6 +559,24 @@ class MealMapper:
             fiber_per_100g=fiber,
             sugar_per_100g=sugar,
         )
+
+    @staticmethod
+    def _food_label_has_gram_basis(meal: Meal) -> bool:
+        """Return whether a food-label serving can be projected per 100g."""
+        if meal.source != "food_label":
+            return True
+
+        metadata = getattr(meal, "food_label_metadata", None)
+        serving_size = (
+            metadata.get("serving_size") if isinstance(metadata, dict) else None
+        )
+        if not isinstance(serving_size, dict) or "grams" not in serving_size:
+            return True
+
+        try:
+            return float(serving_size["grams"]) > 0
+        except (TypeError, ValueError):
+            return True
 
     @staticmethod
     def _custom_nutrition_response(calories, protein, carbs, fat, fiber, sugar):

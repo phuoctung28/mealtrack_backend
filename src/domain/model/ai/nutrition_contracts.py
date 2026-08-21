@@ -122,7 +122,12 @@ class FoodLabelServingSize(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_text: str = Field(..., min_length=1, max_length=80)
-    grams: float = Field(..., gt=0, le=MAX_FOOD_ITEM_QUANTITY)
+    grams: float = Field(
+        ...,
+        ge=0,
+        le=MAX_FOOD_ITEM_QUANTITY,
+        description="Serving mass in grams; 0 means the label does not provide it",
+    )
 
     @field_validator("display_text")
     @classmethod

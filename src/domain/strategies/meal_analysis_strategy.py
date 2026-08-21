@@ -213,12 +213,12 @@ FIELD RULES:
 - product_name: If visible, copy the product name as printed. If not visible, use "Scanned Food Label".
 - brand: Copy only when visible and clearly a brand. Otherwise null.
 - serving_size.display_text: Copy the serving-size text when visible, translated only if necessary for clarity.
-- serving_size.grams: Convert the serving size to grams. If serving size is missing or only per-100g values are shown, use 100.
+- serving_size.grams: Convert to grams only when the label explicitly gives a mass/weight serving. Use 0 when the serving is count- or volume-based (for example, "1 can") and no reliable gram weight is printed; never invent a gram weight. If serving size is missing or only per-100g values are shown, use 100.
 - servings_per_package: Use the label value when visible. If missing or unreadable, use 1.
 - label_calories_per_serving: Use kcal/calories per serving. If only kJ is visible, convert kcal = kJ / 4.184. If no energy value is readable, null is allowed.
 - macros_per_serving: Return protein_g, carbs_g, fat_g, fiber_g, and sugar_g per serving. Missing fiber or sugar should be 0.0. Protein, carbs, and fat must be present; use 0.0 only when the label explicitly says 0 or the row is clearly absent from a simplified zero-macro label.
 - confidence: 0.0 to 1.0 based on image clarity and table readability.
-- label_notes: Short factual notes only: source basis, per-100g fallback, kJ conversion, unreadable rows, or ignored micronutrients.
+- label_notes: Short factual notes only: source basis, per-100g fallback, kJ conversion, unreadable rows, missing gram weight, or ignored micronutrients. When grams is 0, preserve the visible display_text and note that the gram weight was not provided.
 
 NUTRIENT MAPPING:
 - protein_g: protein, proteine, proteina, proteinas, โปรตีน, たんぱく質, 蛋白质, 단백질.

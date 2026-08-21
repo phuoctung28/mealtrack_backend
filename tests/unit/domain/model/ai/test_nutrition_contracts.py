@@ -321,6 +321,29 @@ class TestFoodLabelNutritionResponse:
         assert response.serving_size.grams == pytest.approx(100)
         assert response.servings_per_package == pytest.approx(1)
 
+    def test_accepts_zero_serving_grams_when_mass_is_not_printed(self):
+        response = FoodLabelNutritionResponse.model_validate(
+            {
+                "product_name": "Cereal",
+                "serving_size": {"display_text": "1 can", "grams": 0},
+                "servings_per_package": 1,
+                "macros_per_serving": _valid_macros(),
+            }
+        )
+
+        assert response.serving_size.grams == pytest.approx(0)
+
+    def test_rejects_negative_serving_grams(self):
+        with pytest.raises(ValidationError):
+            FoodLabelNutritionResponse.model_validate(
+                {
+                    "product_name": "Cereal",
+                    "serving_size": {"display_text": "Unknown", "grams": -1},
+                    "servings_per_package": 1,
+                    "macros_per_serving": _valid_macros(),
+                }
+            )
+
     def test_rejects_missing_macros(self):
         with pytest.raises(ValidationError):
             FoodLabelNutritionResponse.model_validate(

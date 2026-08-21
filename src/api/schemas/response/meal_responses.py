@@ -179,7 +179,11 @@ class FoodLabelServingSizeResponse(BaseModel):
     """Serving-size metadata extracted from a Nutrition Facts label."""
 
     display_text: str = Field(..., description="Serving size text from label")
-    grams: float = Field(..., gt=0, description="Serving size in grams")
+    grams: float = Field(
+        ...,
+        ge=0,
+        description="Serving size in grams; 0 means the label did not provide it",
+    )
 
 
 class FoodLabelMetadataResponse(BaseModel):
