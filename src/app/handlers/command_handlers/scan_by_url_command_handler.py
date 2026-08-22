@@ -297,6 +297,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
                 async with self.uow as uow:
                     saved_meal = await uow.meals.save(meal)
+                    if self.cache_invalidation:
+                        await self.cache_invalidation.enqueue_meal_invalidation(
+                            uow.outbox,
+                            command.user_id,
+                            meal_date,
+                        )
                     await uow.commit()
 
                 logger.info(
@@ -305,11 +311,6 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     vision_elapsed,
                     time.time() - start,
                 )
-
-                if self.cache_invalidation:
-                    await self.cache_invalidation.after_meal_write(
-                        command.user_id, meal_date
-                    )
 
                 return saved_meal
 
@@ -373,12 +374,13 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             async with self.uow as uow:
                 saved_meal = await uow.meals.save(meal)
+                if self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        command.user_id,
+                        meal_date,
+                    )
                 await uow.commit()
-
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(
-                    command.user_id, meal_date
-                )
 
             logger.info(
                 "[SCAN-BY-URL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",

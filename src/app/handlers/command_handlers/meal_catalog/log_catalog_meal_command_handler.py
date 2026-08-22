@@ -83,10 +83,6 @@ class LogCatalogMealCommandHandler(
                 self.meal_translation_service, result.meal, command.language
             ),
         )
-        if self.cache_invalidation is not None:
-            await self.cache_invalidation.after_meal_write(
-                command.user_id, command.meal_date
-            )
         if self.recalculator is not None:
             await self._defer(
                 f"catalog-log-recalc:{command.request_id}",
@@ -144,6 +140,12 @@ class LogCatalogMealCommandHandler(
                     target_meal_id=result.meal_id,
                     response=result.to_replay_payload(),
                 )
+                if self.cache_invalidation is not None:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        command.user_id,
+                        command.meal_date,
+                    )
                 return result
             except Exception:
                 await uow.meal_write_operations.release(reservation)

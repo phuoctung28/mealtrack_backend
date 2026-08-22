@@ -203,10 +203,23 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                             },
                         },
                     )
-                await uow.commit()
 
                 old_meal_date = (meal.created_at or utc_now()).date()
                 meal_date = (saved_meal.created_at or utc_now()).date()
+                if self.cache_invalidation:
+                    if old_meal_date != meal_date:
+                        await self.cache_invalidation.enqueue_meal_invalidation(
+                            uow.outbox,
+                            saved_meal.user_id,
+                            old_meal_date,
+                        )
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        saved_meal.user_id,
+                        meal_date,
+                    )
+                await uow.commit()
+
                 # 6. Calculate nutrition delta for event
                 nutrition_delta = self._calculate_nutrition_delta(
                     meal.nutrition, updated_nutrition
@@ -251,14 +264,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 await uow.rollback()
                 raise
 
-        if self.cache_invalidation:
-            if old_meal_date != meal_date:
-                await self.cache_invalidation.after_meal_write(
-                    saved_meal.user_id, old_meal_date
-                )
-            await self.cache_invalidation.after_meal_write(
-                saved_meal.user_id, meal_date
-            )
         return response
 
     async def _handle_v2(self, command: EditMealCommand) -> dict[str, Any]:
@@ -387,18 +392,22 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                     target_meal_id=saved_meal.meal_id,
                     response=replay_response,
                 )
+                old_meal_date = (meal.created_at or utc_now()).date()
+                meal_date = (saved_meal.created_at or utc_now()).date()
+                if self.cache_invalidation:
+                    if old_meal_date != meal_date:
+                        await self.cache_invalidation.enqueue_meal_invalidation(
+                            uow.outbox,
+                            saved_meal.user_id,
+                            old_meal_date,
+                        )
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        saved_meal.user_id,
+                        meal_date,
+                    )
                 await uow.commit()
 
-            old_meal_date = (meal.created_at or utc_now()).date()
-            meal_date = (saved_meal.created_at or utc_now()).date()
-            if self.cache_invalidation:
-                if old_meal_date != meal_date:
-                    await self.cache_invalidation.after_meal_write(
-                        saved_meal.user_id, old_meal_date
-                    )
-                await self.cache_invalidation.after_meal_write(
-                    saved_meal.user_id, meal_date
-                )
             replay_response["events"] = [
                 MealEditedEvent(
                     aggregate_id=saved_meal.meal_id,

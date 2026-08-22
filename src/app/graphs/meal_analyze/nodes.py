@@ -415,13 +415,13 @@ async def persist_meal(
 
     async with runtime.uow as uow:
         saved_meal = await uow.meals.save(meal)
+        if runtime.cache_invalidation and runtime.meal_date:
+            await runtime.cache_invalidation.enqueue_meal_invalidation(
+                uow.outbox,
+                runtime.command.user_id,
+                runtime.meal_date,
+            )
         await uow.commit()
-
-    if runtime.cache_invalidation and runtime.meal_date:
-        await runtime.cache_invalidation.after_meal_write(
-            runtime.command.user_id,
-            runtime.meal_date,
-        )
 
     runtime.saved_meal = saved_meal
     return {
@@ -435,14 +435,9 @@ async def invalidate_cache(
     state: MealAnalyzeGraphState,
     runtime: MealAnalyzeRuntime,
 ) -> MealAnalyzeGraphState:
-    """Queue meal cache projection maintenance before returning READY response."""
+    """Confirm the transactional event created by ``persist_meal``."""
     if state.get("cache_invalidated"):
         return {"cache_invalidated": True}
-    if runtime.cache_invalidation and runtime.meal_date:
-        await runtime.cache_invalidation.after_meal_write(
-            runtime.command.user_id,
-            runtime.meal_date,
-        )
     return {"cache_invalidated": True}
 
 

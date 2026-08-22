@@ -521,7 +521,12 @@ async def test_fake_outbox_claim_stale_lease_recovery():
     now = datetime(2026, 8, 22, 12, 0, 0, tzinfo=UTC)
 
     # Enqueue and claim with worker-1
-    e = await repo.enqueue("stale.event", {}, event_id="stale-1")
+    e = await repo.enqueue(
+        "stale.event",
+        {},
+        event_id="stale-1",
+        scheduled_at=now - timedelta(seconds=1),
+    )
     assert e is not None
 
     claimed_w1 = await repo.claim_due_records(

@@ -1,5 +1,6 @@
 """Tests for the default-off meal analysis graph scaffold."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -45,6 +46,7 @@ class _FakeGraphUow:
             side_effect=lambda meal_id, **_: self._saved_meals[-1]
         )
         self.commit = AsyncMock()
+        self.outbox = SimpleNamespace()
 
     async def __aenter__(self):
         return self
@@ -160,7 +162,7 @@ async def test_async_graph_runner_persists_ready_meal_and_invalidates_cache():
     )
     uow = _FakeGraphUow()
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     runtime = MealAnalyzeRuntime(
         command=UploadMealImageImmediatelyCommand(
             user_id="00000000-0000-0000-0000-000000000001",
@@ -190,7 +192,7 @@ async def test_async_graph_runner_persists_ready_meal_and_invalidates_cache():
         language="en",
     )
     uow.meals.save.assert_awaited_once()
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     meal = result["result"]
     assert meal.meal_id == meal_id
     assert meal.status == MealStatus.READY
@@ -235,7 +237,7 @@ async def test_async_graph_runner_schedules_value_insights_after_cache_invalidat
     )
     uow = _FakeGraphUow()
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
 
     class TaskManager:
         def __init__(self):
@@ -273,7 +275,7 @@ async def test_async_graph_runner_schedules_value_insights_after_cache_invalidat
         runtime,
     )
 
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     assert result["cache_invalidated"] is True
     assert result["meal_value_insight_scheduled"] is True
     assert result["meal_value_insight_source"] == "meal_analyze_graph"
@@ -344,7 +346,7 @@ async def test_graph_ready_response_returns_before_value_insight_ai_completes(ca
 
     task_manager = CapturingTaskManager()
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     insight_cache = FakeCache()
     ai_manager = AsyncMock()
     ai_manager.generate = AsyncMock(
@@ -573,7 +575,7 @@ async def test_async_graph_returns_same_call_locale_without_translation_reload()
         }
     )
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     uow = _FakeGraphUow()
     runtime = MealAnalyzeRuntime(
         command=UploadMealImageImmediatelyCommand(
@@ -609,7 +611,7 @@ async def test_async_graph_returns_same_call_locale_without_translation_reload()
         language="vi",
     )
     assert uow.meals.find_by_id.await_count == 0
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     assert result["result"].meal_id == "22222222-2222-4222-8222-222222222222"
     assert result["result"].dish_name == "Cơm gà"
     assert result["result"].nutrition.food_items[0].name == "Cơm gà"

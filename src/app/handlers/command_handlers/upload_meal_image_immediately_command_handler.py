@@ -174,8 +174,13 @@ class UploadMealImageImmediatelyHandler(
         """Reject incomplete same-call locale output before meal persistence."""
         if language == "en" or not isinstance(result, dict):
             return
-        structured_data = result.get("structured_data") if isinstance(result, dict) else None
-        if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
+        structured_data = (
+            result.get("structured_data") if isinstance(result, dict) else None
+        )
+        if (
+            isinstance(structured_data, dict)
+            and structured_data.get("is_food") is False
+        ):
             return
         parse_meal_response_localization(
             structured_data,
@@ -361,10 +366,13 @@ class UploadMealImageImmediatelyHandler(
             meal = persist_meal_response_localization(meal, localization)
 
             saved_meal = await uow.meals.save(meal)
+            if self.cache_invalidation:
+                await self.cache_invalidation.enqueue_meal_invalidation(
+                    uow.outbox,
+                    command.user_id,
+                    meal_date,
+                )
             await uow.commit()
-
-        if self.cache_invalidation:
-            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
 
         total_elapsed = time.time() - start
         logger.info(

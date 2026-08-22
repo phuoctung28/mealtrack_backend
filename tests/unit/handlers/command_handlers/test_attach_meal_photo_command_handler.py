@@ -51,7 +51,7 @@ async def test_attach_meal_photo_updates_owned_meal_image():
     meal = _ready_meal(user_id)
     uow = _uow_for(meal)
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock(
+    cache.enqueue_meal_invalidation = AsyncMock(
         side_effect=lambda *args: uow.events.append("cache")
     )
     image_id = str(uuid4())
@@ -78,10 +78,10 @@ async def test_attach_meal_photo_updates_owned_meal_image():
     assert saved_meal.image.url == image_url
     assert saved_meal.nutrition == meal.nutrition
     uow.commit.assert_awaited_once()
-    cache.after_meal_write.assert_awaited_once_with(
-        user_id, saved_meal.created_at.date()
+    cache.enqueue_meal_invalidation.assert_awaited_once_with(
+        uow.outbox, user_id, saved_meal.created_at.date()
     )
-    assert uow.events == ["commit", "uow_exit", "cache"]
+    assert uow.events == ["cache", "commit", "uow_exit"]
 
 
 @pytest.mark.asyncio
@@ -113,7 +113,7 @@ async def test_delete_meal_photo_detaches_owned_meal_image():
     meal = _ready_meal(user_id)
     uow = _uow_for(meal)
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock(
+    cache.enqueue_meal_invalidation = AsyncMock(
         side_effect=lambda *args: uow.events.append("cache")
     )
 
@@ -132,10 +132,10 @@ async def test_delete_meal_photo_detaches_owned_meal_image():
     assert saved_meal.image is None
     assert saved_meal.nutrition == meal.nutrition
     uow.commit.assert_awaited_once()
-    cache.after_meal_write.assert_awaited_once_with(
-        user_id, saved_meal.created_at.date()
+    cache.enqueue_meal_invalidation.assert_awaited_once_with(
+        uow.outbox, user_id, saved_meal.created_at.date()
     )
-    assert uow.events == ["commit", "uow_exit", "cache"]
+    assert uow.events == ["cache", "commit", "uow_exit"]
 
 
 @pytest.mark.asyncio

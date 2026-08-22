@@ -101,6 +101,7 @@ class _Uow:
         self.meal_write_operations = writes or _WriteOps()
         self.meal_recommendation_plans = plans or _Plans()
         self.meals = meals or SimpleNamespace(find_by_id=AsyncMock())
+        self.outbox = SimpleNamespace()
 
     async def __aenter__(self):
         return self
@@ -158,7 +159,7 @@ async def test_prefer_slot_logs_matching_unlogged_slot():
     log_service.execute = AsyncMock(
         return_value=_result(logged_via="slot", plan_id="plan-1", slot_id="slot-1")
     )
-    cache = SimpleNamespace(after_meal_write=AsyncMock())
+    cache = SimpleNamespace(enqueue_meal_invalidation=AsyncMock())
     recalculator = SimpleNamespace(recalculate=AsyncMock())
 
     class _Tasks:
@@ -186,7 +187,11 @@ async def test_prefer_slot_logs_matching_unlogged_slot():
 
     assert result.logged_via == "slot"
     assert result.plan_id == "plan-1"
-    cache.after_meal_write.assert_awaited_once_with("user-1", date(2026, 8, 18))
+    cache.enqueue_meal_invalidation.assert_awaited_once_with(
+        handler.uow.outbox,
+        "user-1",
+        date(2026, 8, 18),
+    )
     await tasks.drain()
     recalculator.recalculate.assert_awaited_once()
 
@@ -202,7 +207,7 @@ async def test_translation_runs_after_cache_invalidation_is_enqueued():
             order.append("translate")
 
     class _Cache:
-        async def after_meal_write(self, user_id, meal_date):
+        async def enqueue_meal_invalidation(self, outbox, user_id, meal_date):
             order.append("cache")
 
     class _Tasks:

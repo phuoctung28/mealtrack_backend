@@ -45,6 +45,7 @@ class _FakeUow:
     def __init__(self, fake_meal):
         self.meals = _FakeMeals(fake_meal)
         self.users = _FakeUsers()
+        self.outbox = SimpleNamespace(enqueue=AsyncMock())
 
     async def __aenter__(self):
         return self
@@ -70,6 +71,7 @@ class _PreparedV2Uow:
     def __init__(self):
         self.meals = _PreparedV2Meals()
         self.meal_write_operations = _PreparedV2WriteOperations()
+        self.outbox = SimpleNamespace(enqueue=AsyncMock())
 
     async def __aenter__(self):
         return self
@@ -124,13 +126,13 @@ def _make_command(user_id: str = _UUID_1) -> CreateManualMealCommand:
 
 
 # ---------------------------------------------------------------------------
-# Test A: slow cache delay is isolated from the business response
+# Test A: cache publication is isolated from the business response
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_handler_timing_logs_show_cache_delay(caplog):
-    """A slow cache job must not inflate the business response time."""
+async def test_handler_timing_logs_do_not_wait_for_redis(caplog):
+    """A slow Redis implementation must not inflate the business response time."""
     DELAY_S = 0.05  # 50 ms per operation
 
     slow_cache = MagicMock()
@@ -147,8 +149,9 @@ async def test_handler_timing_logs_show_cache_delay(caplog):
     tasks = _FakeTaskManager()
     cache_svc = CacheInvalidationService(cache=slow_cache, task_manager=tasks)
     fake_meal = _make_meal()
+    uow = _FakeUow(fake_meal)
     handler = CreateManualMealCommandHandler(
-        uow=_FakeUow(fake_meal),
+        uow=uow,
         cache_invalidation=cache_svc,
     )
 
@@ -163,8 +166,8 @@ async def test_handler_timing_logs_show_cache_delay(caplog):
         f"Handler returned in {elapsed * 1000:.0f}ms — cache work is still on the business path."
     )
 
-    assert len(tasks.spawned) == 1
-    await tasks.spawned[0][1]
+    assert tasks.spawned == []
+    uow.outbox.enqueue.assert_awaited_once()
 
     timing_logs = [
         r.message for r in caplog.records if "manual_save handler timing" in r.message

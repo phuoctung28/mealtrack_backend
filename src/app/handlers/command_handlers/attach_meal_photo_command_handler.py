@@ -55,9 +55,15 @@ class AttachMealPhotoCommandHandler(
                 )
                 updated_meal = meal.with_image(image)
                 saved_meal = await uow.meals.save(updated_meal)
+                meal_date = (saved_meal.created_at or utc_now()).date()
+                if self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        saved_meal.user_id,
+                        meal_date,
+                    )
                 await uow.commit()
 
-                meal_date = (saved_meal.created_at or utc_now()).date()
                 response = {
                     "success": True,
                     "meal_id": saved_meal.meal_id,
@@ -67,8 +73,4 @@ class AttachMealPhotoCommandHandler(
                 await uow.rollback()
                 raise
 
-        if self.cache_invalidation:
-            await self.cache_invalidation.after_meal_write(
-                saved_meal.user_id, meal_date
-            )
         return response

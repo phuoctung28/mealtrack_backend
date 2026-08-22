@@ -240,7 +240,7 @@ async def test_successful_upload_keeps_ready_scanner_contract_with_backend_calor
     mock_uow.commit = AsyncMock()
 
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
 
     handler = UploadMealImageImmediatelyHandler(
         uow=mock_uow,
@@ -291,7 +291,7 @@ async def test_successful_upload_keeps_ready_scanner_contract_with_backend_calor
     assert saved_meal.image.size_bytes == len(command.file_contents)
     assert saved_meal.nutrition.calories == pytest.approx(302.0)
     mock_uow.meals.save.assert_awaited_once()
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
 
 
 @pytest.mark.asyncio

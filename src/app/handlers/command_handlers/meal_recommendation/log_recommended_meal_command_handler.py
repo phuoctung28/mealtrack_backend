@@ -74,13 +74,15 @@ class LogRecommendedMealCommandHandler(
                 )
                 saved_meal = meal
                 meal_date = slot.slot_date
+                if self.cache_invalidation is not None:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        command.user_id,
+                        meal_date,
+                    )
 
         # meal_translation uses its own DB session; parent meal must be committed first.
         if saved_meal is not None:
-            if self.cache_invalidation is not None and meal_date is not None:
-                await self.cache_invalidation.after_meal_write(
-                    command.user_id, meal_date
-                )
             await self._defer(
                 f"recommendation-log-translation:{saved_meal.meal_id}",
                 persist_meal_translation(

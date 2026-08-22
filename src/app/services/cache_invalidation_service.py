@@ -1,20 +1,28 @@
-"""Schedule cache projection maintenance after committed business writes.
-
-Mutation handlers do not wait for Redis. The managed task runner executes all
-cache invalidation work after the SQL transaction has completed.
-"""
+"""Build transactional cache invalidation events and retain legacy local jobs."""
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Coroutine
 from datetime import date, timedelta
 from typing import Any
+from uuid import UUID, uuid4
 
+from src.domain.cache.cache_invalidation_operations import (
+    DELETE_KEY,
+    DELETE_PATTERN,
+    build_meal_invalidation_operations,
+)
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.ports.cache_port import CachePort
+from src.domain.ports.outbox_repository_port import OutboxRepositoryPort
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
+
+CACHE_INVALIDATION_EVENT_TYPE = "cache_invalidation.v1"
+MAX_CACHE_EVENT_BYTES = 32 * 1024
 
 
 def _get_week_start(d: date) -> date:
@@ -28,9 +36,63 @@ class CacheInvalidationService:
         self,
         cache: CachePort | None,
         task_manager: Any | None = None,
+        queue_enabled: bool = True,
     ):
         self._cache = cache
         self._task_manager = task_manager
+        self._queue_enabled = queue_enabled
+
+    async def enqueue_meal_invalidation(
+        self,
+        outbox: OutboxRepositoryPort,
+        user_id: str,
+        meal_date: date,
+        *,
+        event_id: str | None = None,
+        current_date: date | None = None,
+    ) -> str | None:
+        """Persist a meal cache event in the caller's active transaction."""
+        if self._cache is None or not self._queue_enabled:
+            return None
+
+        try:
+            UUID(user_id)
+        except ValueError as exc:
+            raise ValueError("Cache invalidation user_id must be UUID") from exc
+
+        resolved_event_id = event_id or str(uuid4())
+        try:
+            resolved_uuid = UUID(resolved_event_id)
+        except ValueError as exc:
+            raise ValueError("Cache invalidation event_id must be a UUID") from exc
+        if resolved_uuid.version != 4:
+            raise ValueError("Cache invalidation event_id must be UUID4")
+        payload = {
+            "version": 1,
+            "event_type": CACHE_INVALIDATION_EVENT_TYPE,
+            "event_id": resolved_event_id,
+            "user_id": user_id,
+            "occurred_at": utc_now().isoformat(),
+            "operations": build_meal_invalidation_operations(
+                user_id,
+                meal_date,
+                current_date=current_date,
+            ),
+        }
+        payload_size = len(
+            json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+        )
+        if payload_size > MAX_CACHE_EVENT_BYTES:
+            raise ValueError("Cache invalidation event exceeds 32 KB")
+
+        await outbox.enqueue(
+            CACHE_INVALIDATION_EVENT_TYPE,
+            payload,
+            event_id=resolved_event_id,
+            aggregate_type="user",
+            aggregate_id=user_id,
+        )
+        return resolved_event_id
 
     async def _invalidate_key(self, key: str) -> None:
         if not self._cache:
@@ -125,27 +187,22 @@ class CacheInvalidationService:
         meal_week_start: date,
         current_week_start: date,
     ) -> None:
-        tasks = [
-            self._invalidate_pattern(
-                f"user:{user_id}:activities:{meal_date.isoformat()}:*"
-            ),
-            self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0]),
-            self._invalidate_weekly_budget(user_id, meal_week_start),
-            self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
-            self._invalidate_key(
-                CacheKeys.daily_breakdown(user_id, meal_week_start)[0]
-            ),
-            self._invalidate_key(CacheKeys.user_streak(user_id)[0]),
-        ]
-        if meal_week_start != current_week_start:
-            tasks.extend(
-                [
-                    self._invalidate_weekly_budget(user_id, current_week_start),
-                    self._invalidate_key(
-                        CacheKeys.daily_breakdown(user_id, current_week_start)[0]
-                    ),
-                ]
-            )
+        await self._run_operations(
+            build_meal_invalidation_operations(user_id, meal_date)
+        )
+
+    async def _run_operations(self, operations: list[dict[str, str]]) -> None:
+        tasks = []
+        for operation in operations:
+            if operation["op"] == DELETE_KEY:
+                tasks.append(self._invalidate_key(operation["key"]))
+            elif operation["op"] == DELETE_PATTERN:
+                tasks.append(self._invalidate_pattern(operation["pattern"]))
+            else:
+                logger.error(
+                    "Unsupported cache invalidation operation: %s",
+                    operation.get("op"),
+                )
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def after_movement_write(self, user_id: str, log_date: date) -> None:

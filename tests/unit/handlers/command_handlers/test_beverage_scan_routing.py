@@ -7,8 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from src.api.exceptions import ValidationException
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
@@ -62,7 +62,7 @@ async def test_packaged_beverage_scan_creates_standard_meal_not_hydration_entry(
     )
     cache = MagicMock()
     cache.after_hydration_write = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
 
     handler = UploadMealImageImmediatelyHandler(
         uow=mock_uow,
@@ -103,7 +103,7 @@ async def test_packaged_beverage_scan_creates_standard_meal_not_hydration_entry(
     assert len(mock_uow._saved_meals) == 1
     assert mock_uow._saved_meals[0].source == "scanner"
     assert mock_uow._saved_meals[0].dish_name == "Coca-Cola"
-    cache.after_meal_write.assert_called_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     cache.after_hydration_write.assert_not_called()
     assert result.meal_id == mock_uow._saved_meals[0].meal_id
 
@@ -116,7 +116,7 @@ async def test_food_scan_unchanged_path():
         side_effect=lambda mid, **kw: mock_uow._saved_meals[-1]
     )
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     cache.after_hydration_write = AsyncMock()
 
     handler = UploadMealImageImmediatelyHandler(
@@ -160,8 +160,8 @@ async def test_food_scan_unchanged_path():
     assert len(mock_uow._saved_meals) >= 1
     assert mock_uow._saved_meals[0].source == "scanner"
 
-    # after_meal_write called, NOT after_hydration_write
-    cache.after_meal_write.assert_called_once()
+    # Meal cache event called, NOT after_hydration_write
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     cache.after_hydration_write.assert_not_called()
 
 
@@ -173,7 +173,7 @@ async def test_food_scan_with_beverage_metadata_false_follows_food_path():
         side_effect=lambda mid, **kw: mock_uow._saved_meals[-1]
     )
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     cache.after_hydration_write = AsyncMock()
 
     handler = UploadMealImageImmediatelyHandler(
@@ -213,7 +213,7 @@ async def test_food_scan_with_beverage_metadata_false_follows_food_path():
     await handler.handle(_make_command())
 
     mock_uow.hydration_entries.add.assert_not_called()
-    cache.after_meal_write.assert_called_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     cache.after_hydration_write.assert_not_called()
 
 
@@ -222,7 +222,7 @@ async def test_zero_calorie_drink_does_not_create_hydration_entry_from_meal_scan
     """Zero-calorie drinks should not be silently routed to hydration from meal scan."""
     mock_uow = _make_uow()
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     cache.after_hydration_write = AsyncMock()
 
     handler = UploadMealImageImmediatelyHandler(
@@ -273,7 +273,7 @@ async def test_zero_calorie_drink_does_not_create_hydration_entry_from_meal_scan
     mock_uow.hydration_entries.add.assert_not_called()
     mock_uow.meals.save.assert_not_called()
     cache.after_hydration_write.assert_not_called()
-    cache.after_meal_write.assert_not_called()
+    cache.enqueue_meal_invalidation.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -300,7 +300,9 @@ async def test_upload_scan_captures_rejected_image_for_review(monkeypatch):
     handler.gpt_parser = MagicMock()
     handler.gpt_parser.parse_is_food.return_value = False
 
-    with pytest.raises(ValidationException, match="Image does not appear to contain food"):
+    with pytest.raises(
+        ValidationException, match="Image does not appear to contain food"
+    ):
         await handler.handle(_make_command())
 
     capture_message.assert_called_once()

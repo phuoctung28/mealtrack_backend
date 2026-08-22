@@ -429,12 +429,16 @@ def get_configured_event_bus() -> EventBus:
     from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
         ThreeDayPlanOptimizer,
     )
+    from src.infra.config.settings import get_settings
     from src.infra.database.uow_async import AsyncUnitOfWork
 
     # Mutation handlers enqueue all cache projections after the SQL write; the
     # managed task runner keeps Redis maintenance off the business path.
+    queue_enabled = getattr(get_settings(), "CLOUDFLARE_QUEUE_ENABLED", False)
     cache_invalidation_service = CacheInvalidationService(
-        cache_service, task_manager=task_manager
+        cache_service,
+        task_manager=task_manager,
+        queue_enabled=queue_enabled,
     )
     provider_budget = _build_provider_budget(cache_service)
     nutrition_integrity_policy = NutritionIntegrityPolicy()

@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.infra.adapters.cloudflare_queue_publisher import CloudflareQueuePublisher
 from src.infra.services.handlers.affiliate_webhook_handler import (
     AffiliateWebhookHandler,
+)
+from src.infra.services.handlers.cache_invalidation_queue_handler import (
+    CacheInvalidationQueueHandler,
 )
 from src.infra.services.handlers.firebase_account_cleanup_handler import (
     FirebaseAccountCleanupHandler,
@@ -30,6 +34,7 @@ __all__ = [
     "NotificationRescheduleHandler",
     "PushNotificationHandler",
     "TelemetryHandler",
+    "CacheInvalidationQueueHandler",
     "create_default_handler_registry",
 ]
 
@@ -39,6 +44,7 @@ def create_default_handler_registry(
     affiliate_adapter: AffiliateServicePort | None = None,
     firebase_service: FirebaseService | None = None,
     posthog_adapter: PostHogAdapter | None = None,
+    cache_invalidation_publisher: CloudflareQueuePublisher | None = None,
 ) -> OutboxHandlerRegistry:
     """Create and configure an OutboxHandlerRegistry with built-in handlers."""
     registry = OutboxHandlerRegistry()
@@ -48,6 +54,9 @@ def create_default_handler_registry(
     telemetry_handler = TelemetryHandler(posthog_adapter)
     firebase_cleanup_handler = FirebaseAccountCleanupHandler()
     notification_reschedule_handler = NotificationRescheduleHandler()
+    cache_invalidation_handler = CacheInvalidationQueueHandler(
+        cache_invalidation_publisher or CloudflareQueuePublisher.from_settings()
+    )
 
     # Affiliate event routes
     for event_type in (
@@ -76,5 +85,6 @@ def create_default_handler_registry(
 
     registry.register("firebase_account_cleanup", firebase_cleanup_handler)
     registry.register("notification_reschedule", notification_reschedule_handler)
+    registry.register("cache_invalidation.v1", cache_invalidation_handler)
 
     return registry

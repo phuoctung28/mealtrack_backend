@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -133,6 +134,7 @@ class _Uow:
     def __init__(self, plans, catalog):
         self.meal_recommendation_plans = plans
         self.catalog_recipes = catalog
+        self.outbox = SimpleNamespace()
 
     async def __aenter__(self):
         return self
@@ -349,7 +351,7 @@ async def test_log_handler_translates_and_invalidates_cache_for_non_english(capl
     cache_invalidation = type(
         "CacheInvalidation",
         (),
-        {"after_meal_write": AsyncMock()},
+        {"enqueue_meal_invalidation": AsyncMock()},
     )()
     handler = LogRecommendedMealCommandHandler(
         uow=_Uow(plans, _CatalogRepo()),
@@ -367,8 +369,10 @@ async def test_log_handler_translates_and_invalidates_cache_for_non_english(capl
     assert kwargs["target_language"] == "vi"
     assert kwargs["dish_name"] == "Rice Bowl"
     assert kwargs["food_items"][0].name == "Rice"
-    cache_invalidation.after_meal_write.assert_awaited_once_with(
-        "user-1", _plan().slots[0].slot_date
+    cache_invalidation.enqueue_meal_invalidation.assert_awaited_once_with(
+        handler.uow.outbox,
+        "user-1",
+        _plan().slots[0].slot_date,
     )
     assert "recommended meal translated" not in caplog.text
 

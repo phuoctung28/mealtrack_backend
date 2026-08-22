@@ -76,7 +76,7 @@ async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
     uow = _make_uow()
     cache = MagicMock()
     cache.after_hydration_write = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
 
     handler = ScanByUrlCommandHandler(
         uow=uow,
@@ -119,7 +119,7 @@ async def test_scan_by_url_packaged_beverage_creates_standard_meal(monkeypatch):
 
     uow.hydration_entries.add.assert_not_called()
     uow.meals.save.assert_awaited_once()
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     cache.after_hydration_write.assert_not_called()
 
     assert result.meal_id == uow._saved_meals[0].meal_id
@@ -141,7 +141,7 @@ async def test_scan_by_url_food_label_uses_crop_image_ai_without_ocr(
     )
     uow = _make_uow()
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     vision_service = MagicMock()
     vision_service.analyze_with_strategy = AsyncMock(
         return_value={
@@ -205,7 +205,7 @@ async def test_scan_by_url_food_label_localizes_english_product_name(monkeypatch
     )
     uow = _make_uow()
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     vision_service = MagicMock()
     vision_service.analyze_with_strategy = AsyncMock(
         return_value={
@@ -272,7 +272,7 @@ async def test_scan_by_url_food_label_uses_full_image_when_crop_missing(monkeypa
     )
     uow = _make_uow()
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     vision_service = MagicMock()
     vision_service.analyze_with_strategy = AsyncMock(
         return_value={

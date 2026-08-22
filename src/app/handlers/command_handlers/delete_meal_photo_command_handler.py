@@ -39,9 +39,15 @@ class DeleteMealPhotoCommandHandler(
                     )
 
                 saved_meal = await uow.meals.save(meal.without_image())
+                meal_date = (saved_meal.created_at or utc_now()).date()
+                if self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        saved_meal.user_id,
+                        meal_date,
+                    )
                 await uow.commit()
 
-                meal_date = (saved_meal.created_at or utc_now()).date()
                 response = {
                     "success": True,
                     "meal_id": saved_meal.meal_id,
@@ -51,8 +57,4 @@ class DeleteMealPhotoCommandHandler(
                 await uow.rollback()
                 raise
 
-        if self.cache_invalidation:
-            await self.cache_invalidation.after_meal_write(
-                saved_meal.user_id, meal_date
-            )
         return response

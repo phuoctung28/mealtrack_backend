@@ -70,23 +70,31 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 Secondary external work that must survive API-process restarts uses the
 transactional outbox and `src/cron/outbox_worker.py`. Firebase account cleanup
 and notification rescheduling are registered outbox event types with bounded
-retry, lease fencing, and dead-letter handling. Cache projection, translation,
-and recommendation-recalculation jobs still use the process-local runner until
-their payloads and retry ownership are moved to the outbox.
+retry, lease fencing, and dead-letter handling.
 
-### Business Writes and Cache Projections
+### Durable Cache Invalidation Slice
 
-SQL is the source of truth for meal, hydration, movement, profile, and other
-business state. Mutation handlers complete their SQL transaction first, then
-enqueue cache invalidation or projection work through
-`CacheInvalidationService`. They do not wait for Redis deletes, pattern scans,
-or cache rebuilds before returning the business response.
+Meal writes use a single durable path:
 
-Queries may read Redis as an optimization. On a miss, the handler reads SQL and
-the concrete `CacheService` schedules the cache population write through
-`BackgroundTaskManager`; cache lag or Redis failure must not make the committed
-business operation fail. The current runner is process-local and provides the
-seam for a future durable background-worker instance.
+1. The business transaction writes the authoritative row and the
+   `cache_invalidation.v1` outbox event in the same unit of work.
+2. `src/cron/outbox_worker.py` claims the outbox row and dispatches it through
+   `CacheInvalidationQueueHandler`.
+3. `CloudflareQueuePublisher` sends the event body to Cloudflare Queue when the
+   one global `CLOUDFLARE_QUEUE_ENABLED` switch and queue credentials are set.
+4. The Cloudflare Worker validates the event envelope, then deletes exact keys
+   or bounded patterns through the Upstash Redis REST API.
+5. Queue delivery owns ACK, retry, and DLQ handling. The backend never waits
+   for Redis deletes, pattern scans, or cache rebuilds before returning the
+   business response.
+
+This slice is delete-only. It does not do HMAC signing, revision tables or
+fencing, cache-value writes, local-vs-Cloudflare dual routing, or percentage
+canaries. Those behaviors are intentionally out of scope here.
+
+Queries may still read Redis as an optimization on the read path. Existing
+cache-aside population behavior is unchanged; the Worker only owns deletes for
+this slice.
 
 ### Repository Pattern
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
