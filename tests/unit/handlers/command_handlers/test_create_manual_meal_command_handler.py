@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.api.exceptions import ValidationException
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
     CustomNutrition,
@@ -346,6 +347,48 @@ async def test_v2_prepared_mixed_sources_keep_confirmed_display_names():
         "Rice noodles"
     )
     assert meal.nutrition.food_items[1].source_snapshot["canonical_name"] == "Beef"
+
+
+class _ResolveUow:
+    food_references = object()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+@pytest.mark.asyncio
+async def test_v2_item_missing_identity_is_rejected_with_validation_error():
+    """A v2 item with no origin/id/snapshot/custom must 422, never AI-estimate."""
+    item = ManualMealItem(
+        name="Mystery food",
+        quantity=100,
+        unit="g",
+        nutrition_contract_version="2",
+    )
+    command = CreateManualMealCommand(
+        user_id=_UUID_1,
+        items=[item],
+        dish_name="Mystery plate",
+        nutrition_contract_version=2,
+        idempotency_key="write-422",
+        request_fingerprint="fingerprint-422",
+    )
+    handler = CreateManualMealCommandHandler(
+        uow=_PreparedV2Uow(),
+        uow_factory=lambda: _ResolveUow(),
+    )
+    handler._reserve_v2_write_short = AsyncMock(
+        return_value=SimpleNamespace(state="claimed")
+    )
+    handler._release_v2_write = AsyncMock()
+
+    with pytest.raises(ValidationException, match="v2 item origin is required"):
+        await handler.handle(command)
+
+    handler._release_v2_write.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

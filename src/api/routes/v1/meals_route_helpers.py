@@ -1,10 +1,33 @@
 """Shared helpers for meals route modules."""
 
 from datetime import datetime
+from typing import Any
 
 from src.api.exceptions import ValidationException
 from src.api.schemas.response.meal_responses import ParsedFoodItem
 from src.domain.model.nutrition.macros import Macros as MacrosModel
+
+
+async def load_food_reference_display_projections(
+    meal, food_reference_repository
+) -> dict[int, dict[str, Any]]:
+    """Load id-keyed catalog display names for every tracked line on a meal.
+
+    Unlike nutrition-density batching, this must include items that already
+    carry a ``source_snapshot`` — display names always follow the live
+    catalog row, while kcal/macros stay frozen on the snapshot.
+    """
+    food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+    food_reference_ids = {
+        item.food_reference_id
+        for item in food_items
+        if getattr(item, "food_reference_id", None) is not None
+    }
+    if not food_reference_ids:
+        return {}
+    return await food_reference_repository.get_display_projections(
+        list(food_reference_ids)
+    )
 
 
 def parse_target_date(target_date: str | None):

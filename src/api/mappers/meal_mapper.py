@@ -5,6 +5,9 @@ Mapper for meal-related DTOs and domain models.
 import json
 from typing import Any
 
+from src.api.mappers.food_reference_display_name import (
+    resolve_food_reference_display_name,
+)
 from src.api.schemas.response import (
     DetailedMealResponse,
     FoodItemResponse,
@@ -106,6 +109,7 @@ class MealMapper:
         value_insights: MealValueInsights | None = None,
         source_nutrition_by_food_reference: dict[int, FoodReferenceNutritionProjection]
         | None = None,
+        display_name_by_food_reference: dict[int, Any] | None = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -117,6 +121,11 @@ class MealMapper:
                 the photo on meal-detail responses.
             target_language: ISO 639-1 code; if provided and a cached
                 translation exists, translated fields are applied to the response.
+            display_name_by_food_reference: Id-keyed catalog display
+                projections (``get_display_projections``). Items whose
+                ``food_reference_id`` is present here get their name/
+                display_name/canonical_name from the live catalog row instead
+                of the snapshot/raw-payload/meal-translation chain.
 
         Returns:
             DetailedMealResponse DTO
@@ -140,6 +149,8 @@ class MealMapper:
         requested_language = (
             normalize_language(target_language) if target_language else None
         )
+        display_projections = display_name_by_food_reference or {}
+        tracked_food_reference_ids = set(display_projections.keys())
         canonical_dish_name, canonical_food_names = MealMapper._raw_response_canonical(
             meal,
             expected_food_count=(
@@ -171,14 +182,27 @@ class MealMapper:
             # Map persisted food-item display names and retain canonical aliases.
             if meal.nutrition.food_items:
                 for index, item in enumerate(meal.nutrition.food_items):
-                    canonical_name = (
-                        _snapshot_canonical_name(item)
-                        or (
-                            canonical_food_names[index]
-                            if index < len(canonical_food_names)
-                            else item.name
-                        )
+                    item_food_reference_id = getattr(item, "food_reference_id", None)
+                    tracked_projection = (
+                        display_projections.get(item_food_reference_id)
+                        if item_food_reference_id is not None
+                        else None
                     )
+                    if tracked_projection is not None:
+                        canonical_name = tracked_projection.get("name") or item.name
+                        display_name = resolve_food_reference_display_name(
+                            tracked_projection, requested_language
+                        )
+                    else:
+                        canonical_name = (
+                            _snapshot_canonical_name(item)
+                            or (
+                                canonical_food_names[index]
+                                if index < len(canonical_food_names)
+                                else item.name
+                            )
+                        )
+                        display_name = item.name
                     item_calories = effective_food_item_calories(
                         item,
                         meal_source=meal.source,
@@ -213,9 +237,14 @@ class MealMapper:
                     )
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),
-                        name=item.name,
-                        display_name=item.name,
+                        name=display_name,
+                        display_name=display_name,
                         canonical_name=canonical_name,
+                        name_vi=(
+                            tracked_projection.get("name_vi")
+                            if tracked_projection is not None
+                            else None
+                        ),
                         category=None,
                         quantity=item.quantity,
                         unit=item.unit,
@@ -284,6 +313,8 @@ class MealMapper:
                 canonical_food_names,
                 strict=False,
             ):
+                if food_item.food_reference_id in tracked_food_reference_ids:
+                    continue
                 food_item.name = canonical_name
                 food_item.display_name = canonical_name
         elif not persisted_image_names and direct_localization:
@@ -294,6 +325,8 @@ class MealMapper:
                 direct_localization.food_item_names,
                 strict=True,
             ):
+                if food_item.food_reference_id in tracked_food_reference_ids:
+                    continue
                 food_item.name = localized_name
                 food_item.display_name = localized_name
         elif (
@@ -329,6 +362,8 @@ class MealMapper:
                     }
                 if translated_names_by_id:
                     for fi in food_items:
+                        if fi.food_reference_id in tracked_food_reference_ids:
+                            continue
                         translated_name = translated_names_by_id.get(
                             str(fi.id)
                         ) or legacy_names_by_id.get(str(fi.id))
@@ -337,6 +372,8 @@ class MealMapper:
                         )
                 elif legacy_names_by_id:
                     for i, fi in enumerate(food_items):
+                        if fi.food_reference_id in tracked_food_reference_ids:
+                            continue
                         _apply_translated_food_name(
                             fi, tr.meal_ingredients[i], requested_language
                         )
