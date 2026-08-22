@@ -50,7 +50,7 @@ from src.infra.repositories.food_reference_repository_async import (
 from src.infra.services.firebase_service import FirebaseService
 
 if TYPE_CHECKING:
-    from src.infra.event_bus.background_task_manager import BackgroundTaskManager
+    from src.api.dependencies.task_manager import BackgroundTaskManager
 
 if TYPE_CHECKING:
     from src.domain.ports.subscription_service_port import SubscriptionServicePort

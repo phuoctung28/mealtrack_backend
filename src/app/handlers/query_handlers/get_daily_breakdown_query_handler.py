@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal.get_daily_breakdown_query import GetDailyBreakdownQuery
@@ -20,7 +21,6 @@ from src.domain.utils.timezone_utils import (
     get_zone_info,
     resolve_user_timezone_async,
 )
-from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -54,15 +54,8 @@ class GetDailyBreakdownQueryHandler(
                 cached_revision = cached.get("profile_target_revision")
                 if cached_revision is None:
                     return cached
-                from sqlalchemy import select
-
-                revision_result = await uow.session.execute(
-                    select(UserProfile.profile_target_revision).where(
-                        UserProfile.user_id == query.user_id,
-                        UserProfile.is_current.is_(True),
-                    )
-                )
-                if cached_revision == revision_result.scalar_one_or_none():
+                profile = await uow.users.get_profile(UUID(query.user_id))
+                if profile and cached_revision == profile.profile_target_revision:
                     return cached
 
             days = [week_start + timedelta(days=i) for i in range(7)]
