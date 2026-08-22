@@ -51,9 +51,7 @@ class CacheInvalidationService:
     async def _invalidate_pattern(self, pattern: str) -> None:
         if not self._cache:
             return
-        invalidate_pattern = getattr(
-            self._cache, "invalidate_pattern_now", None
-        )
+        invalidate_pattern = getattr(self._cache, "invalidate_pattern_now", None)
         if invalidate_pattern is None:
             invalidate_pattern = self._cache.invalidate_pattern
         for attempt in range(2):
@@ -89,7 +87,8 @@ class CacheInvalidationService:
             return
         if self._task_manager is None:
             logger.error(
-                "Cache job dropped because no background task manager is configured: %s",
+                "Cache job dropped because no background task manager is "
+                "configured: %s",
                 name,
             )
             coro.close()
@@ -133,7 +132,9 @@ class CacheInvalidationService:
             self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0]),
             self._invalidate_weekly_budget(user_id, meal_week_start),
             self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
-            self._invalidate_key(CacheKeys.daily_breakdown(user_id, meal_week_start)[0]),
+            self._invalidate_key(
+                CacheKeys.daily_breakdown(user_id, meal_week_start)[0]
+            ),
             self._invalidate_key(CacheKeys.user_streak(user_id)[0]),
         ]
         if meal_week_start != current_week_start:
@@ -233,23 +234,43 @@ class CacheInvalidationService:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def after_custom_macros_update(self, user_id: str) -> None:
-        """Enqueue cache maintenance after custom macro targets change."""
+        """Compatibility alias for profile-derived target updates."""
+        await self.after_profile_write(user_id)
+
+    async def after_profile_write(self, user_id: str) -> None:
+        """Enqueue every projection affected by a profile or target update."""
         await self._schedule(
-            f"cache:after_custom_macros_update:{user_id}",
-            self._run_custom_macro_invalidations(user_id),
+            f"cache:after_profile_write:{user_id}",
+            self._run_profile_invalidations(user_id),
         )
 
-    async def _run_custom_macro_invalidations(self, user_id: str) -> None:
+    async def _run_profile_invalidations(self, user_id: str) -> None:
         await asyncio.gather(
             self._invalidate_key(CacheKeys.user_tdee(user_id)[0]),
             self._invalidate_key(CacheKeys.user_profile(user_id)[0]),
+            self._invalidate_key(CacheKeys.user_metrics(user_id)[0]),
             self._invalidate_pattern(f"user:{user_id}:macros:*"),
             self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
+            self._invalidate_pattern(CacheKeys.weekly_budget_user_pattern(user_id)),
+            self._invalidate_pattern(f"user:{user_id}:daily_breakdown:*"),
+            self._invalidate_pattern(f"user:{user_id}:hydration:*"),
+            self._invalidate_pattern(f"user:{user_id}:activities:*"),
             return_exceptions=True,
         )
-        this_week = _get_week_start(date.today())
-        await asyncio.gather(
-            self._invalidate_weekly_budget(user_id, this_week),
-            self._invalidate_weekly_budget(user_id, this_week + timedelta(days=7)),
-            return_exceptions=True,
+
+    async def after_cheat_day_write(self, user_id: str, cheat_day: date) -> None:
+        """Enqueue weekly-budget maintenance after a cheat-day mutation."""
+        await self._schedule(
+            f"cache:after_cheat_day_write:{user_id}:{cheat_day.isoformat()}",
+            self._run_cheat_day_invalidations(user_id, cheat_day),
+        )
+
+    async def _run_cheat_day_invalidations(self, user_id: str, cheat_day: date) -> None:
+        await self._invalidate_weekly_budget(user_id, _get_week_start(cheat_day))
+
+    async def after_saved_suggestion_write(self, user_id: str) -> None:
+        """Enqueue saved-suggestion cache maintenance after SQL commit."""
+        await self._schedule(
+            f"cache:after_saved_suggestion_write:{user_id}",
+            self._invalidate_key(CacheKeys.saved_suggestions(user_id)[0]),
         )

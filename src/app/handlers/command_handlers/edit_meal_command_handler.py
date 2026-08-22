@@ -207,21 +207,12 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
                 old_meal_date = (meal.created_at or utc_now()).date()
                 meal_date = (saved_meal.created_at or utc_now()).date()
-                if self.cache_invalidation:
-                    if old_meal_date != meal_date:
-                        await self.cache_invalidation.after_meal_write(
-                            saved_meal.user_id, old_meal_date
-                        )
-                    await self.cache_invalidation.after_meal_write(
-                        saved_meal.user_id, meal_date
-                    )
-
                 # 6. Calculate nutrition delta for event
                 nutrition_delta = self._calculate_nutrition_delta(
                     meal.nutrition, updated_nutrition
                 )
 
-                return {
+                response = {
                     "success": True,
                     "meal_id": saved_meal.meal_id,
                     "message": f"Meal updated successfully. {changes_summary}",
@@ -259,6 +250,16 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             except Exception:
                 await uow.rollback()
                 raise
+
+        if self.cache_invalidation:
+            if old_meal_date != meal_date:
+                await self.cache_invalidation.after_meal_write(
+                    saved_meal.user_id, old_meal_date
+                )
+            await self.cache_invalidation.after_meal_write(
+                saved_meal.user_id, meal_date
+            )
+        return response
 
     async def _handle_v2(self, command: EditMealCommand) -> dict[str, Any]:
         """Keep lease reservation and provider/reference resolution out of the write UoW."""

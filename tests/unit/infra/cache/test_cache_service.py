@@ -16,6 +16,7 @@ class _FailingTaskManager:
     def spawn(self, name, coro):
         raise RuntimeError("runner unavailable")
 
+
 # ---------- Serializer ----------
 
 
@@ -131,7 +132,29 @@ async def test_invalidate_schedules_delete(service, task_manager):
 
     await task_manager.drain()
 
-    service.redis.delete.assert_awaited_once_with("user:u:daily")
+    assert service.redis.delete.await_count == 2
+    service.redis.delete.assert_any_await("user:u:daily")
+    service.redis.delete.assert_any_await("user:u:daily:__revision")
+
+
+@pytest.mark.asyncio
+async def test_revision_write_keeps_newest_payload(service, task_manager):
+    service.redis.set_if_revision_newer = AsyncMock(return_value=True)
+
+    assert (
+        await service.set_json(
+            "user:u:metrics",
+            {"profile_target_revision": 4},
+            revision_field="profile_target_revision",
+        )
+        is True
+    )
+    await task_manager.drain()
+
+    service.redis.set_if_revision_newer.assert_awaited_once()
+    args = service.redis.set_if_revision_newer.await_args.args
+    assert args[0] == "user:u:metrics"
+    assert args[2] == 4
 
 
 @pytest.mark.asyncio

@@ -2,11 +2,13 @@
 Handler for registering FCM tokens.
 """
 
+import inspect
 import logging
 from typing import Any
 
 from src.app.commands.notification import RegisterFcmTokenCommand
 from src.app.events.base import EventHandler, handles
+from src.app.services.background_job_scheduler import schedule_background_job
 from src.domain.model.notification import DeviceType, UserFcmToken
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.utils.timezone_utils import is_valid_timezone, normalize_timezone
@@ -28,18 +30,23 @@ class RegisterFcmTokenCommandHandler(
         self,
         notification_repository: NotificationRepositoryPort = None,
         precompute_service: DailyContextPrecomputeService | None = None,
+        task_manager=None,
     ):
         self.notification_repository = notification_repository
         self.precompute_service = precompute_service
+        self.task_manager = task_manager
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
         if "precompute_service" in kwargs:
             self.precompute_service = kwargs["precompute_service"]
+        if "task_manager" in kwargs:
+            self.task_manager = kwargs["task_manager"]
 
     async def handle(self, command: RegisterFcmTokenCommand) -> dict[str, Any]:
         """Handle FCM token registration with old token cleanup."""
         timezone_changed = False
+        durable_reschedule_queued = False
         async with AsyncUnitOfWork() as uow:
             # Use notification repository from UoW if not injected
             notification_repo = self.notification_repository or uow.notifications
@@ -89,26 +96,27 @@ class RegisterFcmTokenCommandHandler(
                     command.user_id,
                 )
 
+            if timezone_changed:
+                outbox = getattr(uow, "outbox", None)
+                if outbox is not None and inspect.iscoroutinefunction(
+                    getattr(outbox, "enqueue", None)
+                ):
+                    await outbox.enqueue(
+                        "notification_reschedule",
+                        {"user_id": command.user_id, "reason": "fcm_timezone"},
+                        event_id=(
+                            f"notification-reschedule:fcm-timezone:{command.user_id}:"
+                            f"{command.timezone}"
+                        ),
+                        aggregate_type="user",
+                        aggregate_id=command.user_id,
+                    )
+                    durable_reschedule_queued = True
+
             # UoW auto-commits on exit
 
-        if timezone_changed and self.precompute_service:
-            try:
-                scheduled_count = (
-                    await self.precompute_service.reschedule_user_notifications(
-                        command.user_id
-                    )
-                )
-                logger.info(
-                    "Rescheduled %s notifications after FCM timezone update "
-                    "for user %s",
-                    scheduled_count,
-                    command.user_id,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Failed to reschedule notifications after FCM timezone update: %s",
-                    exc,
-                )
+        if timezone_changed and not durable_reschedule_queued:
+            self._schedule_notification_reschedule(command.user_id, "fcm_timezone")
 
         logger.info(
             f"FCM token registered for user {command.user_id}, "
@@ -121,3 +129,13 @@ class RegisterFcmTokenCommandHandler(
             "token_id": saved_token.token_id,
             "deactivated_old_tokens": deactivated_count,
         }
+
+    def _schedule_notification_reschedule(self, user_id: str, reason: str) -> None:
+        if self.precompute_service is None:
+            return
+        schedule_background_job(
+            self.task_manager,
+            f"notifications:reschedule:{user_id}:{reason}",
+            self.precompute_service.reschedule_user_notifications(user_id),
+            logger=logger,
+        )

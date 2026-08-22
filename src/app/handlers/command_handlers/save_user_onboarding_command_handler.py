@@ -9,7 +9,7 @@ from uuid import UUID
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.user import UserProfileDomainModel
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
@@ -27,9 +27,12 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
         self,
         uow: AsyncUnitOfWorkPort | None = None,
         cache_service: CachePort | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation or CacheInvalidationService(
+            cache_service
+        )
 
     async def handle(self, command: SaveUserOnboardingCommand) -> None:
         """Save user onboarding data."""
@@ -174,19 +177,9 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                 # Save profile
                 await uow.users.update_profile(profile)
                 await uow.commit()
-                await self._invalidate_user_profile(command.user_id)
 
             except Exception:
                 await uow.rollback()
                 raise
 
-    async def _invalidate_user_profile(self, user_id: str):
-        if not self.cache_service:
-            return
-        cache_key, _ = CacheKeys.user_profile(user_id)
-        try:
-            await self.cache_service.invalidate(cache_key)
-        except Exception as exc:
-            # The profile transaction has already committed. Cache readers use
-            # the revision fence, so a deletion failure is safe to log only.
-            logger.warning("Failed to invalidate profile cache for user %s: %s", user_id, exc)
+        await self.cache_invalidation.after_profile_write(command.user_id)

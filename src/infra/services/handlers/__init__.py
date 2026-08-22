@@ -7,6 +7,12 @@ from typing import TYPE_CHECKING
 from src.infra.services.handlers.affiliate_webhook_handler import (
     AffiliateWebhookHandler,
 )
+from src.infra.services.handlers.firebase_account_cleanup_handler import (
+    FirebaseAccountCleanupHandler,
+)
+from src.infra.services.handlers.notification_reschedule_handler import (
+    NotificationRescheduleHandler,
+)
 from src.infra.services.handlers.push_notification_handler import (
     PushNotificationHandler,
 )
@@ -20,6 +26,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AffiliateWebhookHandler",
+    "FirebaseAccountCleanupHandler",
+    "NotificationRescheduleHandler",
     "PushNotificationHandler",
     "TelemetryHandler",
     "create_default_handler_registry",
@@ -38,6 +46,8 @@ def create_default_handler_registry(
     affiliate_handler = AffiliateWebhookHandler(affiliate_adapter)
     push_handler = PushNotificationHandler(firebase_service)
     telemetry_handler = TelemetryHandler(posthog_adapter)
+    firebase_cleanup_handler = FirebaseAccountCleanupHandler()
+    notification_reschedule_handler = NotificationRescheduleHandler()
 
     # Affiliate event routes
     for event_type in (
@@ -63,5 +73,8 @@ def create_default_handler_registry(
         "posthog.capture",
     ):
         registry.register(event_type, telemetry_handler)
+
+    registry.register("firebase_account_cleanup", firebase_cleanup_handler)
+    registry.register("notification_reschedule", notification_reschedule_handler)
 
     return registry

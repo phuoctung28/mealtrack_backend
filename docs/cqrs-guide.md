@@ -160,6 +160,15 @@ concrete `CacheService` schedules any cache population write on
 `BackgroundTaskManager`. Cache consistency is therefore eventual, while SQL
 correctness and the command response remain independent of Redis availability.
 
+External secondary effects follow the same boundary. Preference, timezone,
+language, and FCM changes commit SQL first and enqueue notification rescheduling;
+account deletion commits SQL first and enqueues Firebase cleanup. When a real
+unit of work exposes the transactional outbox, these jobs are durable and
+handled by the outbox worker. The managed task runner remains a local fallback
+for environments without an outbox-capable unit of work. AI discovery, recipe
+generation, and three-day recommendation creation remain synchronous until the
+HTTP contract exposes an accepted/job-status flow.
+
 ---
 
 ## Key Rules

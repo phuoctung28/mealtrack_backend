@@ -67,6 +67,13 @@ await event_bus.publish(MealCreatedEvent(...))           # fire-and-forget
 
 Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/event_bus/background_task_manager.py`), which replaces bare `asyncio.create_task` in the event bus and routes; it exposes `spawn`, `drain`, and `shutdown` so subscriber failures are observable and app shutdown can cancel outstanding tasks cleanly.
 
+Secondary external work that must survive API-process restarts uses the
+transactional outbox and `src/cron/outbox_worker.py`. Firebase account cleanup
+and notification rescheduling are registered outbox event types with bounded
+retry, lease fencing, and dead-letter handling. Cache projection, translation,
+and recommendation-recalculation jobs still use the process-local runner until
+their payloads and retry ownership are moved to the outbox.
+
 ### Business Writes and Cache Projections
 
 SQL is the source of truth for meal, hydration, movement, profile, and other
@@ -264,7 +271,7 @@ downloading Cloudinary bytes. Graph nodes must not import provider SDKs,
 2. The plan-level response is compact: it includes only the selected slots, with ingredients for each selected meal. Alternatives, scores, and full meal-detail fields stay out of the summary payload.
 3. `GET /v1/meal-recommendations/{plan_id}/slots/{slot_id}` hydrates one selected slot and its alternatives when the client needs drill-down data.
 4. `swap`, `log`, and `skip` return the changed-slot detail shape so the mobile client can patch its cached plan without reloading everything.
-5. Recommendation analytics are scheduled through `BackgroundTaskManager` when available. Catalog meals are read from the process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback. Meal-history affinity is projected from aggregate linked ingredient buckets instead of loading the full meal graph, and logging a recommended meal reuses the already loaded selected catalog projection without fabricating image data.
+5. Recommendation analytics are scheduled through `BackgroundTaskManager` when available. Catalog meals are read from the process-local snapshot service with revision-aware TTL, single-flight refresh, and last-good fallback. Meal-history affinity is projected from aggregate linked ingredient buckets instead of loading the full meal graph, and logging a recommended meal reuses the already loaded selected catalog projection without fabricating image data. Translation persistence and remaining-slot recalculation are post-commit secondary jobs. The current plan-creation endpoint still returns generated content synchronously; moving generation itself to a durable job requires a status/accepted-response contract.
 6. Candidate rows retain `seen_at` and `retired_at`. Swap locks only the requested slot, consumes unseen active candidates, and when exhausted retires that slot's inactive pool before inserting five deterministic fresh alternatives. Replenishment never mutates another slot or changes the response contract; daily jobs remain out of scope.
 
 ---

@@ -20,6 +20,7 @@ from src.domain.utils.timezone_utils import (
     get_zone_info,
     resolve_user_timezone_async,
 )
+from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,19 @@ class GetDailyBreakdownQueryHandler(
 
             cached = await self._try_get_cached_result(query.user_id, week_start)
             if cached is not None:
-                return cached
+                cached_revision = cached.get("profile_target_revision")
+                if cached_revision is None:
+                    return cached
+                from sqlalchemy import select
+
+                revision_result = await uow.session.execute(
+                    select(UserProfile.profile_target_revision).where(
+                        UserProfile.user_id == query.user_id,
+                        UserProfile.is_current.is_(True),
+                    )
+                )
+                if cached_revision == revision_result.scalar_one_or_none():
+                    return cached
 
             days = [week_start + timedelta(days=i) for i in range(7)]
             meals = await uow.meals.find_by_date_range(
@@ -61,9 +74,11 @@ class GetDailyBreakdownQueryHandler(
                 projection=MealProjection.MACROS_ONLY,
             )
 
-        base_daily_cal, base_daily_protein, base_daily_carbs, base_daily_fat = (
-            await self._get_base_daily_targets(query.user_id)
-        )
+        targets = await self._get_base_daily_targets(query.user_id)
+        base_daily_cal, base_daily_protein, base_daily_carbs, base_daily_fat = targets[
+            :4
+        ]
+        target_revision = targets[4] if len(targets) > 4 else None
 
         meals_by_day: dict[date, list[Any]] = {day: [] for day in days}
         for meal in meals:
@@ -112,6 +127,9 @@ class GetDailyBreakdownQueryHandler(
             "days": entries,
             "week_start": week_start.isoformat(),
         }
+        if target_revision is not None:
+            result["profile_target_revision"] = target_revision
+            result["target_revision"] = target_revision
         await self._write_cache(query.user_id, week_start, result)
         return result
 
@@ -123,7 +141,7 @@ class GetDailyBreakdownQueryHandler(
 
     async def _get_base_daily_targets(
         self, user_id: str
-    ) -> tuple[float, float, float, float]:
+    ) -> tuple[float, float, float, float, int | None]:
         """Return (calories, protein, carbs, fat) base daily targets from TDEE."""
         try:
             from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
@@ -141,10 +159,11 @@ class GetDailyBreakdownQueryHandler(
                 macros.get("protein", 70.0),
                 macros.get("carbs", 200.0),
                 macros.get("fat", 70.0),
+                result.get("profile_target_revision"),
             )
         except Exception as e:
             logger.warning(f"Could not fetch TDEE targets for {user_id}: {e}")
-            return 2000.0, 70.0, 200.0, 70.0
+            return 2000.0, 70.0, 200.0, 70.0, None
 
     async def _try_get_cached_result(self, user_id: str, week_start: date):
         if not self.cache_service:
@@ -165,7 +184,12 @@ class GetDailyBreakdownQueryHandler(
             return
         cache_key, ttl = CacheKeys.daily_breakdown(user_id, week_start)
         try:
-            await self.cache_service.set_json(cache_key, payload, ttl)
+            await self.cache_service.set_json(
+                cache_key,
+                payload,
+                ttl,
+                revision_field="profile_target_revision",
+            )
         except Exception as exc:
             logger.warning(
                 "Failed to write daily breakdown cache for %s: %s", user_id, exc

@@ -5,7 +5,7 @@ from typing import Any
 
 from src.app.commands.saved_suggestion import SaveSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
 
@@ -16,9 +16,16 @@ logger = logging.getLogger(__name__)
 class SaveSuggestionCommandHandler(EventHandler[SaveSuggestionCommand, dict[str, Any]]):
     """Save a meal suggestion. Returns existing if already saved (idempotent)."""
 
-    def __init__(self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None):
+    def __init__(
+        self,
+        uow: AsyncUnitOfWorkPort,
+        cache_service: CachePort | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
+    ):
         self.uow = uow
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation or CacheInvalidationService(
+            cache_service
+        )
 
     async def handle(self, command: SaveSuggestionCommand) -> dict[str, Any]:
         async with self.uow as uow:
@@ -40,8 +47,6 @@ class SaveSuggestionCommandHandler(EventHandler[SaveSuggestionCommand, dict[str,
                 f"Saved suggestion {command.suggestion_id} for user {command.user_id}"
             )
 
-        if self.cache_service:
-            cache_key, _ = CacheKeys.saved_suggestions(command.user_id)
-            await self.cache_service.invalidate(cache_key)
+        await self.cache_invalidation.after_saved_suggestion_write(command.user_id)
 
         return result

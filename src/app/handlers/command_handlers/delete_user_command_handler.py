@@ -4,6 +4,7 @@ Performs soft delete in database and hard delete in Firebase Auth.
 """
 
 import asyncio
+import inspect
 import logging
 from typing import Any
 
@@ -11,6 +12,7 @@ from src.api.dependencies.auth_cache import invalidate_cached_user_id
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import DeleteUserCommand
 from src.app.events.base import EventHandler, handles
+from src.app.services.background_job_scheduler import schedule_background_job
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
 from src.domain.utils.timezone_utils import utc_now
@@ -38,9 +40,11 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
         self,
         uow: AsyncUnitOfWorkPort | None = None,
         cache_service: CachePort | None = None,
+        task_manager=None,
     ):
         self.uow = uow
         self.cache_service = cache_service
+        self.task_manager = task_manager
         self.firebase_auth_service = FirebaseAuthService()
 
     async def handle(self, command: DeleteUserCommand) -> dict[str, Any]:
@@ -52,6 +56,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
         """
         # Use provided UoW or create default
         uow = self.uow or AsyncUnitOfWork()
+        durable_cleanup_queued = False
 
         async with uow:
             try:
@@ -86,68 +91,20 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
 
                 # Save changes
                 await uow.users.save(user)
+                outbox = getattr(uow, "outbox", None)
+                if outbox is not None and inspect.iscoroutinefunction(
+                    getattr(outbox, "enqueue", None)
+                ):
+                    await outbox.enqueue(
+                        "firebase_account_cleanup",
+                        {"firebase_uid": command.firebase_uid, "user_id": str(user_id)},
+                        event_id=f"firebase-account-cleanup:{command.firebase_uid}",
+                        aggregate_type="user",
+                        aggregate_id=str(user_id),
+                    )
+                    durable_cleanup_queued = True
                 await uow.commit()
-                await invalidate_cached_user_id(
-                    self.cache_service, command.firebase_uid
-                )
                 logger.info("Successfully soft deleted user in database")
-
-                # Step 4: Revoke refresh tokens to invalidate all active sessions
-                # This prevents the user from getting new access tokens
-                # Run in thread pool to avoid blocking the async event loop
-                tokens_revoked = False
-                try:
-                    await asyncio.to_thread(
-                        self.firebase_auth_service.revoke_refresh_tokens,
-                        command.firebase_uid,
-                    )
-                    tokens_revoked = True
-                    logger.info("Successfully revoked Firebase refresh tokens")
-                except Exception as revoke_error:
-                    logger.warning(f"Token revocation failed: {str(revoke_error)}")
-                    # Continue - deletion is more important
-
-                # Step 5: Hard delete from Firebase Authentication.
-                # The DB soft-delete is already committed, so a Firebase failure
-                # here leaves an orphaned auth account (login still works but the
-                # backend rejects it as inactive). Surface it as an alertable,
-                # structured error and report it in the result so it can be
-                # retried out-of-band instead of being silently dropped.
-                firebase_deleted = False
-                try:
-                    firebase_deleted = await asyncio.to_thread(
-                        self.firebase_auth_service.delete_firebase_user,
-                        command.firebase_uid,
-                    )
-                    if firebase_deleted:
-                        logger.info("Successfully deleted user from Firebase")
-                    else:
-                        logger.error(
-                            "Firebase deletion returned False — orphaned auth account",
-                            extra={
-                                "firebase_uid": command.firebase_uid,
-                                "user_id": str(user_id),
-                                "firebase_delete_pending": True,
-                            },
-                        )
-                except Exception as firebase_error:
-                    logger.error(
-                        f"Firebase deletion failed: {str(firebase_error)}",
-                        exc_info=True,
-                        extra={
-                            "firebase_uid": command.firebase_uid,
-                            "user_id": str(user_id),
-                            "firebase_delete_pending": True,
-                        },
-                    )
-
-                return {
-                    "firebase_uid": command.firebase_uid,
-                    "deleted": True,
-                    "firebase_deleted": firebase_deleted,
-                    "tokens_revoked": tokens_revoked,
-                    "message": "Account successfully deleted",
-                }
 
             except ResourceNotFoundException:
                 # Re-raise not found errors
@@ -155,6 +112,49 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
             except Exception as e:
                 await uow.rollback()
                 raise Exception(f"Failed to delete user account: {str(e)}") from e
+
+        await invalidate_cached_user_id(self.cache_service, command.firebase_uid)
+        queued = durable_cleanup_queued or self._schedule_firebase_cleanup(
+            command.firebase_uid, str(user_id)
+        )
+        return {
+            "firebase_uid": command.firebase_uid,
+            "deleted": True,
+            "firebase_deleted": False,
+            "tokens_revoked": False,
+            "firebase_cleanup_queued": queued,
+            "message": "Account successfully deleted; Firebase cleanup queued",
+        }
+
+    def _schedule_firebase_cleanup(self, firebase_uid: str, user_id: str) -> bool:
+        return schedule_background_job(
+            self.task_manager,
+            f"firebase:cleanup:{user_id}",
+            self._cleanup_firebase(firebase_uid, user_id),
+            logger=logger,
+        )
+
+    async def _cleanup_firebase(self, firebase_uid: str, user_id: str) -> None:
+        """Revoke and delete Firebase auth after the SQL soft delete commits."""
+        try:
+            tokens_revoked = await asyncio.to_thread(
+                self.firebase_auth_service.revoke_refresh_tokens, firebase_uid
+            )
+            firebase_deleted = await asyncio.to_thread(
+                self.firebase_auth_service.delete_firebase_user, firebase_uid
+            )
+            logger.info(
+                "Firebase cleanup completed: user=%s tokens_revoked=%s "
+                "firebase_deleted=%s",
+                user_id,
+                tokens_revoked,
+                firebase_deleted,
+            )
+        except Exception:
+            logger.exception(
+                "Firebase cleanup failed after committed account deletion: user=%s",
+                user_id,
+            )
 
     async def _soft_delete_related_data(self, uow, user_id: str) -> None:
         """
@@ -198,5 +198,5 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
                 f"Soft-deleted related data: meals={meals_count}, meal_plans={meal_plans_count}, "
                 f"fcm_tokens={fcm_tokens_count}, notification_prefs={notif_prefs_count}"
             )
-        except Exception as e:
+        except Exception:
             raise

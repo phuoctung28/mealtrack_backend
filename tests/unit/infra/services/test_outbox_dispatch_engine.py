@@ -403,6 +403,8 @@ class TestCreateDefaultHandlerRegistry:
             "telemetry_event",
             "analytics.event",
             "posthog.capture",
+            "firebase_account_cleanup",
+            "notification_reschedule",
         ]
         for route in expected_routes:
             assert registry.has(route) is True

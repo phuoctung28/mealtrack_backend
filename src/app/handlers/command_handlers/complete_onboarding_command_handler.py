@@ -4,14 +4,14 @@ Auto-extracted for better maintainability.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import CompleteOnboardingCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
-from src.domain.utils.timezone_utils import utc_now
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.ports.cache_port import CachePort
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,14 @@ class CompleteOnboardingCommandHandler(
 ):
     """Handler for marking user onboarding as completed."""
 
-    def __init__(self, cache_service: Optional[CachePort] = None):
-        self.cache_service = cache_service
+    def __init__(
+        self,
+        cache_service: Optional[CachePort] = None,
+        cache_invalidation: CacheInvalidationService | None = None,
+    ):
+        self.cache_invalidation = cache_invalidation or CacheInvalidationService(
+            cache_service
+        )
 
     async def handle(self, command: CompleteOnboardingCommand) -> Dict[str, Any]:
         """Mark user onboarding as completed if not already completed."""
@@ -53,7 +59,10 @@ class CompleteOnboardingCommandHandler(
             await uow.users.save(user)
             # UoW auto-commits on exit
 
-            await self._invalidate_user_profile(user.id)
+            user_id = user.id
+
+        # The UoW must be fully closed before cache maintenance is published.
+        await self.cache_invalidation.after_profile_write(str(user_id))
 
         return {
             "firebase_uid": command.firebase_uid,
@@ -61,9 +70,3 @@ class CompleteOnboardingCommandHandler(
             "updated": True,
             "message": "Onboarding marked as completed",
         }
-
-    async def _invalidate_user_profile(self, user_id: str):
-        if not self.cache_service:
-            return
-        cache_key, _ = CacheKeys.user_profile(user_id)
-        await self.cache_service.invalidate(cache_key)

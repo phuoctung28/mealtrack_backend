@@ -40,6 +40,7 @@ from src.domain.model.meal_recommendation import (
 from src.domain.services.meal_recommendation.ingredient_affinity_service import (
     IngredientAffinityProfile,
 )
+from src.infra.event_bus.background_task_manager import BackgroundTaskManager
 
 
 class _PlanRepo:
@@ -81,7 +82,9 @@ class _ConflictPlanRepo(_PlanRepo):
 class _LogPlanRepo(_PlanRepo):
     def __init__(self, *, replayed=False):
         super().__init__()
-        self.claim_slot_log = AsyncMock(return_value=(_plan(), _plan().slots[0], replayed))
+        self.claim_slot_log = AsyncMock(
+            return_value=(_plan(), _plan().slots[0], replayed)
+        )
         self.finalize_slot_logged = AsyncMock(
             return_value=PersistedMealRecommendationSlotMutationResult(
                 plan_id="plan-1",
@@ -111,15 +114,18 @@ class _Materializer:
             {"id": "food-1", "name": "Rice"},
         )()
         nutrition = type("Nutrition", (), {"food_items": [food_item]})()
-        self.meal = meal or type(
-            "Meal",
-            (),
-            {
-                "meal_id": "meal-1",
-                "dish_name": "Rice Bowl",
-                "nutrition": nutrition,
-            },
-        )()
+        self.meal = (
+            meal
+            or type(
+                "Meal",
+                (),
+                {
+                    "meal_id": "meal-1",
+                    "dish_name": "Rice Bowl",
+                    "nutrition": nutrition,
+                },
+            )()
+        )
         self.materialize = AsyncMock(return_value=self.meal)
 
 
@@ -350,9 +356,11 @@ async def test_log_handler_translates_and_invalidates_cache_for_non_english(capl
         materializer=materializer,
         meal_translation_service=translation_service,
         cache_invalidation=cache_invalidation,
+        task_manager=BackgroundTaskManager(),
     )
 
     await handler.handle(_log_command(language="vi"))
+    await handler.task_manager.drain()
 
     translation_service.translate_meal.assert_awaited_once()
     kwargs = translation_service.translate_meal.await_args.kwargs
@@ -398,9 +406,11 @@ async def test_log_handler_does_not_fail_when_translation_raises():
         uow=_Uow(plans, _CatalogRepo()),
         materializer=materializer,
         meal_translation_service=translation_service,
+        task_manager=BackgroundTaskManager(),
     )
 
     result = await handler.handle(_log_command(language="vi"))
+    await handler.task_manager.drain()
 
     assert result.plan_id == "plan-1"
     translation_service.translate_meal.assert_awaited_once()

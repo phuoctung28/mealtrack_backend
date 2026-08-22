@@ -55,7 +55,9 @@ async def _run_job(task_manager, index: int = 0):
 
 
 @pytest.mark.asyncio
-async def test_mutation_seams_enqueue_without_running_redis(service, cache_mock, task_manager):
+async def test_mutation_seams_enqueue_without_running_redis(
+    service, cache_mock, task_manager
+):
     await service.after_meal_write("user1", date(2026, 6, 2))
 
     assert len(task_manager.spawned) == 1
@@ -75,12 +77,16 @@ async def test_after_meal_write_invalidates_all_projections(
 
     cache_mock.invalidate_pattern.assert_any_call("user:user1:activities:2026-06-02:*")
     cache_mock.invalidate.assert_any_call(CacheKeys.daily_macros("user1", log_date)[0])
-    cache_mock.invalidate.assert_any_call(CacheKeys.weekly_budget("user1", week_start)[0])
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.weekly_budget("user1", week_start)[0]
+    )
     cache_mock.invalidate_pattern.assert_any_call(
         CacheKeys.weekly_budget_pattern("user1", week_start)
     )
     cache_mock.invalidate_pattern.assert_any_call("user:user1:nutrition_bulk:*")
-    cache_mock.invalidate.assert_any_call(CacheKeys.daily_breakdown("user1", week_start)[0])
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.daily_breakdown("user1", week_start)[0]
+    )
     cache_mock.invalidate.assert_any_call(CacheKeys.user_streak("user1")[0])
 
 
@@ -133,9 +139,13 @@ async def test_after_movement_write_enqueues_all_movement_projections(
 
     cache_mock.invalidate_pattern.assert_any_call("user:user2:activities:2026-06-02:*")
     cache_mock.invalidate.assert_any_call(CacheKeys.daily_macros("user2", log_date)[0])
-    cache_mock.invalidate.assert_any_call(CacheKeys.weekly_budget("user2", week_start)[0])
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.weekly_budget("user2", week_start)[0]
+    )
     cache_mock.invalidate_pattern.assert_any_call("user:user2:nutrition_bulk:*")
-    cache_mock.invalidate.assert_any_call(CacheKeys.daily_breakdown("user2", week_start)[0])
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.daily_breakdown("user2", week_start)[0]
+    )
 
 
 @pytest.mark.asyncio
@@ -165,11 +175,15 @@ async def test_after_hydration_write_enqueues_hydration_and_meal_projections(
     cache_mock.invalidate_pattern.assert_any_call("user:user3:activities:2026-06-02:*")
     cache_mock.invalidate_pattern.assert_any_call("user:user3:hydration:2026-06-02:*")
     cache_mock.invalidate.assert_any_call(CacheKeys.daily_macros("user3", log_date)[0])
-    cache_mock.invalidate.assert_any_call(CacheKeys.weekly_budget("user3", week_start)[0])
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.weekly_budget("user3", week_start)[0]
+    )
     cache_mock.invalidate.assert_any_call(
         CacheKeys.weekly_hydration("user3", week_start)[0]
     )
-    cache_mock.invalidate.assert_any_call(CacheKeys.daily_breakdown("user3", week_start)[0])
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.daily_breakdown("user3", week_start)[0]
+    )
     cache_mock.invalidate.assert_any_call(CacheKeys.user_streak("user3")[0])
     cache_mock.invalidate_pattern.assert_any_call("user:user3:nutrition_bulk:*")
 
@@ -185,6 +199,50 @@ async def test_after_custom_macros_update_enqueues_target_projections(
     cache_mock.invalidate.assert_any_call(CacheKeys.user_profile("user4")[0])
     cache_mock.invalidate_pattern.assert_any_call("user:user4:macros:*")
     cache_mock.invalidate_pattern.assert_any_call("user:user4:nutrition_bulk:*")
+
+
+@pytest.mark.asyncio
+async def test_after_profile_write_covers_all_profile_projections(
+    service, cache_mock, task_manager
+):
+    await service.after_profile_write("user5")
+    await _run_job(task_manager)
+
+    cache_mock.invalidate.assert_any_call(CacheKeys.user_profile("user5")[0])
+    cache_mock.invalidate.assert_any_call(CacheKeys.user_tdee("user5")[0])
+    cache_mock.invalidate.assert_any_call(CacheKeys.user_metrics("user5")[0])
+    cache_mock.invalidate_pattern.assert_any_call("user:user5:nutrition_bulk:*")
+    cache_mock.invalidate_pattern.assert_any_call("user:user5:daily_breakdown:*")
+    cache_mock.invalidate_pattern.assert_any_call(
+        CacheKeys.weekly_budget_user_pattern("user5")
+    )
+
+
+@pytest.mark.asyncio
+async def test_after_cheat_day_write_invalidates_only_affected_week(
+    service, cache_mock, task_manager
+):
+    cheat_day = date(2026, 6, 3)
+    await service.after_cheat_day_write("user6", cheat_day)
+    await _run_job(task_manager)
+
+    week_start = date(2026, 6, 1)
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.weekly_budget("user6", week_start)[0]
+    )
+    cache_mock.invalidate_pattern.assert_any_call(
+        CacheKeys.weekly_budget_pattern("user6", week_start)
+    )
+
+
+@pytest.mark.asyncio
+async def test_after_saved_suggestion_write_invalidates_bookmarks_in_background(
+    service, cache_mock, task_manager
+):
+    await service.after_saved_suggestion_write("user7")
+    await _run_job(task_manager)
+
+    cache_mock.invalidate.assert_any_call(CacheKeys.saved_suggestions("user7")[0])
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ High-level cache service that handles serialization and metrics.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -81,7 +82,14 @@ class CacheService(CachePort):
         except json.JSONDecodeError:
             return None
 
-    async def set_json(self, key: str, value: Any, ttl: int | None = None) -> bool:
+    async def set_json(
+        self,
+        key: str,
+        value: Any,
+        ttl: int | None = None,
+        *,
+        revision_field: str | None = None,
+    ) -> bool:
         """Schedule a cache write without blocking the business request."""
         if not self.enabled:
             return False
@@ -93,7 +101,7 @@ class CacheService(CachePort):
             )
             return False
 
-        job = self.set_json_now(key, value, ttl)
+        job = self.set_json_now(key, value, ttl, revision_field=revision_field)
         try:
             self._task_manager.spawn(f"cache:set:{self._key_hash(key)}", job)
         except Exception:
@@ -107,7 +115,12 @@ class CacheService(CachePort):
         return True
 
     async def set_json_now(
-        self, key: str, value: Any, ttl: int | None = None
+        self,
+        key: str,
+        value: Any,
+        ttl: int | None = None,
+        *,
+        revision_field: str | None = None,
     ) -> bool:
         """Write directly to Redis from a background cache job."""
         if not self.enabled:
@@ -119,7 +132,14 @@ class CacheService(CachePort):
         else:
             payload = json.dumps(value, default=_json_serializer)
 
-        return await self.redis.set(key, payload, ttl or self.default_ttl)
+        effective_ttl = ttl or self.default_ttl
+        if revision_field and isinstance(value, dict):
+            revision = value.get(revision_field)
+            if isinstance(revision, int) and not isinstance(revision, bool):
+                return await self.redis.set_if_revision_newer(
+                    key, payload, revision, effective_ttl
+                )
+        return await self.redis.set(key, payload, effective_ttl)
 
     @staticmethod
     def _key_hash(key: str) -> str:
@@ -172,7 +192,11 @@ class CacheService(CachePort):
         """Remove a cached value from inside a background cache job."""
         if not self.enabled:
             return False
-        return await self.redis.delete(key)
+        deleted, _ = await asyncio.gather(
+            self.redis.delete(key),
+            self.redis.delete(f"{key}:__revision"),
+        )
+        return bool(deleted)
 
     async def invalidate_pattern(self, pattern: str) -> int:
         """Schedule removal of all cache keys matching a glob pattern."""
@@ -180,7 +204,8 @@ class CacheService(CachePort):
             return 0
         if self._task_manager is None:
             logger.warning(
-                "Skipping cache pattern invalidation without a background task manager: "
+                "Skipping cache pattern invalidation without a background "
+                "task manager: "
                 "pattern_hash=%s",
                 self._key_hash(pattern),
             )

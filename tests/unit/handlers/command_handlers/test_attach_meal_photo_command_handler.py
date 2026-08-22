@@ -33,11 +33,14 @@ def _ready_meal(user_id: str) -> Meal:
 
 def _uow_for(meal: Meal):
     uow = MagicMock()
+    uow.events = []
     uow.__aenter__ = AsyncMock(return_value=uow)
-    uow.__aexit__ = AsyncMock(return_value=False)
+    uow.__aexit__ = AsyncMock(
+        side_effect=lambda *args: uow.events.append("uow_exit") or False
+    )
     uow.meals.find_by_id = AsyncMock(return_value=meal)
     uow.meals.save = AsyncMock(side_effect=lambda saved: saved)
-    uow.commit = AsyncMock()
+    uow.commit = AsyncMock(side_effect=lambda: uow.events.append("commit"))
     uow.rollback = AsyncMock()
     return uow
 
@@ -48,7 +51,9 @@ async def test_attach_meal_photo_updates_owned_meal_image():
     meal = _ready_meal(user_id)
     uow = _uow_for(meal)
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.after_meal_write = AsyncMock(
+        side_effect=lambda *args: uow.events.append("cache")
+    )
     image_id = str(uuid4())
     image_url = f"https://res.cloudinary.com/demo/image/upload/mealtrack/{image_id}.jpg"
 
@@ -76,6 +81,7 @@ async def test_attach_meal_photo_updates_owned_meal_image():
     cache.after_meal_write.assert_awaited_once_with(
         user_id, saved_meal.created_at.date()
     )
+    assert uow.events == ["commit", "uow_exit", "cache"]
 
 
 @pytest.mark.asyncio
@@ -107,7 +113,9 @@ async def test_delete_meal_photo_detaches_owned_meal_image():
     meal = _ready_meal(user_id)
     uow = _uow_for(meal)
     cache = MagicMock()
-    cache.after_meal_write = AsyncMock()
+    cache.after_meal_write = AsyncMock(
+        side_effect=lambda *args: uow.events.append("cache")
+    )
 
     handler = DeleteMealPhotoCommandHandler(uow=uow, cache_invalidation=cache)
 
@@ -127,6 +135,7 @@ async def test_delete_meal_photo_detaches_owned_meal_image():
     cache.after_meal_write.assert_awaited_once_with(
         user_id, saved_meal.created_at.date()
     )
+    assert uow.events == ["commit", "uow_exit", "cache"]
 
 
 @pytest.mark.asyncio

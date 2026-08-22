@@ -6,6 +6,7 @@ from typing import Any
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.cheat_day import UnmarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -14,9 +15,13 @@ logger = logging.getLogger(__name__)
 
 @handles(UnmarkCheatDayCommand)
 class UnmarkCheatDayCommandHandler(EventHandler[UnmarkCheatDayCommand, dict[str, Any]]):
-
-    def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
+    def __init__(
+        self,
+        uow: AsyncUnitOfWorkPort | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
+    ):
         self.uow = uow
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: UnmarkCheatDayCommand) -> dict[str, Any]:
         uow = self.uow or AsyncUnitOfWork()
@@ -34,13 +39,19 @@ class UnmarkCheatDayCommandHandler(EventHandler[UnmarkCheatDayCommand, dict[str,
                 await uow.cheat_days.delete(existing.cheat_day_id)
                 await uow.commit()
 
-                return {
+                result = {
                     "date": command.date.isoformat(),
                     "message": "Cheat day unmarked",
                 }
             except ResourceNotFoundException:
                 await uow.rollback()
                 raise
-            except Exception as e:
+            except Exception:
                 await uow.rollback()
                 raise
+
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_cheat_day_write(
+                command.user_id, command.date
+            )
+        return result

@@ -2,11 +2,13 @@
 Handler for updating notification preferences.
 """
 
+import inspect
 import logging
 from typing import Any, Dict, Optional
 
 from src.app.commands.notification import UpdateNotificationPreferencesCommand
 from src.app.events.base import EventHandler, handles
+from src.app.services.background_job_scheduler import schedule_background_job
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.notification import NotificationPreferences
 from src.domain.ports.cache_port import CachePort
@@ -28,9 +30,11 @@ class UpdateNotificationPreferencesCommandHandler(
         self,
         cache_service: Optional[CachePort] = None,
         precompute_service: Optional[DailyContextPrecomputeService] = None,
+        task_manager: Any | None = None,
     ):
         self.cache_service = cache_service
         self.precompute_service = precompute_service
+        self.task_manager = task_manager
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -73,6 +77,20 @@ class UpdateNotificationPreferencesCommandHandler(
                 final_prefs = await uow.notifications.save_notification_preferences(
                     updated_prefs
                 )
+                outbox = getattr(uow, "outbox", None)
+                if outbox is not None and inspect.iscoroutinefunction(
+                    getattr(outbox, "enqueue", None)
+                ):
+                    await outbox.enqueue(
+                        "notification_reschedule",
+                        {"user_id": command.user_id, "reason": "preferences"},
+                        event_id=(
+                            f"notification-reschedule:preferences:{command.user_id}:"
+                            f"{final_prefs.updated_at.isoformat()}"
+                        ),
+                        aggregate_type="user",
+                        aggregate_id=command.user_id,
+                    )
                 await uow.commit()
 
                 logger.info(
@@ -88,16 +106,16 @@ class UpdateNotificationPreferencesCommandHandler(
             cache_key, _ = CacheKeys.notification_prefs(command.user_id)
             await self.cache_service.invalidate(cache_key)
 
-        # Reschedule notifications with updated times (real-time update)
-        if self.precompute_service:
-            try:
-                scheduled_count = await self.precompute_service.reschedule_user_notifications(
-                    command.user_id
-                )
-                logger.info(
-                    f"Rescheduled {scheduled_count} notifications for user {command.user_id}"
-                )
-            except Exception as e:
-                logger.warning(f"Failed to reschedule notifications: {e}")
+        self._schedule_notification_reschedule(command.user_id, "preferences")
 
         return result
+
+    def _schedule_notification_reschedule(self, user_id: str, reason: str) -> None:
+        if self.precompute_service is None:
+            return
+        schedule_background_job(
+            self.task_manager,
+            f"notifications:reschedule:{user_id}:{reason}",
+            self.precompute_service.reschedule_user_notifications(user_id),
+            logger=logger,
+        )

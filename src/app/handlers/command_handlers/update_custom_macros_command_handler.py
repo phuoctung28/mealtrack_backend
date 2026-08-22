@@ -62,4 +62,4 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
 
         # Queue cache projection maintenance after the profile transaction.
         if self.cache_invalidation:
-            await self.cache_invalidation.after_custom_macros_update(command.user_id)
+            await self.cache_invalidation.after_profile_write(command.user_id)

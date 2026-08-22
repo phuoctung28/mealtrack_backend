@@ -7,6 +7,7 @@ from typing import Any
 from src.api.exceptions import ValidationException
 from src.app.commands.cheat_day import MarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.cheat_day import CheatDay
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import (
@@ -21,9 +22,13 @@ logger = logging.getLogger(__name__)
 
 @handles(MarkCheatDayCommand)
 class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, dict[str, Any]]):
-
-    def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
+    def __init__(
+        self,
+        uow: AsyncUnitOfWorkPort | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
+    ):
         self.uow = uow
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: MarkCheatDayCommand) -> dict[str, Any]:
         uow = self.uow or AsyncUnitOfWork()
@@ -58,7 +63,7 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, dict[str, Any
                 await uow.cheat_days.add(cheat_day)
                 await uow.commit()
 
-                return {
+                result = {
                     "cheat_day_id": cheat_day.cheat_day_id,
                     "date": target_date.isoformat(),
                     "message": "Date marked as cheat day",
@@ -66,6 +71,12 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, dict[str, Any
             except ValidationException:
                 await uow.rollback()
                 raise
-            except Exception as e:
+            except Exception:
                 await uow.rollback()
                 raise
+
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_cheat_day_write(
+                command.user_id, target_date
+            )
+        return result
