@@ -1,5 +1,6 @@
 """Mappers for meal suggestion domain to API responses."""
 
+
 from src.api.schemas.response.meal_suggestion_responses import (
     DiscoveryBatchResponse,
     DiscoveryMealResponse,

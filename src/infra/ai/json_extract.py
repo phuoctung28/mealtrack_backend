@@ -81,7 +81,7 @@ def extract_json(content: str) -> dict[str, Any]:
     is_truncated = (
         (open_braces > 0 and close_braces == 0)
         or (open_braces > close_braces)
-        or content.rstrip().endswith(('":', '": "', '"name": "', '",'))
+        or content.rstrip().endswith(('":',  '": "', '"name": "', '",'))
     )
     if is_truncated:
         logger.warning(
@@ -98,7 +98,6 @@ def extract_json(content: str) -> dict[str, Any]:
         "[JSON-EXTRACT-FAILED] all attempts failed content_len=%d", len(content)
     )
     from src.observability import increment_metric  # noqa: PLC0415
-
     increment_metric(
         "ai.vision.parse_failure.count",
         attributes={"content_len_bucket": _content_len_bucket(len(content))},

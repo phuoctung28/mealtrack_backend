@@ -31,3 +31,6 @@ class MealActivityResponse(BaseModel):
     quantity: float
     status: str
     image_url: Optional[str] = None
+
+
+

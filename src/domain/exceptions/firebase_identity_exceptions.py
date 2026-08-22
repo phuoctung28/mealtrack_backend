@@ -3,3 +3,4 @@
 
 class FirebaseIdentityConflictError(Exception):
     """Raised when a Firebase UID attempts to claim another account's email."""
+

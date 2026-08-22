@@ -54,7 +54,7 @@ class FileValidator:
         # Validate file size
         if len(contents) > max_size_bytes:
             raise ValidationException(
-                message=f"File size exceeds maximum allowed ({max_size_bytes // (1024 * 1024)}MB)",
+                message=f"File size exceeds maximum allowed ({max_size_bytes // (1024*1024)}MB)",
                 error_code="FILE_TOO_LARGE",
                 details={"size_bytes": len(contents), "max_bytes": max_size_bytes},
             )

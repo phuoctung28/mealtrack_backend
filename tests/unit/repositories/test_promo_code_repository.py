@@ -1,5 +1,4 @@
 """Unit tests for PromoCodeRepository."""
-
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timezone

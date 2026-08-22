@@ -4,3 +4,4 @@ from src.domain.services.barcode.gtin_normalizer import (
 )
 
 __all__ = ["BarcodeLookupKeys", "normalize_gtin"]
+

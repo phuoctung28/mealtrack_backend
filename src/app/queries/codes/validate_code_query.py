@@ -1,5 +1,4 @@
 """Query and error type for the unified code validation endpoint."""
-
 from dataclasses import dataclass
 from typing import Optional
 

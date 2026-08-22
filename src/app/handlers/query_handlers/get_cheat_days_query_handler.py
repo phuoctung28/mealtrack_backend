@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 @handles(GetCheatDaysQuery)
 class GetCheatDaysQueryHandler(EventHandler[GetCheatDaysQuery, dict[str, Any]]):
+
     def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
         self.uow = uow
 

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 @handles(UnmarkCheatDayCommand)
 class UnmarkCheatDayCommandHandler(EventHandler[UnmarkCheatDayCommand, dict[str, Any]]):
+
     def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
         self.uow = uow
 

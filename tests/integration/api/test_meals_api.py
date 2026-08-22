@@ -395,7 +395,7 @@ class TestMealsAPI:
                 meal_id=meal_id,
                 user_id=user.id,
                 status=MealStatusEnum.READY,
-                dish_name=f"Test Meal {i + 1}",
+                dish_name=f"Test Meal {i+1}",
                 created_at=meal_datetime,
                 ready_at=meal_datetime,  # Required for READY status
                 image_id=image_id,

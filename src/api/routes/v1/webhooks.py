@@ -59,7 +59,6 @@ _record_web_funnel_redemption = record_web_funnel_redemption
 _credit_referral_on_purchase = credit_referral_on_purchase
 _revoke_referral_on_refund = revoke_referral_on_refund
 
-
 @router.post("/revenuecat")
 async def revenuecat_webhook(
     request: Request, authorization: str | None = Header(None)

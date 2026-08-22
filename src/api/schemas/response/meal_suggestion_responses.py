@@ -1,5 +1,6 @@
 """Response schemas for meal suggestion discovery, recipes, and saving."""
 
+
 from pydantic import BaseModel, Field
 
 from src.api.schemas.response.meal_responses import DetailedMealResponse

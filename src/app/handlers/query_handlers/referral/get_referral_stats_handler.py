@@ -1,5 +1,4 @@
 """Query handler — return the user's referral code, wallet balance, and conversion history."""
-
 import logging
 
 from sqlalchemy import select

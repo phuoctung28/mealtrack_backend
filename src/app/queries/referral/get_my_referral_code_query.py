@@ -1,5 +1,4 @@
 """Query and result dataclass for retrieving (or lazily creating) the user's referral code."""
-
 from dataclasses import dataclass
 
 

@@ -1,5 +1,4 @@
 """Repository for affiliate_event_outbox — enqueue and claim outbox rows."""
-
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any

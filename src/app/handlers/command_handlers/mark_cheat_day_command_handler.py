@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 @handles(MarkCheatDayCommand)
 class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, dict[str, Any]]):
+
     def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
         self.uow = uow
 

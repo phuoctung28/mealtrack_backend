@@ -1,5 +1,4 @@
 """Outbox table for durable delivery of lifecycle events to nutree-affiliate."""
-
 from sqlalchemy import JSON, Column, DateTime, Index, Integer, String, Text
 
 from src.domain.utils.timezone_utils import utc_now
