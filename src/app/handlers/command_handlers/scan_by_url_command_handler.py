@@ -45,7 +45,6 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.infra.http import get_shared_http_client
 from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
@@ -69,6 +68,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         meal_value_insight_ai_manager: MealInsightAIPort | None = None,
         meal_analyze_workflow: MealAnalyzeWorkflow | None = None,
         meal_analyze_graph_enabled: bool = False,
+        download_image_bytes: Any | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -82,6 +82,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.meal_value_insight_ai_manager = meal_value_insight_ai_manager
         self.meal_analyze_workflow = meal_analyze_workflow
         self.meal_analyze_graph_enabled = meal_analyze_graph_enabled
+        self._download_image_bytes_fn = download_image_bytes
 
     def _record_food_label_metric(
         self,
@@ -123,10 +124,14 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         )
 
     async def _download_image_bytes(self, image_url: str) -> bytes:
-        client = get_shared_http_client()
-        resp = await client.get(image_url, timeout=30.0)
-        resp.raise_for_status()
-        return resp.content
+        if self._download_image_bytes_fn is not None:
+            return await self._download_image_bytes_fn(image_url)
+        import httpx
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(image_url)
+            resp.raise_for_status()
+            return resp.content
 
     async def _analyze_food_label_image_with_ai(
         self,

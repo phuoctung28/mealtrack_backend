@@ -66,9 +66,10 @@ def _install_fake_image_download(
             )
             return FakeResponse(content)
 
+    import httpx
+
     fake_client = FakeClient()
-    monkeypatch.setattr(module.httpx, "AsyncClient", lambda *args, **kwargs: fake_client)
-    monkeypatch.setattr(module, "get_shared_http_client", lambda: fake_client)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs: fake_client)
     monkeypatch.setattr(module, "compress_image", lambda raw_bytes: raw_bytes)
 
 

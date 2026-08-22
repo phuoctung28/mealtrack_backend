@@ -496,6 +496,14 @@ def get_configured_event_bus() -> EventBus:
             meal_analyze_graph_enabled=graph_settings["graph_enabled"],
         ),
     )
+    async def _download_image_bytes_pooled(image_url: str) -> bytes:
+        from src.infra.http import get_shared_http_client
+
+        client = get_shared_http_client()
+        resp = await client.get(image_url, timeout=30.0)
+        resp.raise_for_status()
+        return resp.content
+
     event_bus.register_handler(
         ScanByUrlCommand,
         ScanByUrlCommandHandler(
@@ -511,6 +519,7 @@ def get_configured_event_bus() -> EventBus:
             meal_value_insight_ai_manager=ai_manager,
             meal_analyze_workflow=meal_analyze_workflow,
             meal_analyze_graph_enabled=graph_settings["graph_enabled"],
+            download_image_bytes=_download_image_bytes_pooled,
         ),
     )
 
