@@ -1,19 +1,27 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
-from src.api.exceptions import AuthorizationException, ResourceNotFoundException, ValidationException
-from src.app.commands.movement import DeleteMovementEntryCommand, LogMovementCommand, UpdateMovementEntryCommand
+from src.api.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ValidationException,
+)
+from src.app.commands.movement import (
+    DeleteMovementEntryCommand,
+    LogMovementCommand,
+    UpdateMovementEntryCommand,
+)
+from src.app.handlers.command_handlers import log_movement_command_handler
 from src.app.handlers.command_handlers.delete_movement_entry_command_handler import (
     DeleteMovementEntryCommandHandler,
 )
-from src.app.handlers.command_handlers.update_movement_entry_command_handler import (
-    UpdateMovementEntryCommandHandler,
-)
-from src.app.handlers.command_handlers import log_movement_command_handler
 from src.app.handlers.command_handlers.log_movement_command_handler import (
     LogMovementCommandHandler,
     _validate_log_movement,
+)
+from src.app.handlers.command_handlers.update_movement_entry_command_handler import (
+    UpdateMovementEntryCommandHandler,
 )
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.cache.cache_keys import CacheKeys
@@ -256,7 +264,10 @@ def _weekly_budget_key(user_id="user-1", week_start=date(2026, 5, 25)):
 async def test_log_movement_handler_saves_entry_and_invalidates_daily_caches():
     uow = _FakeUow()
     cache = _FakeCache()
-    handler = LogMovementCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
+    tasks = _FakeTaskManager()
+    handler = LogMovementCommandHandler(
+        uow=uow, cache_invalidation=CacheInvalidationService(cache, task_manager=tasks)
+    )
 
     result = await handler.handle(
         LogMovementCommand(
@@ -275,10 +286,12 @@ async def test_log_movement_handler_saves_entry_and_invalidates_daily_caches():
     saved = uow.movement_entries.added[0]
     assert saved.user_id == "user-1"
     assert saved.activity_id == "badminton"
-    assert saved.logged_at == datetime(2026, 5, 30, 5, 0, tzinfo=timezone.utc)
+    assert saved.logged_at == datetime(2026, 5, 30, 5, 0, tzinfo=UTC)
     assert uow.committed is True
     assert result["id"] == saved.id
     assert result["logged_at"] == "2026-05-30T05:00:00+00:00"
+    assert cache.invalidated == []
+    await tasks.spawned[0][1]
     assert "user:user-1:macros:2026-05-30" in cache.invalidated
     assert _weekly_budget_key() in cache.invalidated
     assert "user:user-1:activities:2026-05-30:*" in cache.patterns
@@ -286,11 +299,14 @@ async def test_log_movement_handler_saves_entry_and_invalidates_daily_caches():
 
 @pytest.mark.asyncio
 async def test_log_movement_without_target_date_uses_current_utc_time(monkeypatch):
-    fixed_now = datetime(2026, 5, 30, 23, 30, tzinfo=timezone.utc)
+    fixed_now = datetime(2026, 5, 30, 23, 30, tzinfo=UTC)
     monkeypatch.setattr(log_movement_command_handler, "utc_now", lambda: fixed_now)
     uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
     cache = _FakeCache()
-    handler = LogMovementCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
+    tasks = _FakeTaskManager()
+    handler = LogMovementCommandHandler(
+        uow=uow, cache_invalidation=CacheInvalidationService(cache, task_manager=tasks)
+    )
 
     result = await handler.handle(
         LogMovementCommand(
@@ -309,6 +325,7 @@ async def test_log_movement_without_target_date_uses_current_utc_time(monkeypatc
     saved = uow.movement_entries.added[0]
     assert saved.logged_at == fixed_now
     assert result["logged_at"] == "2026-05-30T23:30:00+00:00"
+    await tasks.spawned[0][1]
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
     assert _weekly_budget_key() in cache.invalidated
     assert "user:user-1:activities:2026-05-31:*" in cache.patterns
@@ -332,6 +349,7 @@ async def test_delete_movement_handler_raises_not_found_when_entry_missing():
 async def test_delete_movement_handler_deletes_commits_and_invalidates_daily_caches():
     uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
     cache = _FakeCache()
+    tasks = _FakeTaskManager()
     uow.movement_entries.entry = log_movement_command_handler.MovementEntry(
         id="mvmt_123",
         user_id="user-1",
@@ -341,9 +359,11 @@ async def test_delete_movement_handler_deletes_commits_and_invalidates_daily_cac
         kcal_burned=200.5,
         intensity="moderate",
         include_in_balance=True,
-        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
+        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=UTC),
     )
-    handler = DeleteMovementEntryCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
+    handler = DeleteMovementEntryCommandHandler(
+        uow=uow, cache_invalidation=CacheInvalidationService(cache, task_manager=tasks)
+    )
 
     result = await handler.handle(
         DeleteMovementEntryCommand(user_id="user-1", entry_id="mvmt_123")
@@ -352,6 +372,7 @@ async def test_delete_movement_handler_deletes_commits_and_invalidates_daily_cac
     assert result == {}
     assert uow.movement_entries.deleted is True
     assert uow.committed is True
+    await tasks.spawned[0][1]
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
     assert _weekly_budget_key() in cache.invalidated
     assert "user:user-1:activities:2026-05-31:*" in cache.patterns
@@ -389,7 +410,7 @@ async def test_update_movement_handler_rejects_apple_health_entries():
         intensity="hard",
         include_in_balance=True,
         source="apple_health",
-        logged_at=datetime(2026, 5, 30, 5, 0, tzinfo=timezone.utc),
+        logged_at=datetime(2026, 5, 30, 5, 0, tzinfo=UTC),
     )
     handler = UpdateMovementEntryCommandHandler(uow=uow)
 
@@ -412,6 +433,7 @@ async def test_update_movement_handler_rejects_apple_health_entries():
 async def test_update_movement_handler_updates_and_invalidates_caches():
     uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
     cache = _FakeCache()
+    tasks = _FakeTaskManager()
     uow.movement_entries.entry = log_movement_command_handler.MovementEntry(
         id="mvmt_123",
         user_id="user-1",
@@ -421,9 +443,11 @@ async def test_update_movement_handler_updates_and_invalidates_caches():
         intensity="moderate",
         include_in_balance=True,
         source="manual",
-        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
+        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=UTC),
     )
-    handler = UpdateMovementEntryCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
+    handler = UpdateMovementEntryCommandHandler(
+        uow=uow, cache_invalidation=CacheInvalidationService(cache, task_manager=tasks)
+    )
 
     result = await handler.handle(
         UpdateMovementEntryCommand(
@@ -441,6 +465,7 @@ async def test_update_movement_handler_updates_and_invalidates_caches():
     assert result["intensity"] == "hard"
     assert result["include_in_balance"] is False
     assert uow.committed is True
+    await tasks.spawned[0][1]
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
     assert _weekly_budget_key() in cache.invalidated
 
@@ -455,7 +480,7 @@ class _FakeTaskManager:
 
 
 @pytest.mark.asyncio
-async def test_log_movement_returns_before_scheduled_cache_invalidation():
+async def test_log_movement_keeps_all_cache_invalidation_backgrounded():
     uow = _FakeUow()
     cache = _FakeCache()
     tasks = _FakeTaskManager()
@@ -486,11 +511,13 @@ async def test_log_movement_returns_before_scheduled_cache_invalidation():
 
     await tasks.spawned[0][1]
     assert "user:user-1:macros:2026-05-30" in cache.invalidated
+    assert _weekly_budget_key("user-1", date(2026, 5, 25)) in cache.invalidated
     assert "user:user-1:activities:2026-05-30:*" in cache.patterns
+    assert "user:user-1:nutrition_bulk:*" in cache.patterns
 
 
 @pytest.mark.asyncio
-async def test_delete_movement_returns_before_scheduled_cache_invalidation():
+async def test_delete_movement_keeps_all_cache_invalidation_backgrounded():
     uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
     cache = _FakeCache()
     tasks = _FakeTaskManager()
@@ -503,7 +530,7 @@ async def test_delete_movement_returns_before_scheduled_cache_invalidation():
         kcal_burned=200.5,
         intensity="moderate",
         include_in_balance=True,
-        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
+        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=UTC),
     )
     handler = DeleteMovementEntryCommandHandler(
         uow=uow,
@@ -521,6 +548,8 @@ async def test_delete_movement_returns_before_scheduled_cache_invalidation():
 
     await tasks.spawned[0][1]
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
+    assert "user:user-1:activities:2026-05-31:*" in cache.patterns
+    assert "user:user-1:nutrition_bulk:*" in cache.patterns
 
 
 def test_validate_log_movement_rejects_kcal_above_absolute_max():

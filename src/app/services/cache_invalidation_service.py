@@ -1,11 +1,7 @@
-"""Centralized cache invalidation for all mutations.
+"""Schedule cache projection maintenance after committed business writes.
 
-Meal/hydration writes still await invalidation before the HTTP response so a
-follow-up GET cannot hit a stale Redis key.
-
-Movement writes persist first, then schedule invalidation on the process
-task manager. The Flutter client already projects SQLite locally and must
-not wait on Redis SCAN of `nutrition_bulk:*` / weekly-budget patterns.
+Mutation handlers do not wait for Redis. The managed task runner executes all
+cache invalidation work after the SQL transaction has completed.
 """
 
 import asyncio
@@ -26,7 +22,7 @@ def _get_week_start(d: date) -> date:
 
 
 class CacheInvalidationService:
-    """Cache invalidation called by command handlers after a successful write."""
+    """Enqueue cache maintenance without making Redis part of business flow."""
 
     def __init__(
         self,
@@ -39,9 +35,12 @@ class CacheInvalidationService:
     async def _invalidate_key(self, key: str) -> None:
         if not self._cache:
             return
+        invalidate = getattr(self._cache, "invalidate_now", None)
+        if invalidate is None:
+            invalidate = self._cache.invalidate
         for attempt in range(2):
             try:
-                await self._cache.invalidate(key)
+                await invalidate(key)
                 return
             except Exception as exc:
                 if attempt == 0:
@@ -52,9 +51,14 @@ class CacheInvalidationService:
     async def _invalidate_pattern(self, pattern: str) -> None:
         if not self._cache:
             return
+        invalidate_pattern = getattr(
+            self._cache, "invalidate_pattern_now", None
+        )
+        if invalidate_pattern is None:
+            invalidate_pattern = self._cache.invalidate_pattern
         for attempt in range(2):
             try:
-                await self._cache.invalidate_pattern(pattern)
+                await invalidate_pattern(pattern)
                 return
             except Exception as exc:
                 if attempt == 0:
@@ -75,165 +79,177 @@ class CacheInvalidationService:
             return_exceptions=True,
         )
 
-    async def _run_secondary_meal_invalidations(
+    async def _schedule(
+        self,
+        name: str,
+        coro: Coroutine[Any, Any, Any],
+    ) -> None:
+        if self._cache is None:
+            coro.close()
+            return
+        if self._task_manager is None:
+            logger.error(
+                "Cache job dropped because no background task manager is configured: %s",
+                name,
+            )
+            coro.close()
+            return
+        try:
+            self._task_manager.spawn(name, coro)
+        except Exception:
+            coro.close()
+            logger.error("Failed to enqueue cache job: %s", name, exc_info=True)
+
+    async def after_meal_write(self, user_id: str, meal_date: date) -> None:
+        """Enqueue every meal-derived cache projection after SQL commit."""
+        week_start = _get_week_start(meal_date)
+        current_week_start = _get_week_start(date.today())
+        started = time.perf_counter()
+        await self._schedule(
+            f"cache:after_meal_write:{user_id}:{meal_date.isoformat()}",
+            self._run_meal_invalidations(
+                user_id, meal_date, week_start, current_week_start
+            ),
+        )
+        logger.info(
+            "cache_invalidation timing: user=%s enqueue_ms=%.1f "
+            "total_ms=%.1f queued=true",
+            user_id,
+            (time.perf_counter() - started) * 1000,
+            (time.perf_counter() - started) * 1000,
+        )
+
+    async def _run_meal_invalidations(
         self,
         user_id: str,
+        meal_date: date,
         meal_week_start: date,
         current_week_start: date,
     ) -> None:
-        """Invalidate non-critical keys (bulk caches, streaks, breakdowns)."""
         tasks = [
-            self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
-            self._invalidate_key(
-                CacheKeys.daily_breakdown(user_id, meal_week_start)[0]
-            ),
-            self._invalidate_key(CacheKeys.user_streak(user_id)[0]),
-        ]
-        if meal_week_start != current_week_start:
-            tasks.append(self._invalidate_weekly_budget(user_id, current_week_start))
-            tasks.append(
-                self._invalidate_key(
-                    CacheKeys.daily_breakdown(user_id, current_week_start)[0]
-                )
-            )
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def after_meal_write(self, user_id: str, meal_date: date) -> None:
-        """Invalidate all caches affected by a meal create/edit/delete.
-
-        Critical keys needed immediately by the client are awaited synchronously.
-        Secondary keys (bulk scans, streaks, breakdown) are scheduled in the background.
-        """
-        _t0 = time.perf_counter()
-        meal_week_start = _get_week_start(meal_date)
-        current_week_start = _get_week_start(date.today())
-
-        # Critical keys (client reads immediately after write) - run concurrently
-        _tc = time.perf_counter()
-        critical_tasks = [
             self._invalidate_pattern(
                 f"user:{user_id}:activities:{meal_date.isoformat()}:*"
             ),
             self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0]),
             self._invalidate_weekly_budget(user_id, meal_week_start),
+            self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
+            self._invalidate_key(CacheKeys.daily_breakdown(user_id, meal_week_start)[0]),
+            self._invalidate_key(CacheKeys.user_streak(user_id)[0]),
         ]
-        await asyncio.gather(*critical_tasks, return_exceptions=True)
-        _critical_ms = (time.perf_counter() - _tc) * 1000
-
-        # Secondary keys — scheduled on task manager if available, else awaited in-place
-        _ts = time.perf_counter()
-        await self._schedule(
-            f"cache:after_meal_write_secondary:{user_id}:{meal_date.isoformat()}",
-            self._run_secondary_meal_invalidations(
-                user_id, meal_week_start, current_week_start
-            ),
-        )
-        _secondary_ms = (time.perf_counter() - _ts) * 1000
-
-        _total_ms = (time.perf_counter() - _t0) * 1000
-        logger.info(
-            "cache_invalidation timing: user=%s critical_ms=%.1f secondary_ms=%.1f total_ms=%.1f",
-            user_id,
-            _critical_ms,
-            _secondary_ms,
-            _total_ms,
-        )
+        if meal_week_start != current_week_start:
+            tasks.extend(
+                [
+                    self._invalidate_weekly_budget(user_id, current_week_start),
+                    self._invalidate_key(
+                        CacheKeys.daily_breakdown(user_id, current_week_start)[0]
+                    ),
+                ]
+            )
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def after_movement_write(self, user_id: str, log_date: date) -> None:
-        """Invalidate all caches affected by a movement log/edit/delete."""
-        _t0 = time.perf_counter()
+        """Enqueue every movement-derived cache projection after SQL commit."""
         week_start = _get_week_start(log_date)
         current_week_start = _get_week_start(date.today())
-
-        # user_streak is intentionally NOT invalidated: the streak is meal-count
-        # based, and movement entries don't create meals (unlike meals/caloric
-        # drinks), so they cannot change it.
-        await self._invalidate_pattern(
-            f"user:{user_id}:activities:{log_date.isoformat()}:*"
-        )
-        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
-        await self._invalidate_key(CacheKeys.daily_macros(user_id, log_date)[0])
-        await self._invalidate_weekly_budget(user_id, week_start)
-        await self._invalidate_key(CacheKeys.daily_breakdown(user_id, week_start)[0])
-
-        # Backdated movement: also invalidate current week
-        if week_start != current_week_start:
-            await self._invalidate_weekly_budget(user_id, current_week_start)
-            await self._invalidate_key(
-                CacheKeys.daily_breakdown(user_id, current_week_start)[0]
-            )
-
-        logger.info(
-            "cache_invalidation movement timing: user=%s total_ms=%.1f",
-            user_id,
-            (time.perf_counter() - _t0) * 1000,
-        )
-
-    async def schedule_after_movement_write(self, user_id: str, log_date: date) -> None:
-        """Run movement cache invalidation after the HTTP response when possible.
-
-        Without a task manager (unit tests, scripts) this awaits in-process so
-        callers still observe the same cache effects.
-        """
         await self._schedule(
             f"cache:after_movement_write:{user_id}:{log_date.isoformat()}",
-            self.after_movement_write(user_id, log_date),
+            self._run_movement_invalidations(
+                user_id, log_date, week_start, current_week_start
+            ),
         )
 
-    async def _schedule(self, name: str, coro: Coroutine[Any, Any, Any]) -> None:
-        if self._task_manager is not None:
-            self._task_manager.spawn(name, coro)
-            return
-        await coro
+    async def _run_movement_invalidations(
+        self,
+        user_id: str,
+        log_date: date,
+        week_start: date,
+        current_week_start: date,
+    ) -> None:
+        tasks = [
+            self._invalidate_pattern(
+                f"user:{user_id}:activities:{log_date.isoformat()}:*"
+            ),
+            self._invalidate_key(CacheKeys.daily_macros(user_id, log_date)[0]),
+            self._invalidate_weekly_budget(user_id, week_start),
+            self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
+            self._invalidate_key(CacheKeys.daily_breakdown(user_id, week_start)[0]),
+        ]
+        if week_start != current_week_start:
+            tasks.extend(
+                [
+                    self._invalidate_weekly_budget(user_id, current_week_start),
+                    self._invalidate_key(
+                        CacheKeys.daily_breakdown(user_id, current_week_start)[0]
+                    ),
+                ]
+            )
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def schedule_after_movement_write(self, user_id: str, log_date: date) -> None:
+        """Compatibility alias for callers using the former method name."""
+        await self.after_movement_write(user_id, log_date)
 
     async def after_hydration_write(self, user_id: str, log_date: date) -> None:
-        """Invalidate all caches affected by a hydration log/delete.
-
-        Hydration affects meal-related caches too: caloric drinks contribute to
-        daily macros and weekly budget. Previously two separate events were
-        published (MealCacheInvalidationRequiredEvent + HydrationCacheInvalidationRequiredEvent).
-        This method consolidates both key sets into one synchronous call.
-        """
+        """Enqueue hydration and caloric-drink projections after SQL commit."""
         week_start = _get_week_start(log_date)
         current_week_start = _get_week_start(date.today())
-
-        # Hydration-specific keys
-        await self._invalidate_pattern(
-            f"user:{user_id}:activities:{log_date.isoformat()}:*"
+        await self._schedule(
+            f"cache:after_hydration_write:{user_id}:{log_date.isoformat()}",
+            self._run_hydration_invalidations(
+                user_id, log_date, week_start, current_week_start
+            ),
         )
-        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
-        await self._invalidate_pattern(
-            f"user:{user_id}:hydration:{log_date.isoformat()}:*"
-        )
-        await self._invalidate_key(CacheKeys.daily_macros(user_id, log_date)[0])
-        await self._invalidate_key(CacheKeys.weekly_hydration(user_id, week_start)[0])
 
-        # Meal-related keys (caloric drinks affect energy balance)
-        await self._invalidate_weekly_budget(user_id, week_start)
-        await self._invalidate_key(CacheKeys.daily_breakdown(user_id, week_start)[0])
-        await self._invalidate_key(CacheKeys.user_streak(user_id)[0])
-
-        # Backdated hydration: also invalidate current week
+    async def _run_hydration_invalidations(
+        self,
+        user_id: str,
+        log_date: date,
+        week_start: date,
+        current_week_start: date,
+    ) -> None:
+        tasks = [
+            self._invalidate_pattern(
+                f"user:{user_id}:activities:{log_date.isoformat()}:*"
+            ),
+            self._invalidate_pattern(
+                f"user:{user_id}:hydration:{log_date.isoformat()}:*"
+            ),
+            self._invalidate_key(CacheKeys.daily_macros(user_id, log_date)[0]),
+            self._invalidate_weekly_budget(user_id, week_start),
+            self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
+            self._invalidate_key(CacheKeys.weekly_hydration(user_id, week_start)[0]),
+            self._invalidate_key(CacheKeys.daily_breakdown(user_id, week_start)[0]),
+            self._invalidate_key(CacheKeys.user_streak(user_id)[0]),
+        ]
         if week_start != current_week_start:
-            await self._invalidate_weekly_budget(user_id, current_week_start)
-            await self._invalidate_key(
-                CacheKeys.daily_breakdown(user_id, current_week_start)[0]
+            tasks.extend(
+                [
+                    self._invalidate_weekly_budget(user_id, current_week_start),
+                    self._invalidate_key(
+                        CacheKeys.daily_breakdown(user_id, current_week_start)[0]
+                    ),
+                ]
             )
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def after_custom_macros_update(self, user_id: str) -> None:
-        """Invalidate caches affected by custom macro target changes.
+        """Enqueue cache maintenance after custom macro targets change."""
+        await self._schedule(
+            f"cache:after_custom_macros_update:{user_id}",
+            self._run_custom_macro_invalidations(user_id),
+        )
 
-        Custom macro targets are embedded in the cached daily_macros response,
-        so ALL daily_macros entries for the user must be purged via pattern.
-        """
-        await self._invalidate_key(CacheKeys.user_tdee(user_id)[0])
-        await self._invalidate_key(CacheKeys.user_profile(user_id)[0])
-        # Purge ALL daily_macros for this user (targets are embedded in cached response)
-        await self._invalidate_pattern(f"user:{user_id}:macros:*")
-        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
-        # Weekly budget for current and next week (covers timezone skew)
-        today = date.today()
-        this_week = _get_week_start(today)
-        next_week = this_week + timedelta(days=7)
-        await self._invalidate_weekly_budget(user_id, this_week)
-        await self._invalidate_weekly_budget(user_id, next_week)
+    async def _run_custom_macro_invalidations(self, user_id: str) -> None:
+        await asyncio.gather(
+            self._invalidate_key(CacheKeys.user_tdee(user_id)[0]),
+            self._invalidate_key(CacheKeys.user_profile(user_id)[0]),
+            self._invalidate_pattern(f"user:{user_id}:macros:*"),
+            self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
+            return_exceptions=True,
+        )
+        this_week = _get_week_start(date.today())
+        await asyncio.gather(
+            self._invalidate_weekly_budget(user_id, this_week),
+            self._invalidate_weekly_budget(user_id, this_week + timedelta(days=7)),
+            return_exceptions=True,
+        )

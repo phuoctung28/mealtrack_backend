@@ -50,6 +50,9 @@ from src.infra.repositories.food_reference_repository_async import (
 from src.infra.services.firebase_service import FirebaseService
 
 if TYPE_CHECKING:
+    from src.infra.event_bus.background_task_manager import BackgroundTaskManager
+
+if TYPE_CHECKING:
     from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
 # Note: Old handler imports removed - using event-driven architecture now
@@ -70,7 +73,9 @@ _catalog_meal_snapshot_service: CatalogMealSnapshotService | None = None
 _catalog_meal_browse_service = None
 
 
-async def initialize_cache_layer() -> None:
+async def initialize_cache_layer(
+    task_manager: "BackgroundTaskManager | None" = None,
+) -> None:
     """Initialize Redis for optional caches and the provider budget."""
     global _redis_client, _cache_service
 
@@ -95,6 +100,7 @@ async def initialize_cache_layer() -> None:
         default_ttl=settings.CACHE_DEFAULT_TTL,
         monitor=_cache_monitor,
         enabled=settings.CACHE_ENABLED,
+        task_manager=task_manager,
     )
 
 
@@ -616,6 +622,7 @@ def get_nutrition_lookup_service():
             ingredient_nutrition_resolver=get_ingredient_nutrition_resolver(),
             generation_service=MealGenerationService(),
             redis_client=_redis_client,
+            cache_service=get_cache_service(),
         )
     return _nutrition_lookup_service
 

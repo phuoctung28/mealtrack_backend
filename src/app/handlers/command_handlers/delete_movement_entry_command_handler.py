@@ -1,7 +1,5 @@
 """Command handler for deleting a movement entry."""
 
-from typing import Optional
-
 from src.api.exceptions import AuthorizationException, ResourceNotFoundException
 from src.app.commands.movement import DeleteMovementEntryCommand
 from src.app.events.base import EventHandler, handles
@@ -15,7 +13,7 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
     def __init__(
         self,
         uow: AsyncUnitOfWork,
-        cache_invalidation: Optional[CacheInvalidationService] = None,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
         self.cache_invalidation = cache_invalidation
@@ -29,7 +27,8 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
                 )
             if entry.source == "apple_health":
                 raise AuthorizationException(
-                    "Apple Health entries cannot be deleted", "APPLE_HEALTH_NOT_EDITABLE"
+                    "Apple Health entries cannot be deleted",
+                    "APPLE_HEALTH_NOT_EDITABLE",
                 )
             user_tz = await resolve_user_timezone_async(cmd.user_id, uow)
             log_date = entry.logged_at.astimezone(get_zone_info(user_tz)).date()
@@ -40,8 +39,6 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
                 )
 
         if self.cache_invalidation:
-            await self.cache_invalidation.schedule_after_movement_write(
-                cmd.user_id, log_date
-            )
+            await self.cache_invalidation.after_movement_write(cmd.user_id, log_date)
 
         return {}

@@ -415,6 +415,10 @@ def get_configured_event_bus() -> EventBus:
     fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
     task_manager = get_optional_task_manager()
+    if cache_service is not None and task_manager is not None:
+        configure_cache_writer = getattr(cache_service, "set_task_manager", None)
+        if configure_cache_writer is not None:
+            configure_cache_writer(task_manager)
     suggestion_service = get_suggestion_orchestration_service()
 
     from src.app.services.cache_invalidation_service import CacheInvalidationService
@@ -427,8 +431,8 @@ def get_configured_event_bus() -> EventBus:
     )
     from src.infra.database.uow_async import AsyncUnitOfWork
 
-    # Meal/hydration handlers still await invalidation. Movement handlers
-    # schedule it on the task manager so log/delete can return after persist.
+    # Mutation handlers enqueue all cache projections after the SQL write; the
+    # managed task runner keeps Redis maintenance off the business path.
     cache_invalidation_service = CacheInvalidationService(
         cache_service, task_manager=task_manager
     )

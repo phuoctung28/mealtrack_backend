@@ -117,7 +117,8 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
                 )
             )
 
-        # Synchronous invalidation guarantees Redis is cleared before the response returns
+        # SQL has committed when the UoW exits; cache projection maintenance is
+        # queued and is not part of the response critical path.
         if self.cache_invalidation:
             await self.cache_invalidation.after_hydration_write(cmd.user_id, log_date)
 

@@ -234,7 +234,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize Redis cache (must happen BEFORE notification service)
     try:
-        await initialize_cache_layer()
+        await initialize_cache_layer(task_manager=_task_manager)
     except Exception as exc:
         logger.error("Failed to initialize cache layer: %s", exc)
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":

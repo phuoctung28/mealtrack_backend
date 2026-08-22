@@ -435,7 +435,7 @@ async def invalidate_cache(
     state: MealAnalyzeGraphState,
     runtime: MealAnalyzeRuntime,
 ) -> MealAnalyzeGraphState:
-    """Invalidate meal caches before returning READY response."""
+    """Queue meal cache projection maintenance before returning READY response."""
     if state.get("cache_invalidated"):
         return {"cache_invalidated": True}
     if runtime.cache_invalidation and runtime.meal_date:

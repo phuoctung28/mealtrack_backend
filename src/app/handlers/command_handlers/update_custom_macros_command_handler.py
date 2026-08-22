@@ -60,6 +60,6 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
             action = "cleared" if non_null_count == 0 else "set"
             logger.info(f"Custom macros {action} for user {command.user_id}")
 
-        # Synchronous invalidation guarantees Redis is cleared before the response returns
+        # Queue cache projection maintenance after the profile transaction.
         if self.cache_invalidation:
             await self.cache_invalidation.after_custom_macros_update(command.user_id)

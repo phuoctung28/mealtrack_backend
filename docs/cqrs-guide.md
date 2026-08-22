@@ -148,6 +148,18 @@ async with AsyncUnitOfWork() as uow:
     result = await uow.meals.find_by_id(meal_id)
 ```
 
+### Cache Work Is Outside the Business Critical Path
+
+The database transaction is authoritative for command completion. After the
+unit of work commits, mutation handlers enqueue cache invalidation through
+`CacheInvalidationService`; they do not await Redis maintenance. This applies
+to meal, hydration, movement, and derived macro/budget projections.
+
+Query handlers may read Redis first. A cache miss falls back to SQL, and the
+concrete `CacheService` schedules any cache population write on
+`BackgroundTaskManager`. Cache consistency is therefore eventual, while SQL
+correctness and the command response remain independent of Redis availability.
+
 ---
 
 ## Key Rules

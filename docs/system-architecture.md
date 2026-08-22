@@ -67,6 +67,20 @@ await event_bus.publish(MealCreatedEvent(...))           # fire-and-forget
 
 Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/event_bus/background_task_manager.py`), which replaces bare `asyncio.create_task` in the event bus and routes; it exposes `spawn`, `drain`, and `shutdown` so subscriber failures are observable and app shutdown can cancel outstanding tasks cleanly.
 
+### Business Writes and Cache Projections
+
+SQL is the source of truth for meal, hydration, movement, profile, and other
+business state. Mutation handlers complete their SQL transaction first, then
+enqueue cache invalidation or projection work through
+`CacheInvalidationService`. They do not wait for Redis deletes, pattern scans,
+or cache rebuilds before returning the business response.
+
+Queries may read Redis as an optimization. On a miss, the handler reads SQL and
+the concrete `CacheService` schedules the cache population write through
+`BackgroundTaskManager`; cache lag or Redis failure must not make the committed
+business operation fail. The current runner is process-local and provides the
+seam for a future durable background-worker instance.
+
 ### Repository Pattern
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
 
