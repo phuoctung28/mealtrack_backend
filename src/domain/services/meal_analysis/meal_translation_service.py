@@ -11,6 +11,10 @@ from src.domain.model.translation_result import TranslationOutcome, TranslationR
 from src.domain.ports.meal_translation_repository_port import (
     MealTranslationRepositoryPort,
 )
+from src.domain.services.localized_display_name import (
+    already_in_target_language,
+    keep_stored_display_name,
+)
 from src.domain.services.translation.text_translation_service import (
     TextTranslationService,
 )
@@ -89,13 +93,23 @@ class MealTranslationService:
             # Build a single flat list so we use one provider call.
             # Layout: [dish_name, *ingredient_names, *instruction_texts]
             strings_to_translate = [dish_name] + ingredient_names + instruction_texts
+            if all(
+                already_in_target_language(text, target_language)
+                for text in strings_to_translate
+                if str(text).strip()
+            ):
+                logger.info(
+                    "Meal translation skipped; names already in %s meal=%s",
+                    target_language,
+                    meal.meal_id,
+                )
+                return None
 
-            result = await _translate_texts(
-                self._text_service, strings_to_translate, target_language
+            result, translated = await _translate_preserving_localized_names(
+                self._text_service,
+                strings_to_translate,
+                target_language,
             )
-            translated = result.to_list()
-            if result.outcome is not TranslationOutcome.TRANSLATED:
-                translated.extend(strings_to_translate[len(translated) :])
 
             # --- Unpack results ---
             translated_dish_name = translated[0]
@@ -181,3 +195,48 @@ async def _translate_texts(
 ) -> TranslationResult:
     """Translate an ordered batch from the canonical English source."""
     return await service.translate_texts(texts, "en", target_language)
+
+
+async def _translate_preserving_localized_names(
+    service: TextTranslationService,
+    texts: list[str],
+    target_language: str,
+) -> tuple[TranslationResult, list[str]]:
+    """Translate leftover English labels only. Keep already-localized names."""
+    translate_indexes = [
+        index
+        for index, text in enumerate(texts)
+        if not already_in_target_language(text, target_language)
+    ]
+    if not translate_indexes:
+        passthrough = TranslationResult.passthrough(
+            tuple(texts),
+            source_language="en",
+            target_language=target_language,
+        )
+        return passthrough, list(texts)
+
+    result = await _translate_texts(
+        service,
+        [texts[index] for index in translate_indexes],
+        target_language,
+    )
+    translated_batch = result.to_list()
+    if result.outcome is not TranslationOutcome.TRANSLATED:
+        translated_batch.extend(
+            [texts[index] for index in translate_indexes[len(translated_batch) :]]
+        )
+
+    merged = list(texts)
+    for offset, index in enumerate(translate_indexes):
+        translated_name = (
+            translated_batch[offset] if offset < len(translated_batch) else texts[index]
+        )
+        if keep_stored_display_name(
+            stored=texts[index],
+            translated=translated_name,
+            language=target_language,
+        ):
+            translated_name = texts[index]
+        merged[index] = translated_name
+    return result, merged

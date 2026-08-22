@@ -704,8 +704,12 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
             realigned_ingredients = []
             realigned_food_items = []
+            missing_translation = False
             for item in updated_food_items:
-                translated_name = translated_names_by_id.get(str(item.id), item.name)
+                translated_name = translated_names_by_id.get(str(item.id))
+                if not translated_name:
+                    missing_translation = True
+                    break
                 realigned_ingredients.append(translated_name)
                 realigned_food_items.append(
                     FoodItemTranslation(
@@ -713,6 +717,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                         name=translated_name,
                     )
                 )
+            if missing_translation:
+                continue
 
             translation.meal_ingredients = realigned_ingredients
             translation.food_items = realigned_food_items

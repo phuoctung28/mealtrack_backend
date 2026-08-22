@@ -28,6 +28,7 @@ from src.domain.model.nutrition import FoodItem, Macros, Micros, Nutrition
 from src.domain.ports.food_reference_repository_port import (
     FoodReferenceNutritionProjection,
 )
+from src.domain.services.localized_display_name import keep_stored_display_name
 from src.domain.services.meal_calorie_service import (
     effective_food_item_calories,
     effective_meal_calories,
@@ -46,6 +47,19 @@ STATUS_MAPPING = {
     "READY": "ready",
     "FAILED": "failed",
 }
+
+
+def _apply_translated_food_name(food_item, translated_name, language: str | None) -> None:
+    if not translated_name:
+        return
+    if keep_stored_display_name(
+        stored=food_item.name,
+        translated=translated_name,
+        language=language,
+    ):
+        return
+    food_item.name = translated_name
+    food_item.display_name = translated_name
 
 
 class MealMapper:
@@ -280,7 +294,11 @@ class MealMapper:
                 translation_language = requested_language
                 # Apply each translated field independently if it exists
                 # (lenient check - scanned meals may not have instructions)
-                if tr.dish_name:
+                if tr.dish_name and not keep_stored_display_name(
+                    stored=dish_name,
+                    translated=tr.dish_name,
+                    language=requested_language,
+                ):
                     dish_name = tr.dish_name
                 if tr.meal_instruction:
                     instructions = tr.meal_instruction
@@ -301,13 +319,14 @@ class MealMapper:
                         translated_name = translated_names_by_id.get(
                             str(fi.id)
                         ) or legacy_names_by_id.get(str(fi.id))
-                        if translated_name:
-                            fi.name = translated_name
-                            fi.display_name = translated_name
+                        _apply_translated_food_name(
+                            fi, translated_name, requested_language
+                        )
                 elif legacy_names_by_id:
                     for i, fi in enumerate(food_items):
-                        fi.name = tr.meal_ingredients[i]
-                        fi.display_name = tr.meal_ingredients[i]
+                        _apply_translated_food_name(
+                            fi, tr.meal_ingredients[i], requested_language
+                        )
 
         value_insights_response = MealMapper._value_insights_response(value_insights)
 
@@ -342,7 +361,7 @@ class MealMapper:
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at,
-            updated_at=None,
+            updated_at=getattr(meal, "updated_at", None),
             food_items=food_items,
             image_url=image_url,
             total_calories=total_calories,
