@@ -7,11 +7,16 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Header, Request
 
-from src.api.base_dependencies import get_ai_model_manager, get_cache_service
+from src.api.base_dependencies import (
+    get_ai_model_manager,
+    get_cache_service,
+    get_meal_translation_service,
+)
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.dependencies.task_manager import get_optional_task_manager
 from src.api.exceptions import ValidationException
+from src.api.mappers.meal_locale_ensure import ensure_requested_meal_translation
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
@@ -80,6 +85,7 @@ async def update_meal_ingredients(
     x_app_version: str | None = Header(default=None, alias="X-App-Version"),
     x_platform: str | None = Header(default=None, alias="X-Platform"),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    meal_translation_service=Depends(get_meal_translation_service),
 ):
     """
     Update meal ingredients and portions.
@@ -177,11 +183,20 @@ async def update_meal_ingredients(
         },
     )
     result = await event_bus.send(command)
-    meal = await event_bus.send(GetMealByIdQuery(meal_id=meal_id, user_id=user_id))
+    language = get_request_language(request)
+    query = GetMealByIdQuery(meal_id=meal_id, user_id=user_id)
+    meal = await event_bus.send(query)
+    meal = await ensure_requested_meal_translation(
+        meal=meal,
+        language=language,
+        query=query,
+        event_bus=event_bus,
+        meal_translation_service=meal_translation_service,
+    )
     schedule_value_insight_generation(
         task_manager,
         meal,
-        language=get_request_language(request),
+        language=language,
         cache_service=cache_service,
         ai_manager=ai_manager,
         event_bus=event_bus,
@@ -193,7 +208,7 @@ async def update_meal_ingredients(
         result["meal_detail"] = MealMapper.to_detailed_response(
             meal,
             image_url,
-            target_language=get_request_language(request),
+            target_language=language,
         )
     return result
 

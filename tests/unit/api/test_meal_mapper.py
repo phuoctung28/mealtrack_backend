@@ -476,6 +476,73 @@ class TestMealMapper:
         ]
         assert result.translation_language == "vi"
 
+    def test_to_detailed_response_does_not_apply_leftover_english_vi_translation(
+        self,
+    ):
+        """Parse-text names are already Vietnamese; inverted vi rows must not paint."""
+        food_items = [
+            FoodItem(
+                id="item-1",
+                name="Cơm tấm",
+                quantity=1,
+                unit="dĩa",
+                macros=Macros(protein=12, carbs=70, fat=4),
+            ),
+            FoodItem(
+                id="item-2",
+                name="Bì heo",
+                quantity=1,
+                unit="phần",
+                macros=Macros(protein=6, carbs=2, fat=8),
+            ),
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/com-tam.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            source="prompt",
+            dish_name="Cơm tấm với sườn, bì, chả",
+            ready_at=datetime(2026, 8, 22, 13, 50),
+            created_at=datetime(2026, 8, 22, 13, 50),
+            nutrition=Nutrition(
+                macros=Macros(protein=18, carbs=72, fat=12),
+                food_items=food_items,
+            ),
+            translations={
+                "vi": MealTranslation(
+                    meal_id="meal-1",
+                    language="vi",
+                    dish_name="Cơm tấm với sườn, bì, chả",
+                    meal_ingredients=["Broken rice", "Shredded pork skin"],
+                    food_items=[
+                        FoodItemTranslation(
+                            food_item_id="item-1",
+                            name="Broken rice",
+                        ),
+                        FoodItemTranslation(
+                            food_item_id="item-2",
+                            name="Shredded pork skin",
+                        ),
+                    ],
+                )
+            },
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert result.dish_name == "Cơm tấm với sườn, bì, chả"
+        assert [item.name for item in result.food_items] == ["Cơm tấm", "Bì heo"]
+        assert [item.canonical_name for item in result.food_items] == [
+            "Cơm tấm",
+            "Bì heo",
+        ]
+
     def test_to_detailed_response_falls_back_per_item_to_safe_legacy_translation(
         self,
     ):
