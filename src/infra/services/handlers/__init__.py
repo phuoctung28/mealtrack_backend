@@ -17,9 +17,6 @@ from src.infra.services.handlers.firebase_account_cleanup_handler import (
 from src.infra.services.handlers.notification_reschedule_handler import (
     NotificationRescheduleHandler,
 )
-from src.infra.services.handlers.push_notification_handler import (
-    PushNotificationHandler,
-)
 from src.infra.services.handlers.push_notification_queue_handler import (
     PushNotificationQueueHandler,
 )
@@ -29,13 +26,11 @@ from src.infra.services.outbox_handler_registry import OutboxHandlerRegistry
 if TYPE_CHECKING:
     from src.domain.ports.affiliate_service_port import AffiliateServicePort
     from src.infra.adapters.posthog_adapter import PostHogAdapter
-    from src.infra.services.firebase_service import FirebaseService
 
 __all__ = [
     "AffiliateWebhookHandler",
     "FirebaseAccountCleanupHandler",
     "NotificationRescheduleHandler",
-    "PushNotificationHandler",
     "PushNotificationQueueHandler",
     "TelemetryHandler",
     "CacheInvalidationQueueHandler",
@@ -46,7 +41,6 @@ __all__ = [
 def create_default_handler_registry(
     *,
     affiliate_adapter: AffiliateServicePort | None = None,
-    firebase_service: FirebaseService | None = None,
     posthog_adapter: PostHogAdapter | None = None,
     cache_invalidation_publisher: CloudflareQueuePublisher | None = None,
     push_notification_publisher: CloudflareQueuePublisher | None = None,
@@ -55,7 +49,10 @@ def create_default_handler_registry(
     registry = OutboxHandlerRegistry()
 
     affiliate_handler = AffiliateWebhookHandler(affiliate_adapter)
-    push_handler = PushNotificationHandler(firebase_service)
+    push_queue_publisher = (
+        push_notification_publisher or CloudflareQueuePublisher.from_settings()
+    )
+    active_push_handler = PushNotificationQueueHandler(push_queue_publisher)
     telemetry_handler = TelemetryHandler(posthog_adapter)
     firebase_cleanup_handler = FirebaseAccountCleanupHandler()
     notification_reschedule_handler = NotificationRescheduleHandler()
@@ -72,13 +69,7 @@ def create_default_handler_registry(
     ):
         registry.register(event_type, affiliate_handler)
 
-    # Push notification routes (direct Firebase SDK dispatch or Cloudflare Queue)
-    active_push_handler = (
-        PushNotificationQueueHandler(push_notification_publisher)
-        if push_notification_publisher is not None
-        else push_handler
-    )
-
+    # Push notification routes (Cloudflare Queue)
     for event_type in (
         "push_notification",
         "notification.push",

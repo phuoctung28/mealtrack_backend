@@ -265,16 +265,6 @@ class TestCalorieFormulaParityStaticSource:
         assert "from src.domain.model.nutrition.macros import Macros" in source
         assert "Macros.raw_total_calories(protein, carbs, fat, fiber)" in source
 
-    def test_cron_notification_dispatch_service_sql(self):
-        path = "src/infra/services/cron_notification_dispatch_service.py"
-        with open(path) as f:
-            source = f.read()
-        assert (
-            "from src.domain.constants.calorie_sql import CALORIE_FORMULA_SQL_FRAGMENT"
-            in source
-        )
-        assert source.count("{CALORIE_FORMULA_SQL_FRAGMENT}") == 1
-
     def test_daily_context_precompute_service_sql(self):
         """Two SQL sites in this file share the identical formula constant."""
         path = "src/infra/services/daily_context_precompute_service.py"

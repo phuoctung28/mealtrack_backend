@@ -47,7 +47,6 @@ from src.infra.repositories.catalog_recipe_repository_async import (
 from src.infra.repositories.food_reference_repository_async import (
     AsyncFoodReferenceRepository,
 )
-from src.infra.services.firebase_service import FirebaseService
 
 if TYPE_CHECKING:
     from src.api.dependencies.task_manager import BackgroundTaskManager
@@ -373,23 +372,6 @@ def get_async_food_reference_repository():
 # Backward-compatible aliases for older callers; runtime receives async adapter.
 get_food_reference_repository = get_async_food_reference_repository
 get_barcode_product_repository = get_food_reference_repository
-
-
-# Firebase Service (singleton pattern - create once and reuse)
-_firebase_service = None
-
-
-def get_firebase_service() -> FirebaseService:
-    """
-    Get the Firebase service instance (singleton).
-
-    Returns:
-        FirebaseService: The Firebase service
-    """
-    global _firebase_service
-    if _firebase_service is None:
-        _firebase_service = FirebaseService()
-    return _firebase_service
 
 
 def get_daily_context_precompute_service():

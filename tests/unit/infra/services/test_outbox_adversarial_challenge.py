@@ -26,7 +26,7 @@ from src.infra.database.models.outbox_event import TransactionalOutboxORM
 from src.infra.repositories.outbox_repository import AsyncOutboxRepository
 from src.infra.services.handlers import (
     AffiliateWebhookHandler,
-    PushNotificationHandler,
+    PushNotificationQueueHandler,
     TelemetryHandler,
     create_default_handler_registry,
 )
@@ -269,11 +269,19 @@ class TestHandlerFailureClassification:
         assert res.is_transient is False
         assert res.error_type == "InvalidPayload"
 
-    # --- PushNotificationHandler ---
+    # --- PushNotificationQueueHandler ---
 
     @pytest.mark.asyncio
-    async def test_push_empty_or_whitespace_topic_fails_permanently(self):
-        handler = PushNotificationHandler(MagicMock())
+    async def test_push_queue_transient_error(self):
+        from src.infra.adapters.cloudflare_queue_publisher import (
+            CloudflareQueueTransientError,
+        )
+
+        publisher = MagicMock()
+        publisher.publish = AsyncMock(
+            side_effect=CloudflareQueueTransientError("Connection reset")
+        )
+        handler = PushNotificationQueueHandler(publisher)
         context = OutboxEventContext(
             outbox_id="1",
             event_id="e1",
@@ -281,41 +289,21 @@ class TestHandlerFailureClassification:
             retry_count=0,
             created_at_iso="2026-08-22",
         )
-        res = await handler.handle({"topic": "   ", "title": "T", "body": "B"}, context)
-        assert res.success is False
-        assert res.is_transient is False
-        assert res.error_type == "ValidationError"
-
-    @pytest.mark.asyncio
-    async def test_push_firebase_not_initialized_is_transient(self):
-        firebase = MagicMock()
-        firebase.send_to_topic.return_value = {
-            "success": False,
-            "reason": "firebase_not_initialized",
-        }
-        handler = PushNotificationHandler(firebase)
-        context = OutboxEventContext(
-            outbox_id="1",
-            event_id="e1",
-            event_type="push",
-            retry_count=0,
-            created_at_iso="2026-08-22",
-        )
-        res = await handler.handle(
-            {"topic": "news", "title": "T", "body": "B"}, context
-        )
+        res = await handler.handle({"topic": "news", "title": "T", "body": "B"}, context)
         assert res.success is False
         assert res.is_transient is True
-        assert res.error_type == "FirebaseNotInitialized"
 
     @pytest.mark.asyncio
-    async def test_push_no_tokens_for_user_is_permanent(self):
-        firebase = MagicMock()
-        firebase.send_notification.return_value = {
-            "success": False,
-            "reason": "no_tokens",
-        }
-        handler = PushNotificationHandler(firebase)
+    async def test_push_queue_permanent_error(self):
+        from src.infra.adapters.cloudflare_queue_publisher import (
+            CloudflareQueuePermanentError,
+        )
+
+        publisher = MagicMock()
+        publisher.publish = AsyncMock(
+            side_effect=CloudflareQueuePermanentError("Queue not found")
+        )
+        handler = PushNotificationQueueHandler(publisher)
         context = OutboxEventContext(
             outbox_id="1",
             event_id="e1",
@@ -328,7 +316,6 @@ class TestHandlerFailureClassification:
         )
         assert res.success is False
         assert res.is_transient is False
-        assert res.error_type == "NoTokensForUser"
 
     # --- TelemetryHandler ---
 

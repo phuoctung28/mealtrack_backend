@@ -13,7 +13,7 @@ from src.domain.ports.outbox_handler_port import (
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.services.handlers import (
     AffiliateWebhookHandler,
-    PushNotificationHandler,
+    PushNotificationQueueHandler,
     TelemetryHandler,
     create_default_handler_registry,
 )
@@ -202,16 +202,17 @@ class TestAffiliateWebhookHandler:
 
 
 # ---------------------------------------------------------------------------
-# PushNotificationHandler Tests
+# PushNotificationQueueHandler Tests
 # ---------------------------------------------------------------------------
 
 
-class TestPushNotificationHandler:
+class TestPushNotificationQueueHandler:
     @pytest.mark.asyncio
-    async def test_push_topic_success(self):
-        firebase = MagicMock()
-        firebase.send_to_topic.return_value = {"success": True, "message_id": "msg-1"}
-        handler = PushNotificationHandler(firebase)
+    async def test_push_queue_success(self):
+        publisher = MagicMock()
+        publisher.publish = AsyncMock()
+        publisher._queue_name = "mealtrack-notifications"
+        handler = PushNotificationQueueHandler(publisher)
 
         context = OutboxEventContext(
             outbox_id="1",
@@ -225,13 +226,21 @@ class TestPushNotificationHandler:
             context,
         )
         assert res.success is True
-        assert res.metadata.get("message_id") == "msg-1"
+        assert res.metadata.get("destination") == "cloudflare_queue"
+        publisher.publish.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_push_multicast_success(self):
-        firebase = MagicMock()
-        firebase.send_multicast.return_value = {"success": True, "sent": 2, "failed": 0}
-        handler = PushNotificationHandler(firebase)
+    async def test_push_queue_transient_failure(self):
+        from src.infra.adapters.cloudflare_queue_publisher import (
+            CloudflareQueueTransientError,
+        )
+
+        publisher = MagicMock()
+        publisher.publish = AsyncMock(
+            side_effect=CloudflareQueueTransientError("Rate limited")
+        )
+        publisher._queue_name = "mealtrack-notifications"
+        handler = PushNotificationQueueHandler(publisher)
 
         context = OutboxEventContext(
             outbox_id="1",
@@ -241,46 +250,24 @@ class TestPushNotificationHandler:
             created_at_iso="2026-08-22T00:00:00Z",
         )
         res = await handler.handle(
-            {"tokens": ["tok-1", "tok-2"], "title": "MealTrack", "body": "Dinner time"},
-            context,
-        )
-        assert res.success is True
-        assert res.metadata["sent"] == 2
-
-    @pytest.mark.asyncio
-    async def test_push_multicast_all_failed_transient(self):
-        firebase = MagicMock()
-        firebase.send_multicast.return_value = {
-            "success": True,
-            "sent": 0,
-            "failed": 2,
-            "failed_tokens": [{"token": "tok-1", "error": "UNAVAILABLE"}],
-        }
-        handler = PushNotificationHandler(firebase)
-
-        context = OutboxEventContext(
-            outbox_id="1",
-            event_id="e1",
-            event_type="push_notification",
-            retry_count=0,
-            created_at_iso="2026-08-22T00:00:00Z",
-        )
-        res = await handler.handle(
-            {"tokens": ["tok-1", "tok-2"], "title": "MealTrack", "body": "Dinner time"},
+            {"tokens": ["tok-1"], "title": "MealTrack", "body": "Dinner time"},
             context,
         )
         assert res.success is False
         assert res.is_transient is True
-        assert res.error_type == "FCMDeliveryFailure"
 
     @pytest.mark.asyncio
-    async def test_push_direct_user_no_tokens_permanent_failure(self):
-        firebase = MagicMock()
-        firebase.send_notification.return_value = {
-            "success": False,
-            "reason": "no_tokens",
-        }
-        handler = PushNotificationHandler(firebase)
+    async def test_push_queue_permanent_failure(self):
+        from src.infra.adapters.cloudflare_queue_publisher import (
+            CloudflareQueuePermanentError,
+        )
+
+        publisher = MagicMock()
+        publisher.publish = AsyncMock(
+            side_effect=CloudflareQueuePermanentError("Bad auth")
+        )
+        publisher._queue_name = "mealtrack-notifications"
+        handler = PushNotificationQueueHandler(publisher)
 
         context = OutboxEventContext(
             outbox_id="1",
@@ -295,24 +282,6 @@ class TestPushNotificationHandler:
         )
         assert res.success is False
         assert res.is_transient is False
-        assert res.error_type == "NoTokensForUser"
-
-    @pytest.mark.asyncio
-    async def test_push_missing_title_body_permanent_failure(self):
-        handler = PushNotificationHandler(MagicMock())
-        context = OutboxEventContext(
-            outbox_id="1",
-            event_id="e1",
-            event_type="push_notification",
-            retry_count=0,
-            created_at_iso="2026-08-22T00:00:00Z",
-        )
-        res = await handler.handle(
-            {"user_id": "u-123", "title": "", "body": ""}, context
-        )
-        assert res.success is False
-        assert res.is_transient is False
-        assert res.error_type == "ValidationError"
 
 
 # ---------------------------------------------------------------------------
