@@ -59,6 +59,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             provider=provider,
             provider_budget=provider_budget,
             provider_rpm=provider_rpm,
+            uow_factory=uow_factory,
         )
 
     async def handle(self, command: EditMealCommand) -> dict[str, Any]:

@@ -35,7 +35,15 @@ async def ensure_requested_meal_translation(
     if language == "en":
         return meal
 
-    food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+    all_food_items = getattr(getattr(meal, "nutrition", None), "food_items", None) or []
+    # Tracked (catalog-linked) lines get their name from food_reference at
+    # read time — exclude them so translation completeness is judged only on
+    # the untracked lines that actually need meal-translation overlay.
+    food_items = [
+        item
+        for item in all_food_items
+        if getattr(item, "food_reference_id", None) is None
+    ]
     instructions = getattr(meal, "instructions", None)
     if not meal.dish_name and not food_items and not instructions:
         return meal

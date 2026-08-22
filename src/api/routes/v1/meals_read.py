@@ -22,6 +22,9 @@ from src.api.mappers.meal_locale_ensure import (
 )
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.middleware.accept_language import get_request_language
+from src.api.routes.v1.meals_route_helpers import (
+    load_food_reference_display_projections,
+)
 from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.response import (
     DetailedMealResponse,
@@ -197,12 +200,16 @@ async def get_meal(
     source_nutrition = await _source_nutrition_by_food_reference(
         meal, food_reference_repository
     )
+    display_projections = await load_food_reference_display_projections(
+        meal, food_reference_repository
+    )
     return MealMapper.to_detailed_response(
         meal,
         image_url,
         target_language=language,
         value_insights=value_insights,
         source_nutrition_by_food_reference=source_nutrition,
+        display_name_by_food_reference=display_projections,
     )
 
 
