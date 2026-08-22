@@ -50,9 +50,7 @@ def upgrade() -> None:
             "error_log",
             postgresql.JSONB().with_variant(sa.JSON(), "sqlite"),
             nullable=True,
-            server_default=sa.text("'[]'::jsonb").with_variant(
-                sa.text("'[]'"), "sqlite"
-            ),
+            server_default=sa.text("'[]'"),
         ),
         sa.Column(
             "created_at",
