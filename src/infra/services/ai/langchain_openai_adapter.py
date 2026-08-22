@@ -44,10 +44,8 @@ class OpenAILangChainAdapter:
         max_tokens: int | None,
         request_kwargs: dict[str, Any] | None,
         store_override: bool | None = None,
-        temperature: float | None = None,
-        seed: int | None = None,
     ) -> LangChainOpenAIResult:
-        llm = self._llm(model=model, temperature=temperature, seed=seed)
+        llm = self._llm(model=model)
         structured = llm.with_structured_output(
             _openai_json_schema(schema),
             method="json_schema",
@@ -79,10 +77,8 @@ class OpenAILangChainAdapter:
         system_message: str,
         max_tokens: int | None,
         request_kwargs: dict[str, Any] | None,
-        temperature: float | None = None,
-        seed: int | None = None,
     ) -> LangChainOpenAIResult:
-        llm = self._llm(model=model, temperature=temperature, seed=seed)
+        llm = self._llm(model=model)
         raw_message = await llm.ainvoke(
             [
                 SystemMessage(content=system_message),
@@ -106,10 +102,8 @@ class OpenAILangChainAdapter:
         schema: type,
         max_tokens: int | None,
         request_kwargs: dict[str, Any] | None,
-        temperature: float | None = None,
-        seed: int | None = None,
     ) -> LangChainOpenAIResult:
-        llm = self._llm(model=model, temperature=temperature, seed=seed)
+        llm = self._llm(model=model)
         structured = llm.with_structured_output(
             _openai_json_schema(schema),
             method="json_schema",
@@ -141,16 +135,9 @@ class OpenAILangChainAdapter:
             raw_message=response["raw"],
         )
 
-    def _llm(
-        self,
-        *,
-        model: str,
-        temperature: float | None = None,
-        seed: int | None = None,
-    ) -> ChatOpenAI:
-        cache_key = f"{model}:{temperature}:{seed}"
-        if cache_key in self._llms:
-            return self._llms[cache_key]
+    def _llm(self, *, model: str) -> ChatOpenAI:
+        if model in self._llms:
+            return self._llms[model]
         kwargs: dict[str, Any] = {
             "model": model,
             "api_key": self._api_key,
@@ -159,12 +146,8 @@ class OpenAILangChainAdapter:
             "use_responses_api": True,
             "reasoning": {"effort": "none"},
         }
-        if temperature is not None:
-            kwargs["temperature"] = temperature
-        if seed is not None:
-            kwargs["seed"] = seed
-        self._llms[cache_key] = ChatOpenAI(**kwargs)
-        return self._llms[cache_key]
+        self._llms[model] = ChatOpenAI(**kwargs)
+        return self._llms[model]
 
     def _request_kwargs(
         self,
@@ -245,8 +228,8 @@ def _openai_json_schema(schema: type) -> dict[str, Any]:
     }
 
 
-def _validate_parsed(schema: type[BaseModel], parsed: Any) -> BaseModel:
-    if isinstance(parsed, BaseModel):
+def _validate_parsed(schema: type, parsed: Any) -> BaseModel:
+    if isinstance(parsed, schema):
         return parsed
     return schema.model_validate(parsed)
 

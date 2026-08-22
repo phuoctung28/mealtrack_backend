@@ -42,9 +42,7 @@ class MealRecommendationAnalyticsService:
             properties={
                 "schema_version": "meal_recommendation_v1",
                 "slots_count": len(plan.slots),
-                "alternatives_count": sum(
-                    len(slot.alternatives) for slot in plan.slots
-                ),
+                "alternatives_count": sum(len(slot.alternatives) for slot in plan.slots),
             },
         )
 

@@ -9,7 +9,6 @@ import pytest
 def clear_sentinel():
     """Wipe in-memory sentinel between tests to prevent leakage."""
     from src.infra.services import daily_context_precompute_service as module
-
     module._precomputed_today.clear()
     yield
     module._precomputed_today.clear()
@@ -43,9 +42,8 @@ async def test_runs_and_adds_to_sentinel_set():
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with (
-        patch.object(svc, "_precompute_db", AsyncMock(return_value=5)),
-        patch.object(svc, "_check_db_sentinel", AsyncMock(return_value=False)),
+    with patch.object(svc, "_precompute_db", AsyncMock(return_value=5)), patch.object(
+        svc, "_check_db_sentinel", AsyncMock(return_value=False)
     ):
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
 
@@ -63,9 +61,8 @@ async def test_zero_users_does_not_set_sentinel():
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with (
-        patch.object(svc, "_precompute_db", AsyncMock(return_value=0)),
-        patch.object(svc, "_check_db_sentinel", AsyncMock(return_value=False)),
+    with patch.object(svc, "_precompute_db", AsyncMock(return_value=0)), patch.object(
+        svc, "_check_db_sentinel", AsyncMock(return_value=False)
     ):
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
 
@@ -82,10 +79,9 @@ async def test_db_sentinel_fallback_skips_precompute():
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with (
-        patch.object(svc, "_check_db_sentinel", AsyncMock(return_value=True)),
-        patch.object(svc, "_precompute_db", new_callable=AsyncMock) as mock_precompute,
-    ):
+    with patch.object(
+        svc, "_check_db_sentinel", AsyncMock(return_value=True)
+    ), patch.object(svc, "_precompute_db", new_callable=AsyncMock) as mock_precompute:
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
         mock_precompute.assert_not_awaited()
 
@@ -172,17 +168,10 @@ async def test_user_calorie_goal_rejects_stale_weekly_target_revision():
     )
 
     profile = SimpleNamespace(
-        age=30,
-        gender="male",
-        height_cm=175,
-        weight_kg=70,
-        body_fat_percentage=None,
-        job_type="desk",
-        training_days_per_week=3,
-        training_minutes_per_session=45,
-        fitness_goal="maintain",
-        training_level="beginner",
-        profile_target_revision=2,
+        age=30, gender="male", height_cm=175, weight_kg=70,
+        body_fat_percentage=None, job_type="desk", training_days_per_week=3,
+        training_minutes_per_session=45, fitness_goal="maintain",
+        training_level="beginner", profile_target_revision=2,
     )
     budget = MagicMock(target_revision=1)
     uow = MagicMock()
@@ -203,28 +192,16 @@ async def test_precompute_applies_keto_policy_before_returning_adjusted_goal():
     )
 
     profile = SimpleNamespace(
-        age=30,
-        gender="male",
-        height_cm=175,
-        weight_kg=70,
-        body_fat_percentage=None,
-        job_type="desk",
-        training_days_per_week=3,
-        training_minutes_per_session=45,
-        fitness_goal="maintain",
-        training_level="beginner",
-        dietary_preferences=["keto"],
-        custom_protein_g=None,
-        custom_carbs_g=None,
-        custom_fat_g=None,
+        age=30, gender="male", height_cm=175, weight_kg=70,
+        body_fat_percentage=None, job_type="desk", training_days_per_week=3,
+        training_minutes_per_session=45, fitness_goal="maintain",
+        training_level="beginner", dietary_preferences=["keto"],
+        custom_protein_g=None, custom_carbs_g=None, custom_fat_g=None,
         profile_target_revision=1,
     )
     budget = MagicMock(
-        target_revision=1,
-        target_calories=14000.0,
-        target_protein=700.0,
-        target_carbs=1750.0,
-        target_fat=350.0,
+        target_revision=1, target_calories=14000.0, target_protein=700.0,
+        target_carbs=1750.0, target_fat=350.0,
     )
     uow = MagicMock()
     uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=budget)

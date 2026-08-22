@@ -7,7 +7,6 @@ Both sides must use: HMAC-SHA256(secret, f"{timestamp}.{raw_body}")
 Known vector computed offline and embedded here so either side can break
 independently if the algorithm drifts.
 """
-
 import hashlib
 import hmac
 
@@ -51,6 +50,4 @@ def test_different_timestamp_produces_different_digest():
 
 def test_different_body_produces_different_digest():
     body2 = _BODY.replace("user-123", "user-456")
-    assert _sign_request(_BODY, _TIMESTAMP, _SECRET) != _sign_request(
-        body2, _TIMESTAMP, _SECRET
-    )
+    assert _sign_request(_BODY, _TIMESTAMP, _SECRET) != _sign_request(body2, _TIMESTAMP, _SECRET)

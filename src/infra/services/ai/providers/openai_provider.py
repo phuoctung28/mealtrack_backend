@@ -123,8 +123,6 @@ class OpenAIProvider(AIProviderPort):
         **kwargs: Any,
     ) -> dict[str, Any]:
         purpose_hint = kwargs.get("purpose_hint")
-        temperature = kwargs.get("temperature")
-        seed = kwargs.get("seed")
         prompt_cache_kwargs = self._prompt_cache_kwargs(
             model=model,
             purpose_hint=purpose_hint,
@@ -138,8 +136,6 @@ class OpenAIProvider(AIProviderPort):
                 schema=schema,
                 max_tokens=max_tokens,
                 request_kwargs=prompt_cache_kwargs,
-                temperature=temperature,
-                seed=seed,
             )
             self._record_prompt_cache_usage(
                 result.raw_message,
@@ -154,8 +150,6 @@ class OpenAIProvider(AIProviderPort):
             system_message=system_message,
             max_tokens=max_tokens,
             request_kwargs=prompt_cache_kwargs,
-            temperature=temperature,
-            seed=seed,
         )
         self._record_prompt_cache_usage(
             result.raw_message,
@@ -180,8 +174,6 @@ class OpenAIProvider(AIProviderPort):
     ) -> OpenAIStructuredGenerationResult:
         """Return parsed structured data plus sanitized response metadata."""
         purpose_hint = kwargs.get("purpose_hint")
-        temperature = kwargs.get("temperature")
-        seed = kwargs.get("seed")
         prompt_cache_kwargs = self._prompt_cache_kwargs(
             model=model,
             purpose_hint=purpose_hint,
@@ -195,8 +187,6 @@ class OpenAIProvider(AIProviderPort):
             max_tokens=max_tokens,
             request_kwargs=prompt_cache_kwargs,
             store_override=store_responses,
-            temperature=temperature,
-            seed=seed,
         )
         self._record_prompt_cache_usage(
             result.raw_message,

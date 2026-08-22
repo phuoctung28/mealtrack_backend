@@ -173,7 +173,8 @@ async def analyze_meal_image_immediate(
         if scan_mode != "scanner":
             raise ValidationException(
                 message=(
-                    "Use /v1/meals/food-label/scan-by-url for Nutrition Facts labels."
+                    "Use /v1/meals/food-label/scan-by-url "
+                    "for Nutrition Facts labels."
                 ),
                 error_code="INVALID_SCAN_MODE",
                 details={"scan_mode": scan_mode},

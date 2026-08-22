@@ -1,5 +1,4 @@
 """Unit tests for ValidatePromoCodeQueryHandler."""
-
 from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,9 +14,7 @@ from src.app.queries.promo_code.validate_promo_code_query import (
 from src.infra.database.models.promo_code import PromoCode
 
 
-def _make_promo(
-    code="SUMMER50", max_uses=100, current_uses=0, is_active=True, expires_at=None
-):
+def _make_promo(code="SUMMER50", max_uses=100, current_uses=0, is_active=True, expires_at=None):
     p = PromoCode()
     p.id = "promo-id-1"
     p.code = code
@@ -152,11 +149,7 @@ async def test_source_offering_guard_rejects_wrong_offering():
         handler = ValidatePromoCodeQueryHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
             await handler.handle(
-                ValidatePromoCodeQuery(
-                    code="SUMMER50",
-                    user_id="user-123",
-                    current_offering_id="price_89k_899k",
-                )
+                ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123", current_offering_id="price_89k_899k")
             )
 
     assert exc_info.value.status_code == 422
@@ -175,11 +168,7 @@ async def test_source_offering_guard_accepts_matching_offering():
     ):
         handler = ValidatePromoCodeQueryHandler()
         result = await handler.handle(
-            ValidatePromoCodeQuery(
-                code="SUMMER50",
-                user_id="user-123",
-                current_offering_id="price_49k_399k",
-            )
+            ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123", current_offering_id="price_49k_399k")
         )
 
     assert result["is_valid"] is True
@@ -197,9 +186,7 @@ async def test_source_offering_guard_unrestricted_when_none():
     ):
         handler = ValidatePromoCodeQueryHandler()
         result = await handler.handle(
-            ValidatePromoCodeQuery(
-                code="SUMMER50", user_id="user-123", current_offering_id="anything"
-            )
+            ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123", current_offering_id="anything")
         )
 
     assert result["is_valid"] is True
@@ -208,7 +195,6 @@ async def test_source_offering_guard_unrestricted_when_none():
 @pytest.mark.asyncio
 async def test_validate_raises_422_when_expired():
     from datetime import datetime, timedelta
-
     past = datetime.now(UTC) - timedelta(days=1)
     promo = _make_promo(expires_at=past)
     mock_uow, mock_repo = _mock_uow(promo=promo)
@@ -219,9 +205,7 @@ async def test_validate_raises_422_when_expired():
     ):
         handler = ValidatePromoCodeQueryHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
-            await handler.handle(
-                ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123")
-            )
+            await handler.handle(ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123"))
 
     assert exc_info.value.status_code == 422
     assert "expired" in exc_info.value.detail

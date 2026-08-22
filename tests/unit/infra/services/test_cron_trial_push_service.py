@@ -43,29 +43,23 @@ async def test_schedules_row_for_active_expiring_sub_with_token():
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
-    with (
-        patch(
-            "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
-            return_value=uow_ctx,
-        ),
-        patch.object(
-            CronTrialPushService,
-            "_fetch_prefs",
-            AsyncMock(
-                return_value={
-                    user_id: {
-                        "language": "en",
-                        "timezone": "Asia/Ho_Chi_Minh",
-                        "gender": "male",
-                    }
-                }
-            ),
-        ),
-        patch.object(
-            CronTrialPushService,
-            "_fetch_fcm_tokens",
-            AsyncMock(return_value={user_id: ["tok1", "tok2"]}),
-        ),
+    with patch(
+        "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
+        return_value=uow_ctx,
+    ), patch.object(
+        CronTrialPushService,
+        "_fetch_prefs",
+        AsyncMock(return_value={
+            user_id: {
+                "language": "en",
+                "timezone": "Asia/Ho_Chi_Minh",
+                "gender": "male",
+            }
+        }),
+    ), patch.object(
+        CronTrialPushService,
+        "_fetch_fcm_tokens",
+        AsyncMock(return_value={user_id: ["tok1", "tok2"]}),
     ):
         n = await svc.check_and_schedule_pushes(NOW_UTC)
         assert n >= 1
@@ -79,29 +73,23 @@ async def test_skips_user_without_fcm_token():
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
-    with (
-        patch(
-            "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
-            return_value=uow_ctx,
-        ),
-        patch.object(
-            CronTrialPushService,
-            "_fetch_prefs",
-            AsyncMock(
-                return_value={
-                    user_id: {
-                        "language": "en",
-                        "timezone": "UTC",
-                        "gender": "male",
-                    }
-                }
-            ),
-        ),
-        patch.object(
-            CronTrialPushService,
-            "_fetch_fcm_tokens",
-            AsyncMock(return_value={}),  # no tokens
-        ),
+    with patch(
+        "src.infra.services.cron_trial_push_service.AsyncUnitOfWork",
+        return_value=uow_ctx,
+    ), patch.object(
+        CronTrialPushService,
+        "_fetch_prefs",
+        AsyncMock(return_value={
+            user_id: {
+                "language": "en",
+                "timezone": "UTC",
+                "gender": "male",
+            }
+        }),
+    ), patch.object(
+        CronTrialPushService,
+        "_fetch_fcm_tokens",
+        AsyncMock(return_value={}),  # no tokens
     ):
         n = await svc.check_and_schedule_pushes(NOW_UTC)
         assert n == 0
@@ -152,9 +140,7 @@ async def test_language_resolution_falls_back_to_users_language_code():
     row.timezone = "Asia/Ho_Chi_Minh"
     row.gender = "female"
     row.language_code = "vi"
-    session.execute = AsyncMock(
-        return_value=MagicMock(fetchall=MagicMock(return_value=[row]))
-    )
+    session.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=[row])))
 
     out = await CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "vi"
@@ -169,9 +155,7 @@ async def test_language_resolution_pref_overrides_user():
     row.timezone = "UTC"
     row.gender = "male"
     row.language_code = "vi"
-    session.execute = AsyncMock(
-        return_value=MagicMock(fetchall=MagicMock(return_value=[row]))
-    )
+    session.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=[row])))
 
     out = await CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"
@@ -186,9 +170,7 @@ async def test_language_resolution_unknown_falls_back_to_en():
     row.timezone = "UTC"
     row.gender = "male"
     row.language_code = "de"
-    session.execute = AsyncMock(
-        return_value=MagicMock(fetchall=MagicMock(return_value=[row]))
-    )
+    session.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=[row])))
 
     out = await CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"

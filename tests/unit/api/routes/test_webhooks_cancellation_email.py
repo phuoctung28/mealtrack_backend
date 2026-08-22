@@ -11,9 +11,7 @@ from src.domain.ports.email_service_port import EmailResult
 @pytest.fixture
 def mock_email_service():
     service = AsyncMock()
-    service.send_cancellation_email.return_value = EmailResult(
-        success=True, message_id="msg_123"
-    )
+    service.send_cancellation_email.return_value = EmailResult(success=True, message_id="msg_123")
     return service
 
 
@@ -51,9 +49,7 @@ async def test_cancellation_sends_email(mock_uow, mock_user, mock_email_service)
 
 
 @pytest.mark.asyncio
-async def test_cancellation_skips_email_if_opted_out(
-    mock_uow, mock_user, mock_email_service
-):
+async def test_cancellation_skips_email_if_opted_out(mock_uow, mock_user, mock_email_service):
     mock_user.email_opt_out = True
     event = {"app_user_id": "rc_123", "product_id": "premium_monthly"}
 

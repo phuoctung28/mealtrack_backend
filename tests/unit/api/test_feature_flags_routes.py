@@ -1,5 +1,4 @@
 """Feature flag routes with mocked DB session and optional cache."""
-
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -166,9 +165,7 @@ def test_create_feature_flag_conflict(app_no_cache):
 
     with patch(
         "src.api.routes.v1.feature_flags.FeatureFlagService.create",
-        new=AsyncMock(
-            side_effect=HTTPException(status_code=409, detail="already exists")
-        ),
+        new=AsyncMock(side_effect=HTTPException(status_code=409, detail="already exists")),
     ):
         r = TestClient(app_no_cache).post(
             "/v1/feature-flags/",
@@ -221,12 +218,10 @@ def test_mutations_reject_non_admin(monkeypatch):
     application = FastAPI()
     application.include_router(router)
     application.dependency_overrides[get_cache_service] = lambda: None
-    application.dependency_overrides[get_async_db] = lambda: _async_session_for_results(
-        []
-    )
+    application.dependency_overrides[get_async_db] = lambda: _async_session_for_results([])
     application.dependency_overrides[get_current_user_id] = lambda: "user-1"
-    application.dependency_overrides[get_current_user_email] = lambda: (
-        "stranger@example.com"
+    application.dependency_overrides[get_current_user_email] = (
+        lambda: "stranger@example.com"
     )
 
     client = TestClient(application)
@@ -260,7 +255,6 @@ def test_mutations_allow_configured_admin(monkeypatch):
         new=AsyncMock(return_value=new_flag),
     ):
         r = TestClient(application).post(
-            "/v1/feature-flags/",
-            json={"name": "n", "enabled": True, "description": "d"},
+            "/v1/feature-flags/", json={"name": "n", "enabled": True, "description": "d"}
         )
     assert r.status_code == 201

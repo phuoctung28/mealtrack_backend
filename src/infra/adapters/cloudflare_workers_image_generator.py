@@ -65,7 +65,10 @@ class CloudflareWorkersImageGenerator:
             "Authorization": f"Bearer {self._api_token}",
             "Content-Type": "application/json",
         }
-        url = f"https://api.cloudflare.com/client/v4/accounts/{self._account_id}/ai/run"
+        url = (
+            "https://api.cloudflare.com/client/v4/accounts/"
+            f"{self._account_id}/ai/run"
+        )
         async with httpx.AsyncClient(
             timeout=self._timeout,
             transport=self._transport,

@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 class UpdateLanguageCommandHandler(EventHandler[UpdateLanguageCommand, Dict[str, Any]]):
     """Handler for updating user language preference."""
 
-    def __init__(self, precompute_service: DailyContextPrecomputeService | None = None):
+    def __init__(
+        self, precompute_service: DailyContextPrecomputeService | None = None
+    ):
         self.precompute_service = precompute_service
 
     def set_dependencies(self, **kwargs):

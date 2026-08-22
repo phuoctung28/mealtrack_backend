@@ -28,7 +28,9 @@ async def test_translates_and_expands_deduplicated_texts(service, port):
         ("Poulet", "Riz"), TranslationOutcome.TRANSLATED, "en", "fr"
     )
 
-    result = await service.translate_texts(["Chicken", "Rice", "Chicken"], "en", "fr")
+    result = await service.translate_texts(
+        ["Chicken", "Rice", "Chicken"], "en", "fr"
+    )
 
     assert result.items == ("Poulet", "Riz", "Poulet")
     assert result.outcome is TranslationOutcome.TRANSLATED

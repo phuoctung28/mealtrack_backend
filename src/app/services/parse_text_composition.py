@@ -87,7 +87,9 @@ def classify_parse_text_input(text: str) -> ParseTextInputKind:
     return "single_food"
 
 
-def composition_retry_feedback(text: str, items: list[dict[str, Any]]) -> str | None:
+def composition_retry_feedback(
+    text: str, items: list[dict[str, Any]]
+) -> str | None:
     """Ask the model to expand a named dish returned as a single row."""
     if classify_parse_text_input(text) != "dish":
         return None

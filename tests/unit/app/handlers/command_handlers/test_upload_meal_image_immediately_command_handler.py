@@ -153,9 +153,7 @@ class TestVisionRetryRouting:
         command = _make_command()
         command.scan_mode = "food_label"
 
-        with pytest.raises(
-            ValidationException, match="require the scan-by-url image flow"
-        ):
+        with pytest.raises(ValidationException, match="require the scan-by-url image flow"):
             await handler.handle(command)
 
         analyze_mock.assert_not_called()

@@ -29,8 +29,7 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
                 )
             if entry.source == "apple_health":
                 raise AuthorizationException(
-                    "Apple Health entries cannot be deleted",
-                    "APPLE_HEALTH_NOT_EDITABLE",
+                    "Apple Health entries cannot be deleted", "APPLE_HEALTH_NOT_EDITABLE"
                 )
             user_tz = await resolve_user_timezone_async(cmd.user_id, uow)
             log_date = entry.logged_at.astimezone(get_zone_info(user_tz)).date()

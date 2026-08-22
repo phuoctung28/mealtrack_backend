@@ -61,14 +61,7 @@ async def dispatch_affiliate_outbox(batch_size: int = 50) -> dict:
                     failed += 1
                     if is_terminal:
                         permanently_failed += 1
-                        increment_metric(
-                            "affiliate.outbox.failure",
-                            attributes={
-                                "component": "affiliate_outbox",
-                                "status": "permanent",
-                                "event_type": event_type,
-                            },
-                        )
+                        increment_metric("affiliate.outbox.failure", attributes={"component": "affiliate_outbox", "status": "permanent", "event_type": event_type})
                         capture_message(
                             "Affiliate outbox row permanently failed",
                             level="error",

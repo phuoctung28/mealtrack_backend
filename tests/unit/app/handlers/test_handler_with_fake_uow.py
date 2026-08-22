@@ -67,6 +67,7 @@ class TestDeleteMealWithFakeUoW:
         )
         mock_uow.meals.delete.assert_called_once_with(meal.meal_id)
 
+
     @pytest.mark.asyncio
     async def test_delete_meal_clears_recommendation_links_before_delete(self):
         """Recommended-meal FK clear must run before hard-deleting the meal."""
@@ -88,7 +89,9 @@ class TestDeleteMealWithFakeUoW:
             ),
             dish_name="Recommended meal",
         )
-        meal = meal.__class__(**{**meal.__dict__, "source": "meal_recommendation"})
+        meal = meal.__class__(
+            **{**meal.__dict__, "source": "meal_recommendation"}
+        )
 
         call_order: list[str] = []
 

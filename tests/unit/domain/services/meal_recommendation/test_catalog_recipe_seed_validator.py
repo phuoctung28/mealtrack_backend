@@ -184,10 +184,7 @@ def test_manifest_rejects_invalid_food_reference_id_type():
     )
 
     assert result.is_valid is False
-    assert any(
-        "food_reference_id must be an integer or null" in error
-        for error in result.errors
-    )
+    assert any("food_reference_id must be an integer or null" in error for error in result.errors)
 
 
 def test_manifest_rejects_derived_recipe_fields():
@@ -227,10 +224,7 @@ def test_manifest_rejects_invalid_popularity_rank():
     )
 
     assert result.is_valid is False
-    assert (
-        "popularity_rank must fit a non-negative PostgreSQL INTEGER or null"
-        in result.errors[0]
-    )
+    assert "popularity_rank must fit a non-negative PostgreSQL INTEGER or null" in result.errors[0]
 
 
 def test_manifest_rejects_derived_ingredient_fields():
@@ -251,7 +245,5 @@ def test_manifest_rejects_derived_ingredient_fields():
     )
 
     assert result.is_valid is False
-    assert any(
-        "resolved_grams is derived by backend" in error for error in result.errors
-    )
+    assert any("resolved_grams is derived by backend" in error for error in result.errors)
     assert any("fiber_g is derived by backend" in error for error in result.errors)

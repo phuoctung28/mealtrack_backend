@@ -50,16 +50,16 @@ class TestSaveUserOnboardingCommandHandler:
             .filter(User.id == user_id, User.is_active.is_(True))
             .first()
         )
-        assert db_user is not None, (
-            f"User {user_id} must be queryable directly in test_session"
-        )
+        assert (
+            db_user is not None
+        ), f"User {user_id} must be queryable directly in test_session"
 
         # Verify repository can find user with UUID conversion
         test_repo = TestUserRepository(test_session)
         repo_user = test_repo.find_by_id(UUID(user_id))
-        assert repo_user is not None, (
-            f"UserRepository must find user {user_id} with UUID conversion"
-        )
+        assert (
+            repo_user is not None
+        ), f"UserRepository must find user {user_id} with UUID conversion"
 
         # Arrange
         command = SaveUserOnboardingCommand(

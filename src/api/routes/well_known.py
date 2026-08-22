@@ -27,23 +27,21 @@ async def apple_app_site_association():
         content={
             "applinks": {
                 "apps": [],
-                "details": [
-                    {
-                        "appID": f"{APPLE_TEAM_ID}.{APP_BUNDLE_ID}",
-                        "paths": [
-                            "/log",
-                            "/log/*",
-                            "/dashboard",
-                            "/dashboard/*",
-                            "/upgrade",
-                            "/upgrade/*",
-                            "/feedback",
-                            "/feedback/*",
-                            "/settings/*",
-                        ],
-                    }
-                ],
+                "details": [{
+                    "appID": f"{APPLE_TEAM_ID}.{APP_BUNDLE_ID}",
+                    "paths": [
+                        "/log",
+                        "/log/*",
+                        "/dashboard",
+                        "/dashboard/*",
+                        "/upgrade",
+                        "/upgrade/*",
+                        "/feedback",
+                        "/feedback/*",
+                        "/settings/*"
+                    ]
+                }]
             }
         },
-        media_type="application/json",
+        media_type="application/json"
     )

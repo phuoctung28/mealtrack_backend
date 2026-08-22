@@ -40,16 +40,7 @@ class FakeFirebase:
 
 @pytest.mark.asyncio
 async def test_cleanup_deletes_only_expired_unclaimed_reservation():
-    claim = WebFunnelClaim(
-        id="claim-1",
-        lead_id="lead-1",
-        generation=1,
-        magic_token_hash="hash",
-        expires_at=utcnow() + timedelta(hours=1),
-        reservation_uid="wf_provisional",
-        provisional_reservation_uid="wf_provisional",
-        reservation_expires_at=utcnow() - timedelta(minutes=1),
-    )
+    claim = WebFunnelClaim(id="claim-1", lead_id="lead-1", generation=1, magic_token_hash="hash", expires_at=utcnow() + timedelta(hours=1), reservation_uid="wf_provisional", provisional_reservation_uid="wf_provisional", reservation_expires_at=utcnow() - timedelta(minutes=1))
     firebase = FakeFirebase()
     assert await cleanup_expired_reservations(FakeSession(claim), firebase) == 1
     assert firebase.deleted == ["wf_provisional"]
@@ -58,21 +49,8 @@ async def test_cleanup_deletes_only_expired_unclaimed_reservation():
 
 @pytest.mark.asyncio
 async def test_cleanup_never_deletes_reused_or_claimed_identity():
-    claim = WebFunnelClaim(
-        id="claim-1",
-        lead_id="lead-1",
-        generation=1,
-        magic_token_hash="hash",
-        expires_at=utcnow() + timedelta(hours=1),
-        reservation_uid="wf_existing",
-        reservation_expires_at=utcnow() - timedelta(minutes=1),
-    )
+    claim = WebFunnelClaim(id="claim-1", lead_id="lead-1", generation=1, magic_token_hash="hash", expires_at=utcnow() + timedelta(hours=1), reservation_uid="wf_existing", reservation_expires_at=utcnow() - timedelta(minutes=1))
     firebase = FakeFirebase()
-    assert (
-        await cleanup_expired_reservations(
-            FakeSession(claim, user="local-user"), firebase
-        )
-        == 0
-    )
+    assert await cleanup_expired_reservations(FakeSession(claim, user="local-user"), firebase) == 0
     assert firebase.deleted == []
     assert claim.revoked_at is not None

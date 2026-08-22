@@ -19,15 +19,9 @@ def test_idf_counts_each_canonical_ingredient_once_per_meal():
     )
 
     assert stats.catalog_size == 3
-    assert stats.idf_by_food_reference_id[1] == pytest.approx(
-        log((3 + 1) / (2 + 1)) + 1
-    )
-    assert stats.idf_by_food_reference_id[2] == pytest.approx(
-        log((3 + 1) / (1 + 1)) + 1
-    )
-    assert stats.idf_by_food_reference_id[3] == pytest.approx(
-        log((3 + 1) / (2 + 1)) + 1
-    )
+    assert stats.idf_by_food_reference_id[1] == pytest.approx(log((3 + 1) / (2 + 1)) + 1)
+    assert stats.idf_by_food_reference_id[2] == pytest.approx(log((3 + 1) / (1 + 1)) + 1)
+    assert stats.idf_by_food_reference_id[3] == pytest.approx(log((3 + 1) / (2 + 1)) + 1)
     assert 0 not in stats.idf_by_food_reference_id
 
 

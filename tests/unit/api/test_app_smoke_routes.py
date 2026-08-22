@@ -120,8 +120,8 @@ def test_meals_analyze_ai_unavailable_returns_503(client: TestClient):
                 last_error="503 UNAVAILABLE",
             )
 
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: (
-        _UnavailableBus()
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _UnavailableBus()
     )
 
     r = client.post(
@@ -141,8 +141,8 @@ def test_meals_analyze_localization_error_returns_controlled_422(client: TestCli
         async def send(self, msg):
             raise MealResponseLocalizationError("localized food item is missing")
 
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: (
-        _LocalizationErrorBus()
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _LocalizationErrorBus()
     )
 
     r = client.post(
@@ -200,8 +200,8 @@ def test_scan_by_url_localization_error_returns_controlled_422(client: TestClien
         async def send(self, msg):
             raise MealResponseLocalizationError("localized food item is missing")
 
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: (
-        _LocalizationErrorBus()
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _LocalizationErrorBus()
     )
 
     r = client.post(
@@ -377,9 +377,7 @@ def test_meals_manual_create_happy_path(client: TestClient):
                 ),
             )
 
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: (
-        _ManualCreateBus()
-    )
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _ManualCreateBus()
 
     payload = {
         "dish_name": "Chicken Rice",
@@ -705,9 +703,7 @@ def test_meals_value_insights_unavailable_without_cache_service(client: TestClie
         async def send(self, msg):
             return meal
 
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: (
-        _ValueInsightsBus()
-    )
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _ValueInsightsBus()
 
     r = client.get(f"/v1/meals/{meal_id}/value-insights")
 

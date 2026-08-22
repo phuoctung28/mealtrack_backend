@@ -100,9 +100,7 @@ async def test_run_closes_read_uow_before_remote_generation(monkeypatch):
     monkeypatch.setattr(_MODULE, "_load_target_meals", load_targets)
     monkeypatch.setattr(_MODULE, "_persist_image_url", persist)
     monkeypatch.setattr(_MODULE, "CloudinaryImageStore", lambda: object())
-    monkeypatch.setattr(
-        _MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator
-    )
+    monkeypatch.setattr(_MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator)
 
     summary = await _MODULE._run(_args())
 
@@ -111,9 +109,7 @@ async def test_run_closes_read_uow_before_remote_generation(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_generation_failure_does_not_open_persistence_uow(
-    monkeypatch, capsys
-):
+async def test_run_generation_failure_does_not_open_persistence_uow(monkeypatch, capsys):
     events: list[str] = []
     generator = SimpleNamespace(
         generate_url=AsyncMock(side_effect=RuntimeError("Invalid Signature secret"))
@@ -126,9 +122,7 @@ async def test_run_generation_failure_does_not_open_persistence_uow(
         AsyncMock(return_value=[_meal()]),
     )
     monkeypatch.setattr(_MODULE, "CloudinaryImageStore", lambda: object())
-    monkeypatch.setattr(
-        _MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator
-    )
+    monkeypatch.setattr(_MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator)
     persist = AsyncMock(return_value=True)
     monkeypatch.setattr(_MODULE, "_persist_image_url", persist)
 
@@ -152,9 +146,7 @@ async def test_run_counts_lost_conditional_update_as_skipped(monkeypatch):
         AsyncMock(return_value=[_meal()]),
     )
     monkeypatch.setattr(_MODULE, "CloudinaryImageStore", lambda: object())
-    monkeypatch.setattr(
-        _MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator
-    )
+    monkeypatch.setattr(_MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator)
     monkeypatch.setattr(_MODULE, "_persist_image_url", AsyncMock(return_value=False))
 
     summary = await _MODULE._run(_args())
@@ -209,9 +201,7 @@ async def test_run_persistence_failure_exits_fresh_uow_and_counts_failure(monkey
         AsyncMock(return_value=[_meal()]),
     )
     monkeypatch.setattr(_MODULE, "CloudinaryImageStore", lambda: object())
-    monkeypatch.setattr(
-        _MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator
-    )
+    monkeypatch.setattr(_MODULE, "CloudflareWorkersImageGenerator", lambda **kwargs: generator)
     monkeypatch.setattr(_MODULE, "_set_image_url", fail_persistence)
 
     summary = await _MODULE._run(_args())

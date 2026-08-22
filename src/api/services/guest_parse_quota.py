@@ -1,5 +1,4 @@
 """Guest parse quota enforcement using PostgreSQL for one-shot AI trial protection."""
-
 import hashlib
 import hmac
 import logging
@@ -35,7 +34,6 @@ class QuotaUnavailableError(GuestParseQuotaError):
 
 class QuotaInFlightError(GuestParseQuotaError):
     """Another request from same install id is already in flight."""
-
     pass
 
 
@@ -128,9 +126,7 @@ class GuestParseQuotaService:
             )
             row = result.scalar_one_or_none()
             if row is None:
-                logger.warning(
-                    "quota_mark_completed_missing hash_prefix=%s", id_hash[:8]
-                )
+                logger.warning("quota_mark_completed_missing hash_prefix=%s", id_hash[:8])
                 return
             now = utc_now()
             row.status = "completed"

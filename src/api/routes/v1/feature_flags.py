@@ -2,6 +2,7 @@
 Feature flags API endpoints for application-level feature control.
 """
 
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,9 +78,7 @@ async def get_individual_feature_flag(
         if cached:
             return IndividualFeatureFlagResponse(**cached)
 
-    result = await db.execute(
-        select(FeatureFlag).where(FeatureFlag.name == feature_name)
-    )
+    result = await db.execute(select(FeatureFlag).where(FeatureFlag.name == feature_name))
     feature_flag = result.scalar_one_or_none()
 
     if not feature_flag:

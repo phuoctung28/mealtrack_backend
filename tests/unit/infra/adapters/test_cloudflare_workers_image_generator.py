@@ -26,7 +26,9 @@ async def test_generate_url_posts_model_input_payload():
         return httpx.Response(
             200,
             json={
-                "result": {"image": "iVBORw0KGgo="},
+                "result": {
+                    "image": "iVBORw0KGgo="
+                },
                 "state": "Completed",
             },
         )
@@ -61,7 +63,9 @@ async def test_generate_url_posts_json_for_legacy_url_model():
         return httpx.Response(
             200,
             json={
-                "result": {"image": "https://pub-example.r2.dev/catalog/pho-ga.jpeg"},
+                "result": {
+                    "image": "https://pub-example.r2.dev/catalog/pho-ga.jpeg"
+                },
                 "state": "Completed",
             },
         )

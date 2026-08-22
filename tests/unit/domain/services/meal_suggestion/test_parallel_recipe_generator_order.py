@@ -61,11 +61,7 @@ def make_meal_suggestion(meal_name: str, index: int) -> MealSuggestion:
 
 def make_generator() -> ParallelRecipeGenerator:
     """Build a ParallelRecipeGenerator with mock dependencies."""
-    from src.infra.services.ai.schemas import (
-        DiscoveryMealsResponse,
-        MealNamesResponse,
-        RecipeDetailsResponse,
-    )
+    from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse, RecipeDetailsResponse
 
     generation_service = MagicMock()
     translation_service = MagicMock()
@@ -175,9 +171,9 @@ class TestPhase2PreservesSubmissionOrder:
                 )
 
         for i, (result, expected_name) in enumerate(zip(results, meal_names)):
-            assert result.meal_name == expected_name, (
-                f"Index {i}: expected '{expected_name}', got '{result.meal_name}'"
-            )
+            assert (
+                result.meal_name == expected_name
+            ), f"Index {i}: expected '{expected_name}', got '{result.meal_name}'"
 
     @pytest.mark.asyncio
     async def test_none_results_filtered_out_and_order_preserved(self):

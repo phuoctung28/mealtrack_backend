@@ -31,11 +31,7 @@ class AddWeightEntryCommandHandler(EventHandler[AddWeightEntryCommand, Dict[str,
             return {
                 "id": saved.id,
                 "weight_kg": saved.weight_kg,
-                "recorded_at": saved.recorded_at.isoformat()
-                if saved.recorded_at
-                else None,
-                "created_at": saved.created_at.isoformat()
-                if saved.created_at
-                else None,
+                "recorded_at": saved.recorded_at.isoformat() if saved.recorded_at else None,
+                "created_at": saved.created_at.isoformat() if saved.created_at else None,
                 "message": "Weight entry added",
             }

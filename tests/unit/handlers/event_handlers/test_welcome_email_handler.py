@@ -14,9 +14,7 @@ from src.domain.ports.email_service_port import EmailResult
 @pytest.fixture
 def mock_email_service():
     service = AsyncMock()
-    service.send_welcome_email.return_value = EmailResult(
-        success=True, message_id="msg_123"
-    )
+    service.send_welcome_email.return_value = EmailResult(success=True, message_id="msg_123")
     return service
 
 
@@ -43,12 +41,8 @@ def onboarded_event(mock_user):
 
 
 @pytest.mark.asyncio
-async def test_sends_welcome_email_on_onboarding(
-    mock_email_service, mock_user, onboarded_event
-):
-    with patch(
-        "src.app.handlers.event_handlers.welcome_email_handler.AsyncUnitOfWork"
-    ) as mock_uow:
+async def test_sends_welcome_email_on_onboarding(mock_email_service, mock_user, onboarded_event):
+    with patch("src.app.handlers.event_handlers.welcome_email_handler.AsyncUnitOfWork") as mock_uow:
         mock_uow_instance = AsyncMock()
         mock_uow_instance.users.find_by_id.return_value = mock_user
         mock_uow.return_value.__aenter__.return_value = mock_uow_instance
@@ -68,9 +62,7 @@ async def test_sends_welcome_email_on_onboarding(
 async def test_skips_if_already_sent(mock_email_service, mock_user, onboarded_event):
     mock_user.welcome_email_sent_at = datetime.now()
 
-    with patch(
-        "src.app.handlers.event_handlers.welcome_email_handler.AsyncUnitOfWork"
-    ) as mock_uow:
+    with patch("src.app.handlers.event_handlers.welcome_email_handler.AsyncUnitOfWork") as mock_uow:
         mock_uow_instance = AsyncMock()
         mock_uow_instance.users.find_by_id.return_value = mock_user
         mock_uow.return_value.__aenter__.return_value = mock_uow_instance
@@ -85,9 +77,7 @@ async def test_skips_if_already_sent(mock_email_service, mock_user, onboarded_ev
 async def test_skips_if_opted_out(mock_email_service, mock_user, onboarded_event):
     mock_user.email_opt_out = True
 
-    with patch(
-        "src.app.handlers.event_handlers.welcome_email_handler.AsyncUnitOfWork"
-    ) as mock_uow:
+    with patch("src.app.handlers.event_handlers.welcome_email_handler.AsyncUnitOfWork") as mock_uow:
         mock_uow_instance = AsyncMock()
         mock_uow_instance.users.find_by_id.return_value = mock_user
         mock_uow.return_value.__aenter__.return_value = mock_uow_instance

@@ -7,9 +7,7 @@ the tests/unit/scripts/ test package.
 import os
 import sys
 
-_PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 _SCRIPTS_ROOT = os.path.join(_PROJECT_ROOT, "scripts")
 
 # Insert project root at position 0 so 'scripts' resolves to the project's
@@ -31,8 +29,6 @@ if "scripts" in sys.modules:
     if _SCRIPTS_ROOT not in cached_path:
         # Wrong 'scripts' package cached — remove sub-modules but keep 'scripts'
         # itself so the currently-loading conftest doesn't break.
-        to_remove = [
-            k for k in sys.modules if k.startswith("scripts.") and "conftest" not in k
-        ]
+        to_remove = [k for k in sys.modules if k.startswith("scripts.") and "conftest" not in k]
         for key in to_remove:
             del sys.modules[key]

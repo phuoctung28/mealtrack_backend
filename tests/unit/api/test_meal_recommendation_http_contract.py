@@ -84,9 +84,7 @@ def test_summary_openapi_schema_keeps_selected_ingredients_compact():
     definitions = schema["$defs"]
 
     slot_fields = definitions["MealRecommendationSlotSummaryResponse"]["properties"]
-    meal_fields = definitions["MealRecommendationCatalogMealSummaryResponse"][
-        "properties"
-    ]
+    meal_fields = definitions["MealRecommendationCatalogMealSummaryResponse"]["properties"]
 
     assert "alternatives" not in slot_fields
     assert "score" not in slot_fields
@@ -143,9 +141,7 @@ def _full_plan() -> PersistedMealRecommendationPlan:
         for position, meal_type in enumerate(("breakfast", "lunch", "dinner")):
             slot_number = day_index * 3 + position
             slot_id = f"slot-{slot_number}"
-            selected_meal = _catalog_meal(
-                f"{meal_type}-selected-{day_index}", meal_type
-            )
+            selected_meal = _catalog_meal(f"{meal_type}-selected-{day_index}", meal_type)
             selected = PersistedMealRecommendationCandidate(
                 id="plan-baseline" if slot_number == 0 else f"selected-{slot_number}",
                 slot_id=slot_id,

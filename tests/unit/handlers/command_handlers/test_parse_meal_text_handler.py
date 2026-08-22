@@ -1,7 +1,6 @@
 import asyncio
 import gc
 import time
-from typing import Any
 
 import pytest
 
@@ -622,7 +621,9 @@ async def test_parse_text_keeps_localized_names_and_translates_ascii_leftovers()
     )
 
     response = await handler.handle(
-        ParseMealTextCommand(text="bún bò Huế", user_id="user-1", language="vi")
+        ParseMealTextCommand(
+            text="bún bò Huế", user_id="user-1", language="vi"
+        )
     )
 
     names = [item.name for item in response.items]
@@ -632,7 +633,9 @@ async def test_parse_text_keeps_localized_names_and_translates_ascii_leftovers()
         "Giò heo",
         "Nước dùng Bún bò Huế",
     ]
-    assert translator.calls == [(["Rice vermicelli", "Pork knuckle"], "en", "vi")]
+    assert translator.calls == [
+        (["Rice vermicelli", "Pork knuckle"], "en", "vi")
+    ]
 
 
 @pytest.mark.asyncio
@@ -663,7 +666,9 @@ async def test_parse_text_force_localizes_english_when_translator_leaves_origina
     )
 
     response = await handler.handle(
-        ParseMealTextCommand(text="bì heo", user_id="user-1", language="vi")
+        ParseMealTextCommand(
+            text="bì heo", user_id="user-1", language="vi"
+        )
     )
 
     assert response.items[0].name == "Bì heo"
@@ -1455,87 +1460,3 @@ def test_canonicalize_reference_quantity_maps_gram_alias_to_g():
     assert grams == pytest.approx(100)
     assert item["unit"] == "g"
     assert item["english_unit"] == "g"
-
-
-class _FakeCache:
-    def __init__(self):
-        self.store = {}
-        self.get_calls = 0
-        self.set_calls = 0
-
-    async def get(self, key: str):
-        self.get_calls += 1
-        return self.store.get(key)
-
-    async def set(self, key: str, value: Any, ttl_seconds: int = 3600):
-        self.set_calls += 1
-        self.store[key] = value
-
-
-@pytest.mark.asyncio
-async def test_parse_text_cache_hit_returns_cached_dto_without_ai_call():
-    cache = _FakeCache()
-    generation = _FakeMealGenerationService(
-        responses=[
-            {
-                "items": [
-                    {
-                        "name": "Eggs",
-                        "lookup_name": "Eggs",
-                        "quantity": 2,
-                        "unit": "large",
-                        "protein": 12,
-                        "carbs": 1,
-                        "fat": 10,
-                    }
-                ]
-            }
-        ]
-    )
-    handler = ParseMealTextHandler(
-        meal_generation_service=generation,
-        cache_service=cache,
-    )
-
-    # First call: cache miss, executes AI generation and caches
-    response1 = await handler.handle(
-        ParseMealTextCommand(text="2 eggs", user_id="user-1", language="en")
-    )
-    assert len(generation.calls) == 1
-    assert cache.set_calls == 1
-    assert len(response1.items) == 1
-    assert response1.items[0].name == "Eggs"
-
-    # Second call with identical input: cache hit, 0 AI calls
-    response2 = await handler.handle(
-        ParseMealTextCommand(text="2 eggs", user_id="user-1", language="en")
-    )
-    assert len(generation.calls) == 1  # No additional AI calls
-    assert cache.get_calls == 2
-    assert len(response2.items) == 1
-    assert response2.items[0].name == "Eggs"
-    assert response2.total_protein == response1.total_protein
-    assert response2.total_fat == response1.total_fat
-
-
-@pytest.mark.asyncio
-async def test_parse_text_refinement_bypasses_cache():
-    cache = _FakeCache()
-    generation = _FakeMealGenerationService()
-    handler = ParseMealTextHandler(
-        meal_generation_service=generation,
-        cache_service=cache,
-    )
-
-    response = await handler.handle(
-        ParseMealTextCommand(
-            text="update potato",
-            user_id="user-1",
-            language="en",
-            current_items=[{"name": "potato", "unit": "piece"}],
-        )
-    )
-    assert len(generation.calls) == 1
-    assert cache.get_calls == 0
-    assert cache.set_calls == 0
-    assert len(response.items) > 0

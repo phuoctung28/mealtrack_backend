@@ -101,8 +101,6 @@ class ImageStorePort(ABC):
         pass
 
     @abstractmethod
-    async def generate_upload_signature_async(
-        self, image_id: str, ttl: int = 300
-    ) -> dict:
+    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
         """Async version of generate_upload_signature."""
         pass

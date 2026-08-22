@@ -1,5 +1,4 @@
 """Command handler — record a promo code redemption and increment usage counter."""
-
 import logging
 
 from src.app.commands.promo_code.redeem_promo_code_command import RedeemPromoCodeCommand
@@ -19,9 +18,7 @@ class RedeemPromoCodeCommandHandler:
 
             promo = await repo.get_by_code_for_update(command.code)
             if not promo:
-                raise PromoCodeValidationError(
-                    status_code=404, detail="Promo code not found"
-                )
+                raise PromoCodeValidationError(status_code=404, detail="Promo code not found")
 
             if not promo.is_active:
                 raise PromoCodeValidationError(

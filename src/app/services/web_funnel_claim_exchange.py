@@ -75,11 +75,7 @@ async def exchange_claim(
     claim = await db.scalar(
         select(WebFunnelClaim).where(WebFunnelClaim.id == claim.id).with_for_update()
     )
-    if (
-        not claim
-        or claim.reservation_expires_at is None
-        or claim.reservation_expires_at <= utcnow()
-    ):
+    if not claim or claim.reservation_expires_at is None or claim.reservation_expires_at <= utcnow():
         raise claim_not_found()
     if claim.reservation_uid and claim.reservation_uid != identity.uid:
         raise claim_conflict()
@@ -93,9 +89,7 @@ async def exchange_claim(
     return {"firebase_custom_token": custom_token, "exchange_token": exchange_token}
 
 
-def reservation_is_bound(
-    claim: WebFunnelClaim, uid: str, exchange_token: str | None
-) -> bool:
+def reservation_is_bound(claim: WebFunnelClaim, uid: str, exchange_token: str | None) -> bool:
     """Allow recovery from a custom-token bearer only while its reservation is live."""
     if claim.reservation_uid != uid or not claim.reservation_expires_at:
         return False

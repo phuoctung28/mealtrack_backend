@@ -77,9 +77,7 @@ class AsyncAdminMealCatalogRepository:
 
     async def get_meal(self, catalog_id: str) -> AdminCatalogMealProjection | None:
         result = await self._session.execute(
-            select(MealCatalogORM)
-            .where(MealCatalogORM.id == catalog_id)
-            .options(_load_options())
+            select(MealCatalogORM).where(MealCatalogORM.id == catalog_id).options(_load_options())
         )
         row = result.scalar_one_or_none()
         return _projection(row) if row else None
@@ -144,9 +142,7 @@ def _catalog_filters(
 
 
 def _missing_image_filter():
-    return or_(
-        MealCatalogORM.image_url.is_(None), func.trim(MealCatalogORM.image_url) == ""
-    )
+    return or_(MealCatalogORM.image_url.is_(None), func.trim(MealCatalogORM.image_url) == "")
 
 
 def _meal_type_column(meal_type: str):

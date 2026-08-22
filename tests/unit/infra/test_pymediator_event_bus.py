@@ -5,10 +5,7 @@ import pytest
 
 from src.api.exceptions import ResourceNotFoundException
 from src.domain.events.base import EventHandler, Query
-from src.domain.exceptions.ai_exceptions import (
-    AIOutputValidationError,
-    AIUnavailableError,
-)
+from src.domain.exceptions.ai_exceptions import AIOutputValidationError, AIUnavailableError
 from src.infra.event_bus.pymediator_event_bus import PyMediatorEventBus
 
 

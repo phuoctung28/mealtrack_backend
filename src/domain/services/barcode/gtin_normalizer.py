@@ -17,9 +17,7 @@ class BarcodeLookupKeys:
 def normalize_gtin(value: str) -> BarcodeLookupKeys:
     digits = _digits_only(value)
     if len(digits) not in GTIN_LENGTHS:
-        raise InvalidBarcodeError(
-            "Barcode must be GTIN-8, GTIN-12, GTIN-13, or GTIN-14"
-        )
+        raise InvalidBarcodeError("Barcode must be GTIN-8, GTIN-12, GTIN-13, or GTIN-14")
     if not _has_valid_check_digit(digits):
         raise InvalidBarcodeError("Invalid barcode check digit")
 
@@ -72,3 +70,4 @@ def _aliases(gtin: str, gtin_13: str | None, gtin_14: str) -> tuple[str, ...]:
         if candidate and candidate not in seen:
             seen.append(candidate)
     return tuple(seen)
+

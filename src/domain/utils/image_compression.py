@@ -1,5 +1,4 @@
 """Shared image compression — resize to max dimension, encode as JPEG."""
-
 import logging
 from io import BytesIO
 
@@ -20,11 +19,7 @@ def compress_image(image_bytes: bytes, max_dim: int = _MAX_DIM) -> bytes:
     try:
         img = Image.open(BytesIO(image_bytes))
         w, h = img.size
-        if (
-            img.format == "JPEG"
-            and max(w, h) <= max_dim
-            and len(image_bytes) < _MAX_BYTES
-        ):
+        if img.format == "JPEG" and max(w, h) <= max_dim and len(image_bytes) < _MAX_BYTES:
             return image_bytes
         if max(w, h) > max_dim:
             ratio = max_dim / max(w, h)

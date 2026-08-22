@@ -59,9 +59,7 @@ async def test_food_search_returns_local_results_when_cache_and_provider_are_dow
         local_search=local_search,
     )
 
-    result = await handler.handle(
-        SearchFoodsQuery(query="rice", language="en", limit=5)
-    )
+    result = await handler.handle(SearchFoodsQuery(query="rice", language="en", limit=5))
 
     local_search.assert_awaited_once_with("rice", "US", 5)
     assert result["total"] == 1

@@ -38,9 +38,7 @@ def mock_user():
 
 
 @pytest.mark.asyncio
-async def test_send_welcome_email(
-    email_service, mock_user, mock_adapter, mock_renderer
-):
+async def test_send_welcome_email(email_service, mock_user, mock_adapter, mock_renderer):
     result = await email_service.send_welcome_email(mock_user, tdee=2000)
 
     assert result.success is True
@@ -53,9 +51,7 @@ async def test_send_welcome_email(
 
 
 @pytest.mark.asyncio
-async def test_send_welcome_email_fallback_name(
-    email_service, mock_adapter, mock_renderer
-):
+async def test_send_welcome_email_fallback_name(email_service, mock_adapter, mock_renderer):
     user = MagicMock()
     user.id = "user_123"
     user.email = "test@example.com"
@@ -70,9 +66,7 @@ async def test_send_welcome_email_fallback_name(
 
 @pytest.mark.asyncio
 async def test_send_reengagement_email(email_service, mock_user, mock_adapter):
-    result = await email_service.send_reengagement_email(
-        mock_user, days_inactive=3, streak_days=5
-    )
+    result = await email_service.send_reengagement_email(mock_user, days_inactive=3, streak_days=5)
 
     assert result.success is True
     mock_adapter.send_email.assert_called_once()

@@ -164,10 +164,7 @@ async def verify_firebase_token_revocation_checked(
             detail="Authentication token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         ) from error
-    except (
-        firebase_auth.InvalidIdTokenError,
-        firebase_auth.CertificateFetchError,
-    ) as error:
+    except (firebase_auth.InvalidIdTokenError, firebase_auth.CertificateFetchError) as error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",

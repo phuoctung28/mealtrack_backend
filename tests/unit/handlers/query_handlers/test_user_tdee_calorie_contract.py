@@ -55,9 +55,7 @@ async def test_calculated_keto_response_derives_target_calories_from_returned_ma
     uow.session.execute = AsyncMock(return_value=query_result)
     uow.__aenter__ = AsyncMock(return_value=uow)
     uow.__aexit__ = AsyncMock(return_value=False)
-    service = MagicMock(
-        calculate_tdee=MagicMock(return_value=_tdee_response(MacroPreset.KETO))
-    )
+    service = MagicMock(calculate_tdee=MagicMock(return_value=_tdee_response(MacroPreset.KETO)))
     handler = GetUserTdeeQueryHandler(tdee_service=service)
 
     with patch(
@@ -83,9 +81,7 @@ def test_custom_response_derives_target_calories_from_returned_rounded_macros():
         custom_carbs_g=123.46,
         custom_fat_g=50.04,
     )
-    handler = GetUserTdeeQueryHandler(
-        tdee_service=MagicMock(calculate_tdee=MagicMock(return_value=_tdee_response()))
-    )
+    handler = GetUserTdeeQueryHandler(tdee_service=MagicMock(calculate_tdee=MagicMock(return_value=_tdee_response())))
 
     response = handler._build_custom_macros_response(
         GetUserTdeeQuery(user_id="user-1"), profile, MacroPreset.STANDARD

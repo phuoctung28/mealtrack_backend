@@ -301,18 +301,13 @@ class Settings(BaseSettings):
         description="Meal analysis graph version emitted in workflow state.",
     )
     PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED: bool = Field(
-        default=True,
+        default=False,
         description="Enable structured local/FatSecret resolution for parse-text.",
     )
     PARSE_TEXT_FATSECRET_TIMEOUT_SECONDS: float = Field(
         default=3.0,
         gt=0,
         description="Request-wide parse-text FatSecret deadline in seconds.",
-    )
-    PARSE_TEXT_CACHE_TTL_SECONDS: int = Field(
-        default=604800,
-        gt=0,
-        description="Redis cache TTL in seconds for parsed meal text responses (default 7 days).",
     )
 
     # Catalog meal recommendations analytics

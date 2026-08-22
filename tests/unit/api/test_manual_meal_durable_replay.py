@@ -233,7 +233,9 @@ async def test_manual_meal_route_forwards_prepared_nutrition_contract():
     event_bus = AsyncMock()
     event_bus.send = AsyncMock(return_value=meal)
     with (
-        patch("src.api.routes.v1.meals_manual_text.schedule_value_insight_generation"),
+        patch(
+            "src.api.routes.v1.meals_manual_text.schedule_value_insight_generation"
+        ),
         patch(
             "src.api.routes.v1.meals_manual_text.MealMapper.to_detailed_response",
             return_value=None,

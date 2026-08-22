@@ -1,5 +1,4 @@
 """PromoCode model — system-generated codes for email marketing campaigns."""
-
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, Index, text
 from sqlalchemy.orm import relationship
 
@@ -12,15 +11,15 @@ class PromoCode(Base, PrimaryEntityMixin):
 
     code = Column(String(50), nullable=False)
     max_uses = Column(Integer, nullable=False)
-    current_uses = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    current_uses = Column(Integer, nullable=False, default=0, server_default=text('0'))
     is_active = Column(Boolean, nullable=False, default=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     description = Column(String(255), nullable=True)
     rc_offering_id = Column(String(50), nullable=False, default="email")
     source_offering_id = Column(String(50), nullable=True, default=None)
 
-    __table_args__ = (Index("ix_promo_codes_code", "code", unique=True),)
-
-    redemptions = relationship(
-        "PromoCodeRedemption", back_populates="promo_code", lazy="raise"
+    __table_args__ = (
+        Index("ix_promo_codes_code", "code", unique=True),
     )
+
+    redemptions = relationship("PromoCodeRedemption", back_populates="promo_code", lazy="raise")

@@ -44,7 +44,9 @@ def _validate_log_movement(cmd: LogMovementCommand) -> None:
             "Duration must be between 1 and 600 minutes", "INVALID_DURATION"
         )
     if cmd.kcal_burned < 0:
-        raise ValidationException("Calories burned cannot be negative", "INVALID_KCAL")
+        raise ValidationException(
+            "Calories burned cannot be negative", "INVALID_KCAL"
+        )
     if cmd.kcal_burned > 5000:
         raise ValidationException(
             "kcal_burned exceeds maximum allowed (5000)", "INVALID_KCAL"

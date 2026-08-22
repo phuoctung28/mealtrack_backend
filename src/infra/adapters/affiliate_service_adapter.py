@@ -1,5 +1,4 @@
 """httpx adapter for nutree-affiliate internal API with HMAC-SHA256 request signing."""
-
 import hashlib
 import hmac
 import json
@@ -108,10 +107,7 @@ class AffiliateServiceAdapter(AffiliateServicePort):
             ) as client:
                 resp = await client.post(url, content=body, headers=headers)
         except httpx.TimeoutException:
-            logger.warning(
-                "Affiliate event send timed out: event_type=%s",
-                payload.get("event_type"),
-            )
+            logger.warning("Affiliate event send timed out: event_type=%s", payload.get("event_type"))
             return False
         except httpx.HTTPError as exc:
             logger.warning("Affiliate event send HTTP error: %s", exc)
@@ -122,7 +118,6 @@ class AffiliateServiceAdapter(AffiliateServicePort):
 
         logger.warning(
             "Affiliate event send returned %s: event_type=%s",
-            resp.status_code,
-            payload.get("event_type"),
+            resp.status_code, payload.get("event_type"),
         )
         return False

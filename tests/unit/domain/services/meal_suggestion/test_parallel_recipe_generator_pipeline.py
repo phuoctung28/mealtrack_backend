@@ -189,19 +189,17 @@ async def test_generate_discovery_falls_back_when_ai_unavailable():
 async def test_generate_discovery_tops_up_partial_ai_results():
     gen, _ = _make_generator()
     session = _make_real_session()
-    gen._generation.generate_meal_plan_async = AsyncMock(
-        return_value={
-            "meals": [
-                {
-                    "name": "Chicken Rice Bowl",
-                    "calories": 500,
-                    "protein": 35,
-                    "carbs": 50,
-                    "fat": 15,
-                }
-            ]
-        }
-    )
+    gen._generation.generate_meal_plan_async = AsyncMock(return_value={
+        "meals": [
+            {
+                "name": "Chicken Rice Bowl",
+                "calories": 500,
+                "protein": 35,
+                "carbs": 50,
+                "fat": 15,
+            }
+        ]
+    })
 
     meals = await gen.generate_discovery(
         session,

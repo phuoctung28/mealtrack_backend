@@ -300,9 +300,7 @@ async def test_upload_scan_captures_rejected_image_for_review(monkeypatch):
     handler.gpt_parser = MagicMock()
     handler.gpt_parser.parse_is_food.return_value = False
 
-    with pytest.raises(
-        ValidationException, match="Image does not appear to contain food"
-    ):
+    with pytest.raises(ValidationException, match="Image does not appear to contain food"):
         await handler.handle(_make_command())
 
     capture_message.assert_called_once()

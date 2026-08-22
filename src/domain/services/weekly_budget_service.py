@@ -221,7 +221,9 @@ class WeeklyBudgetService:
 
         for created_at, protein, carbs, fat, fiber in meal_rows:
             aware_dt = ensure_utc(created_at)
-            meal_local_date = aware_dt.astimezone(tz).date() if tz else aware_dt.date()
+            meal_local_date = (
+                aware_dt.astimezone(tz).date() if tz else aware_dt.date()
+            )
             if meal_local_date < week_start:
                 continue
             if end_date and meal_local_date > end_date:
@@ -280,7 +282,11 @@ class WeeklyBudgetService:
         logged_past_days = 0
         if past_days_count > 0:
             logged_past_days = len(
-                {d for d in hydratable_dates if week_start <= d <= past_end}
+                {
+                    d
+                    for d in hydratable_dates
+                    if week_start <= d <= past_end
+                }
             )
 
         consumed_total = WeeklyBudgetService.aggregate_weekly_consumed_from_meal_rows(

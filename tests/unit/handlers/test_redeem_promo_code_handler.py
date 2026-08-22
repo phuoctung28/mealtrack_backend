@@ -1,5 +1,4 @@
 """Unit tests for RedeemPromoCodeCommandHandler."""
-
 from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -52,13 +51,9 @@ async def test_redeem_succeeds_for_valid_code():
         return_value=mock_uow,
     ):
         handler = RedeemPromoCodeCommandHandler()
-        await handler.handle(
-            RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123")
-        )
+        await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
 
-    mock_repo.create_redemption.assert_awaited_once_with(
-        promo_code=promo, user_id="user-123"
-    )
+    mock_repo.create_redemption.assert_awaited_once_with(promo_code=promo, user_id="user-123")
 
 
 @pytest.mark.asyncio
@@ -71,9 +66,7 @@ async def test_redeem_raises_404_when_code_not_found():
     ):
         handler = RedeemPromoCodeCommandHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
-            await handler.handle(
-                RedeemPromoCodeCommand(code="BADCODE", user_id="user-123")
-            )
+            await handler.handle(RedeemPromoCodeCommand(code="BADCODE", user_id="user-123"))
 
     assert exc_info.value.status_code == 404
 
@@ -92,9 +85,7 @@ async def test_redeem_raises_422_when_already_redeemed():
     ):
         handler = RedeemPromoCodeCommandHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
-            await handler.handle(
-                RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123")
-            )
+            await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
 
     assert exc_info.value.status_code == 422
 
@@ -110,9 +101,7 @@ async def test_redeem_raises_422_when_inactive():
     ):
         handler = RedeemPromoCodeCommandHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
-            await handler.handle(
-                RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123")
-            )
+            await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
 
     assert exc_info.value.status_code == 422
 
@@ -128,9 +117,7 @@ async def test_redeem_raises_422_when_max_uses_reached():
     ):
         handler = RedeemPromoCodeCommandHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
-            await handler.handle(
-                RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123")
-            )
+            await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
 
     assert exc_info.value.status_code == 422
     assert "no longer available" in exc_info.value.detail
@@ -139,7 +126,6 @@ async def test_redeem_raises_422_when_max_uses_reached():
 @pytest.mark.asyncio
 async def test_redeem_raises_422_when_expired():
     from datetime import datetime, timedelta
-
     past = datetime.now(UTC) - timedelta(days=1)
     promo = _make_promo()
     promo.expires_at = past
@@ -151,9 +137,7 @@ async def test_redeem_raises_422_when_expired():
     ):
         handler = RedeemPromoCodeCommandHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
-            await handler.handle(
-                RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123")
-            )
+            await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
 
     assert exc_info.value.status_code == 422
     assert "expired" in exc_info.value.detail

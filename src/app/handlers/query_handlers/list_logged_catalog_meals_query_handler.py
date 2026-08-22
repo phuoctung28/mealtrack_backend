@@ -24,9 +24,7 @@ class ListLoggedCatalogMealsQueryHandler(
             )
             snapshot = await self._snapshot_service.get_snapshot(uow)
         by_id = {meal.id: meal for meal in snapshot.meals}
-        return [
-            by_id[catalog_id] for catalog_id, _logged_at in rows if catalog_id in by_id
-        ]
+        return [by_id[catalog_id] for catalog_id, _logged_at in rows if catalog_id in by_id]
 
 
 def to_logged_item_responses(meals: list[CatalogMeal]):

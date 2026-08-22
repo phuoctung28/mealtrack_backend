@@ -219,7 +219,9 @@ async def test_weekly_create_and_stale_sync_derive_calories_from_macros(
         synced, _ = await handler._sync_targets_if_stale(uow, stale, "u1")
 
     expected_weekly_calories = round(
-        created.target_protein * 4 + created.target_carbs * 4 + created.target_fat * 9,
+        created.target_protein * 4
+        + created.target_carbs * 4
+        + created.target_fat * 9,
         1,
     )
     assert created.target_calories == expected_weekly_calories
@@ -283,9 +285,7 @@ async def test_unavailable_authoritative_target_writes_no_weekly_budget():
         side_effect=RuntimeError("unavailable"),
     ):
         with pytest.raises(ExternalServiceException) as error:
-            await handler._create_weekly_budget(
-                uow, "u1", date(2026, 3, 9), date(2026, 3, 9)
-            )
+            await handler._create_weekly_budget(uow, "u1", date(2026, 3, 9), date(2026, 3, 9))
 
     assert error.value.error_code == "target_unavailable"
     uow.weekly_budgets.create.assert_not_awaited()

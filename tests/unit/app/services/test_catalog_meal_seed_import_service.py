@@ -318,10 +318,7 @@ async def test_import_reports_unresolved_food_reference_candidates():
     assert summary.inserted == 0
     assert "needs_review" in summary.errors[0]
     assert summary.resolution_issues[0].candidates[0].food_reference_id == 1
-    assert (
-        summary.resolution_report()["issues"][0]["candidates"][0]["name"]
-        == "White rice"
-    )
+    assert summary.resolution_report()["issues"][0]["candidates"][0]["name"] == "White rice"
 
 
 @pytest.mark.asyncio
@@ -393,10 +390,7 @@ async def test_import_reports_every_unverified_exact_match_in_one_recipe():
     summary = await importer.import_manifest(manifest)
 
     assert summary.inserted == 0
-    assert [issue.normalized_name for issue in summary.resolution_issues] == [
-        "rice",
-        "egg",
-    ]
+    assert [issue.normalized_name for issue in summary.resolution_issues] == ["rice", "egg"]
     assert len(summary.errors) == 2
 
 
@@ -409,10 +403,7 @@ async def test_import_reports_pinned_unverified_reference_for_manifest_recovery(
     assert summary.inserted == 0
     assert "food_reference_not_verified" in summary.errors[0]
     assert summary.unverified_references[0].food_reference_id == 7
-    assert (
-        summary.resolution_report()["unverified_references"][0]["source"]
-        == "catalog_seed"
-    )
+    assert summary.resolution_report()["unverified_references"][0]["source"] == "catalog_seed"
 
 
 @pytest.mark.asyncio

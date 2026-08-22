@@ -292,9 +292,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
 
         if ing_str:
-            ing_line = (
-                f"Use these ingredients as main components where compatible: {ing_str}"
-            )
+            ing_line = f"Use these ingredients as main components where compatible: {ing_str}"
         else:
             ing_line = "Use common ingredients appropriate for the dish."
         if constraints_str:
@@ -346,7 +344,7 @@ CRITICAL: Size all quantities for {servings} serving only — no batch scaling.
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
-- 3-8 ingredients in GRAMS, scaled for {servings} serving{"s" if servings > 1 else ""}{time_req_str}
+- 3-8 ingredients in GRAMS, scaled for {servings} serving{'s' if servings > 1 else ''}{time_req_str}
 - Include origin_country and cuisine_type in JSON
 
 {DECOMPOSITION_RULES}

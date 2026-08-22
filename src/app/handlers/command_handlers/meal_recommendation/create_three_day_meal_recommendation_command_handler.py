@@ -52,9 +52,7 @@ class CreateThreeDayMealRecommendationCommandHandler(
     ):
         self.uow = uow
         self.optimizer = optimizer or ThreeDayPlanOptimizer()
-        self.history_projector = (
-            history_projector or MealRecommendationHistoryProjector()
-        )
+        self.history_projector = history_projector or MealRecommendationHistoryProjector()
         self.catalog_snapshot_service = catalog_snapshot_service
 
     async def handle(

@@ -14,9 +14,7 @@ from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import Nutrition
 
 
-def _meal_with_macros(
-    *, meal_id: str, protein: float, carbs: float, fat: float
-) -> Meal:
+def _meal_with_macros(*, meal_id: str, protein: float, carbs: float, fat: float) -> Meal:
     from datetime import datetime, timezone
 
     macros = Macros(protein=protein, carbs=carbs, fat=fat, fiber=0)

@@ -27,7 +27,8 @@ INGREDIENT_RULES_DETAILED = (
 # SEASONING RULES (Compressed)
 # =============================================================================
 SEASONING_RULES = (
-    "SEASONINGS: Exact amounts (g/ml). Example: ['2g salt', '1g pepper', '3g oregano']"
+    "SEASONINGS: Exact amounts (g/ml). "
+    "Example: ['2g salt', '1g pepper', '3g oregano']"
 )
 
 SEASONING_RULES_DETAILED = (

@@ -24,9 +24,7 @@ async def test_stale_bulk_target_cache_is_recomputed():
         user_id="u1", start_date=date(2026, 4, 1), end_date=date(2026, 4, 2)
     )
     fresh = {"target_revision": 2, "dates": {}}
-    handler._get_user_targets = AsyncMock(
-        return_value=(2000, {}, 1700, 2, MagicMock(), False)
-    )
+    handler._get_user_targets = AsyncMock(return_value=(2000, {}, 1700, 2, MagicMock(), False))
     handler._compute = AsyncMock(return_value=fresh)
 
     assert await handler.handle(query) == fresh
@@ -49,11 +47,8 @@ async def test_bulk_serializes_keto_calories_from_rounded_policy_grams():
     uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=budget)
     effective = EffectiveAdjustedResult(
         adjusted=AdjustedDailyTargets(1900.0, 100.0, 100.0, 100.0, False, 7),
-        consumed_before_today={},
-        consumed_total={"calories": 0.0},
-        logged_past_days=0,
-        skipped_days=0,
-        show_logging_prompt=False,
+        consumed_before_today={}, consumed_total={"calories": 0.0},
+        logged_past_days=0, skipped_days=0, show_logging_prompt=False,
     )
     handler = GetNutritionBulkQueryHandler()
     handler._get_user_targets = AsyncMock(

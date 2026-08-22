@@ -1,5 +1,4 @@
 """Tests for CloudflareWorkersAIProvider (LangChain-backed)."""
-
 from unittest.mock import AsyncMock, Mock
 
 import httpx
@@ -59,18 +58,14 @@ class TestProviderInterface:
         assert AICapability.STRUCTURED_OUTPUT in caps
         assert AICapability.VISION not in caps
 
-    def test_supported_capabilities_includes_vision_when_enabled(
-        self, provider_with_vision
-    ):
+    def test_supported_capabilities_includes_vision_when_enabled(self, provider_with_vision):
         caps = provider_with_vision.supported_capabilities
         assert AICapability.VISION in caps
 
     def test_get_available_models_returns_configured_model(self, provider):
         assert "@cf/google/gemma-4-26b-a4b-it" in provider.get_available_models()
 
-    def test_get_available_models_includes_both_when_vision_configured(
-        self, provider_with_vision
-    ):
+    def test_get_available_models_includes_both_when_vision_configured(self, provider_with_vision):
         models = provider_with_vision.get_available_models()
         assert "@cf/meta/llama-3.3-70b-instruct-fp8-fast" in models
         assert "@cf/google/gemma-4-26b-a4b-it" in models
@@ -133,10 +128,7 @@ class TestGenerate:
             meal: str
             calories: int
 
-        _mock_llm(
-            provider,
-            return_value=AIMessage(content='{"meal": "rice", "calories": 200}'),
-        )
+        _mock_llm(provider, return_value=AIMessage(content='{"meal": "rice", "calories": 200}'))
 
         result = await provider.generate(
             model="@cf/google/gemma-4-26b-a4b-it",
@@ -283,9 +275,7 @@ class TestGenerate:
 
         _mock_llm(
             provider,
-            return_value=AIMessage(
-                content='{"meal": "rice", "calories": "not-an-int"}'
-            ),
+            return_value=AIMessage(content='{"meal": "rice", "calories": "not-an-int"}'),
         )
 
         with pytest.raises(ValueError):
@@ -299,9 +289,7 @@ class TestGenerate:
 
 class TestGenerateWithVision:
     @pytest.mark.asyncio
-    async def test_generate_with_vision_raises_not_implemented_when_disabled(
-        self, provider
-    ):
+    async def test_generate_with_vision_raises_not_implemented_when_disabled(self, provider):
         """Provider without vision_model must raise NotImplementedError."""
         with pytest.raises(NotImplementedError):
             await provider.generate_with_vision(
@@ -342,9 +330,7 @@ class TestGenerateWithVision:
         assert result.get("dish_name") == "Salad"
 
     @pytest.mark.asyncio
-    async def test_generate_with_vision_empty_response_raises(
-        self, provider_with_vision
-    ):
+    async def test_generate_with_vision_empty_response_raises(self, provider_with_vision):
         """Empty response text raises ValueError."""
         from unittest.mock import AsyncMock, Mock, patch
 
@@ -414,16 +400,11 @@ class TestGenerateWithVision:
                 )
 
     @pytest.mark.asyncio
-    async def test_generate_with_vision_malformed_json_raises(
-        self, provider_with_vision
-    ):
+    async def test_generate_with_vision_malformed_json_raises(self, provider_with_vision):
         """Malformed JSON in response raises AIVisionError with json_parse kind."""
         from unittest.mock import AsyncMock, Mock, patch
 
-        from src.infra.services.ai.ai_vision_errors import (
-            AIVisionError,
-            AIVisionFailureKind,
-        )
+        from src.infra.services.ai.ai_vision_errors import AIVisionError, AIVisionFailureKind
 
         mock_resp = Mock()
         mock_resp.json.return_value = {"result": {"response": "not valid json {{{"}}
@@ -475,9 +456,7 @@ class TestGenerateWithVision:
         assert provider_with_vision._extract_response_text(raw) == "hello"
 
     @pytest.mark.asyncio
-    async def test_generate_with_vision_returns_schema_valid_dict(
-        self, provider_with_vision
-    ):
+    async def test_generate_with_vision_returns_schema_valid_dict(self, provider_with_vision):
         """Valid JSON response is parsed and returned as dict."""
         from unittest.mock import AsyncMock, patch
 
@@ -596,7 +575,6 @@ class TestGenerateWithVision:
             text_model="@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         )
         import asyncio
-
         try:
             asyncio.get_event_loop().run_until_complete(
                 default_provider.generate_with_vision(

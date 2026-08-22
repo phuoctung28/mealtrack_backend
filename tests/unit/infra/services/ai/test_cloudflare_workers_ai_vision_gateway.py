@@ -1,13 +1,10 @@
 """Unit tests — CloudflareWorkersAIProvider vision gateway header injection."""
-
 import json
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.infra.services.ai.providers.cloudflare_workers_ai_provider import (
-    CloudflareWorkersAIProvider,
-)
+from src.infra.services.ai.providers.cloudflare_workers_ai_provider import CloudflareWorkersAIProvider
 
 
 def _make_provider(gateway_id: str) -> CloudflareWorkersAIProvider:
@@ -32,9 +29,7 @@ def _make_httpx_mock(captured_headers: dict):
     """
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
-    mock_resp.json.return_value = {
-        "result": {"response": '{"foods":[],"is_food":false}'}
-    }
+    mock_resp.json.return_value = {"result": {"response": '{"foods":[],"is_food":false}'}}
 
     async def fake_post(url, json, headers):
         captured_headers.update(headers)
@@ -60,9 +55,7 @@ async def test_gateway_headers_injected_when_gateway_id_set():
         "src.infra.services.ai.providers.cloudflare_workers_ai_provider.httpx.AsyncClient",
         _make_httpx_mock(captured_headers),
     ):
-        await provider._post_workers_ai(
-            "@cf/google/gemma-4-26b-a4b-it", {}, purpose="meal_scan"
-        )
+        await provider._post_workers_ai("@cf/google/gemma-4-26b-a4b-it", {}, purpose="meal_scan")
 
     assert captured_headers["cf-aig-gateway-id"] == "gw-123"
     assert captured_headers["cf-aig-skip-cache"] == "true"
@@ -79,9 +72,7 @@ async def test_no_gateway_headers_when_gateway_id_empty():
         "src.infra.services.ai.providers.cloudflare_workers_ai_provider.httpx.AsyncClient",
         _make_httpx_mock(captured_headers),
     ):
-        await provider._post_workers_ai(
-            "@cf/google/gemma-4-26b-a4b-it", {}, purpose="meal_scan"
-        )
+        await provider._post_workers_ai("@cf/google/gemma-4-26b-a4b-it", {}, purpose="meal_scan")
 
     assert "cf-aig-gateway-id" not in captured_headers
     assert "cf-aig-skip-cache" not in captured_headers

@@ -91,10 +91,8 @@ class UpdateNotificationPreferencesCommandHandler(
         # Reschedule notifications with updated times (real-time update)
         if self.precompute_service:
             try:
-                scheduled_count = (
-                    await self.precompute_service.reschedule_user_notifications(
-                        command.user_id
-                    )
+                scheduled_count = await self.precompute_service.reschedule_user_notifications(
+                    command.user_id
                 )
                 logger.info(
                     f"Rescheduled {scheduled_count} notifications for user {command.user_id}"

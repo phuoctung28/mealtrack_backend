@@ -34,7 +34,9 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    async def find_active_fcm_tokens_by_user(self, user_id: str) -> list[UserFcmToken]:
+    async def find_active_fcm_tokens_by_user(
+        self, user_id: str
+    ) -> list[UserFcmToken]:
         """
         Finds all active FCM tokens for a user.
 

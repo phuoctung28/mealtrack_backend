@@ -111,7 +111,7 @@ async def test_day_boundary_parity_same_utc_window():
     An entry at 23:30 HCM (=16:30 UTC) must fall inside this window.
     An entry at 00:30 HCM next day (=17:30 UTC) must fall OUTSIDE this window.
     """
-    inside_utc = datetime(2026, 5, 29, 16, 30, tzinfo=timezone.utc)  # 23:30 HCM May 29
+    inside_utc = datetime(2026, 5, 29, 16, 30, tzinfo=timezone.utc)   # 23:30 HCM May 29
     outside_utc = datetime(2026, 5, 29, 17, 30, tzinfo=timezone.utc)  # 00:30 HCM May 30
 
     uow = _FakeUow([])
@@ -132,9 +132,7 @@ async def test_day_boundary_parity_same_utc_window():
 
     # Boundary correctness
     assert start_utc <= inside_utc < end_utc, "23:30 HCM must be inside May 29 window"
-    assert not (start_utc <= outside_utc < end_utc), (
-        "00:30 HCM next day must be outside May 29 window"
-    )
+    assert not (start_utc <= outside_utc < end_utc), "00:30 HCM next day must be outside May 29 window"
 
 
 def test_activities_handler_converts_tz_aware_utc_to_local_date():

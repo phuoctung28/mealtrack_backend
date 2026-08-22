@@ -222,7 +222,9 @@ class ManualMealNutritionResolver:
             allowed_units=allowed_units,
             source_kind="custom",
             nutrition_contract_version="2",
-            source_snapshot=self._snapshot(result, "custom", None, None, allowed_units),
+            source_snapshot=self._snapshot(
+                result, "custom", None, None, allowed_units
+            ),
         )
 
     def _resolve_reference(self, item, reference, origin: str) -> ManualMealItem:

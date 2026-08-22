@@ -230,9 +230,9 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
             ]
             for row in active_rows:
                 row.retired_at = now  # type: ignore[assignment]
-            next_rank = (
-                max((cast(int, row.candidate_rank) for row in rows), default=0) + 1
-            )
+            next_rank = max(
+                (cast(int, row.candidate_rank) for row in rows), default=0
+            ) + 1
             new_rows = []
             for position, alternative in enumerate(replenishment_alternatives):
                 row = MealRecommendationORM(
@@ -306,15 +306,12 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
 
     async def get_slot_replenishment_context(
         self, *, user_id: str, plan_id: str, slot_id: str
-    ) -> (
-        tuple[
-            PersistedMealRecommendationSlot,
-            frozenset[str],
-            frozenset[str],
-            str,
-        ]
-        | None
-    ):
+    ) -> tuple[
+        PersistedMealRecommendationSlot,
+        frozenset[str],
+        frozenset[str],
+        str,
+    ] | None:
         rows = await self._load_batch(user_id=user_id, batch_id=plan_id)
         target_rows = [row for row in rows if cast(str, row.slot_id) == slot_id]
         if not target_rows:
@@ -448,17 +445,16 @@ class AsyncMealRecommendationPlanRepository(MealRecommendationPlanRepositoryPort
                 or cast(str, replay.slot_id) != slot_id
             ):
                 raise MealRecommendationIdempotencyConflictError
-            logged_meal_id = cast(
-                str | None, getattr(replay, "result_logged_meal_id", None)
-            )
+            logged_meal_id = cast(str | None, getattr(replay, "result_logged_meal_id", None))
             if not logged_meal_id:
                 raise MealRecommendationIdempotencyConflictError
-            if cast(
-                str | None, getattr(replay, "request_fingerprint", None)
-            ) != _operation_fingerprint(
-                plan_id=plan_id,
-                slot_id=slot_id,
-                meal_id=logged_meal_id,
+            if (
+                cast(str | None, getattr(replay, "request_fingerprint", None))
+                != _operation_fingerprint(
+                    plan_id=plan_id,
+                    slot_id=slot_id,
+                    meal_id=logged_meal_id,
+                )
             ):
                 raise MealRecommendationIdempotencyConflictError
             if slot.logged_meal_id != logged_meal_id:
@@ -741,16 +737,10 @@ def _plan_to_rows(plan: PersistedMealRecommendationPlan) -> list[MealRecommendat
                     status=plan.status if candidate.id == plan.id else None,
                     timezone=plan.timezone if candidate.id == plan.id else None,
                     start_date=plan.start_date if candidate.id == plan.id else None,
-                    target_calories=plan.daily_calories
-                    if candidate.id == plan.id
-                    else None,
+                    target_calories=plan.daily_calories if candidate.id == plan.id else None,
                     operation=plan.operation if candidate.id == plan.id else None,
-                    idempotency_key=plan.idempotency_key
-                    if candidate.id == plan.id
-                    else None,
-                    request_fingerprint=plan.request_fingerprint
-                    if candidate.id == plan.id
-                    else None,
+                    idempotency_key=plan.idempotency_key if candidate.id == plan.id else None,
+                    request_fingerprint=plan.request_fingerprint if candidate.id == plan.id else None,
                 )
             )
     return rows
@@ -803,10 +793,7 @@ def _rows_to_plan(rows: list[MealRecommendationORM]) -> PersistedMealRecommendat
             PersistedMealRecommendationSlot(
                 id=cast(str, selected.slot_id),
                 slot_date=cast(date, selected.recommendation_date),
-                day_index=(
-                    cast(date, selected.recommendation_date)
-                    - cast(date, anchor.start_date)
-                ).days,
+                day_index=(cast(date, selected.recommendation_date) - cast(date, anchor.start_date)).days,
                 meal_type=cast(str, selected.meal_type),
                 catalog_meal_id=cast(str, selected.catalog_meal_id),
                 target_calories=cast(int, anchor.target_calories),
@@ -836,9 +823,7 @@ def _rows_to_plan(rows: list[MealRecommendationORM]) -> PersistedMealRecommendat
     )
 
 
-def _rows_to_summary(
-    rows: list[MealRecommendationORM],
-) -> PersistedMealRecommendationPlan:
+def _rows_to_summary(rows: list[MealRecommendationORM]) -> PersistedMealRecommendationPlan:
     anchor = _anchor_row(rows)
     if anchor is None:
         raise MealRecommendationNotFoundError
@@ -980,14 +965,10 @@ def _candidate_catalog_meal(row: MealRecommendationORM) -> CatalogMeal | None:
 
 
 def _anchor_row(rows: list[MealRecommendationORM]) -> MealRecommendationORM | None:
-    return next(
-        (row for row in rows if cast(str, row.id) == cast(str, row.batch_id)), None
-    )
+    return next((row for row in rows if cast(str, row.id) == cast(str, row.batch_id)), None)
 
 
-def _selected_row(
-    rows: list[MealRecommendationORM], slot_id: str
-) -> MealRecommendationORM:
+def _selected_row(rows: list[MealRecommendationORM], slot_id: str) -> MealRecommendationORM:
     for row in rows:
         if cast(str, row.slot_id) == slot_id and cast(bool, row.is_selected):
             return row

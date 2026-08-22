@@ -1,5 +1,4 @@
 """Promo code API routes — validate before purchase, redeem after purchase."""
-
 import logging
 
 from typing import Optional
@@ -68,7 +67,9 @@ async def redeem_promo_code(
     """Record a promo code redemption after successful RC purchase. Increments usage."""
     try:
         handler = RedeemPromoCodeCommandHandler()
-        await handler.handle(RedeemPromoCodeCommand(code=request.code, user_id=user_id))
+        await handler.handle(
+            RedeemPromoCodeCommand(code=request.code, user_id=user_id)
+        )
         return {"success": True}
     except PromoCodeValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

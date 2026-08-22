@@ -33,7 +33,9 @@ class FoodDataService(FoodDataServicePort):
             resp.raise_for_status()
             return resp.json()
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{self.BASE_URL}{path}", params=params, timeout=10)
+            resp = await client.get(
+                f"{self.BASE_URL}{path}", params=params, timeout=10
+            )
             resp.raise_for_status()
             return resp.json()
 
@@ -46,7 +48,6 @@ class FoodDataService(FoodDataServicePort):
 
     async def get_multiple_foods(self, fdc_ids: list[int]) -> list[dict[str, Any]]:
         import asyncio
-
         # Semaphore caps concurrent USDA connections regardless of batch size.
         sem = asyncio.Semaphore(5)
 
@@ -75,9 +76,7 @@ class FoodDataService(FoodDataServicePort):
                     },
                 )
             except (httpx.HTTPError, ValueError) as exc:
-                logger.warning(
-                    "USDA branded GTIN lookup failed: %s", type(exc).__name__
-                )
+                logger.warning("USDA branded GTIN lookup failed: %s", type(exc).__name__)
                 return None
 
             for item in data.get("foods", []) or []:

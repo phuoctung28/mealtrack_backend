@@ -180,9 +180,7 @@ async def swap_meal_recommendation_slot(
         )
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
-        raise HTTPException(
-            status_code=exc.status_code, detail=exc.public_detail
-        ) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
     response = to_slot_detail_response(
         result.plan_id,
         await localize_meal_recommendation_slot(
@@ -199,7 +197,9 @@ async def swap_meal_recommendation_slot(
         task_manager=task_manager,
     )
     metric_status = "success"
-    record_operation_latency("swap", started, metric_status, outcome=result.outcome)
+    record_operation_latency(
+        "swap", started, metric_status, outcome=result.outcome
+    )
     return response
 
 
@@ -235,9 +235,7 @@ async def log_recommended_meal(
         )
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
-        raise HTTPException(
-            status_code=exc.status_code, detail=exc.public_detail
-        ) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
     response = to_slot_detail_response(
         result.plan_id,
         await localize_meal_recommendation_slot(
@@ -289,9 +287,7 @@ async def skip_meal_recommendation_slot(
         )
     except MealRecommendationCreationError as exc:
         metric_status = f"http_{exc.status_code}"
-        raise HTTPException(
-            status_code=exc.status_code, detail=exc.public_detail
-        ) from exc
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_detail) from exc
     response = to_slot_detail_response(
         result.plan_id,
         await localize_meal_recommendation_slot(

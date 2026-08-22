@@ -574,8 +574,6 @@ def get_configured_event_bus() -> EventBus:
             structured_reference_enabled=parse_text_settings[
                 "structured_reference_enabled"
             ],
-            cache_service=cache_service,
-            cache_ttl_seconds=parse_text_settings.get("cache_ttl_seconds", 604800),
         ),
     )
 

@@ -81,15 +81,12 @@ class MealRecommendationPlanRepositoryPort(ABC):
 
     async def get_slot_replenishment_context(
         self, *, user_id: str, plan_id: str, slot_id: str
-    ) -> (
-        tuple[
-            PersistedMealRecommendationSlot,
-            frozenset[str],
-            frozenset[str],
-            str,
-        ]
-        | None
-    ):
+    ) -> tuple[
+        PersistedMealRecommendationSlot,
+        frozenset[str],
+        frozenset[str],
+        str,
+    ] | None:
         """Return target slot, seen target candidates, and other selected IDs."""
         return None
 

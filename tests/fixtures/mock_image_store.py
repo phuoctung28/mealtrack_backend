@@ -1,7 +1,6 @@
 """
 Mock Image Store for testing.
 """
-
 import uuid
 from typing import Dict, Optional
 
@@ -10,14 +9,12 @@ from src.domain.ports.image_store_port import ImageStorePort
 
 class MockImageStore(ImageStorePort):
     """Mock implementation of image store for testing."""
-
+    
     def __init__(self):
         """Initialize with in-memory storage."""
         self.storage: Dict[str, bytes] = {}
-
-    def save(
-        self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None
-    ) -> str:
+    
+    def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
         """Save image data and return image ID."""
         if image_id is None:
             image_id = str(uuid.uuid4())
@@ -69,7 +66,5 @@ class MockImageStore(ImageStorePort):
             "public_id": public_id,
         }
 
-    async def generate_upload_signature_async(
-        self, image_id: str, ttl: int = 300
-    ) -> dict:
+    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
         return self.generate_upload_signature(image_id, ttl)

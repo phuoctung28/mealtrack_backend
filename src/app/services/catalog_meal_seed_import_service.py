@@ -86,9 +86,7 @@ class CatalogSeedResolutionIssue:
     ingredient_name: str
     normalized_name: str
     reason: str
-    candidates: tuple[CatalogSeedResolutionCandidate, ...] = field(
-        default_factory=tuple
-    )
+    candidates: tuple[CatalogSeedResolutionCandidate, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -170,9 +168,7 @@ class CatalogSeedImportSummary:
     unverified_references: tuple[CatalogSeedUnverifiedReference, ...] = field(
         default_factory=tuple
     )
-    review_required: tuple[CatalogSeedReviewRequired, ...] = field(
-        default_factory=tuple
-    )
+    review_required: tuple[CatalogSeedReviewRequired, ...] = field(default_factory=tuple)
     inserted_catalog_keys: tuple[str, ...] = field(default_factory=tuple)
 
     @property
@@ -232,9 +228,7 @@ class CatalogSeedResolutionErrors(CatalogSeedImportError):
 
     def __init__(self, issues: list[CatalogSeedResolutionIssue]) -> None:
         self.issues = tuple(issues)
-        super().__init__(
-            "; ".join(str(CatalogSeedResolutionError(issue)) for issue in issues)
-        )
+        super().__init__("; ".join(str(CatalogSeedResolutionError(issue)) for issue in issues))
 
 
 @dataclass(frozen=True)
@@ -299,9 +293,7 @@ class CatalogMealSeedImporter:
             candidate_enricher=self._candidate_enricher,
         )
 
-    async def import_manifest(
-        self, manifest: dict[str, Any]
-    ) -> CatalogSeedImportSummary:
+    async def import_manifest(self, manifest: dict[str, Any]) -> CatalogSeedImportSummary:
         started = perf_counter()
         self._pending_popularity_updates = []
         skipped = 0
@@ -315,9 +307,7 @@ class CatalogMealSeedImporter:
             try:
                 prepared_seed = await self._prepare_recipe(recipe, index)
             except CatalogSeedResolutionErrors as exc:
-                errors.extend(
-                    str(CatalogSeedResolutionError(issue)) for issue in exc.issues
-                )
+                errors.extend(str(CatalogSeedResolutionError(issue)) for issue in exc.issues)
                 resolution_issues.extend(exc.issues)
                 continue
             except CatalogSeedResolutionError as exc:
@@ -354,12 +344,9 @@ class CatalogMealSeedImporter:
             return summary
 
         if prepared:
-            (
-                to_insert,
-                skipped_after_lock,
-                lock_errors,
-                lock_reviews,
-            ) = await self._recheck_under_lock(prepared)
+            to_insert, skipped_after_lock, lock_errors, lock_reviews = (
+                await self._recheck_under_lock(prepared)
+            )
         else:
             await self._catalog_repository.lock_seed_import()
             to_insert, skipped_after_lock, lock_errors, lock_reviews = [], 0, [], []
@@ -392,7 +379,9 @@ class CatalogMealSeedImporter:
         _record_seed_import_metrics(summary, started)
         return summary
 
-    async def load_meals_by_catalog_keys(self, catalog_keys: tuple[str, ...]) -> list:
+    async def load_meals_by_catalog_keys(
+        self, catalog_keys: tuple[str, ...]
+    ) -> list:
         """Load hydrated catalog meals for insight warmup after import."""
 
         if not catalog_keys:
@@ -493,9 +482,7 @@ class CatalogMealSeedImporter:
                     continue
                 skipped += 1
                 continue
-            review = _near_duplicate_review(
-                item.recipe_index, item.signature, signatures
-            )
+            review = _near_duplicate_review(item.recipe_index, item.signature, signatures)
             if review is not None:
                 review_required.append(review)
                 continue
@@ -587,9 +574,7 @@ class CatalogMealSeedImporter:
             if reference is not None:
                 return reference
         if len(verified_matches) == 1:
-            reference = await self._get_reference_by_id(
-                verified_matches[0].food_reference_id
-            )
+            reference = await self._get_reference_by_id(verified_matches[0].food_reference_id)
             if reference is not None:
                 return reference
         if len(verified_matches) > 1:
@@ -669,7 +654,10 @@ class CatalogMealSeedImporter:
     async def _enrich_missing_candidate(self, name: str, normalized: str) -> bool:
         """Cache one provider candidate for review without bypassing publication gates."""
 
-        if self._candidate_enricher is None or normalized in self._enriched_names:
+        if (
+            self._candidate_enricher is None
+            or normalized in self._enriched_names
+        ):
             return False
         self._enriched_names.add(normalized)
         try:
@@ -724,11 +712,7 @@ class CatalogMealSeedImporter:
         candidates = [candidate for candidate in candidates if candidate.score > 0.25]
         return sorted(
             candidates,
-            key=lambda item: (
-                -item.score,
-                not item.is_verified,
-                item.food_reference_id,
-            ),
+            key=lambda item: (-item.score, not item.is_verified, item.food_reference_id),
         )[:20]
 
     async def _all_candidate_rows(self) -> list[_FoodReferenceSearchRow]:

@@ -99,9 +99,7 @@ class TestGetMealByIdQueryHandler:
             await event_bus.send(query)
 
     @pytest.mark.asyncio
-    async def test_get_meal_by_id_falls_back_to_hydration_entry_alias(
-        self, monkeypatch
-    ):
+    async def test_get_meal_by_id_falls_back_to_hydration_entry_alias(self, monkeypatch):
         """Scanned beverages return a meal-shaped response backed by hydration_entries."""
         from src.app.handlers.query_handlers import (
             get_meal_by_id_query_handler as module,

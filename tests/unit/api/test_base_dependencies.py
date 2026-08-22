@@ -42,15 +42,13 @@ def test_get_parse_text_settings_reads_structured_reference_flag(monkeypatch):
 
     class _Settings:
         PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED = True
-        PARSE_TEXT_CACHE_TTL_SECONDS = 604800
 
     import src.infra.config.settings as settings_module
 
     monkeypatch.setattr(settings_module, "get_settings", lambda: _Settings())
 
     assert dependencies.get_parse_text_settings() == {
-        "structured_reference_enabled": True,
-        "cache_ttl_seconds": 604800,
+        "structured_reference_enabled": True
     }
 
 
