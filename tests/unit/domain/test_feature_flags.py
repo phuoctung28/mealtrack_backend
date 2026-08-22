@@ -128,9 +128,9 @@ class TestFeatureFlagsIntegration:
         response_time = end_time - start_time
 
         # Should be very fast since it's mocked
-        assert (
-            response_time < 1.0
-        ), f"Response time {response_time}s exceeds 1s requirement"
+        assert response_time < 1.0, (
+            f"Response time {response_time}s exceeds 1s requirement"
+        )
         assert mock_response is not None
 
 

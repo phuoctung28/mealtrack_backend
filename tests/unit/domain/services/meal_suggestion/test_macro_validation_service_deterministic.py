@@ -130,9 +130,9 @@ class TestValidateDeterministic:
             self.service.validate_deterministic(meal_macros)
 
         error_logs = [r for r in caplog.records if r.levelno == logging.ERROR]
-        assert (
-            not error_logs
-        ), f"Unexpected ERROR logs: {[r.message for r in error_logs]}"
+        assert not error_logs, (
+            f"Unexpected ERROR logs: {[r.message for r in error_logs]}"
+        )
 
     def test_all_t3_logs_tier_correctly(self, caplog):
         """Meals resolved entirely via AI fallback (T3) should log T3>0."""
@@ -141,6 +141,6 @@ class TestValidateDeterministic:
         with caplog.at_level(logging.INFO):
             self.service.validate_deterministic(meal_macros)
 
-        assert any(
-            "T3=3" in record.message for record in caplog.records
-        ), "Expected T3 count in log"
+        assert any("T3=3" in record.message for record in caplog.records), (
+            "Expected T3 count in log"
+        )

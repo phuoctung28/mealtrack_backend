@@ -352,7 +352,11 @@ async def test_generate_meal_recipes_handler_returns_three_recipes_for_three_sel
     )
 
     assert len(recipes) == 3
-    assert [r.meal_name for r in recipes] == ["Chicken Rice", "Grilled Salmon", "Beef Stew"]
+    assert [r.meal_name for r in recipes] == [
+        "Chicken Rice",
+        "Grilled Salmon",
+        "Beef Stew",
+    ]
     _, selected = service._recipe_generator.generate_selected_recipes.await_args.args
     assert [m["id"] for m in selected] == ["disc_1", "disc_2", "disc_3"]
     assert [m["calories"] for m in selected] == [500, 600, 550]

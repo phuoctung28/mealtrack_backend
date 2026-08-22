@@ -78,7 +78,9 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
                     command.user_id, log_date
                 )
             else:
-                await self.cache_invalidation.after_meal_write(command.user_id, log_date)
+                await self.cache_invalidation.after_meal_write(
+                    command.user_id, log_date
+                )
 
         return {
             "meal_id": command.meal_id,

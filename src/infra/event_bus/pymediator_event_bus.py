@@ -123,7 +123,10 @@ class PyMediatorEventBus(EventBus):
             for param in signature.parameters.values()
             if param.default is inspect.Parameter.empty
             and param.kind
-            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
         ]
         if required_params:
             return handler
@@ -189,7 +192,9 @@ class PyMediatorEventBus(EventBus):
             # Controlled application exceptions and degraded AI-provider failures
             # are converted to proper HTTP responses by the API layer. Keep this
             # at debug so routine control flow does not produce duplicate ERRORs.
-            logger.debug(f"Application exception handling {event_type.__name__}: {str(e)}")
+            logger.debug(
+                f"Application exception handling {event_type.__name__}: {str(e)}"
+            )
             raise
         except Exception as e:
             logger.error(
@@ -225,7 +230,9 @@ class PyMediatorEventBus(EventBus):
         if tasks:
             # Execute all tasks in the background (fire-and-forget)
             async def run_tasks_in_background():
-                logger.debug(f"Starting background processing for {event_type.__name__}")
+                logger.debug(
+                    f"Starting background processing for {event_type.__name__}"
+                )
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Log any exceptions

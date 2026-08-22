@@ -212,8 +212,12 @@ async def test_precompute_db_locks_calorie_goals_for_mixed_user_batch():
 
     svc = DailyContextPrecomputeService()
 
-    async def _fake_effective(*, user_id, cheat_dates=None, weekly_preload=None, **_kwargs):
-        assert user_id == user_budget_ok, "only the matching-revision user should reach here"
+    async def _fake_effective(
+        *, user_id, cheat_dates=None, weekly_preload=None, **_kwargs
+    ):
+        assert user_id == user_budget_ok, (
+            "only the matching-revision user should reach here"
+        )
         assert cheat_dates == []
         assert weekly_preload is not None
         return SimpleNamespace(

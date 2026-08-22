@@ -41,6 +41,7 @@ class FakePaymentSession:
         class Empty:
             def all(self):
                 return []
+
         return Empty()
 
     def add(self, row):
@@ -51,19 +52,44 @@ class FakePaymentSession:
 
 
 def _lead():
-    return WebFunnelLead(id="11111111-1111-1111-1111-111111111111", email="buyer@example.com", access_key_hash="hash", request_id="request", snapshot_version="v1", snapshot={}, snapshot_hash="snapshot", status="draft", revision=1, access_sync_status="pending")
+    return WebFunnelLead(
+        id="11111111-1111-1111-1111-111111111111",
+        email="buyer@example.com",
+        access_key_hash="hash",
+        request_id="request",
+        snapshot_version="v1",
+        snapshot={},
+        snapshot_hash="snapshot",
+        status="draft",
+        revision=1,
+        access_sync_status="pending",
+    )
 
 
 @pytest.mark.asyncio
 async def test_unknown_or_non_uuid_revenuecat_id_stays_on_native_path():
-    assert not await reconcile_revenuecat_event(FakePaymentSession(None), {"id": "event", "app_user_id": "$RCAnonymousID:abc"}, None)
+    assert not await reconcile_revenuecat_event(
+        FakePaymentSession(None),
+        {"id": "event", "app_user_id": "$RCAnonymousID:abc"},
+        None,
+    )
 
 
 @pytest.mark.asyncio
 async def test_authoritative_standard_enqueues_one_claim_email():
     session = FakePaymentSession(_lead())
     active = {"subscriber": {"entitlements": {"standard": {"expires_date": None}}}}
-    handled = await reconcile_revenuecat_event(session, {"id": "event-1", "type": "INITIAL_PURCHASE", "app_user_id": session.lead.id, "product_id": "web_monthly", "environment": "PRODUCTION"}, active)
+    handled = await reconcile_revenuecat_event(
+        session,
+        {
+            "id": "event-1",
+            "type": "INITIAL_PURCHASE",
+            "app_user_id": session.lead.id,
+            "product_id": "web_monthly",
+            "environment": "PRODUCTION",
+        },
+        active,
+    )
     assert handled
     assert session.lead.status == "email_queued"
     assert "claim_email" in {getattr(row, "job_type", None) for row in session.added}
@@ -75,9 +101,20 @@ async def test_wrong_environment_records_event_without_queuing_claim_email():
     session = FakePaymentSession(_lead())
     active = {"subscriber": {"entitlements": {"standard": {"expires_date": None}}}}
 
-    assert await reconcile_revenuecat_event(session, {"id": "event-sandbox", "type": "INITIAL_PURCHASE", "app_user_id": session.lead.id, "environment": "SANDBOX"}, active)
+    assert await reconcile_revenuecat_event(
+        session,
+        {
+            "id": "event-sandbox",
+            "type": "INITIAL_PURCHASE",
+            "app_user_id": session.lead.id,
+            "environment": "SANDBOX",
+        },
+        active,
+    )
     assert session.lead.status == "draft"
-    assert "claim_email" not in {getattr(row, "job_type", None) for row in session.added}
+    assert "claim_email" not in {
+        getattr(row, "job_type", None) for row in session.added
+    }
 
 
 @pytest.mark.asyncio
@@ -99,7 +136,9 @@ async def test_missing_environment_configuration_records_event_without_queuing_c
         active,
     )
     assert session.lead.status == "draft"
-    assert "claim_email" not in {getattr(row, "job_type", None) for row in session.added}
+    assert "claim_email" not in {
+        getattr(row, "job_type", None) for row in session.added
+    }
 
 
 class FakeReconcileSession(FakePaymentSession):

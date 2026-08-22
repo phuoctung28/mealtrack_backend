@@ -30,4 +30,3 @@ def _non_negative(value: Any) -> float:
 
 def _derive_calories(protein: float, carbs: float, fat: float, fiber: float) -> float:
     return round(Macros.raw_total_calories(protein, carbs, fat, fiber), 1)
-

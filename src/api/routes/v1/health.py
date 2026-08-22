@@ -239,9 +239,9 @@ async def notification_health_check(_monitor=Depends(require_monitoring_access))
         # Warn if high inactive rate
         if total_tokens > 0 and (inactive_tokens / total_tokens) > 0.5:
             health_status["status"] = "warning"
-            health_status["components"]["fcm_tokens"][
-                "message"
-            ] = "High inactive token rate"
+            health_status["components"]["fcm_tokens"]["message"] = (
+                "High inactive token rate"
+            )
 
         return JSONResponse(
             status_code=200 if health_status["status"] == "healthy" else 503,

@@ -44,4 +44,8 @@ def test_app_download_encodes_special_characters():
 
     location = response.headers["location"]
     # The & should be encoded, not interpreted as param separator
-    assert "ct=test%26inject%3Dbad" in location or "ct=test" in location and "inject=bad" not in location
+    assert (
+        "ct=test%26inject%3Dbad" in location
+        or "ct=test" in location
+        and "inject=bad" not in location
+    )

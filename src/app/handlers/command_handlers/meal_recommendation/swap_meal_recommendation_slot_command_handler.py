@@ -51,7 +51,9 @@ class SwapMealRecommendationSlotCommandHandler(
             )
             if (
                 context
-                and not any(candidate.seen_at is None for candidate in context[0].alternatives)
+                and not any(
+                    candidate.seen_at is None for candidate in context[0].alternatives
+                )
                 and self.catalog_snapshot_service
                 and self.history_projector
             ):

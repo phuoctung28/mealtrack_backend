@@ -85,7 +85,9 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
             await self.cache_invalidation.after_hydration_write(cmd.user_id, log_date)
 
         kcal = round(
-            Macros(protein=0.0, carbs=carbs, fat=fat, fiber=0.0, sugar=sugar).total_calories,
+            Macros(
+                protein=0.0, carbs=carbs, fat=fat, fiber=0.0, sugar=sugar
+            ).total_calories,
             1,
         )
         return {

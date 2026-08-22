@@ -1,6 +1,14 @@
 """Weight entry database model."""
 
-from sqlalchemy import Column, String, Float, DateTime, UniqueConstraint, Index, ForeignKey
+from sqlalchemy import (
+    Column,
+    String,
+    Float,
+    DateTime,
+    UniqueConstraint,
+    Index,
+    ForeignKey,
+)
 from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
@@ -11,7 +19,10 @@ class WeightEntryORM(Base, BaseMixin):
     __tablename__ = "weight_entries"
 
     user_id = Column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     weight_kg = Column(Float, nullable=False)
     recorded_at = Column(DateTime(timezone=True), nullable=False)

@@ -35,6 +35,7 @@ def build_meal_analyze_graph() -> Any:
 
 def build_runtime_meal_analyze_graph(runtime: MealAnalyzeRuntime) -> Any:
     """Build the meal analysis graph with per-request runtime dependencies."""
+
     async def acquire_image_node(
         state: MealAnalyzeGraphState,
     ) -> MealAnalyzeGraphState:

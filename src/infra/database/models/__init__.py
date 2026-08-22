@@ -94,6 +94,9 @@ from .email_log import EmailLog
 # Movement tracking
 from .movement_entry import MovementEntryORM
 
+# Transactional outbox
+from .outbox_event import OutboxEventORM, TransactionalOutboxORM
+
 # Promo codes (email marketing)
 from .promo_code import PromoCode, PromoCodeRedemption
 from .referral import PayoutRequest, ReferralCode, ReferralConversion, ReferralWallet
@@ -194,4 +197,6 @@ __all__ = [
     "WebFunnelOutbox",
     "WebFunnelProviderEvent",
     "WebFunnelRedemption",
+    "TransactionalOutboxORM",
+    "OutboxEventORM",
 ]

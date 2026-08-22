@@ -639,9 +639,13 @@ def _plan_to_candidate_rows(plan):
                     status=plan.status if candidate.id == plan.id else None,
                     timezone=plan.timezone if candidate.id == plan.id else None,
                     start_date=plan.start_date if candidate.id == plan.id else None,
-                    target_calories=plan.daily_calories if candidate.id == plan.id else None,
+                    target_calories=plan.daily_calories
+                    if candidate.id == plan.id
+                    else None,
                     operation=plan.operation if candidate.id == plan.id else None,
-                    idempotency_key=plan.idempotency_key if candidate.id == plan.id else None,
+                    idempotency_key=plan.idempotency_key
+                    if candidate.id == plan.id
+                    else None,
                     request_fingerprint=plan.request_fingerprint
                     if candidate.id == plan.id
                     else None,

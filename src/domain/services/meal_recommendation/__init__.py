@@ -1,2 +1,1 @@
 """Meal recommendation domain services."""
-

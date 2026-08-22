@@ -16,9 +16,9 @@ def test_connection_pool_has_socket_timeout():
         RedisClient(redis_url="redis://localhost:6379")
         call_kwargs = mock_from_url.call_args[1]
         assert "socket_timeout" in call_kwargs, "socket_timeout must be set"
-        assert (
-            "socket_connect_timeout" in call_kwargs
-        ), "socket_connect_timeout must be set"
+        assert "socket_connect_timeout" in call_kwargs, (
+            "socket_connect_timeout must be set"
+        )
         assert call_kwargs["socket_timeout"] > 0
         assert call_kwargs["socket_connect_timeout"] > 0
 

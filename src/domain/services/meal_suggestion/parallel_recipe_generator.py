@@ -320,11 +320,7 @@ class ParallelRecipeGenerator:
                 fill_missing_steps=True,
             )
             localized_name = selected.get("name")
-            if (
-                generated is not None
-                and localized_name
-                and localized_name != meal_name
-            ):
+            if generated is not None and localized_name and localized_name != meal_name:
                 generated = replace(generated, meal_name=localized_name)
             return generated
 
@@ -501,7 +497,7 @@ class ParallelRecipeGenerator:
 
         logger.debug(
             f"[PHASE-2-COMPLETE] session={session.id} | "
-            f"success={len(successful)}/{total_attempts} | elapsed={time.time()-gen_start:.2f}s"
+            f"success={len(successful)}/{total_attempts} | elapsed={time.time() - gen_start:.2f}s"
         )
         if len(successful) < min_acceptable:
             if not successful:
@@ -583,7 +579,9 @@ class ParallelRecipeGenerator:
         self, suggestion: MealSuggestion, language: str
     ) -> SuggestionTranslationResult:
         if self._translation_service is None:
-            return SuggestionTranslationResult(suggestion, TranslationOutcome.PASSTHROUGH)
+            return SuggestionTranslationResult(
+                suggestion, TranslationOutcome.PASSTHROUGH
+            )
         result_method = getattr(
             self._translation_service, "translate_meal_suggestion_result", None
         )
@@ -653,7 +651,7 @@ class ParallelRecipeGenerator:
 
         logger.debug(
             f"[PHASE-2-PIPELINE-COMPLETE] session={session.id} | "
-            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time()-gen_start:.2f}s"
+            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time() - gen_start:.2f}s"
         )
 
         if gen_successes < min_acceptable:

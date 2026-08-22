@@ -175,7 +175,14 @@ class TestUserSpecificActivities:
         """Cache misses should not hold one DB checkout across all daily reads."""
 
         class _UowScope:
-            def __init__(self, *, users=None, meals=None, movement_entries=None, hydration_entries=None):
+            def __init__(
+                self,
+                *,
+                users=None,
+                meals=None,
+                movement_entries=None,
+                hydration_entries=None,
+            ):
                 self.users = users or AsyncMock()
                 self.meals = meals or AsyncMock()
                 self.movement_entries = movement_entries or AsyncMock()

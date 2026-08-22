@@ -44,7 +44,9 @@ class CatalogMealSnapshotService:
         self._ttl_seconds = ttl_seconds
         self._failure_retry_seconds = failure_retry_seconds
         self._clock = clock
-        self._statistics_service = statistics_service or CatalogIngredientStatisticsService()
+        self._statistics_service = (
+            statistics_service or CatalogIngredientStatisticsService()
+        )
         self._lock = asyncio.Lock()
         self._snapshot: CatalogMealSnapshot | None = None
         self._next_refresh_after = 0.0
@@ -124,10 +126,14 @@ class CatalogMealSnapshotService:
 
             try:
                 meals = tuple(await uow.catalog_recipes.list_active_meals())
-                loaded_revision = await uow.catalog_recipes.get_active_catalog_revision()
+                loaded_revision = (
+                    await uow.catalog_recipes.get_active_catalog_revision()
+                )
                 if loaded_revision != expected_revision:
                     meals = tuple(await uow.catalog_recipes.list_active_meals())
-                    loaded_revision = await uow.catalog_recipes.get_active_catalog_revision()
+                    loaded_revision = (
+                        await uow.catalog_recipes.get_active_catalog_revision()
+                    )
                 if not meals:
                     raise MealRecommendationCatalogUnavailableError
                 snapshot = CatalogMealSnapshot(

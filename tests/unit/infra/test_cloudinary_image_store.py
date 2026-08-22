@@ -499,12 +499,12 @@ class TestCloudinaryImageStoreIntegration:
         """Test complete flow of save, load, and delete."""
         image_id = "test-flow-id"
 
-        with patch("cloudinary.uploader.upload") as mock_upload, patch(
-            "cloudinary.api.resource"
-        ) as mock_resource, patch("httpx.get") as mock_get, patch(
-            "cloudinary.uploader.destroy"
-        ) as mock_destroy:
-
+        with (
+            patch("cloudinary.uploader.upload") as mock_upload,
+            patch("cloudinary.api.resource") as mock_resource,
+            patch("httpx.get") as mock_get,
+            patch("cloudinary.uploader.destroy") as mock_destroy,
+        ):
             # Setup mocks
             mock_upload.return_value = {
                 "secure_url": f"https://res.cloudinary.com/test/image/upload/v123/mealtrack/{image_id}.jpg"
@@ -587,7 +587,9 @@ class TestAsyncWrappers:
     """Test async wrapper methods delegate to sync implementations."""
 
     @pytest.mark.asyncio
-    async def test_save_async_delegates_to_save(self, cloudinary_store, sample_image_bytes):
+    async def test_save_async_delegates_to_save(
+        self, cloudinary_store, sample_image_bytes
+    ):
         with patch("cloudinary.uploader.upload") as mock_upload:
             mock_upload.return_value = {
                 "secure_url": "https://res.cloudinary.com/test/image/upload/v1/mealtrack/test.jpg"

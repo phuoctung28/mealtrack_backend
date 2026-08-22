@@ -26,6 +26,5 @@ async def app_download(source: str = Query(default="direct")):
         302 redirect to App Store with tracking params
     """
     return RedirectResponse(
-        url=f"{APP_STORE_URL}?ct={quote(source, safe='')}&mt=8",
-        status_code=302
+        url=f"{APP_STORE_URL}?ct={quote(source, safe='')}&mt=8", status_code=302
     )

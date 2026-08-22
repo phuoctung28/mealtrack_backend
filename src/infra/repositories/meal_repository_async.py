@@ -602,6 +602,12 @@ class AsyncMealRepository(MealRepositoryPort):
 
     async def _upsert_meal_image(self, image: DomainMealImage) -> MealImageORM:
         """Insert or update a mealimage row, always refreshing a non-empty URL."""
+        if not image.url:
+            db_image = meal_image_domain_to_orm(image)
+            self.session.add(db_image)
+            await self.session.flush()
+            return db_image
+
         img_result = await self.session.execute(
             select(MealImageORM).where(MealImageORM.image_id == image.image_id)
         )

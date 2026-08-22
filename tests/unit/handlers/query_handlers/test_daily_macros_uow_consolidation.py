@@ -65,9 +65,9 @@ async def test_cache_miss_opens_uow_once():
             await handler.handle(query)
             mock_tdee_cls.assert_called_once_with(cache_service=handler.cache_service)
 
-    assert (
-        mock_cls.call_count == 1
-    ), f"Expected 1 UoW open on cache miss, got {mock_cls.call_count}"
+    assert mock_cls.call_count == 1, (
+        f"Expected 1 UoW open on cache miss, got {mock_cls.call_count}"
+    )
 
 
 @pytest.mark.asyncio
@@ -138,7 +138,9 @@ async def test_weekly_budget_present_matching_revision_locks_weekly_context():
     opening a second one.
     """
     handler = _make_handler()
-    week_start = date(2026, 4, 20)  # Monday, so get_user_monday(target_date) == target_date
+    week_start = date(
+        2026, 4, 20
+    )  # Monday, so get_user_monday(target_date) == target_date
     target_date = week_start
     query = GetDailyMacrosQuery(user_id="u1", target_date=target_date)
 

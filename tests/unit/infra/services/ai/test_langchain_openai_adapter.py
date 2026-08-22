@@ -254,8 +254,8 @@ async def test_vision_uses_multimodal_human_message_with_data_url(monkeypatch):
     assert isinstance(messages[1], HumanMessage)
     assert messages[1].content[0] == {"type": "text", "text": "Identify food."}
     assert messages[1].content[1]["type"] == "image_url"
-    assert messages[1].content[1]["image_url"]["url"].startswith(
-        "data:image/png;base64,"
+    assert (
+        messages[1].content[1]["image_url"]["url"].startswith("data:image/png;base64,")
     )
     assert messages[1].content[1]["image_url"]["url"].endswith("aW1hZ2UtYnl0ZXM=")
     assert messages[1].content[1]["image_url"]["detail"] == "high"

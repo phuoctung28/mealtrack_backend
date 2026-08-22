@@ -148,7 +148,12 @@ def schedule_value_insight_generation(
     source: str = "api",
 ) -> bool:
     """Schedule profile-aware insight generation without blocking meal responses."""
-    if cache_service is None or task_manager is None or ai_manager is None or event_bus is None:
+    if (
+        cache_service is None
+        or task_manager is None
+        or ai_manager is None
+        or event_bus is None
+    ):
         logger.info(
             "meal_value_insights.schedule_skipped source=%s meal_id=%s user_id=%s",
             source,

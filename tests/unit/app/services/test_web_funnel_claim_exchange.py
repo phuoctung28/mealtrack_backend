@@ -37,7 +37,9 @@ class FakeFirebase:
         self.is_provisional = True
 
     async def resolve(self, _lead_id, email):
-        return FirebaseIdentity(uid="wf-uid", email=email, is_provisional=self.is_provisional)
+        return FirebaseIdentity(
+            uid="wf-uid", email=email, is_provisional=self.is_provisional
+        )
 
     async def mint_custom_token(self, _identity, _reservation_id, _generation):
         return "firebase-custom-token"
@@ -51,9 +53,28 @@ class ConflictFirebase:
 @pytest.mark.asyncio
 async def test_exchange_reserves_claim_and_persists_hashes_not_returned_secrets():
     magic, retry = "m" * 48, "r" * 48
-    lead = WebFunnelLead(id="lead-1", email="buyer@example.com", access_key_hash="key", request_id="request", snapshot_version="v1", snapshot={}, snapshot_hash="snapshot", status="email_queued", revision=1, access_sync_status="pending")
-    claim = WebFunnelClaim(id="claim-1", lead_id="lead-1", generation=1, magic_token_hash=hash_secret(magic), expires_at=utcnow() + timedelta(hours=1))
-    response = await exchange_claim(FakeExchangeSession(claim, lead), magic, retry, FakeFirebase())
+    lead = WebFunnelLead(
+        id="lead-1",
+        email="buyer@example.com",
+        access_key_hash="key",
+        request_id="request",
+        snapshot_version="v1",
+        snapshot={},
+        snapshot_hash="snapshot",
+        status="email_queued",
+        revision=1,
+        access_sync_status="pending",
+    )
+    claim = WebFunnelClaim(
+        id="claim-1",
+        lead_id="lead-1",
+        generation=1,
+        magic_token_hash=hash_secret(magic),
+        expires_at=utcnow() + timedelta(hours=1),
+    )
+    response = await exchange_claim(
+        FakeExchangeSession(claim, lead), magic, retry, FakeFirebase()
+    )
     assert response["firebase_custom_token"] == "firebase-custom-token"
     assert response["exchange_token"] not in {magic, retry}
     assert claim.reservation_retry_secret_hash == hash_secret(retry)
@@ -64,8 +85,25 @@ async def test_exchange_reserves_claim_and_persists_hashes_not_returned_secrets(
 @pytest.mark.asyncio
 async def test_exchange_retry_retains_provisional_cleanup_ownership():
     magic, retry = "m" * 48, "r" * 48
-    lead = WebFunnelLead(id="lead-1", email="buyer@example.com", access_key_hash="key", request_id="request", snapshot_version="v1", snapshot={}, snapshot_hash="snapshot", status="email_queued", revision=1, access_sync_status="pending")
-    claim = WebFunnelClaim(id="claim-1", lead_id="lead-1", generation=1, magic_token_hash=hash_secret(magic), expires_at=utcnow() + timedelta(hours=1))
+    lead = WebFunnelLead(
+        id="lead-1",
+        email="buyer@example.com",
+        access_key_hash="key",
+        request_id="request",
+        snapshot_version="v1",
+        snapshot={},
+        snapshot_hash="snapshot",
+        status="email_queued",
+        revision=1,
+        access_sync_status="pending",
+    )
+    claim = WebFunnelClaim(
+        id="claim-1",
+        lead_id="lead-1",
+        generation=1,
+        magic_token_hash=hash_secret(magic),
+        expires_at=utcnow() + timedelta(hours=1),
+    )
     firebase = FakeFirebase()
     session = FakeExchangeSession(claim, lead)
     await exchange_claim(session, magic, retry, firebase)
@@ -78,8 +116,25 @@ async def test_exchange_retry_retains_provisional_cleanup_ownership():
 @pytest.mark.asyncio
 async def test_exchange_persists_terminal_conflict_after_reservation_commit():
     magic, retry = "m" * 48, "r" * 48
-    lead = WebFunnelLead(id="lead-1", email="buyer@example.com", access_key_hash="key", request_id="request", snapshot_version="v1", snapshot={}, snapshot_hash="snapshot", status="email_queued", revision=1, access_sync_status="pending")
-    claim = WebFunnelClaim(id="claim-1", lead_id="lead-1", generation=1, magic_token_hash=hash_secret(magic), expires_at=utcnow() + timedelta(hours=1))
+    lead = WebFunnelLead(
+        id="lead-1",
+        email="buyer@example.com",
+        access_key_hash="key",
+        request_id="request",
+        snapshot_version="v1",
+        snapshot={},
+        snapshot_hash="snapshot",
+        status="email_queued",
+        revision=1,
+        access_sync_status="pending",
+    )
+    claim = WebFunnelClaim(
+        id="claim-1",
+        lead_id="lead-1",
+        generation=1,
+        magic_token_hash=hash_secret(magic),
+        expires_at=utcnow() + timedelta(hours=1),
+    )
     session = FakeExchangeSession(claim, lead)
 
     with pytest.raises(HTTPException) as exc:

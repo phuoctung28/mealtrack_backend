@@ -2,7 +2,7 @@ import logging
 import os
 from collections.abc import Callable
 from importlib import import_module
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -304,10 +304,10 @@ def get_open_food_facts_service_instance():
 
 # fatsecret Service
 def get_fat_secret_service_instance():
-    """Get the fatsecret service instance."""
+    """Get the fatsecret service instance with Redis caching."""
     from src.infra.adapters.fat_secret_service import get_fat_secret_service
 
-    return get_fat_secret_service()
+    return get_fat_secret_service(cache_service=get_cache_service())
 
 
 def get_meal_analyze_graph_settings():
@@ -327,15 +327,18 @@ def get_meal_analyze_graph_settings():
     }
 
 
-def get_parse_text_settings() -> dict[str, bool]:
+def get_parse_text_settings() -> dict[str, Any]:
     """Return parse-text feature settings for API composition."""
     from src.infra.config.settings import get_settings
 
     current_settings = get_settings()
     return {
         "structured_reference_enabled": bool(
-            getattr(current_settings, "PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED", False)
-        )
+            getattr(current_settings, "PARSE_TEXT_STRUCTURED_REFERENCE_ENABLED", True)
+        ),
+        "cache_ttl_seconds": int(
+            getattr(current_settings, "PARSE_TEXT_CACHE_TTL_SECONDS", 604800)
+        ),
     }
 
 
@@ -428,7 +431,9 @@ def get_suggestion_translation_service():
     # Requires text translation service
     text_service = get_text_translation_service()
     if text_service is None:
-        logger.warning("OPENAI_API_KEY not set - suggestion translation will be skipped")
+        logger.warning(
+            "OPENAI_API_KEY not set - suggestion translation will be skipped"
+        )
         return None
 
     from src.domain.services.meal_suggestion.suggestion_translation_service import (
@@ -548,13 +553,13 @@ def get_text_translation_service():
     )
 
     adapter_module = import_module("src.infra.adapters.openai_translation_adapter")
-    provider_module = import_module(
-        "src.infra.services.ai.providers.openai_provider"
-    )
+    provider_module = import_module("src.infra.services.ai.providers.openai_provider")
 
     provider = provider_module.OpenAIProvider(
         api_key=settings.OPENAI_API_KEY,
-        request_timeout_seconds=max(1, int(settings.OPENAI_TRANSLATION_TIMEOUT_SECONDS)),
+        request_timeout_seconds=max(
+            1, int(settings.OPENAI_TRANSLATION_TIMEOUT_SECONDS)
+        ),
         max_retries=settings.OPENAI_MAX_RETRIES,
         store_responses=False,
         prompt_cache_enabled=settings.OPENAI_PROMPT_CACHE_ENABLED,

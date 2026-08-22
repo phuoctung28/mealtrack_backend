@@ -189,4 +189,6 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
         except Exception as exc:
             # The profile transaction has already committed. Cache readers use
             # the revision fence, so a deletion failure is safe to log only.
-            logger.warning("Failed to invalidate profile cache for user %s: %s", user_id, exc)
+            logger.warning(
+                "Failed to invalidate profile cache for user %s: %s", user_id, exc
+            )

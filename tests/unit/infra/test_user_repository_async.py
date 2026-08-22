@@ -30,7 +30,9 @@ async def test_save_translates_identity_unique_constraint_to_conflict(
     session.execute = AsyncMock(return_value=_NoRowResult())
     session.flush = AsyncMock(
         side_effect=IntegrityError(
-            "INSERT", {}, Exception(f'duplicate key value violates unique constraint "{constraint}"')
+            "INSERT",
+            {},
+            Exception(f'duplicate key value violates unique constraint "{constraint}"'),
         )
     )
     repository = AsyncUserRepository(session)

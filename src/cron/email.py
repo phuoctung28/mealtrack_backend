@@ -63,7 +63,11 @@ async def run() -> None:
             )
             lifecycle_email = CronLifecycleEmailService(email_service=email_service)
             await lifecycle_email.check_and_send_emails()
-        log_event("info", "cron.phase.completed", attributes={"phase": "email", "status": "success"})
+        log_event(
+            "info",
+            "cron.phase.completed",
+            attributes={"phase": "email", "status": "success"},
+        )
     except Exception as exc:
         logger.exception("Email cron failed")
         capture_exception(

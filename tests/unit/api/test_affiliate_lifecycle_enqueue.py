@@ -1,4 +1,5 @@
 """Unit tests for affiliate lifecycle event dispatch in RevenueCat webhook handlers."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -39,7 +40,9 @@ def _make_uow():
     uow.session.add = MagicMock()
     uow.session.execute = AsyncMock(
         return_value=MagicMock(
-            scalars=MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+            scalars=MagicMock(
+                return_value=MagicMock(first=MagicMock(return_value=None))
+            )
         )
     )
     uow.subscriptions = MagicMock()
@@ -55,8 +58,12 @@ async def test_initial_purchase_enqueues_affiliate_event():
     uow = _make_uow()
     user = _make_user()
 
-    with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
-         patch(f"{MODULE}.credit_referral_on_purchase", AsyncMock()):
+    with (
+        patch(
+            f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)
+        ),
+        patch(f"{MODULE}.credit_referral_on_purchase", AsyncMock()),
+    ):
         await handle_purchase(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -73,10 +80,16 @@ async def test_enqueue_failure_does_not_raise():
     """Outbox enqueue error is propagated to UoW rollback — webhook still ACKs via RC retry."""
     uow = _make_uow()
     user = _make_user()
-    uow.affiliate_outbox.enqueue = AsyncMock(return_value=None)  # None = duplicate, silently skipped
+    uow.affiliate_outbox.enqueue = AsyncMock(
+        return_value=None
+    )  # None = duplicate, silently skipped
 
-    with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
-         patch(f"{MODULE}.credit_referral_on_purchase", AsyncMock()):
+    with (
+        patch(
+            f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)
+        ),
+        patch(f"{MODULE}.credit_referral_on_purchase", AsyncMock()),
+    ):
         await handle_purchase(uow, user, RC_EVENT)  # must not raise
 
 
@@ -87,8 +100,12 @@ async def test_renewal_enqueues_subscription_renewal():
     uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=sub)
     user = _make_user()
 
-    with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=sub)), \
-         patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
+    with (
+        patch(
+            f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=sub)
+        ),
+        patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()),
+    ):
         await handle_renewal(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -101,8 +118,10 @@ async def test_cancellation_enqueues_subscription_canceled():
     sub = MagicMock()
     user = _make_user()
 
-    with patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
-         patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
+    with (
+        patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)),
+        patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()),
+    ):
         await handle_cancellation(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -115,8 +134,10 @@ async def test_expiration_enqueues_subscription_expired():
     sub = MagicMock()
     user = _make_user()
 
-    with patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
-         patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
+    with (
+        patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)),
+        patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()),
+    ):
         await handle_expiration(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -129,9 +150,11 @@ async def test_refund_enqueues_subscription_refund():
     sub = MagicMock()
     user = _make_user()
 
-    with patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
-         patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()), \
-         patch(f"{MODULE}.revoke_referral_on_refund", AsyncMock()):
+    with (
+        patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)),
+        patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()),
+        patch(f"{MODULE}.revoke_referral_on_refund", AsyncMock()),
+    ):
         await handle_refund(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()

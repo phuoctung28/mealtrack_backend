@@ -82,7 +82,9 @@ async def test_manual_meal_save_emits_db_and_cache_latency_metrics():
     mock_cache = AsyncMock()
     mock_cache.after_meal_write = AsyncMock()
 
-    handler = CreateManualMealCommandHandler(uow=mock_uow, cache_invalidation=mock_cache)
+    handler = CreateManualMealCommandHandler(
+        uow=mock_uow, cache_invalidation=mock_cache
+    )
     # Patch _process_meal so we don't need a real DB / domain object
     handler._process_meal = AsyncMock(return_value=(MagicMock(), "2026-06-13"))
 
@@ -93,14 +95,20 @@ async def test_manual_meal_save_emits_db_and_cache_latency_metrics():
     await handler.handle(command)
 
     dist_names = [c[1] for c in rec.calls if c[0] == "distribution_metric"]
-    assert "meal.manual_save.db_ms" in dist_names, f"missing db_ms metric, got {dist_names}"
-    assert "meal.manual_save.cache_ms" in dist_names, f"missing cache_ms metric, got {dist_names}"
+    assert "meal.manual_save.db_ms" in dist_names, (
+        f"missing db_ms metric, got {dist_names}"
+    )
+    assert "meal.manual_save.cache_ms" in dist_names, (
+        f"missing cache_ms metric, got {dist_names}"
+    )
 
     # No high-cardinality IDs in attributes
     for call in rec.calls:
         if call[0] == "distribution_metric":
             attrs = call[4] or {}
-            assert "user_id" not in attrs, "user_id must not appear in metric attributes"
+            assert "user_id" not in attrs, (
+                "user_id must not appear in metric attributes"
+            )
             assert "meal_id" not in attrs
 
 
@@ -149,8 +157,7 @@ async def test_ai_all_models_fail_emits_provider_failure_log_event():
         )
 
     failure_events = [
-        c for c in rec.calls
-        if c[0] == "log_event" and c[2] == "ai.provider.failure"
+        c for c in rec.calls if c[0] == "log_event" and c[2] == "ai.provider.failure"
     ]
     assert len(failure_events) >= 1, "expected ai.provider.failure log_event"
 
@@ -212,13 +219,16 @@ async def test_affiliate_outbox_permanent_failure_emits_metric():
         await dispatch_affiliate_outbox()
 
     failure_metrics = [
-        c for c in rec.calls
+        c
+        for c in rec.calls
         if c[0] == "increment_metric" and c[1] == "affiliate.outbox.failure"
     ]
     assert len(failure_metrics) >= 1, "expected affiliate.outbox.failure metric"
 
     for m in failure_metrics:
         attrs = m[4] or {}
-        assert "row_id" not in attrs, "row_id is high-cardinality, must not be a metric tag"
+        assert "row_id" not in attrs, (
+            "row_id is high-cardinality, must not be a metric tag"
+        )
         assert "event_id" not in attrs, "event_id is high-cardinality"
         assert attrs.get("status") == "permanent"

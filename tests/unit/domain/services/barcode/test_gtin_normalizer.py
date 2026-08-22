@@ -32,4 +32,3 @@ def test_normalize_gtin_strips_common_separators():
 def test_normalize_gtin_rejects_invalid_input(barcode):
     with pytest.raises(InvalidBarcodeError):
         normalize_gtin(barcode)
-

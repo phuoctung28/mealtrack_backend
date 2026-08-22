@@ -28,6 +28,7 @@ def initialize_observability() -> None:
     set_observability_connector(SentryObservabilityConnector())
     initialize_configured_observability()
 
+
 __all__ = [
     "capture_exception",
     "capture_message",

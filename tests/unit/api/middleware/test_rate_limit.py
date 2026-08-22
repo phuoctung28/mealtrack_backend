@@ -48,4 +48,7 @@ async def test_registered_preview_rate_limit_envelope_has_retry_after():
 
     assert response.status_code == 429
     assert response.headers["Retry-After"] == "23"
-    assert response.body == b'{"error":"rate_limit_exceeded","code":"preview_rate_limited"}'
+    assert (
+        response.body
+        == b'{"error":"rate_limit_exceeded","code":"preview_rate_limited"}'
+    )

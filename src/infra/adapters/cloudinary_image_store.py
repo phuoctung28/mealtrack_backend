@@ -74,7 +74,6 @@ class CloudinaryImageStore(ImageStorePort):
         else:
             logger.debug(f"Using provided image_id: {image_id}")
 
-
         # Determine file extension from content type
         if content_type == "image/jpeg":
             file_extension = "jpg"
@@ -136,6 +135,7 @@ class CloudinaryImageStore(ImageStorePort):
         try:
             logger.debug("Fetching Cloudinary image for image_id=%s", image_id)
             import httpx
+
             response = httpx.get(url)
             if response.status_code == 200:
                 logger.debug("Image successfully fetched")
@@ -257,21 +257,25 @@ class CloudinaryImageStore(ImageStorePort):
     ) -> str:
         """Async wrapper — runs blocking Cloudinary SDK upload off the event loop."""
         import asyncio
+
         return await asyncio.to_thread(self.save, image_bytes, content_type, image_id)
 
     async def load_async(self, image_id: str) -> bytes | None:
         """Async wrapper — runs blocking Cloudinary SDK + HTTP load off the event loop."""
         import asyncio
+
         return await asyncio.to_thread(self.load, image_id)
 
     async def get_url_async(self, image_id: str) -> str | None:
         """Async wrapper — runs blocking Cloudinary API call off the event loop."""
         import asyncio
+
         return await asyncio.to_thread(self.get_url, image_id)
 
     async def delete_async(self, image_id: str) -> bool:
         """Async wrapper — runs blocking Cloudinary SDK delete off the event loop."""
         import asyncio
+
         return await asyncio.to_thread(self.delete, image_id)
 
     def generate_upload_signature(self, image_id: str, ttl: int = 300) -> dict:
@@ -299,7 +303,10 @@ class CloudinaryImageStore(ImageStorePort):
             "public_id": public_id,
         }
 
-    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+    async def generate_upload_signature_async(
+        self, image_id: str, ttl: int = 300
+    ) -> dict:
         """Async wrapper for generate_upload_signature."""
         import asyncio
+
         return await asyncio.to_thread(self.generate_upload_signature, image_id, ttl)

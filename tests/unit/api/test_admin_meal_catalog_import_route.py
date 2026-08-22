@@ -172,7 +172,9 @@ def _client(db, importer=object, reviewer=object):
     app = FastAPI()
     app.include_router(route_mod.router)
     app.dependency_overrides[get_async_db] = lambda: db
-    app.dependency_overrides[route_mod.get_catalog_meal_seed_importer] = lambda: importer
+    app.dependency_overrides[route_mod.get_catalog_meal_seed_importer] = lambda: (
+        importer
+    )
     app.dependency_overrides[route_mod.get_catalog_food_reference_review_service] = (
         lambda: reviewer
     )

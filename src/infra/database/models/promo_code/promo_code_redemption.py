@@ -1,4 +1,5 @@
 """PromoCodeRedemption model — one row per user+code redemption."""
+
 from sqlalchemy import Column, String, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 

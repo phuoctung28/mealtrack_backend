@@ -1,4 +1,5 @@
 """Unified code validation — accepts promo codes and referral codes via a single endpoint."""
+
 import logging
 from typing import Dict, Literal, Optional, Union
 
@@ -6,8 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from src.api.dependencies.auth import get_current_user_id
-from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
-from src.app.queries.codes.validate_code_query import CodeValidationError, ValidateCodeQuery
+from src.app.handlers.query_handlers.codes.validate_code_handler import (
+    ValidateCodeQueryHandler,
+)
+from src.app.queries.codes.validate_code_query import (
+    CodeValidationError,
+    ValidateCodeQuery,
+)
 
 router = APIRouter(prefix="/v1/codes", tags=["Codes"])
 logger = logging.getLogger(__name__)
@@ -52,7 +58,9 @@ class AffiliateValidatedResponse(BaseModel):
 
 @router.post(
     "/validate",
-    response_model=Union[PromoValidatedResponse, ReferralValidatedResponse, AffiliateValidatedResponse],
+    response_model=Union[
+        PromoValidatedResponse, ReferralValidatedResponse, AffiliateValidatedResponse
+    ],
 )
 async def validate_code(
     request: CodeValidateRequest,

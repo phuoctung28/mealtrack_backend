@@ -1,4 +1,5 @@
 """FastAPI dependency for GuestParseQuotaService (Postgres-backed)."""
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 

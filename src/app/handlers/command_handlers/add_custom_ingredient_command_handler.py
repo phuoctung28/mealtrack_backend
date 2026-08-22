@@ -52,7 +52,9 @@ class AddCustomIngredientCommandHandler(
 
             meal_date = (saved_meal.created_at or utc_now()).date()
             if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(saved_meal.user_id, meal_date)
+                await self.cache_invalidation.after_meal_write(
+                    saved_meal.user_id, meal_date
+                )
 
             return {
                 "success": True,

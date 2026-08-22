@@ -25,8 +25,12 @@ class GetWeightEntriesQueryHandler(EventHandler[GetWeightEntriesQuery, Dict[str,
                     {
                         "id": e.id,
                         "weight_kg": e.weight_kg,
-                        "recorded_at": e.recorded_at.isoformat() if e.recorded_at else None,
-                        "created_at": e.created_at.isoformat() if e.created_at else None,
+                        "recorded_at": e.recorded_at.isoformat()
+                        if e.recorded_at
+                        else None,
+                        "created_at": e.created_at.isoformat()
+                        if e.created_at
+                        else None,
                     }
                     for e in entries
                 ],

@@ -154,7 +154,9 @@ class _Repository:
 
     async def list_meals(self, **kwargs):
         self.list_kwargs = kwargs
-        return AdminCatalogMealPage(items=tuple(self.page_items), total=len(self.page_items))
+        return AdminCatalogMealPage(
+            items=tuple(self.page_items), total=len(self.page_items)
+        )
 
     async def get_meal_row(self, catalog_id):
         return self.row
@@ -178,7 +180,9 @@ def _client(repository, *, generator=None, use_route_auth=False):
     if not use_route_auth:
         app.dependency_overrides[require_admin_or_local] = lambda: "admin@nutree.ai"
     if generator is not None:
-        app.dependency_overrides[get_catalog_image_generator_factory] = lambda: lambda: generator
+        app.dependency_overrides[get_catalog_image_generator_factory] = lambda: (
+            lambda: generator
+        )
     return TestClient(app, client=("127.0.0.1", 50000))
 
 

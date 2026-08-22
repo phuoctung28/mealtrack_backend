@@ -14,12 +14,14 @@ class MockEmailAdapter:
         self.sent_emails = []
 
     async def send_email(self, to, subject, html_body, tags=None):
-        self.sent_emails.append({
-            "to": to,
-            "subject": subject,
-            "html_body": html_body,
-            "tags": tags,
-        })
+        self.sent_emails.append(
+            {
+                "to": to,
+                "subject": subject,
+                "html_body": html_body,
+                "tags": tags,
+            }
+        )
         return EmailResult(success=True, message_id=f"mock_{len(self.sent_emails)}")
 
 
@@ -63,7 +65,9 @@ async def test_all_email_types_render(email_service, mock_adapter):
 
     await email_service.send_welcome_email(user, tdee=2000)
     await email_service.send_reengagement_email(user, days_inactive=3, streak_days=5)
-    await email_service.send_trial_expiring_email(user, days_left=2, meals_logged=10, streak_days=7)
+    await email_service.send_trial_expiring_email(
+        user, days_left=2, meals_logged=10, streak_days=7
+    )
     await email_service.send_cancellation_email(user)
 
     assert len(mock_adapter.sent_emails) == 4

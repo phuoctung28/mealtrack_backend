@@ -302,9 +302,7 @@ async def abandon_durable_write(
         if existing.response_status_code != PENDING_RESPONSE_STATUS:
             return
         await uow.session.execute(
-            delete(DurableWriteRecordORM).where(
-                DurableWriteRecordORM.id == existing.id
-            )
+            delete(DurableWriteRecordORM).where(DurableWriteRecordORM.id == existing.id)
         )
 
 

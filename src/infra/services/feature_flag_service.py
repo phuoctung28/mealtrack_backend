@@ -11,7 +11,9 @@ from src.infra.database.uow_async import AsyncUnitOfWork
 class FeatureFlagService:
     """Wraps feature flag create/update with UoW transaction ownership."""
 
-    async def create(self, name: str, enabled: bool, description: str | None) -> FeatureFlag:
+    async def create(
+        self, name: str, enabled: bool, description: str | None
+    ) -> FeatureFlag:
         async with AsyncUnitOfWork() as uow:
             result = await uow.session.execute(
                 select(FeatureFlag).where(FeatureFlag.name == name)
@@ -25,7 +27,9 @@ class FeatureFlagService:
             return flag
         # UoW __aexit__ commits on clean exit
 
-    async def update(self, name: str, enabled: bool | None, description: str | None) -> FeatureFlag:
+    async def update(
+        self, name: str, enabled: bool | None, description: str | None
+    ) -> FeatureFlag:
         async with AsyncUnitOfWork() as uow:
             result = await uow.session.execute(
                 select(FeatureFlag).where(FeatureFlag.name == name)

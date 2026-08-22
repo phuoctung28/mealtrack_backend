@@ -134,27 +134,6 @@ def test_fatsecret_nutrition_rejects_missing_metric_basis():
 
 
 @pytest.mark.unit
-def test_fatsecret_nutrition_rejects_missing_metric_basis():
-    service = FatSecretService("client", "secret")
-    nutrition = service._extract_nutrition_from_details(
-        {
-            "servings": {
-                "serving": {
-                    "measurement_description": "serving",
-                    "calories": "100",
-                    "protein": "3",
-                    "carbohydrate": "20",
-                    "fat": "2",
-                }
-            }
-        }
-    )
-
-    assert nutrition["metric_serving_amount"] is None
-    assert nutrition["protein_100g"] is None
-
-
-@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_fatsecret_api_request_posts_form_params():
     service = FatSecretService("client", "secret")
@@ -362,3 +341,62 @@ async def test_fatsecret_barcode_lookup_uses_method_based_endpoint():
         "gram_weight": 1.0,
         "description": "1 g",
     }
+
+
+class _FakeCachePort:
+    def __init__(self):
+        self.store = {}
+        self.get_calls = 0
+        self.set_calls = 0
+
+    async def get(self, key: str):
+        self.get_calls += 1
+        return self.store.get(key)
+
+    async def set(self, key: str, value, ttl_seconds: int = 3600):
+        self.set_calls += 1
+        self.store[key] = value
+
+    async def invalidate(self, key: str) -> bool:
+        return self.store.pop(key, None) is not None
+
+    async def invalidate_pattern(self, pattern: str) -> int:
+        return 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fatsecret_get_food_details_cache_hit_and_miss():
+    cache = _FakeCachePort()
+    service = FatSecretService("client", "secret", cache_service=cache)
+    service._api_request = AsyncMock(
+        return_value={
+            "food": {
+                "food_id": "50953",
+                "food_name": "Whole Grain Cheerios",
+                "servings": {
+                    "serving": {
+                        "measurement_description": "g",
+                        "metric_serving_amount": "100.000",
+                        "serving_description": "100 g",
+                        "calories": "333",
+                        "protein": "10",
+                        "carbohydrate": "66.67",
+                        "fat": "6.67",
+                    }
+                },
+            }
+        }
+    )
+
+    # First call: cache miss, calls API and caches result
+    result1 = await service.get_food_details("50953")
+    assert service._api_request.call_count == 1
+    assert cache.set_calls == 1
+    assert result1["description"] == "Whole Grain Cheerios"
+
+    # Second call: cache hit, zero API calls
+    result2 = await service.get_food_details("50953")
+    assert service._api_request.call_count == 1
+    assert cache.get_calls == 2
+    assert result2["description"] == "Whole Grain Cheerios"

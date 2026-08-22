@@ -2,11 +2,14 @@
 
 MealTrack stores no attribution state — sends event to nutree-affiliate directly.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
+from src.app.commands.referral.apply_referral_code_command import (
+    ApplyReferralCodeCommand,
+)
 from src.app.handlers.command_handlers.referral.apply_referral_code_handler import (
     ApplyReferralCodeCommandHandler,
 )
@@ -15,7 +18,10 @@ from src.domain.ports.affiliate_service_port import AffiliateCodeValidationResul
 MODULE = "src.app.handlers.command_handlers.referral.apply_referral_code_handler"
 
 CMD = ApplyReferralCodeCommand(
-    user_id="user-1", code="AFFCODE1", discount_applied=199000, currency="VND",
+    user_id="user-1",
+    code="AFFCODE1",
+    discount_applied=199000,
+    currency="VND",
 )
 
 
@@ -76,8 +82,11 @@ async def test_affiliate_path_enqueues_attribution_no_local_state():
     """Affiliate apply enqueues attribution to outbox; nothing stored in MealTrack."""
     mock_uow = _make_uow()
     aff_result = AffiliateCodeValidationResult(
-        active=True, affiliate_id="aff-1", code_id="code-1",
-        display_name="Alex", partner_type="pt",
+        active=True,
+        affiliate_id="aff-1",
+        code_id="code-1",
+        display_name="Alex",
+        partner_type="pt",
     )
 
     with (
@@ -104,8 +113,11 @@ async def test_affiliate_duplicate_attribution_does_not_raise():
     mock_uow = _make_uow()
     mock_uow.affiliate_outbox.enqueue = AsyncMock(return_value=None)
     aff_result = AffiliateCodeValidationResult(
-        active=True, affiliate_id="aff-1", code_id="code-1",
-        display_name="Alex", partner_type="pt",
+        active=True,
+        affiliate_id="aff-1",
+        code_id="code-1",
+        display_name="Alex",
+        partner_type="pt",
     )
 
     with (

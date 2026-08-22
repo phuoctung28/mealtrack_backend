@@ -174,8 +174,13 @@ class UploadMealImageImmediatelyHandler(
         """Reject incomplete same-call locale output before meal persistence."""
         if language == "en" or not isinstance(result, dict):
             return
-        structured_data = result.get("structured_data") if isinstance(result, dict) else None
-        if isinstance(structured_data, dict) and structured_data.get("is_food") is False:
+        structured_data = (
+            result.get("structured_data") if isinstance(result, dict) else None
+        )
+        if (
+            isinstance(structured_data, dict)
+            and structured_data.get("is_food") is False
+        ):
             return
         parse_meal_response_localization(
             structured_data,

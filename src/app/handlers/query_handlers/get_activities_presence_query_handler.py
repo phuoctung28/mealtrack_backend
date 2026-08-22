@@ -1,6 +1,7 @@
 """
 Handler for activities presence query - returns boolean map of dates with meals.
 """
+
 import logging
 from datetime import date, timedelta
 from typing import Dict, Optional
@@ -17,7 +18,9 @@ MAX_DATE_RANGE = 60
 
 
 @handles(GetActivitiesPresenceQuery)
-class GetActivitiesPresenceQueryHandler(EventHandler[GetActivitiesPresenceQuery, Dict[str, bool]]):
+class GetActivitiesPresenceQueryHandler(
+    EventHandler[GetActivitiesPresenceQuery, Dict[str, bool]]
+):
     """Handler for activities presence check."""
 
     def __init__(self, cache_service: Optional[CachePort] = None):
@@ -43,7 +46,9 @@ class GetActivitiesPresenceQueryHandler(EventHandler[GetActivitiesPresenceQuery,
             result: Dict[str, bool] = {}
             current = query.start_date
             while current <= query.end_date:
-                result[current.isoformat()] = current in daily_counts and daily_counts[current] > 0
+                result[current.isoformat()] = (
+                    current in daily_counts and daily_counts[current] > 0
+                )
                 current += timedelta(days=1)
 
             return result

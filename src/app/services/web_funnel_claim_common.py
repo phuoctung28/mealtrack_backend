@@ -38,7 +38,9 @@ def claim_not_found() -> HTTPException:
 
 
 def claim_conflict() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Claim unavailable")
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT, detail="Claim unavailable"
+    )
 
 
 def is_active_standard(subscriber: dict | None) -> bool:

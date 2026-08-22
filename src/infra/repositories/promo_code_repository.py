@@ -1,4 +1,5 @@
 """Async repository for promo code system — validation and redemption tracking."""
+
 from typing import Optional
 
 from sqlalchemy import select

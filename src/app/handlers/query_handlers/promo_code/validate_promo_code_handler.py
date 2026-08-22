@@ -1,4 +1,5 @@
 """Query handler — validate a promo code: existence, active status, usage cap, already-redeemed."""
+
 import logging
 
 from src.app.queries.promo_code.validate_promo_code_query import (
@@ -18,7 +19,9 @@ class ValidatePromoCodeQueryHandler:
 
             promo = await repo.get_by_code(query.code)
             if not promo:
-                raise PromoCodeValidationError(status_code=404, detail="Promo code not found")
+                raise PromoCodeValidationError(
+                    status_code=404, detail="Promo code not found"
+                )
 
             if not promo.is_active:
                 raise PromoCodeValidationError(

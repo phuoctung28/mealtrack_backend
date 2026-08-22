@@ -30,7 +30,9 @@ class TemplateRenderer(Protocol):
 class EmailService:
     """Business logic for sending lifecycle emails."""
 
-    def __init__(self, email_adapter: EmailServicePort, template_renderer: TemplateRenderer):
+    def __init__(
+        self, email_adapter: EmailServicePort, template_renderer: TemplateRenderer
+    ):
         self._adapter = email_adapter
         self._renderer = template_renderer
 
@@ -81,7 +83,11 @@ class EmailService:
         )
 
     async def send_trial_expiring_email(
-        self, user: EmailUser, days_left: int, meals_logged: int = 0, streak_days: int = 0
+        self,
+        user: EmailUser,
+        days_left: int,
+        meals_logged: int = 0,
+        streak_days: int = 0,
     ) -> EmailResult:
         """Send trial expiring reminder."""
         subject = f"In {days_left} days, your macros go dark ⏰"

@@ -89,9 +89,9 @@ class TestRecipeDetailsResponse:
             carbs=25.0,
             fat=18.0,
         )
-        assert not hasattr(
-            response, "description"
-        ), "Response should not have description field"
+        assert not hasattr(response, "description"), (
+            "Response should not have description field"
+        )
         assert len(response.ingredients) == 3
         assert len(response.recipe_steps) == 3
         assert response.prep_time_minutes == 20

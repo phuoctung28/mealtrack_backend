@@ -1,4 +1,5 @@
 """Circuit breaker for AI provider health tracking."""
+
 import logging
 import threading
 import time

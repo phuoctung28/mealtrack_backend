@@ -31,7 +31,7 @@ class GetDailyMovementQueryHandler(EventHandler[GetDailyMovementQuery, dict]):
         self._uow = uow
 
     async def handle(self, query: GetDailyMovementQuery) -> dict:
-        async with (self._uow if self._uow is not None else AsyncUnitOfWork()) as uow:
+        async with self._uow if self._uow is not None else AsyncUnitOfWork() as uow:
             user_tz = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
             )

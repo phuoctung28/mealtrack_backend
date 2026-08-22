@@ -1,6 +1,7 @@
 """
 Nutrition API endpoints - bulk data retrieval and presence checks.
 """
+
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request

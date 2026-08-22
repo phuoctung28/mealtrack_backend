@@ -8,7 +8,9 @@ from src.api.utils.file_validation import FileValidator
 
 
 def _upload_file(content: bytes, content_type: str) -> UploadFile:
-    return UploadFile(filename="x", file=io.BytesIO(content), headers={"content-type": content_type})
+    return UploadFile(
+        filename="x", file=io.BytesIO(content), headers={"content-type": content_type}
+    )
 
 
 def test_validate_image_file_rejects_content_type():
@@ -45,10 +47,11 @@ def test_validate_image_file_wraps_read_error():
         def read(self, *args, **kwargs):  # type: ignore[override]
             raise RuntimeError("boom")
 
-    f = UploadFile(filename="x", file=_BadFile(b"abc"), headers={"content-type": "image/jpeg"})
+    f = UploadFile(
+        filename="x", file=_BadFile(b"abc"), headers={"content-type": "image/jpeg"}
+    )
     with pytest.raises(ValidationException) as exc:
         FileValidator.validate_image_file(
             f, allowed_content_types=["image/jpeg"], max_size_bytes=10
         )
     assert exc.value.error_code == "FILE_READ_ERROR"
-

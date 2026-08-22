@@ -8,8 +8,15 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import ValidationException
-from src.api.schemas.request.movement_requests import LogMovementRequest, UpdateMovementRequest
-from src.app.commands.movement import DeleteMovementEntryCommand, LogMovementCommand, UpdateMovementEntryCommand
+from src.api.schemas.request.movement_requests import (
+    LogMovementRequest,
+    UpdateMovementRequest,
+)
+from src.app.commands.movement import (
+    DeleteMovementEntryCommand,
+    LogMovementCommand,
+    UpdateMovementEntryCommand,
+)
 from src.app.queries.movement import GetDailyMovementQuery, GetMovementCatalogQuery
 from src.infra.event_bus import EventBus
 
@@ -22,7 +29,9 @@ def _parse_date(value: Optional[str]):
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError as exc:
-        raise ValidationException("Invalid date format. Use YYYY-MM-DD", "INVALID_DATE") from exc
+        raise ValidationException(
+            "Invalid date format. Use YYYY-MM-DD", "INVALID_DATE"
+        ) from exc
 
 
 @router.get("/catalog")

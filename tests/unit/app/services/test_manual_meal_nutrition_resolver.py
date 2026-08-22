@@ -286,7 +286,9 @@ async def test_custom_parse_text_unit_is_not_canonicalized_to_grams():
 
     assert resolved[0].quantity == pytest.approx(1.0)
     assert resolved[0].unit == "Miếng"
-    units = {option["unit"]: option["gram_weight"] for option in resolved[0].allowed_units}
+    units = {
+        option["unit"]: option["gram_weight"] for option in resolved[0].allowed_units
+    }
     assert units["miếng"] == pytest.approx(100.0)
     assert units["g"] == pytest.approx(1.0)
     nutrition, _ = NutritionCalculationService().aggregate_from_command_items(resolved)

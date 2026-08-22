@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from src.domain.ports.cache_port import CachePort
 from src.domain.services.nutrition_integrity_policy import (
     NutritionIntegrityPolicy,
     normalize_serving_options,
@@ -48,6 +49,8 @@ class FatSecretService:
         client_id: str,
         client_secret: str,
         integrity_policy: NutritionIntegrityPolicy | None = None,
+        cache_service: CachePort | None = None,
+        cache_ttl_seconds: int = 604800,
     ):
         self.client_id = client_id
         self.client_secret = client_secret
@@ -55,6 +58,8 @@ class FatSecretService:
         self._token_expires_at: float = 0
         self._client: httpx.AsyncClient | None = None
         self._integrity_policy = integrity_policy or NutritionIntegrityPolicy()
+        self._cache_service = cache_service
+        self._cache_ttl_seconds = cache_ttl_seconds
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
@@ -299,6 +304,17 @@ class FatSecretService:
         language: str = "en",
     ) -> dict[str, Any] | None:
         """Fetch detailed nutrition for one selected fatsecret food candidate."""
+        cache_key = (
+            f"fatsecret:food_details:{food_id}:{region.upper()}:{language.lower()}"
+        )
+        if self._cache_service:
+            try:
+                cached = await self._cache_service.get(cache_key)
+                if isinstance(cached, dict):
+                    return cached
+            except Exception as exc:
+                logger.debug("fatsecret food details cache read failed: %s", exc)
+
         detail_params = {
             "method": "food.get.v5",
             "food_id": food_id,
@@ -314,6 +330,15 @@ class FatSecretService:
         food_data = details.get("food", details)
         mapped = self._map_search_result(food_data)
         mapped.update(self._extract_nutrition_from_details(food_data))
+
+        if self._cache_service and mapped:
+            try:
+                await self._cache_service.set(
+                    cache_key, mapped, ttl_seconds=self._cache_ttl_seconds
+                )
+            except Exception as exc:
+                logger.debug("fatsecret food details cache write failed: %s", exc)
+
         return mapped
 
     def _extract_foods_search_results(self, result: dict[str, Any]) -> list[dict]:
@@ -560,10 +585,14 @@ _fat_secret_service: FatSecretService | None = None
 _fat_secret_service_initialized = False
 
 
-def get_fat_secret_service() -> FatSecretService | None:
+def get_fat_secret_service(
+    cache_service: CachePort | None = None,
+) -> FatSecretService | None:
     """Get the optional FatSecret service when credentials are configured."""
     global _fat_secret_service, _fat_secret_service_initialized
     if _fat_secret_service_initialized:
+        if _fat_secret_service is not None and cache_service is not None:
+            _fat_secret_service._cache_service = cache_service
         return _fat_secret_service
 
     client_id = settings.FATSECRET_CLIENT_ID
@@ -577,6 +606,7 @@ def get_fat_secret_service() -> FatSecretService | None:
     _fat_secret_service = FatSecretService(
         client_id=client_id,
         client_secret=client_secret,
+        cache_service=cache_service,
     )
     _fat_secret_service_initialized = True
     return _fat_secret_service

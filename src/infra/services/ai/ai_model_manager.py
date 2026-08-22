@@ -279,6 +279,11 @@ class AIModelManager:
         Tries each model in the fallback chain until one succeeds.
         Records failures/successes in circuit breaker.
         """
+        kwargs_copy = dict(kwargs)
+        if purpose == ModelPurpose.PARSE_TEXT:
+            kwargs_copy.setdefault("temperature", 0.0)
+            kwargs_copy.setdefault("seed", 42)
+
         chain = self.get_fallback_chain(purpose)
         available = self._circuit_breaker.filter_available(chain)
 
@@ -309,7 +314,7 @@ class AIModelManager:
                     max_tokens=max_tokens,
                     schema=schema,
                     purpose_hint=purpose.value,
-                    **kwargs,
+                    **kwargs_copy,
                 )
 
                 self._circuit_breaker.record_success(model)

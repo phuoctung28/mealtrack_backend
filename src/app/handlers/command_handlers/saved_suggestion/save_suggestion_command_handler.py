@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 class SaveSuggestionCommandHandler(EventHandler[SaveSuggestionCommand, dict[str, Any]]):
     """Save a meal suggestion. Returns existing if already saved (idempotent)."""
 
-    def __init__(self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None):
+    def __init__(
+        self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None
+    ):
         self.uow = uow
         self.cache_service = cache_service
 

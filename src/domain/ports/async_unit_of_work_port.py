@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         MealSuggestionRepositoryPort,
     )
     from src.domain.ports.notification_repository_port import NotificationRepositoryPort
+    from src.domain.ports.outbox_repository_port import OutboxRepositoryPort
     from src.domain.ports.saved_suggestion_repository_port import (
         SavedSuggestionRepositoryPort,
     )
@@ -35,6 +36,7 @@ class AsyncUnitOfWorkPort(ABC):
     saved_suggestions: SavedSuggestionRepositoryPort
     saved_suggestions_db: SavedSuggestionRepositoryPort
     body_fat_visual_profiles: BodyFatVisualProfileRepositoryPort
+    outbox: OutboxRepositoryPort
 
     weekly_budgets: Any
     cheat_days: Any

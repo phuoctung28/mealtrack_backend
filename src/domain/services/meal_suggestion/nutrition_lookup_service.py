@@ -590,8 +590,7 @@ class NutritionLookupService:
         """Log current cache metrics at INFO level."""
         metrics = NutritionLookupService.get_cache_metrics()
         logger.info(
-            "[NUTRITION-CACHE] hits=%d misses=%d hit_rate=%.1f%% | "
-            "T1=%d T2=%d T3=%d",
+            "[NUTRITION-CACHE] hits=%d misses=%d hit_rate=%.1f%% | T1=%d T2=%d T3=%d",
             metrics["redis_hits"],
             metrics["redis_misses"],
             metrics["redis_hit_rate_pct"],

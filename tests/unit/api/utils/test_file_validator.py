@@ -8,7 +8,9 @@ from src.api.utils.file_validator import FileValidator
 
 
 def _upload_file(content: bytes, content_type: str) -> UploadFile:
-    return UploadFile(filename="x", file=io.BytesIO(content), headers={"content-type": content_type})
+    return UploadFile(
+        filename="x", file=io.BytesIO(content), headers={"content-type": content_type}
+    )
 
 
 @pytest.mark.asyncio
@@ -47,4 +49,3 @@ async def test_validate_image_file_returns_bytes_and_resets_position():
     assert out == b"hello"
     # Starlette's UploadFile exposes the underlying file object
     assert f.file.tell() == 0
-

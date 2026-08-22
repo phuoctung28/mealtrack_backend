@@ -1,4 +1,5 @@
 """Unit tests for GuestParseQuotaService (Postgres-backed) logic."""
+
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, call
 
@@ -19,6 +20,7 @@ from src.domain.utils.timezone_utils import utc_now
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_savepoint(*, raises_on_flush: Exception | None = None):
     """Async context manager mock for session.begin_nested()."""
@@ -56,6 +58,7 @@ def _make_session(
         async def _flush(*args, **kwargs):
             raise _exc
     else:
+
         async def _flush(*args, **kwargs):
             pass
 
@@ -90,13 +93,14 @@ def _completed_row() -> MagicMock:
 # validate_install_id
 # ---------------------------------------------------------------------------
 
+
 def test_validate_install_id_valid():
     assert validate_install_id("abc12345") is True
     assert validate_install_id("a" * 128) is True
 
 
 def test_validate_install_id_invalid():
-    assert validate_install_id("abc") is False      # too short
+    assert validate_install_id("abc") is False  # too short
     assert validate_install_id("a" * 129) is False  # too long
     assert validate_install_id("has space!") is False
 
@@ -104,6 +108,7 @@ def test_validate_install_id_invalid():
 # ---------------------------------------------------------------------------
 # reserve — first insert succeeds
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_reserve_first_time_returns_hash():
@@ -123,6 +128,7 @@ async def test_reserve_first_time_returns_hash():
 # reserve — row exists, in-flight
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_reserve_in_flight_raises():
     session = _make_session(
@@ -141,6 +147,7 @@ async def test_reserve_in_flight_raises():
 # reserve — row exists, completed
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_reserve_completed_raises_already_used():
     session = _make_session(
@@ -158,6 +165,7 @@ async def test_reserve_completed_raises_already_used():
 # ---------------------------------------------------------------------------
 # reserve — expired reservation is reclaimed
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_reserve_expired_reclaims_slot():
@@ -183,6 +191,7 @@ async def test_reserve_expired_reclaims_slot():
 # reserve — DB failure raises QuotaUnavailableError
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_reserve_db_failure_raises_unavailable():
     session = _make_session(flush_raises=SQLAlchemyError("conn lost"))
@@ -197,6 +206,7 @@ async def test_reserve_db_failure_raises_unavailable():
 # ---------------------------------------------------------------------------
 # mark_completed
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_mark_completed_updates_row():
@@ -215,6 +225,7 @@ async def test_mark_completed_updates_row():
 # release_reservation — reserved row is deleted
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_release_reservation_deletes_reserved_row():
     row = _reserved_row()
@@ -229,6 +240,7 @@ async def test_release_reservation_deletes_reserved_row():
 # ---------------------------------------------------------------------------
 # release_reservation — completed row is NOT deleted
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_release_reservation_skips_completed_row():

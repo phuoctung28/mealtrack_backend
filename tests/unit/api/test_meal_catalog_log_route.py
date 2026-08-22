@@ -168,7 +168,9 @@ def test_log_returns_locked_response_shape():
         "meal_date": "2026-08-18",
         "meal_type": "breakfast",
     }
-    command = next(item for item in bus.commands if isinstance(item, LogCatalogMealCommand))
+    command = next(
+        item for item in bus.commands if isinstance(item, LogCatalogMealCommand)
+    )
     assert command.user_id == "user-1"
     assert command.catalog_meal_id == "catalog-1"
     assert command.meal_date == date(2026, 8, 18)

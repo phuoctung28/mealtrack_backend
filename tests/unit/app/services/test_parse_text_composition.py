@@ -12,9 +12,7 @@ def test_named_dish_is_classified_for_composition():
 
 
 def test_listed_or_measured_foods_are_not_dishes():
-    assert (
-        classify_parse_text_input("trứng, sữa, bánh mì") == "ingredient_list"
-    )
+    assert classify_parse_text_input("trứng, sữa, bánh mì") == "ingredient_list"
     assert classify_parse_text_input("100g chicken breast") == "single_food"
     assert classify_parse_text_input("1 banana") == "single_food"
     assert classify_parse_text_input("thịt nướng") == "single_food"

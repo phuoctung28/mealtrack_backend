@@ -1,4 +1,5 @@
 """Tests that AIOutputValidationError from vision service produces controlled failures."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -89,5 +90,3 @@ async def test_scan_by_url_handler_propagates_ai_validation_error():
                 await handler.handle(command)
 
     assert exc_info.value is VALIDATION_ERROR
-
-

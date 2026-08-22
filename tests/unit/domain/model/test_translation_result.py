@@ -28,4 +28,3 @@ def test_canonical_result_is_not_cacheable():
     assert result.outcome is TranslationOutcome.UNAVAILABLE
     assert result.to_list() == ["Chicken"]
     assert result.cacheable is False
-

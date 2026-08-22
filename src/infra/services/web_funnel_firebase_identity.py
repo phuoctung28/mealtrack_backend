@@ -51,7 +51,9 @@ class WebFunnelFirebaseIdentityService:
             is_provisional=is_provisional,
         )
 
-    async def mint_custom_token(self, identity: FirebaseIdentity, reservation_id: str, generation: int) -> str:
+    async def mint_custom_token(
+        self, identity: FirebaseIdentity, reservation_id: str, generation: int
+    ) -> str:
         token = await asyncio.to_thread(
             auth.create_custom_token,
             identity.uid,

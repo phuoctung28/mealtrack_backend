@@ -5,7 +5,6 @@ All items must provide their own nutrition (via custom_nutrition).
 
 import logging
 import time
-from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -144,9 +143,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
 
         try:
             items_needing_resolution = [
-                item
-                for item in event.items
-                if not self._is_prepared_nutrition(item)
+                item for item in event.items if not self._is_prepared_nutrition(item)
             ]
             if items_needing_resolution:
                 async with self.uow_factory() as resolve_uow:
@@ -202,19 +199,13 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
     def _is_prepared_nutrition(item: Any) -> bool:
         """Recognize only the versioned nutrition payload as save-ready."""
         return (
-            item.nutrition_contract_version == "2"
+            str(item.nutrition_contract_version or "") == "2"
             and item.custom_nutrition is not None
             and (item.origin == "custom" or item.source_snapshot is not None)
         )
 
     async def _reserve_v2_write_short(self, event):
         async with self.uow_factory() as uow:
-            cleanup = getattr(uow.meal_write_operations, "cleanup_finished", None)
-            if cleanup is not None:
-                await cleanup(
-                    older_than=utc_now() - timedelta(days=30),
-                    limit=100,
-                )
             return await self._reserve_v2_write(event, uow)
 
     async def _release_v2_write(self, reservation):

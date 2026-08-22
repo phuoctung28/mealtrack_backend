@@ -41,6 +41,15 @@ Parse the user's food description into a list of items with nutritional data. Ea
 - sugar_g: Sugar in grams, or 0 when unavailable
 - quantity_g: Weight in grams when stated or confidently convertible, otherwise null
 
+PORTION & GRAM BENCHMARK STANDARDS (Use for estimation when grams are not specified):
+- 1 standard egg (quả trứng) = 50g
+- 1 bowl of cooked white rice (bát/chén cơm trắng) = 150g (protein: ~4g, carbs: ~42g, fat: ~0.4g)
+- 1 bowl of noodle soup (tô/bát phở, bún, mì): 180g cooked noodles + 90g cooked meat + 350ml broth
+- 1 standard sandwich / roll: 80g bread/wrap + 60g meat/egg + 30g vegetables
+- 1 serving of cooked lean meat (ức gà, thăn bò, nạc heo) = 100g
+- 1 slice of bread (lát bánh mì) = 30-35g
+- Densities for volume conversion: Cooking oil = 0.92g/ml, Milk = 1.03g/ml, Honey = 1.42g/ml
+
 IMPORTANT: You MUST respond with ONLY valid JSON object (no markdown, no code blocks):
 {
   "emoji": "single emoji representing the overall dish (🍜 noodle soup, 🍝 dry pasta, 🍚 rice, 🍲 stew/hotpot, 🍖 grilled meat, 🥗 salad, 🥘 braised, 🥟 rolls/dumplings, 🥪 sandwich)",
@@ -49,7 +58,7 @@ IMPORTANT: You MUST respond with ONLY valid JSON object (no markdown, no code bl
 
 Guidelines:
 - Estimate nutritional values based on standard food databases
-- Use reasonable portion sizes
+- Use reasonable portion sizes based on the benchmark standards above
 - If ambiguous, make a reasonable assumption and note it in the name
 - Include common items like beverages, condiments, and cooking oils
 - COMPOSITION: If the user named a prepared dish or meal as a whole, return the edible components of one serving as separate items. Do not return the dish as a single row. Stop at foods a diner would point to on the plate. Do not recurse into recipes, dough, or unnamed spices.
@@ -403,7 +412,7 @@ Return ONLY valid JSON matching the structure above."""
         lang = language if language in SystemPrompts.SUPPORTED_LANGUAGES else "en"
         return (
             f"Translate each English food name into {lang}. "
-            "Return JSON only: {\"items\": [\"...\"]} with the same count and order. "
+            'Return JSON only: {"items": ["..."]} with the same count and order. '
             "Never leave an item in English. Generic ingredients are not brands. "
             "Use the everyday name a speaker of that language would say for "
             "that food, not a brand or a copied English label."

@@ -8,6 +8,7 @@ task manager. The Flutter client already projects SQLite locally and must
 not wait on Redis SCAN of `nutrition_bulk:*` / weekly-budget patterns.
 """
 
+import asyncio
 import logging
 import time
 from collections.abc import Coroutine
@@ -57,40 +58,77 @@ class CacheInvalidationService:
                 return
             except Exception as exc:
                 if attempt == 0:
-                    logger.warning("Cache pattern invalidation retry for %s: %s", pattern, exc)
+                    logger.warning(
+                        "Cache pattern invalidation retry for %s: %s", pattern, exc
+                    )
                 else:
-                    logger.error("Cache pattern invalidation failed for %s: %s", pattern, exc)
+                    logger.error(
+                        "Cache pattern invalidation failed for %s: %s", pattern, exc
+                    )
 
     async def _invalidate_weekly_budget(self, user_id: str, week_start: date) -> None:
-        await self._invalidate_key(CacheKeys.weekly_budget(user_id, week_start)[0])
-        await self._invalidate_pattern(CacheKeys.weekly_budget_pattern(user_id, week_start))
+        await asyncio.gather(
+            self._invalidate_key(CacheKeys.weekly_budget(user_id, week_start)[0]),
+            self._invalidate_pattern(
+                CacheKeys.weekly_budget_pattern(user_id, week_start)
+            ),
+            return_exceptions=True,
+        )
+
+    async def _run_secondary_meal_invalidations(
+        self,
+        user_id: str,
+        meal_week_start: date,
+        current_week_start: date,
+    ) -> None:
+        """Invalidate non-critical keys (bulk caches, streaks, breakdowns)."""
+        tasks = [
+            self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*"),
+            self._invalidate_key(
+                CacheKeys.daily_breakdown(user_id, meal_week_start)[0]
+            ),
+            self._invalidate_key(CacheKeys.user_streak(user_id)[0]),
+        ]
+        if meal_week_start != current_week_start:
+            tasks.append(self._invalidate_weekly_budget(user_id, current_week_start))
+            tasks.append(
+                self._invalidate_key(
+                    CacheKeys.daily_breakdown(user_id, current_week_start)[0]
+                )
+            )
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def after_meal_write(self, user_id: str, meal_date: date) -> None:
-        """Invalidate all caches affected by a meal create/edit/delete."""
+        """Invalidate all caches affected by a meal create/edit/delete.
+
+        Critical keys needed immediately by the client are awaited synchronously.
+        Secondary keys (bulk scans, streaks, breakdown) are scheduled in the background.
+        """
         _t0 = time.perf_counter()
         meal_week_start = _get_week_start(meal_date)
         current_week_start = _get_week_start(date.today())
 
-        # Critical keys (client reads immediately after write)
+        # Critical keys (client reads immediately after write) - run concurrently
         _tc = time.perf_counter()
-        await self._invalidate_pattern(
-            f"user:{user_id}:activities:{meal_date.isoformat()}:*"
-        )
-        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
-        await self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0])
-        await self._invalidate_weekly_budget(user_id, meal_week_start)
+        critical_tasks = [
+            self._invalidate_pattern(
+                f"user:{user_id}:activities:{meal_date.isoformat()}:*"
+            ),
+            self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0]),
+            self._invalidate_weekly_budget(user_id, meal_week_start),
+        ]
+        await asyncio.gather(*critical_tasks, return_exceptions=True)
         _critical_ms = (time.perf_counter() - _tc) * 1000
 
-        # Secondary keys (read on other screens, slight delay acceptable)
+        # Secondary keys — scheduled on task manager if available, else awaited in-place
         _ts = time.perf_counter()
-        await self._invalidate_key(CacheKeys.daily_breakdown(user_id, meal_week_start)[0])
-        await self._invalidate_key(CacheKeys.user_streak(user_id)[0])
+        await self._schedule(
+            f"cache:after_meal_write_secondary:{user_id}:{meal_date.isoformat()}",
+            self._run_secondary_meal_invalidations(
+                user_id, meal_week_start, current_week_start
+            ),
+        )
         _secondary_ms = (time.perf_counter() - _ts) * 1000
-
-        # Backdated meal: also invalidate current week
-        if meal_week_start != current_week_start:
-            await self._invalidate_weekly_budget(user_id, current_week_start)
-            await self._invalidate_key(CacheKeys.daily_breakdown(user_id, current_week_start)[0])
 
         _total_ms = (time.perf_counter() - _t0) * 1000
         logger.info(
@@ -121,7 +159,9 @@ class CacheInvalidationService:
         # Backdated movement: also invalidate current week
         if week_start != current_week_start:
             await self._invalidate_weekly_budget(user_id, current_week_start)
-            await self._invalidate_key(CacheKeys.daily_breakdown(user_id, current_week_start)[0])
+            await self._invalidate_key(
+                CacheKeys.daily_breakdown(user_id, current_week_start)[0]
+            )
 
         logger.info(
             "cache_invalidation movement timing: user=%s total_ms=%.1f",
@@ -176,7 +216,9 @@ class CacheInvalidationService:
         # Backdated hydration: also invalidate current week
         if week_start != current_week_start:
             await self._invalidate_weekly_budget(user_id, current_week_start)
-            await self._invalidate_key(CacheKeys.daily_breakdown(user_id, current_week_start)[0])
+            await self._invalidate_key(
+                CacheKeys.daily_breakdown(user_id, current_week_start)[0]
+            )
 
     async def after_custom_macros_update(self, user_id: str) -> None:
         """Invalidate caches affected by custom macro target changes.

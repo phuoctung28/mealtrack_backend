@@ -128,7 +128,9 @@ async def test_attempt_recipe_generation_uses_deterministic_macros():
     meal_macros = _make_meal_macros()
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan_async = AsyncMock(return_value=_make_ai_raw_response())
+    generation_service.generate_meal_plan_async = AsyncMock(
+        return_value=_make_ai_raw_response()
+    )
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
     nutrition_lookup.calculate_meal_macros.return_value = meal_macros
@@ -220,11 +222,13 @@ async def test_attempt_recipe_generation_returns_none_on_empty_ingredients():
     session = _make_session()
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan_async = AsyncMock(return_value={
-        "ingredients": [],
-        "recipe_steps": [{"step": 1, "instruction": "...", "duration_minutes": 5}],
-        "prep_time_minutes": 10,
-    })
+    generation_service.generate_meal_plan_async = AsyncMock(
+        return_value={
+            "ingredients": [],
+            "recipe_steps": [{"step": 1, "instruction": "...", "duration_minutes": 5}],
+            "prep_time_minutes": 10,
+        }
+    )
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
 
@@ -276,7 +280,9 @@ async def test_attempt_recipe_generation_returns_none_on_nutrition_lookup_error(
     session = _make_session()
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan_async = AsyncMock(return_value=_make_ai_raw_response())
+    generation_service.generate_meal_plan_async = AsyncMock(
+        return_value=_make_ai_raw_response()
+    )
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
     nutrition_lookup.calculate_meal_macros.side_effect = RuntimeError(
@@ -309,7 +315,9 @@ async def test_attempt_recipe_generation_scale_within_range_returns_scaled_sugge
     session = _make_session()  # target_calories=600
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan_async = AsyncMock(return_value=_make_ai_raw_response())
+    generation_service.generate_meal_plan_async = AsyncMock(
+        return_value=_make_ai_raw_response()
+    )
 
     # Deterministic macros: 520 kcal (scale = 600/520 ≈ 1.154 → within range)
     # Use a simple pure-protein ingredient so calorie math is exact
@@ -372,9 +380,9 @@ async def test_attempt_recipe_generation_scale_within_range_returns_scaled_sugge
         session=session,
     )
 
-    assert (
-        result is not None
-    ), "Scale factor ≈1.15 is within range; recipe should be accepted"
+    assert result is not None, (
+        "Scale factor ≈1.15 is within range; recipe should be accepted"
+    )
 
     scale = 600 / raw_calories
     # Verify macros reflect scaling (validate_deterministic passes through valid values)
@@ -388,7 +396,9 @@ async def test_attempt_recipe_generation_scale_out_of_range_returns_none():
     session = _make_session()  # target_calories=600
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan_async = AsyncMock(return_value=_make_ai_raw_response())
+    generation_service.generate_meal_plan_async = AsyncMock(
+        return_value=_make_ai_raw_response()
+    )
 
     # Deterministic macros: 1400 kcal → scale = 600/1400 ≈ 0.43 → rejected
     from src.domain.services.meal_suggestion.nutrition_lookup_service import (
@@ -448,9 +458,9 @@ async def test_attempt_recipe_generation_scale_out_of_range_returns_none():
     )
 
     # Scale factor ≈0.43 is out of range → rejected → None
-    assert (
-        result is None
-    ), "Scale factor out of range should return None for upstream retry"
+    assert result is None, (
+        "Scale factor out of range should return None for upstream retry"
+    )
 
 
 @pytest.mark.asyncio
@@ -460,7 +470,9 @@ async def test_attempt_recipe_generation_selected_mode_scales_without_rejecting(
     session.target_calories = 300
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan_async = AsyncMock(return_value=_make_ai_raw_response())
+    generation_service.generate_meal_plan_async = AsyncMock(
+        return_value=_make_ai_raw_response()
+    )
 
     raw_macros = MealMacros(
         calories=600.0,

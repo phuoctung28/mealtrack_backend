@@ -8,9 +8,7 @@ from typing import Any
 
 _SEGMENT_SPLIT = re.compile(r"([/|,;&]+)")
 _LATIN_TOKEN = re.compile(r"[A-Za-z][A-Za-z']*")
-_ENGLISH_CONNECTORS = re.compile(
-    r"\b(and|with|of|the|in|from|style)\b", re.IGNORECASE
-)
+_ENGLISH_CONNECTORS = re.compile(r"\b(and|with|of|the|in|from|style)\b", re.IGNORECASE)
 _NON_GLOSSARY = re.compile(r"[^a-z]+")
 
 _CLEAR_ENGLISH_FOOD_TOKENS = frozenset(
@@ -101,9 +99,7 @@ def apply_localized_display_names(
             item["name"] = updated
 
 
-def apply_glossary_display_names(
-    items: list[dict[str, Any]], language: str
-) -> None:
+def apply_glossary_display_names(items: list[dict[str, Any]], language: str) -> None:
     """Apply deterministic display names for known leftover English foods."""
     mapping = {
         leftover: localized
@@ -114,9 +110,7 @@ def apply_glossary_display_names(
         apply_localized_display_names(items, mapping, language)
 
 
-def apply_fail_closed_display_names(
-    items: list[dict[str, Any]], language: str
-) -> None:
+def apply_fail_closed_display_names(items: list[dict[str, Any]], language: str) -> None:
     """Replace remaining English leftovers with a glossary or generic fallback."""
     leftovers = leftover_display_names(items, language)
     if not leftovers:

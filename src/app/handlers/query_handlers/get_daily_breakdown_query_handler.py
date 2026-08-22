@@ -61,9 +61,12 @@ class GetDailyBreakdownQueryHandler(
                 projection=MealProjection.MACROS_ONLY,
             )
 
-        base_daily_cal, base_daily_protein, base_daily_carbs, base_daily_fat = (
-            await self._get_base_daily_targets(query.user_id)
-        )
+        (
+            base_daily_cal,
+            base_daily_protein,
+            base_daily_carbs,
+            base_daily_fat,
+        ) = await self._get_base_daily_targets(query.user_id)
 
         meals_by_day: dict[date, list[Any]] = {day: [] for day in days}
         for meal in meals:

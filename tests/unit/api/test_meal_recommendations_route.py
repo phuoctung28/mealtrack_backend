@@ -314,7 +314,9 @@ async def test_log_route_sends_recommended_meal_command():
     )
 
     command = next(
-        item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
+        item
+        for item in event_bus.commands
+        if isinstance(item, LogRecommendedMealCommand)
     )
     assert command.request_id == "log-1"
     assert command.language == "en"
@@ -337,7 +339,9 @@ async def test_log_route_forwards_request_language_to_command():
     )
 
     command = next(
-        item for item in event_bus.commands if isinstance(item, LogRecommendedMealCommand)
+        item
+        for item in event_bus.commands
+        if isinstance(item, LogRecommendedMealCommand)
     )
     assert command.language == "vi"
 
@@ -357,7 +361,9 @@ async def test_skip_route_sends_skip_slot_command():
     )
 
     command = next(
-        item for item in event_bus.commands if isinstance(item, SkipMealRecommendationSlotCommand)
+        item
+        for item in event_bus.commands
+        if isinstance(item, SkipMealRecommendationSlotCommand)
     )
     assert command.request_id == "skip-1"
     assert response.plan_id == "plan-1"

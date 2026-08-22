@@ -69,4 +69,6 @@ class WelcomeEmailHandler(EventHandler[UserOnboardedEvent, None]):
 
                 logger.info(f"Welcome email sent to user {user.id}")
             else:
-                logger.error(f"Failed to send welcome email to {user.id}: {result.error}")
+                logger.error(
+                    f"Failed to send welcome email to {user.id}: {result.error}"
+                )

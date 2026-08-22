@@ -1,4 +1,5 @@
 """Query and error type for validating a promo code before purchase."""
+
 from dataclasses import dataclass
 from typing import Optional
 

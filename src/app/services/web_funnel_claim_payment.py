@@ -32,12 +32,16 @@ def _exact_lead_id(event: dict) -> str | None:
 
 def _matches_revenuecat_environment(environment: object) -> bool:
     """Fail closed unless this webhook belongs to the configured environment."""
-    return isinstance(environment, str) and bool(
-        settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
-    ) and environment == settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
+    return (
+        isinstance(environment, str)
+        and bool(settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT)
+        and environment == settings.WEB_FUNNEL_REVENUECAT_ENVIRONMENT
+    )
 
 
-async def reconcile_revenuecat_event(db: AsyncSession, event: dict, subscriber: dict | None) -> bool:
+async def reconcile_revenuecat_event(
+    db: AsyncSession, event: dict, subscriber: dict | None
+) -> bool:
     """Handle web leads only; caller continues the native webhook path unchanged."""
     event_id = event.get("id")
     lead_id = _exact_lead_id(event)
@@ -46,26 +50,67 @@ async def reconcile_revenuecat_event(db: AsyncSession, event: dict, subscriber: 
     lead = await db.get(WebFunnelLead, lead_id, with_for_update=True)
     if not lead:
         return False
-    existing = await db.scalar(select(WebFunnelProviderEvent).where(WebFunnelProviderEvent.provider_event_id == event_id))
+    existing = await db.scalar(
+        select(WebFunnelProviderEvent).where(
+            WebFunnelProviderEvent.provider_event_id == event_id
+        )
+    )
     if existing:
         return True
-    inbox = WebFunnelProviderEvent(id=str(uuid.uuid4()), provider_event_id=event_id, event_type=str(event.get("type", "unknown")), lead_id=lead_id, payload={"environment": event.get("environment"), "product_id": event.get("product_id")}, created_at=utcnow())
+    inbox = WebFunnelProviderEvent(
+        id=str(uuid.uuid4()),
+        provider_event_id=event_id,
+        event_type=str(event.get("type", "unknown")),
+        lead_id=lead_id,
+        payload={
+            "environment": event.get("environment"),
+            "product_id": event.get("product_id"),
+        },
+        created_at=utcnow(),
+    )
     db.add(inbox)
     if not _matches_revenuecat_environment(event.get("environment")):
         await db.commit()
         return True
     if subscriber is None:
-        db.add(WebFunnelOutbox(idempotency_key=f"revenuecat-reconcile:{event_id}", job_type="revenuecat_reconcile", payload={"provider_event_id": event_id, "lead_id": lead_id}, status="pending", attempts=0, next_attempt_at=utcnow()))
+        db.add(
+            WebFunnelOutbox(
+                idempotency_key=f"revenuecat-reconcile:{event_id}",
+                job_type="revenuecat_reconcile",
+                payload={"provider_event_id": event_id, "lead_id": lead_id},
+                status="pending",
+                attempts=0,
+                next_attempt_at=utcnow(),
+            )
+        )
         await db.commit()
         return True
     if event.get("type") == "REFUND" or not is_active_standard(subscriber):
         lead.status, lead.access_sync_status = "refunded", "refunded"
-        for claim in (await db.scalars(select(WebFunnelClaim).where(WebFunnelClaim.lead_id == lead.id, WebFunnelClaim.consumed_at.is_(None)).with_for_update())).all():
+        for claim in (
+            await db.scalars(
+                select(WebFunnelClaim)
+                .where(
+                    WebFunnelClaim.lead_id == lead.id,
+                    WebFunnelClaim.consumed_at.is_(None),
+                )
+                .with_for_update()
+            )
+        ).all():
             claim.revoked_at = utcnow()
     elif lead.status not in {"claimed", "refunded"}:
         lead.status, lead.payment_verified_at = "payment_verified", utcnow()
         generation = await next_claim_generation(db, lead.id)
-        db.add(WebFunnelOutbox(idempotency_key=f"claim-email:{lead.id}:{generation}", job_type="claim_email", payload={"lead_id": lead.id, "generation": generation}, status="pending", attempts=0, next_attempt_at=utcnow()))
+        db.add(
+            WebFunnelOutbox(
+                idempotency_key=f"claim-email:{lead.id}:{generation}",
+                job_type="claim_email",
+                payload={"lead_id": lead.id, "generation": generation},
+                status="pending",
+                attempts=0,
+                next_attempt_at=utcnow(),
+            )
+        )
         lead.status = "email_queued"
     await db.commit()
     return True
@@ -111,12 +156,29 @@ async def process_revenuecat_reconcile(
             await db.commit()
             return True
         outbox.attempts += 1
-        outbox.next_attempt_at = utcnow() + timedelta(minutes=min(60, 2 ** int(outbox.attempts)))
+        outbox.next_attempt_at = utcnow() + timedelta(
+            minutes=min(60, 2 ** int(outbox.attempts))
+        )
         await db.commit()
         return False
     generation = await next_claim_generation(db, lead.id)
-    db.add(WebFunnelOutbox(idempotency_key=f"claim-email:{lead.id}:{generation}", job_type="claim_email", payload={"lead_id": lead.id, "generation": generation}, status="pending", attempts=0, next_attempt_at=utcnow()))
-    lead.status, lead.payment_verified_at, event.processed_at, outbox.status, outbox.completed_at = "email_queued", utcnow(), utcnow(), "completed", utcnow()
+    db.add(
+        WebFunnelOutbox(
+            idempotency_key=f"claim-email:{lead.id}:{generation}",
+            job_type="claim_email",
+            payload={"lead_id": lead.id, "generation": generation},
+            status="pending",
+            attempts=0,
+            next_attempt_at=utcnow(),
+        )
+    )
+    (
+        lead.status,
+        lead.payment_verified_at,
+        event.processed_at,
+        outbox.status,
+        outbox.completed_at,
+    ) = "email_queued", utcnow(), utcnow(), "completed", utcnow()
     await db.commit()
     return True
 
@@ -156,7 +218,9 @@ async def next_claim_generation(db: AsyncSession, lead_id: str) -> int:
     return max([int(latest_claim or 0), *queued_generations], default=0) + 1
 
 
-async def process_claim_email(db: AsyncSession, outbox: WebFunnelOutbox, send: object) -> None:
+async def process_claim_email(
+    db: AsyncSession, outbox: WebFunnelOutbox, send: object
+) -> None:
     """Mint and send a link in memory. A post-send crash is safely recoverable by resend."""
     lead = await db.get(WebFunnelLead, outbox.payload["lead_id"], with_for_update=True)
     if not lead or lead.status in {"refunded", "revoked"}:
@@ -164,10 +228,14 @@ async def process_claim_email(db: AsyncSession, outbox: WebFunnelOutbox, send: o
         await db.commit()
         return
     token = new_secret()
-    result = await send(lead.email, token, lead.id)  # token intentionally has no log/persistence path
+    result = await send(
+        lead.email, token, lead.id
+    )  # token intentionally has no log/persistence path
     if not result:
         outbox.attempts += 1
-        outbox.next_attempt_at = utcnow() + timedelta(minutes=min(60, 2 ** outbox.attempts))
+        outbox.next_attempt_at = utcnow() + timedelta(
+            minutes=min(60, 2**outbox.attempts)
+        )
         await db.commit()
         return
     generation = int(outbox.payload["generation"])
@@ -182,6 +250,17 @@ async def process_claim_email(db: AsyncSession, outbox: WebFunnelOutbox, send: o
     )
     for active_claim in active_claims.all():
         active_claim.revoked_at = utcnow()
-    db.add(WebFunnelClaim(lead_id=lead.id, generation=generation, magic_token_hash=hash_secret(token), expires_at=utcnow() + CLAIM_TTL))
-    outbox.status, outbox.completed_at, lead.status = "completed", utcnow(), "email_queued"
+    db.add(
+        WebFunnelClaim(
+            lead_id=lead.id,
+            generation=generation,
+            magic_token_hash=hash_secret(token),
+            expires_at=utcnow() + CLAIM_TTL,
+        )
+    )
+    outbox.status, outbox.completed_at, lead.status = (
+        "completed",
+        utcnow(),
+        "email_queued",
+    )
     await db.commit()

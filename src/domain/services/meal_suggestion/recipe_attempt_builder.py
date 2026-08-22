@@ -26,7 +26,9 @@ from src.domain.services.meal_suggestion.nutrition_lookup_service import (
 
 logger = logging.getLogger(__name__)
 
-PARALLEL_SINGLE_MEAL_TOKENS = 1200  # was 4000; worst-case output ~600 tokens, 2x safety margin
+PARALLEL_SINGLE_MEAL_TOKENS = (
+    1200  # was 4000; worst-case output ~600 tokens, 2x safety margin
+)
 PARALLEL_SINGLE_MEAL_TIMEOUT = 20  # was 35
 
 

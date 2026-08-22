@@ -15,11 +15,12 @@ from src.infra.services.firebase_service import FirebaseService
 class TestFirebaseServicePayload:
     def test_send_to_tokens_data_only_no_notification_field(self):
         svc = FirebaseService.__new__(FirebaseService)
-        with patch(
-            "src.infra.services.firebase_service.firebase_admin"
-        ) as mock_admin, patch(
-            "src.infra.services.firebase_service.messaging.send_each_for_multicast"
-        ) as mock_send:
+        with (
+            patch("src.infra.services.firebase_service.firebase_admin") as mock_admin,
+            patch(
+                "src.infra.services.firebase_service.messaging.send_each_for_multicast"
+            ) as mock_send,
+        ):
             mock_admin._apps = {"default": object()}
             mock_send.return_value = MagicMock(
                 success_count=1, failure_count=0, responses=[]
@@ -38,9 +39,7 @@ class TestFirebaseServicePayload:
 
         # APNs payload has interruption-level in payload body, not headers
         apns_dict = MessageEncoder.encode_apns(sent_msg.apns)
-        assert (
-            apns_dict["payload"]["aps"]["interruption-level"] == "time-sensitive"
-        )
+        assert apns_dict["payload"]["aps"]["interruption-level"] == "time-sensitive"
         assert "apns-interruption-level" not in apns_dict.get("headers", {})
         assert sent_msg.data["title"] == "T"
         assert sent_msg.data["body"] == "B"
@@ -49,11 +48,10 @@ class TestFirebaseServicePayload:
 
     def test_send_to_topic_data_only_no_notification_field(self):
         svc = FirebaseService.__new__(FirebaseService)
-        with patch(
-            "src.infra.services.firebase_service.firebase_admin"
-        ) as mock_admin, patch(
-            "src.infra.services.firebase_service.messaging.send"
-        ) as mock_send:
+        with (
+            patch("src.infra.services.firebase_service.firebase_admin") as mock_admin,
+            patch("src.infra.services.firebase_service.messaging.send") as mock_send,
+        ):
             mock_admin._apps = {"default": object()}
             mock_send.return_value = "projects/p/messages/123"
             svc.send_to_topic("test_topic", "T", "B", {"type": "summary"})
@@ -67,19 +65,18 @@ class TestFirebaseServicePayload:
 
         # APNs payload has interruption-level (same as multicast path)
         apns_dict = MessageEncoder.encode_apns(sent_msg.apns)
-        assert (
-            apns_dict["payload"]["aps"]["interruption-level"] == "time-sensitive"
-        )
+        assert apns_dict["payload"]["aps"]["interruption-level"] == "time-sensitive"
         assert apns_dict["payload"]["aps"]["alert"]["title"] == "T"
         assert apns_dict["payload"]["aps"]["alert"]["body"] == "B"
 
     def test_send_to_tokens_rejects_blank_ios_display_text(self):
         svc = FirebaseService.__new__(FirebaseService)
-        with patch(
-            "src.infra.services.firebase_service.firebase_admin"
-        ) as mock_admin, patch(
-            "src.infra.services.firebase_service.messaging.send_each_for_multicast"
-        ) as mock_send:
+        with (
+            patch("src.infra.services.firebase_service.firebase_admin") as mock_admin,
+            patch(
+                "src.infra.services.firebase_service.messaging.send_each_for_multicast"
+            ) as mock_send,
+        ):
             mock_admin._apps = {"default": object()}
             mock_send.return_value = MagicMock(
                 success_count=1, failure_count=0, responses=[]
@@ -93,11 +90,10 @@ class TestFirebaseServicePayload:
 
     def test_send_to_topic_rejects_blank_ios_display_text(self):
         svc = FirebaseService.__new__(FirebaseService)
-        with patch(
-            "src.infra.services.firebase_service.firebase_admin"
-        ) as mock_admin, patch(
-            "src.infra.services.firebase_service.messaging.send"
-        ) as mock_send:
+        with (
+            patch("src.infra.services.firebase_service.firebase_admin") as mock_admin,
+            patch("src.infra.services.firebase_service.messaging.send") as mock_send,
+        ):
             mock_admin._apps = {"default": object()}
             mock_send.return_value = "projects/p/messages/123"
             result = svc.send_to_topic("test_topic", "", "  ", {"type": "summary"})

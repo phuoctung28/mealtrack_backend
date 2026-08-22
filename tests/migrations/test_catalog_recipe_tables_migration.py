@@ -15,7 +15,9 @@ ANCHOR_METADATA_MIGRATION = Path(
 )
 REMOVED_MIGRATIONS = (
     Path("migrations/versions/20260716000002_add_meal_recommendation_plan_tables.py"),
-    Path("migrations/versions/20260716000003_add_recommendation_swaps_and_interactions.py"),
+    Path(
+        "migrations/versions/20260716000003_add_recommendation_swaps_and_interactions.py"
+    ),
 )
 
 
@@ -121,7 +123,7 @@ def test_candidate_rows_enforce_selection_owner_and_idempotency_invariants() -> 
 
     assert "meal_recommendations" in text
     assert "deferrable=True" in text
-    assert "initially=\"DEFERRED\"" in text
+    assert 'initially="DEFERRED"' in text
     assert "ck_meal_recommendations_anchor_metadata" in text
     assert "uq_meal_recommendations_one_selected" in text
     assert "uq_meal_recommendations_one_active_anchor" in text

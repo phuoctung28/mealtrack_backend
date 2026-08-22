@@ -20,7 +20,16 @@ PRODUCTION_CUISINE_COUNTS = {
     "korean": 60,
 }
 _DERIVED_RECIPE_FIELDS = frozenset(
-    {"servings", "instructions", "calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g"}
+    {
+        "servings",
+        "instructions",
+        "calories",
+        "protein_g",
+        "carbs_g",
+        "fat_g",
+        "fiber_g",
+        "sugar_g",
+    }
 )
 _DERIVED_INGREDIENT_FIELDS = frozenset(
     {"resolved_grams", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g"}
@@ -78,7 +87,9 @@ def validate_catalog_seed_manifest(
             f"got {declared_expected}"
         )
     if len(recipes) != expected_recipe_count:
-        errors.append(f"recipe count must be {expected_recipe_count}, got {len(recipes)}")
+        errors.append(
+            f"recipe count must be {expected_recipe_count}, got {len(recipes)}"
+        )
 
     keys: Counter[str] = Counter()
     cuisine_counts: Counter[str] = Counter()
@@ -111,7 +122,9 @@ def validate_catalog_seed_manifest(
                 )
 
     coverage_dict = {
-        cuisine: {meal_type: counts.get(meal_type, 0) for meal_type in ALLOWED_MEAL_TYPES}
+        cuisine: {
+            meal_type: counts.get(meal_type, 0) for meal_type in ALLOWED_MEAL_TYPES
+        }
         for cuisine, counts in coverage.items()
     }
     for cuisine in required_cuisines or ():

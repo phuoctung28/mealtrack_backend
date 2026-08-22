@@ -1,4 +1,5 @@
 """Abstract port for affiliate code validation via nutree-affiliate internal API."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 

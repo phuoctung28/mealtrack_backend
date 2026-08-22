@@ -1,4 +1,5 @@
 """Query handler — validate a referral code: existence, self-referral, already-referred checks."""
+
 import logging
 
 from sqlalchemy import select
@@ -44,7 +45,9 @@ class ValidateReferralCodeQueryHandler:
 
             # Fetch referrer's first name for personalised UI copy
             result = await uow.session.execute(
-                select(User.first_name, User.display_name).where(User.id == code.user_id)
+                select(User.first_name, User.display_name).where(
+                    User.id == code.user_id
+                )
             )
             row = result.first()
             referrer_name = "Friend"

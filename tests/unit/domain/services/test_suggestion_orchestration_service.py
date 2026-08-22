@@ -163,7 +163,6 @@ def mock_recipe_response():
 # Main Test Class
 @pytest.mark.asyncio
 class TestSuggestionGenerationPipeline:
-
     async def test_successful_generation_flow(
         self,
         recipe_generator,
@@ -187,14 +186,16 @@ class TestSuggestionGenerationPipeline:
             ]
         }
 
-        mock_generation_service.generate_meal_plan_async = AsyncMock(side_effect=[
-            mock_names,
-            mock_recipe_response,
-            mock_recipe_response,
-            mock_recipe_response,
-            None,
-            None,
-        ])
+        mock_generation_service.generate_meal_plan_async = AsyncMock(
+            side_effect=[
+                mock_names,
+                mock_recipe_response,
+                mock_recipe_response,
+                mock_recipe_response,
+                None,
+                None,
+            ]
+        )
 
         suggestions = await recipe_generator.generate(
             session=mock_session, exclude_meal_names=[]
@@ -213,7 +214,9 @@ class TestSuggestionGenerationPipeline:
         Tests that the process fails if Phase 1 does not return enough unique meal names.
         """
         mock_names = {"meal_names": ["Spinach Omelette", "Tofu Scramble"]}
-        mock_generation_service.generate_meal_plan_async = AsyncMock(return_value=mock_names)
+        mock_generation_service.generate_meal_plan_async = AsyncMock(
+            return_value=mock_names
+        )
 
         with pytest.raises(
             RuntimeError, match="Could not generate enough unique meal names"
@@ -235,13 +238,15 @@ class TestSuggestionGenerationPipeline:
             ]
         }
 
-        mock_generation_service.generate_meal_plan_async = AsyncMock(side_effect=[
-            mock_names,
-            None,
-            None,
-            {"ingredients": [], "recipe_steps": [], "prep_time_minutes": 0},
-            None,
-        ])
+        mock_generation_service.generate_meal_plan_async = AsyncMock(
+            side_effect=[
+                mock_names,
+                None,
+                None,
+                {"ingredients": [], "recipe_steps": [], "prep_time_minutes": 0},
+                None,
+            ]
+        )
 
         with pytest.raises(RuntimeError, match="Failed to generate any recipes"):
             await recipe_generator.generate(session=mock_session, exclude_meal_names=[])
@@ -268,13 +273,15 @@ class TestSuggestionGenerationPipeline:
                 "Avocado Toast",
             ]
         }
-        mock_generation_service.generate_meal_plan_async = AsyncMock(side_effect=[
-            mock_names,
-            mock_recipe_response,
-            mock_recipe_response,
-            mock_recipe_response,
-            mock_recipe_response,
-        ])
+        mock_generation_service.generate_meal_plan_async = AsyncMock(
+            side_effect=[
+                mock_names,
+                mock_recipe_response,
+                mock_recipe_response,
+                mock_recipe_response,
+                mock_recipe_response,
+            ]
+        )
 
         await recipe_generator.generate(session=mock_session, exclude_meal_names=[])
 
@@ -383,9 +390,9 @@ class TestSessionCreationInvariants:
             servings=1,
         )
 
-        assert (
-            session.dietary_preferences == []
-        ), "Session must strip profile dietary_preferences to avoid over-filtering"
+        assert session.dietary_preferences == [], (
+            "Session must strip profile dietary_preferences to avoid over-filtering"
+        )
 
     async def test_new_session_preserves_profile_allergies(
         self, orchestration_service, mock_user_repo, monkeypatch
@@ -411,9 +418,9 @@ class TestSessionCreationInvariants:
             servings=1,
         )
 
-        assert session.allergies == [
-            "peanuts"
-        ], "Profile allergies must still be applied — food safety critical"
+        assert session.allergies == ["peanuts"], (
+            "Profile allergies must still be applied — food safety critical"
+        )
 
     async def test_new_session_passes_servings_through(
         self, orchestration_service, monkeypatch
@@ -557,7 +564,9 @@ async def test_generate_discovery_appends_existing_discovery_meals_on_load_more(
 
 
 @pytest.mark.asyncio
-async def test_generate_discovery_accepts_async_profile_provider(mock_generation_service):
+async def test_generate_discovery_accepts_async_profile_provider(
+    mock_generation_service,
+):
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
         SuggestionOrchestrationService,
     )

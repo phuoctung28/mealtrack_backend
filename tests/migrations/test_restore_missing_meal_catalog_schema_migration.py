@@ -103,9 +103,7 @@ def test_repair_restores_normalized_name_uniqueness_for_seed_upserts(
         lambda _bind: _Inspector({"food_reference": {"id", "name_normalized"}}),
     )
 
-    module._ensure_food_reference_search_index(
-        module.sa.inspect(operations.get_bind())
-    )
+    module._ensure_food_reference_search_index(module.sa.inspect(operations.get_bind()))
 
     assert operations.calls == ["execute", "execute", "execute"]
 

@@ -8,4 +8,3 @@ def test_failure_classifier_returns_bounded_categories_without_error_text():
     assert failure.category == "timeout"
     assert failure.error_code == "timeout"
     assert "secret" not in failure.__repr__()
-

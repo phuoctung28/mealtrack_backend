@@ -332,8 +332,8 @@ def test_generate_recipes_generation_failure_returns_503(ms_client):
                 details={"requested": 3, "generated": 0},
             )
 
-    client.app.dependency_overrides[get_configured_event_bus] = (
-        lambda: _BusRecipeFailure()
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: (
+        _BusRecipeFailure()
     )
 
     payload = {

@@ -261,12 +261,15 @@ def test_allowed_unit_logs_do_not_expose_unit_or_description(caplog):
 def test_herb_sprig_units_use_countable_serving_grams():
     assert convert_quantity_to_grams(1, "nhánh", "Cilantro") == 100
     assert convert_quantity_to_grams(1, "sprig", "Cilantro") == 100
-    assert quantity_to_grams(
-        1,
-        "nhánh",
-        "Cilantro",
-        [{"unit": "g", "gram_weight": 1.0}, {"unit": "nhánh", "gram_weight": 4.0}],
-    ) == 4
+    assert (
+        quantity_to_grams(
+            1,
+            "nhánh",
+            "Cilantro",
+            [{"unit": "g", "gram_weight": 1.0}, {"unit": "nhánh", "gram_weight": 4.0}],
+        )
+        == 4
+    )
 
 
 def test_qualitative_garnish_units_use_countable_serving_grams():

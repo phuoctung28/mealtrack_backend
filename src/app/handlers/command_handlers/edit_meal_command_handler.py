@@ -4,7 +4,6 @@ Handler for editing meal ingredients.
 
 import logging
 from dataclasses import replace
-from datetime import timedelta
 from typing import Any
 
 from src.api.exceptions import (
@@ -438,12 +437,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
     async def _reserve_v2_write_short(self, command):
         async with self.uow_factory() as uow:
-            cleanup = getattr(uow.meal_write_operations, "cleanup_finished", None)
-            if cleanup is not None:
-                await cleanup(
-                    older_than=utc_now() - timedelta(days=30),
-                    limit=100,
-                )
             return await self._reserve_v2_write(command, uow)
 
     async def _release_v2_write(self, reservation):
@@ -602,7 +595,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 return replace(change, unit=existing_unit)
             return change
         snapshot = existing_item.source_snapshot or {}
-        allowed_units = snapshot.get("allowed_units") or existing_item.allowed_units or []
+        allowed_units = (
+            snapshot.get("allowed_units") or existing_item.allowed_units or []
+        )
         if not allowed_units:
             raise ValueError("v2 quantity updates require an immutable source snapshot")
         quantity = (

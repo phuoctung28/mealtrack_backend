@@ -23,9 +23,9 @@ def test_all_5_strategies_return_vision_analysis_system_prompt():
     ]
     for s in strategies:
         result = s.get_analysis_prompt()
-        assert (
-            result == SystemPrompts.VISION_ANALYSIS
-        ), f"{s.__class__.__name__}.get_analysis_prompt() must return SystemPrompts.VISION_ANALYSIS"
+        assert result == SystemPrompts.VISION_ANALYSIS, (
+            f"{s.__class__.__name__}.get_analysis_prompt() must return SystemPrompts.VISION_ANALYSIS"
+        )
 
 
 def test_portion_aware_user_message_contains_portion_info():

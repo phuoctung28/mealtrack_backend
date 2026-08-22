@@ -51,7 +51,9 @@ async def test_after_meal_write_invalidates_daily_macros(service, cache_mock):
 
 
 @pytest.mark.asyncio
-async def test_after_meal_write_invalidates_weekly_budget_and_breakdown(service, cache_mock):
+async def test_after_meal_write_invalidates_weekly_budget_and_breakdown(
+    service, cache_mock
+):
     # June 2 2026 is a Tuesday; week_start is June 1
     week_start = date(2026, 6, 1)
     weekly_key = CacheKeys.weekly_budget("user1", week_start)[0]
@@ -71,7 +73,9 @@ async def test_after_meal_write_invalidates_streak(service, cache_mock):
 
 
 @pytest.mark.asyncio
-async def test_after_meal_write_backdated_also_invalidates_current_week(service, cache_mock):
+async def test_after_meal_write_backdated_also_invalidates_current_week(
+    service, cache_mock
+):
     """A meal logged for a past week must also purge the current week's budget."""
     today = date.today()
     current_week_start = today - timedelta(days=today.weekday())
@@ -108,7 +112,9 @@ async def test_after_meal_write_retries_on_invalidate_pattern_failure(cache_mock
 @pytest.mark.asyncio
 async def test_after_meal_write_retries_on_invalidate_key_failure(cache_mock):
     """Transient failure on first key invalidate triggers one retry."""
-    cache_mock.invalidate.side_effect = [ConnectionError("redis down"), None] + [None] * 20
+    cache_mock.invalidate.side_effect = [ConnectionError("redis down"), None] + [
+        None
+    ] * 20
     svc = CacheInvalidationService(cache_mock)
     await svc.after_meal_write("user1", date(2026, 6, 2))
     # First invalidate call retried once → at least 2 calls
@@ -127,7 +133,9 @@ async def test_after_movement_write_invalidates_activities_pattern(service, cach
 
 
 @pytest.mark.asyncio
-async def test_after_movement_write_invalidates_daily_macros_and_weekly_budget(service, cache_mock):
+async def test_after_movement_write_invalidates_daily_macros_and_weekly_budget(
+    service, cache_mock
+):
     log_date = date(2026, 6, 2)
     week_start = date(2026, 6, 1)
     daily_key = CacheKeys.daily_macros("user2", log_date)[0]
@@ -144,7 +152,9 @@ async def test_after_movement_write_invalidates_daily_macros_and_weekly_budget(s
 
 
 @pytest.mark.asyncio
-async def test_after_movement_write_backdated_invalidates_current_week(service, cache_mock):
+async def test_after_movement_write_backdated_invalidates_current_week(
+    service, cache_mock
+):
     today = date.today()
     current_week_start = today - timedelta(days=today.weekday())
     past_date = current_week_start - timedelta(days=14)
@@ -160,7 +170,9 @@ async def test_after_movement_write_backdated_invalidates_current_week(service, 
 
 
 @pytest.mark.asyncio
-async def test_after_hydration_write_invalidates_activities_and_hydration_patterns(service, cache_mock):
+async def test_after_hydration_write_invalidates_activities_and_hydration_patterns(
+    service, cache_mock
+):
     await service.after_hydration_write("user3", date(2026, 6, 2))
     cache_mock.invalidate_pattern.assert_any_call("user:user3:activities:2026-06-02:*")
     cache_mock.invalidate_pattern.assert_any_call("user:user3:hydration:2026-06-02:*")
@@ -207,7 +219,9 @@ async def test_after_custom_macros_update_purges_macros_pattern(service, cache_m
 
 
 @pytest.mark.asyncio
-async def test_after_custom_macros_update_invalidates_tdee_and_profile(service, cache_mock):
+async def test_after_custom_macros_update_invalidates_tdee_and_profile(
+    service, cache_mock
+):
     tdee_key = CacheKeys.user_tdee("user4")[0]
     profile_key = CacheKeys.user_profile("user4")[0]
 
@@ -218,7 +232,9 @@ async def test_after_custom_macros_update_invalidates_tdee_and_profile(service, 
 
 
 @pytest.mark.asyncio
-async def test_after_custom_macros_update_invalidates_current_and_next_week_budget(service, cache_mock):
+async def test_after_custom_macros_update_invalidates_current_and_next_week_budget(
+    service, cache_mock
+):
     """Weekly budget for this week AND next week must be purged (covers timezone skew)."""
     from datetime import timedelta
 
@@ -297,7 +313,9 @@ async def test_schedule_after_movement_write_awaits_without_task_manager(cache_m
 
 
 @pytest.mark.asyncio
-async def test_schedule_after_movement_write_spawns_when_task_manager_present(cache_mock):
+async def test_schedule_after_movement_write_spawns_when_task_manager_present(
+    cache_mock,
+):
     tasks = _FakeTaskManager()
     svc = CacheInvalidationService(cache_mock, task_manager=tasks)
 
@@ -305,8 +323,31 @@ async def test_schedule_after_movement_write_spawns_when_task_manager_present(ca
 
     assert cache_mock.invalidate_pattern.call_count == 0
     assert cache_mock.invalidate.call_count == 0
-    assert len(tasks.spawned) == 1
-    assert tasks.spawned[0][0].startswith("cache:after_movement_write:user2:")
-
     await tasks.spawned[0][1]
     cache_mock.invalidate_pattern.assert_any_call("user:user2:activities:2026-06-02:*")
+
+
+@pytest.mark.asyncio
+async def test_after_meal_write_spawns_secondary_when_task_manager_present(
+    cache_mock,
+):
+    tasks = _FakeTaskManager()
+    svc = CacheInvalidationService(cache_mock, task_manager=tasks)
+
+    # Critical keys are invalidated synchronously; secondary keys are spawned
+    await svc.after_meal_write("user1", date(2026, 6, 2))
+
+    # Critical keys should be called immediately
+    cache_mock.invalidate_pattern.assert_any_call("user:user1:activities:2026-06-02:*")
+    cache_mock.invalidate.assert_any_call(
+        CacheKeys.daily_macros("user1", date(2026, 6, 2))[0]
+    )
+
+    # Secondary tasks spawned on task manager
+    assert len(tasks.spawned) == 1
+    assert tasks.spawned[0][0].startswith("cache:after_meal_write_secondary:user1:")
+
+    # Running spawned task completes secondary invalidations
+    await tasks.spawned[0][1]
+    cache_mock.invalidate_pattern.assert_any_call("user:user1:nutrition_bulk:*")
+    cache_mock.invalidate.assert_any_call(CacheKeys.user_streak("user1")[0])

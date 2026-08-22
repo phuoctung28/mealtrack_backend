@@ -61,11 +61,22 @@ def test_hydration_reminder_keys_exist(lang, gender):
     for slot in ("afternoon", "evening"):
         tmpl = msgs["hydration_reminder"][slot]["body_template"]
         assert tmpl, f"{lang}/{gender}/{slot} body_template is empty"
-        assert "{consumed_ml}" in tmpl, f"{lang}/{gender}/{slot} missing {{consumed_ml}}"
-        assert "{remaining_ml}" in tmpl, f"{lang}/{gender}/{slot} missing {{remaining_ml}}"
+        assert "{consumed_ml}" in tmpl, (
+            f"{lang}/{gender}/{slot} missing {{consumed_ml}}"
+        )
+        assert "{remaining_ml}" in tmpl, (
+            f"{lang}/{gender}/{slot} missing {{remaining_ml}}"
+        )
 
 
 def test_hydration_type_enum_values_exist():
     from src.domain.model.notification.enums import NotificationType
-    assert NotificationType.HYDRATION_REMINDER_AFTERNOON.value == "hydration_reminder_afternoon"
-    assert NotificationType.HYDRATION_REMINDER_EVENING.value == "hydration_reminder_evening"
+
+    assert (
+        NotificationType.HYDRATION_REMINDER_AFTERNOON.value
+        == "hydration_reminder_afternoon"
+    )
+    assert (
+        NotificationType.HYDRATION_REMINDER_EVENING.value
+        == "hydration_reminder_evening"
+    )

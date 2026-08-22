@@ -63,5 +63,7 @@ class VisionFoodIdentityResponse(BaseModel):
     @model_validator(mode="after")
     def require_foods_for_food_images(self) -> "VisionFoodIdentityResponse":
         if self.is_food and not self.foods:
-            raise ValueError("foods must contain at least one item when is_food is true")
+            raise ValueError(
+                "foods must contain at least one item when is_food is true"
+            )
         return self

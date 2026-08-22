@@ -33,11 +33,15 @@ def test_aasa_has_correct_paths():
 
     details = data["applinks"]["details"][0]
     expected_paths = [
-        "/log", "/log/*",
-        "/dashboard", "/dashboard/*",
-        "/upgrade", "/upgrade/*",
-        "/feedback", "/feedback/*",
-        "/settings/*"
+        "/log",
+        "/log/*",
+        "/dashboard",
+        "/dashboard/*",
+        "/upgrade",
+        "/upgrade/*",
+        "/feedback",
+        "/feedback/*",
+        "/settings/*",
     ]
 
     assert details["paths"] == expected_paths

@@ -2,6 +2,7 @@
 TDEE calculation helpers for SuggestionOrchestrationService.
 Builds TdeeRequest from user profile and fetches adjusted daily target from weekly budget.
 """
+
 import logging
 from typing import Any
 
@@ -32,7 +33,11 @@ def build_tdee_request(profile: Any) -> TdeeRequest:
     preferences = preferences if isinstance(preferences, (list, tuple, set)) else ()
     preset = (
         MacroPreset.KETO
-        if any(value.casefold() == "keto" for value in preferences if isinstance(value, str))
+        if any(
+            value.casefold() == "keto"
+            for value in preferences
+            if isinstance(value, str)
+        )
         else MacroPreset.STANDARD
     )
     return TdeeRequest(
@@ -64,7 +69,9 @@ def calculate_daily_tdee(tdee_service: TdeeCalculationService, profile: Any) -> 
     )
     if all(isinstance(value, (int, float)) for value in custom_values):
         return round(
-            profile.custom_protein_g * 4 + profile.custom_carbs_g * 4 + profile.custom_fat_g * 9,
+            profile.custom_protein_g * 4
+            + profile.custom_carbs_g * 4
+            + profile.custom_fat_g * 9,
             1,
         )
     return tdee_service.calculate_tdee(build_tdee_request(profile)).macros.calories
@@ -96,30 +103,41 @@ async def get_adjusted_daily_target(
         bmr = tdee_result.bmr
 
         if uow is None:
-            logger.info(f"No UoW provided for user {user_id}, using raw TDEE: {base_calories}")
+            logger.info(
+                f"No UoW provided for user {user_id}, using raw TDEE: {base_calories}"
+            )
             return base_calories
 
         user_tz = await resolve_user_timezone_async(user_id, uow)
         today = user_today(user_tz)
         week_start = await get_user_monday_async(today, user_id, uow)
-        weekly_budget = await uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
+        weekly_budget = await uow.weekly_budgets.find_by_user_and_week(
+            user_id, week_start
+        )
 
         if not weekly_budget:
-            logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
+            logger.info(
+                f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}"
+            )
             return base_calories
-        if weekly_budget.target_revision != getattr(profile, "profile_target_revision", None):
+        if weekly_budget.target_revision != getattr(
+            profile, "profile_target_revision", None
+        ):
             raise ValueError("Weekly target revision is stale")
 
         # Use async shared method: recalculates consumed, applies skip/redistribute
         effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
-            uow=uow, user_id=user_id,
-            week_start=week_start, target_date=today,
+            uow=uow,
+            user_id=user_id,
+            week_start=week_start,
+            target_date=today,
             weekly_budget=weekly_budget,
             base_daily_cal=base_calories,
             base_daily_protein=tdee_result.macros.protein,
             base_daily_carbs=tdee_result.macros.carbs,
             base_daily_fat=tdee_result.macros.fat,
-            bmr=bmr, user_timezone=user_tz,
+            bmr=bmr,
+            user_timezone=user_tz,
         )
         logger.info(
             f"Adjusted daily target for user {user_id}: "
