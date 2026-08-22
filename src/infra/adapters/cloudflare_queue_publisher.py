@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from src.infra.http import get_shared_http_client
+
 
 class CloudflareQueueError(Exception):
     """Base error for Queue publication failures."""
@@ -83,20 +85,13 @@ class CloudflareQueuePublisher:
         body = {"body": payload}
 
         try:
-            if self._client is not None:
-                response = await self._client.post(
-                    self.endpoint,
-                    json=body,
-                    headers=headers,
-                    timeout=self._timeout_seconds,
-                )
-            else:
-                async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                    response = await client.post(
-                        self.endpoint,
-                        json=body,
-                        headers=headers,
-                    )
+            client = self._client or get_shared_http_client()
+            response = await client.post(
+                self.endpoint,
+                json=body,
+                headers=headers,
+                timeout=self._timeout_seconds,
+            )
         except httpx.TimeoutException as exc:
             raise CloudflareQueueTransientError("Queue request timed out") from exc
         except httpx.HTTPError as exc:

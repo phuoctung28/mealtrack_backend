@@ -58,7 +58,7 @@ def _install_fake_image_download(
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def get(self, url):
+        async def get(self, url, *args, **kwargs):
             content = (
                 responses.get(url, b"fake-image-bytes")
                 if responses
@@ -66,7 +66,9 @@ def _install_fake_image_download(
             )
             return FakeResponse(content)
 
-    monkeypatch.setattr(module.httpx, "AsyncClient", lambda timeout: FakeClient())
+    fake_client = FakeClient()
+    monkeypatch.setattr(module.httpx, "AsyncClient", lambda *args, **kwargs: fake_client)
+    monkeypatch.setattr(module, "get_shared_http_client", lambda: fake_client)
     monkeypatch.setattr(module, "compress_image", lambda raw_bytes: raw_bytes)
 
 

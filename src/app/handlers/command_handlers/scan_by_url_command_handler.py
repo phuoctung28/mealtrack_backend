@@ -6,8 +6,6 @@ import time
 from typing import Any
 from uuid import uuid4
 
-import httpx
-
 from src.api.exceptions import ValidationException
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
@@ -37,13 +35,17 @@ from src.domain.services.meal_type_determination_service import (
 from src.domain.strategies.meal_analysis_strategy import (
     FoodLabelImageAnalysisStrategy,
 )
-from src.domain.utils.image_compression import compress_image
+from src.domain.utils.image_compression import (
+    compress_image,
+    to_compressed_cloudinary_url,
+)
 from src.domain.utils.timezone_utils import (
     get_zone_info,
     is_valid_timezone,
     noon_utc_for_date,
     utc_now,
 )
+from src.infra.http import get_shared_http_client
 from src.observability import capture_message, distribution_metric, increment_metric
 
 logger = logging.getLogger(__name__)
@@ -121,10 +123,10 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         )
 
     async def _download_image_bytes(self, image_url: str) -> bytes:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(image_url)
-            resp.raise_for_status()
-            return resp.content
+        client = get_shared_http_client()
+        resp = await client.get(image_url, timeout=30.0)
+        resp.raise_for_status()
+        return resp.content
 
     async def _analyze_food_label_image_with_ai(
         self,
@@ -168,11 +170,18 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         image_id = command.public_id.split("/")[-1]
 
         try:
-            # Download from Cloudinary and compress off the event loop
-            raw_bytes = await self._download_image_bytes(command.image_url)
+            # For meal scans, fetch edge-compressed Cloudinary URL to avoid local PIL resizing
+            download_url = (
+                to_compressed_cloudinary_url(command.image_url)
+                if command.scan_mode != "food_label"
+                else command.image_url
+            )
+            raw_bytes = await self._download_image_bytes(download_url)
             image_bytes: bytes | None = None
             if command.scan_mode != "food_label":
-                image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
+                image_bytes = raw_bytes
+                if len(image_bytes) > 200 * 1024:
+                    image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
                 logger.info(
                     "[SCAN-BY-URL] image_id=%s raw=%d compressed=%d bytes",
                     image_id,

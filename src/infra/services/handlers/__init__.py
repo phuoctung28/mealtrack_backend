@@ -20,6 +20,9 @@ from src.infra.services.handlers.notification_reschedule_handler import (
 from src.infra.services.handlers.push_notification_handler import (
     PushNotificationHandler,
 )
+from src.infra.services.handlers.push_notification_queue_handler import (
+    PushNotificationQueueHandler,
+)
 from src.infra.services.handlers.telemetry_handler import TelemetryHandler
 from src.infra.services.outbox_handler_registry import OutboxHandlerRegistry
 
@@ -33,6 +36,7 @@ __all__ = [
     "FirebaseAccountCleanupHandler",
     "NotificationRescheduleHandler",
     "PushNotificationHandler",
+    "PushNotificationQueueHandler",
     "TelemetryHandler",
     "CacheInvalidationQueueHandler",
     "create_default_handler_registry",
@@ -45,6 +49,7 @@ def create_default_handler_registry(
     firebase_service: FirebaseService | None = None,
     posthog_adapter: PostHogAdapter | None = None,
     cache_invalidation_publisher: CloudflareQueuePublisher | None = None,
+    push_notification_publisher: CloudflareQueuePublisher | None = None,
 ) -> OutboxHandlerRegistry:
     """Create and configure an OutboxHandlerRegistry with built-in handlers."""
     registry = OutboxHandlerRegistry()
@@ -67,13 +72,20 @@ def create_default_handler_registry(
     ):
         registry.register(event_type, affiliate_handler)
 
-    # Push notification routes
+    # Push notification routes (direct Firebase SDK dispatch or Cloudflare Queue)
+    active_push_handler = (
+        PushNotificationQueueHandler(push_notification_publisher)
+        if push_notification_publisher is not None
+        else push_handler
+    )
+
     for event_type in (
         "push_notification",
         "notification.push",
         "scheduled_push",
+        "push_notification.v1",
     ):
-        registry.register(event_type, push_handler)
+        registry.register(event_type, active_push_handler)
 
     # Telemetry and analytics routes
     for event_type in (
@@ -83,7 +95,14 @@ def create_default_handler_registry(
     ):
         registry.register(event_type, telemetry_handler)
 
-    registry.register("firebase_account_cleanup", firebase_cleanup_handler)
+    active_cleanup_handler = (
+        PushNotificationQueueHandler(push_notification_publisher)
+        if push_notification_publisher is not None
+        else firebase_cleanup_handler
+    )
+    registry.register("firebase_account_cleanup", active_cleanup_handler)
+    registry.register("user.account_cleanup.v1", active_cleanup_handler)
+
     registry.register("notification_reschedule", notification_reschedule_handler)
     registry.register("cache_invalidation.v1", cache_invalidation_handler)
 
