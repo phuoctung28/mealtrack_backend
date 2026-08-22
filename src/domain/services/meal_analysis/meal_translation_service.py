@@ -53,7 +53,8 @@ class MealTranslationService:
             instructions: Optional list of instruction dicts or strings.
 
         Returns:
-            Saved MealTranslation or None on skip / failure.
+            Saved MealTranslation, including an identity row when names are
+            already in the request locale, or None on failure.
         """
         if target_language == "en":
             return None
@@ -103,7 +104,16 @@ class MealTranslationService:
                     target_language,
                     meal.meal_id,
                 )
-                return None
+                saved = await self._save(
+                    _identity_meal_translation(
+                        meal_id=meal.meal_id,
+                        language=target_language,
+                        dish_name=dish_name,
+                        named_food_items=named_food_items,
+                        normalised_steps=normalised_steps,
+                    )
+                )
+                return saved
 
             result, translated = await _translate_preserving_localized_names(
                 self._text_service,
@@ -188,6 +198,39 @@ class MealTranslationService:
         if inspect.iscoroutinefunction(method):
             return await cast(Any, method)(translation)
         return await asyncio.to_thread(cast(Any, method), translation)
+
+
+def _identity_meal_translation(
+    *,
+    meal_id: str,
+    language: str,
+    dish_name: str,
+    named_food_items: list[FoodItem],
+    normalised_steps: list[dict],
+) -> MealTranslation:
+    """Persist stored localized names as the request-locale row."""
+    return MealTranslation(
+        meal_id=meal_id,
+        language=language,
+        dish_name=dish_name,
+        food_items=[
+            FoodItemTranslation(food_item_id=str(item.id), name=item.name)
+            for item in named_food_items
+        ],
+        meal_instruction=(
+            [
+                {
+                    "instruction": step.get("instruction", ""),
+                    "duration_minutes": step.get("duration_minutes"),
+                }
+                for step in normalised_steps
+            ]
+            if normalised_steps
+            else None
+        ),
+        meal_ingredients=[item.name for item in named_food_items],
+        translated_at=utc_now(),
+    )
 
 
 async def _translate_texts(

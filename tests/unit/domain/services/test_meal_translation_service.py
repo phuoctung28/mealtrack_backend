@@ -155,9 +155,13 @@ async def test_translate_meal_skips_when_names_already_in_target_language(
         target_language="vi",
     )
 
-    assert result is None
+    assert result is not None
+    assert result.dish_name == "Cơm tấm với sườn, bì, chả"
+    assert result.meal_ingredients == ["Cơm tấm", "Bì heo"]
+    assert result.food_items[0].name == "Cơm tấm"
+    assert result.food_items[1].name == "Bì heo"
     text_translation_service.translate_texts.assert_not_called()
-    repo.save.assert_not_called()
+    repo.save.assert_called_once()
 
 
 @pytest.mark.asyncio
