@@ -796,7 +796,8 @@ async def test_acquire_image_upload_saves_bytes_in_runtime_not_state():
 
 @pytest.mark.asyncio
 async def test_acquire_image_scan_by_url_downloads_and_compresses_regular_scan():
-    download_image_bytes = AsyncMock(return_value=b"raw-image")
+    large_raw = b"x" * 300_000
+    download_image_bytes = AsyncMock(return_value=large_raw)
     compression_calls = []
 
     def compress_image(raw_bytes: bytes) -> bytes:
@@ -817,12 +818,14 @@ async def test_acquire_image_scan_by_url_downloads_and_compresses_regular_scan()
 
     state_update = await acquire_image({}, runtime)
 
-    download_image_bytes.assert_awaited_once_with(command.image_url)
-    assert compression_calls == [b"raw-image"]
+    download_image_bytes.assert_awaited_once_with(
+        "https://res.cloudinary.com/demo/image/upload/w_768,c_limit,q_auto,f_jpg/v1/mealtrack/image-456.jpg"
+    )
+    assert compression_calls == [large_raw]
     assert state_update == {
         "image_id": "image-456",
         "content_kind": "meal_image",
-        "image_size_bytes": len(b"raw-image"),
+        "image_size_bytes": len(large_raw),
     }
     assert runtime.acquired_image is not None
     assert runtime.acquired_image.image_url == command.image_url
