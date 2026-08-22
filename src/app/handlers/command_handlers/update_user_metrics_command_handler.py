@@ -7,7 +7,7 @@ import logging
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.common.enums import FitnessGoal, JobType, TrainingLevel
 from src.domain.model.user.body_fat_visual import remap_visual_profile_selection
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
@@ -54,10 +54,15 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
     """Handle updating user metrics (weight, job type, training, body fat)."""
 
     def __init__(
-        self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None
+        self,
+        uow: AsyncUnitOfWorkPort,
+        cache_service: CachePort | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation or CacheInvalidationService(
+            cache_service
+        )
 
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
         # Validate at least one field is provided
@@ -265,58 +270,4 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
             await uow.users.update_profile(profile)
 
-        await self._invalidate_user_profile(command.user_id)
-
-    async def _invalidate_user_profile(self, user_id: str):
-        """Invalidate user profile, TDEE, metrics, and ALL daily macros cache."""
-        if not self.cache_service:
-            return
-
-        # Cache invalidation follows a committed profile update, so it must
-        # never turn a successful mutation into an API failure. Readers fence
-        # target-bearing cache entries by profile_target_revision.
-        for cache_key in (
-            CacheKeys.user_profile(user_id)[0],
-            CacheKeys.user_tdee(user_id)[0],
-            CacheKeys.user_metrics(user_id)[0],
-        ):
-            try:
-                await self.cache_service.invalidate(cache_key)
-            except Exception as exc:
-                logger.warning("Failed to invalidate cache key %s: %s", cache_key, exc)
-
-        # Invalidate ALL cached daily macros for this user (not just today)
-        # TDEE changes affect targets for all dates
-        macros_pattern = f"user:{user_id}:macros:*"
-        try:
-            await self.cache_service.invalidate_pattern(macros_pattern)
-        except Exception as e:
-            logger.warning(
-                f"Failed to invalidate macros pattern for user {user_id}: {e}"
-            )
-
-        # Invalidate ALL weekly budgets for this user
-        # TDEE changes affect weekly targets
-        weekly_pattern = CacheKeys.weekly_budget_user_pattern(user_id)
-        try:
-            await self.cache_service.invalidate_pattern(weekly_pattern)
-        except Exception as e:
-            logger.warning(
-                f"Failed to invalidate weekly budget pattern for user {user_id}: {e}"
-            )
-
-        hydration_pattern = f"user:{user_id}:hydration:*"
-        try:
-            await self.cache_service.invalidate_pattern(hydration_pattern)
-        except Exception as e:
-            logger.warning(
-                f"Failed to invalidate hydration pattern for user {user_id}: {e}"
-            )
-
-        weekly_hydration_pattern = f"user:{user_id}:hydration_weekly:*"
-        try:
-            await self.cache_service.invalidate_pattern(weekly_hydration_pattern)
-        except Exception as e:
-            logger.warning(
-                f"Failed to invalidate weekly hydration pattern for user {user_id}: {e}"
-            )
+        await self.cache_invalidation.after_profile_write(command.user_id)

@@ -49,15 +49,17 @@ class AddCustomIngredientCommandHandler(
                 meal_service = MealService()
                 updated_meal = meal_service.apply_food_item_changes(meal, [change])
                 saved_meal = await uow.meals.save(updated_meal)
-
-            meal_date = (saved_meal.created_at or utc_now()).date()
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(saved_meal.user_id, meal_date)
+                if self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        saved_meal.user_id,
+                        (saved_meal.created_at or utc_now()).date(),
+                    )
 
             return {
                 "success": True,
                 "meal_id": saved_meal.meal_id,
                 "message": f"Added custom ingredient: {command.name}",
             }
-        except Exception as e:
+        except Exception:
             raise

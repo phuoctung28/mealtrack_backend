@@ -49,6 +49,12 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
                     await plans.clear_links_for_deleted_meal(meal_id=command.meal_id)
                 await uow.meals.delete(command.meal_id)
                 log_date = (meal.created_at or utc_now()).date()
+                if self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        command.user_id,
+                        log_date,
+                    )
             else:
                 hydration_entries = getattr(uow, "hydration_entries", None)
                 hydration_entry = (
@@ -77,8 +83,6 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
                 await self.cache_invalidation.after_hydration_write(
                     command.user_id, log_date
                 )
-            else:
-                await self.cache_invalidation.after_meal_write(command.user_id, log_date)
 
         return {
             "meal_id": command.meal_id,

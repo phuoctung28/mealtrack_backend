@@ -47,7 +47,9 @@ from src.infra.repositories.catalog_recipe_repository_async import (
 from src.infra.repositories.food_reference_repository_async import (
     AsyncFoodReferenceRepository,
 )
-from src.infra.services.firebase_service import FirebaseService
+
+if TYPE_CHECKING:
+    from src.api.dependencies.task_manager import BackgroundTaskManager
 
 if TYPE_CHECKING:
     from src.domain.ports.subscription_service_port import SubscriptionServicePort
@@ -70,7 +72,9 @@ _catalog_meal_snapshot_service: CatalogMealSnapshotService | None = None
 _catalog_meal_browse_service = None
 
 
-async def initialize_cache_layer() -> None:
+async def initialize_cache_layer(
+    task_manager: "BackgroundTaskManager | None" = None,
+) -> None:
     """Initialize Redis for optional caches and the provider budget."""
     global _redis_client, _cache_service
 
@@ -95,6 +99,7 @@ async def initialize_cache_layer() -> None:
         default_ttl=settings.CACHE_DEFAULT_TTL,
         monitor=_cache_monitor,
         enabled=settings.CACHE_ENABLED,
+        task_manager=task_manager,
     )
 
 
@@ -369,23 +374,6 @@ get_food_reference_repository = get_async_food_reference_repository
 get_barcode_product_repository = get_food_reference_repository
 
 
-# Firebase Service (singleton pattern - create once and reuse)
-_firebase_service = None
-
-
-def get_firebase_service() -> FirebaseService:
-    """
-    Get the Firebase service instance (singleton).
-
-    Returns:
-        FirebaseService: The Firebase service
-    """
-    global _firebase_service
-    if _firebase_service is None:
-        _firebase_service = FirebaseService()
-    return _firebase_service
-
-
 def get_daily_context_precompute_service():
     """Get daily context precompute service for notification rescheduling."""
     from src.infra.services.daily_context_precompute_service import (
@@ -616,6 +604,7 @@ def get_nutrition_lookup_service():
             ingredient_nutrition_resolver=get_ingredient_nutrition_resolver(),
             generation_service=MealGenerationService(),
             redis_client=_redis_client,
+            cache_service=get_cache_service(),
         )
     return _nutrition_lookup_service
 

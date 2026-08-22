@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     CACHE_ENABLED: bool = Field(default=True)
     CACHE_DEFAULT_TTL: int = Field(default=3600)  # 1 hour
 
+    # Cloudflare Queue cache invalidation
+    CLOUDFLARE_QUEUE_ENABLED: bool = Field(default=False)
+    CLOUDFLARE_QUEUE_ACCOUNT_ID: str = Field(default="")
+    CLOUDFLARE_QUEUE_NAME: str = Field(default="")
+    CLOUDFLARE_QUEUE_API_TOKEN: str = Field(default="")
+    CLOUDFLARE_QUEUE_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0)
+
     # Firebase
     FIREBASE_CREDENTIALS: str | None = Field(default=None)
     FIREBASE_SERVICE_ACCOUNT_JSON: str | None = Field(default=None)

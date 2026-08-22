@@ -1,7 +1,7 @@
 """
 Tests for timing instrumentation in CreateManualMealCommandHandler.
-Verifies that handler awaits cache invalidation (not fire-and-forget) and
-that timing log messages are emitted.
+Verifies that cache maintenance is queued after the business write and that
+timing log messages are emitted.
 """
 
 import asyncio
@@ -45,6 +45,7 @@ class _FakeUow:
     def __init__(self, fake_meal):
         self.meals = _FakeMeals(fake_meal)
         self.users = _FakeUsers()
+        self.outbox = SimpleNamespace(enqueue=AsyncMock())
 
     async def __aenter__(self):
         return self
@@ -70,12 +71,22 @@ class _PreparedV2Uow:
     def __init__(self):
         self.meals = _PreparedV2Meals()
         self.meal_write_operations = _PreparedV2WriteOperations()
+        self.outbox = SimpleNamespace(enqueue=AsyncMock())
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
         return False
+
+
+class _FakeTaskManager:
+    def __init__(self):
+        self.spawned = []
+
+    def spawn(self, name, coro):
+        self.spawned.append((name, coro))
+        return None
 
 
 def _make_meal():
@@ -115,13 +126,13 @@ def _make_command(user_id: str = _UUID_1) -> CreateManualMealCommand:
 
 
 # ---------------------------------------------------------------------------
-# Test A: slow cache delay is visible in elapsed time (handler awaits it)
+# Test A: cache publication is isolated from the business response
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_handler_timing_logs_show_cache_delay(caplog):
-    """Handler must await cache invalidation; a slow cache inflates elapsed time."""
+async def test_handler_timing_logs_do_not_wait_for_redis(caplog):
+    """A slow Redis implementation must not inflate the business response time."""
     DELAY_S = 0.05  # 50 ms per operation
 
     slow_cache = MagicMock()
@@ -135,10 +146,12 @@ async def test_handler_timing_logs_show_cache_delay(caplog):
     slow_cache.invalidate = slow_invalidate
     slow_cache.invalidate_pattern = slow_invalidate_pattern
 
-    cache_svc = CacheInvalidationService(cache=slow_cache)
+    tasks = _FakeTaskManager()
+    cache_svc = CacheInvalidationService(cache=slow_cache, task_manager=tasks)
     fake_meal = _make_meal()
+    uow = _FakeUow(fake_meal)
     handler = CreateManualMealCommandHandler(
-        uow=_FakeUow(fake_meal),
+        uow=uow,
         cache_invalidation=cache_svc,
     )
 
@@ -149,11 +162,12 @@ async def test_handler_timing_logs_show_cache_delay(caplog):
         result = await handler.handle(cmd)
     elapsed = time.perf_counter() - t_start
 
-    # If handler awaits cache, elapsed must be ≥ one slow operation delay
-    assert elapsed >= DELAY_S, (
-        f"Handler returned in {elapsed * 1000:.0f}ms — expected ≥{DELAY_S * 1000:.0f}ms. "
-        "Cache invalidation may not be awaited."
+    assert elapsed < DELAY_S, (
+        f"Handler returned in {elapsed * 1000:.0f}ms — cache work is still on the business path."
     )
+
+    assert tasks.spawned == []
+    uow.outbox.enqueue.assert_awaited_once()
 
     timing_logs = [
         r.message for r in caplog.records if "manual_save handler timing" in r.message
@@ -309,7 +323,7 @@ async def test_handler_timing_logs_fast_cache(caplog):
 
 @pytest.mark.asyncio
 async def test_cache_invalidation_service_emits_timing_log(caplog):
-    """after_meal_write emits a cache_invalidation timing log with critical/secondary/total."""
+    """after_meal_write emits a cache-job enqueue timing log."""
     fast_cache = MagicMock()
     fast_cache.invalidate = AsyncMock()
     fast_cache.invalidate_pattern = AsyncMock()
@@ -326,6 +340,5 @@ async def test_cache_invalidation_service_emits_timing_log(caplog):
     assert timing_logs, (
         "No 'cache_invalidation timing' log found in CacheInvalidationService."
     )
-    assert "critical_ms" in timing_logs[0]
-    assert "secondary_ms" in timing_logs[0]
+    assert "enqueue_ms" in timing_logs[0]
     assert "total_ms" in timing_logs[0]

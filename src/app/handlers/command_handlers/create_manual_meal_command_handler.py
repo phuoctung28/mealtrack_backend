@@ -5,7 +5,6 @@ All items must provide their own nutrition (via custom_nutrition).
 
 import logging
 import time
-from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -69,6 +68,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             _t_db_start = time.perf_counter()
             async with self.uow as uow:
                 reservation = await self._reserve_v2_write(event, uow)
+                cache_event_needed = False
                 if reservation and reservation.state == "replay":
                     saved_meal = await uow.meals.find_by_id(reservation.target_meal_id)
                     if saved_meal is None:
@@ -82,6 +82,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                         saved_meal, meal_date = await self._process_meal(
                             event, uow.meals, uow=uow
                         )
+                        cache_event_needed = True
                         if reservation:
                             await uow.meal_write_operations.complete(
                                 reservation,
@@ -92,12 +93,16 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                         if reservation:
                             await uow.meal_write_operations.release(reservation)
                         raise
+                if cache_event_needed and self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        event.user_id,
+                        meal_date,
+                    )
             _db_ms = (time.perf_counter() - _t_db_start) * 1000
 
-            # Invalidate after commit so a concurrent read can't repopulate from a pre-commit snapshot.
+            # Queue publication is asynchronous; the outbox row committed above.
             _t_cache_start = time.perf_counter()
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(event.user_id, meal_date)
             _cache_ms = (time.perf_counter() - _t_cache_start) * 1000
 
             _total_ms = (time.perf_counter() - _t_start) * 1000
@@ -144,9 +149,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
 
         try:
             items_needing_resolution = [
-                item
-                for item in event.items
-                if not self._is_prepared_nutrition(item)
+                item for item in event.items if not self._is_prepared_nutrition(item)
             ]
             if items_needing_resolution:
                 async with self.uow_factory() as resolve_uow:
@@ -190,9 +193,13 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                     target_meal_id=saved_meal.meal_id,
                     response={"meal_id": saved_meal.meal_id},
                 )
+                if self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        event.user_id,
+                        meal_date,
+                    )
 
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(event.user_id, meal_date)
             return saved_meal
         except Exception:
             await self._release_v2_write(reservation)
@@ -202,19 +209,13 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
     def _is_prepared_nutrition(item: Any) -> bool:
         """Recognize only the versioned nutrition payload as save-ready."""
         return (
-            item.nutrition_contract_version == "2"
+            str(item.nutrition_contract_version or "") == "2"
             and item.custom_nutrition is not None
             and (item.origin == "custom" or item.source_snapshot is not None)
         )
 
     async def _reserve_v2_write_short(self, event):
         async with self.uow_factory() as uow:
-            cleanup = getattr(uow.meal_write_operations, "cleanup_finished", None)
-            if cleanup is not None:
-                await cleanup(
-                    older_than=utc_now() - timedelta(days=30),
-                    limit=100,
-                )
             return await self._reserve_v2_write(event, uow)
 
     async def _release_v2_write(self, reservation):
@@ -316,11 +317,14 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             source=source,
         )
 
-        saved_meal = await meal_repo.save(meal)
         if uow is None:
-            # injected meal_repository path: invalidate here as there is no outer UoW block
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(event.user_id, meal_date)
-            return saved_meal
-        # UoW path: return (saved_meal, meal_date) so handle() can invalidate after commit
+            if self.cache_invalidation is not None:
+                raise RuntimeError(
+                    "Transactional UoW is required for durable cache invalidation"
+                )
+            # The compatibility repository path has no transactional outbox.
+            # Production wiring uses the UoW path for durable invalidation.
+            return await meal_repo.save(meal)
+        saved_meal = await meal_repo.save(meal)
+        # The caller enqueues the event before the active UoW commits.
         return saved_meal, meal_date

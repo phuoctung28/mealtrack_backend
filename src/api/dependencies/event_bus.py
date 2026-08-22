@@ -415,6 +415,10 @@ def get_configured_event_bus() -> EventBus:
     fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
     task_manager = get_optional_task_manager()
+    if cache_service is not None and task_manager is not None:
+        configure_cache_writer = getattr(cache_service, "set_task_manager", None)
+        if configure_cache_writer is not None:
+            configure_cache_writer(task_manager)
     suggestion_service = get_suggestion_orchestration_service()
 
     from src.app.services.cache_invalidation_service import CacheInvalidationService
@@ -425,12 +429,16 @@ def get_configured_event_bus() -> EventBus:
     from src.domain.services.meal_recommendation.three_day_plan_optimizer import (
         ThreeDayPlanOptimizer,
     )
+    from src.infra.config.settings import get_settings
     from src.infra.database.uow_async import AsyncUnitOfWork
 
-    # Meal/hydration handlers still await invalidation. Movement handlers
-    # schedule it on the task manager so log/delete can return after persist.
+    # Mutation handlers enqueue all cache projections after the SQL write; the
+    # managed task runner keeps Redis maintenance off the business path.
+    queue_enabled = getattr(get_settings(), "CLOUDFLARE_QUEUE_ENABLED", False)
     cache_invalidation_service = CacheInvalidationService(
-        cache_service, task_manager=task_manager
+        cache_service,
+        task_manager=task_manager,
+        queue_enabled=queue_enabled,
     )
     provider_budget = _build_provider_budget(cache_service)
     nutrition_integrity_policy = NutritionIntegrityPolicy()
@@ -488,6 +496,14 @@ def get_configured_event_bus() -> EventBus:
             meal_analyze_graph_enabled=graph_settings["graph_enabled"],
         ),
     )
+    async def _download_image_bytes_pooled(image_url: str) -> bytes:
+        from src.infra.http import get_shared_http_client
+
+        client = get_shared_http_client()
+        resp = await client.get(image_url, timeout=30.0)
+        resp.raise_for_status()
+        return resp.content
+
     event_bus.register_handler(
         ScanByUrlCommand,
         ScanByUrlCommandHandler(
@@ -503,6 +519,7 @@ def get_configured_event_bus() -> EventBus:
             meal_value_insight_ai_manager=ai_manager,
             meal_analyze_workflow=meal_analyze_workflow,
             meal_analyze_graph_enabled=graph_settings["graph_enabled"],
+            download_image_bytes=_download_image_bytes_pooled,
         ),
     )
 
@@ -689,6 +706,7 @@ def get_configured_event_bus() -> EventBus:
             uow=AsyncUnitOfWork(),
             meal_translation_service=meal_translation_service,
             cache_invalidation=cache_invalidation_service,
+            task_manager=task_manager,
         ),
     )
     from src.api.base_dependencies import get_catalog_meal_browse_service
@@ -767,7 +785,10 @@ def get_configured_event_bus() -> EventBus:
     # Register user handlers
     event_bus.register_handler(
         SaveUserOnboardingCommand,
-        SaveUserOnboardingCommandHandler(cache_service=cache_service),
+        SaveUserOnboardingCommandHandler(
+            cache_service=cache_service,
+            cache_invalidation=cache_invalidation_service,
+        ),
     )
     event_bus.register_handler(
         SaveBodyFatVisualProfileCommand,
@@ -779,25 +800,37 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         CompleteOnboardingCommand,
-        CompleteOnboardingCommandHandler(cache_service=cache_service),
+        CompleteOnboardingCommandHandler(
+            cache_service=cache_service,
+            cache_invalidation=cache_invalidation_service,
+        ),
     )
     event_bus.register_handler(
-        DeleteUserCommand, DeleteUserCommandHandler(cache_service=cache_service)
+        DeleteUserCommand,
+        DeleteUserCommandHandler(
+            cache_service=cache_service, task_manager=task_manager
+        ),
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand,
         UpdateUserMetricsCommandHandler(
-            uow=AsyncUnitOfWork(), cache_service=cache_service
+            uow=AsyncUnitOfWork(),
+            cache_service=cache_service,
+            cache_invalidation=cache_invalidation_service,
         ),
     )
     precompute_service = get_daily_context_precompute_service()
     event_bus.register_handler(
         UpdateTimezoneCommand,
-        UpdateTimezoneCommandHandler(precompute_service=precompute_service),
+        UpdateTimezoneCommandHandler(
+            precompute_service=precompute_service, task_manager=task_manager
+        ),
     )
     event_bus.register_handler(
         UpdateLanguageCommand,
-        UpdateLanguageCommandHandler(precompute_service=precompute_service),
+        UpdateLanguageCommandHandler(
+            precompute_service=precompute_service, task_manager=task_manager
+        ),
     )
     event_bus.register_handler(
         UpdateCustomMacrosCommand,
@@ -831,7 +864,9 @@ def get_configured_event_bus() -> EventBus:
     # Register notification handlers
     event_bus.register_handler(
         RegisterFcmTokenCommand,
-        RegisterFcmTokenCommandHandler(precompute_service=precompute_service),
+        RegisterFcmTokenCommandHandler(
+            precompute_service=precompute_service, task_manager=task_manager
+        ),
     )
     event_bus.register_handler(DeleteFcmTokenCommand, DeleteFcmTokenCommandHandler())
     event_bus.register_handler(
@@ -839,6 +874,7 @@ def get_configured_event_bus() -> EventBus:
         UpdateNotificationPreferencesCommandHandler(
             cache_service=cache_service,
             precompute_service=precompute_service,
+            task_manager=task_manager,
         ),
     )
     event_bus.register_handler(
@@ -856,8 +892,14 @@ def get_configured_event_bus() -> EventBus:
     )
 
     # Register cheat day handlers
-    event_bus.register_handler(MarkCheatDayCommand, MarkCheatDayCommandHandler())
-    event_bus.register_handler(UnmarkCheatDayCommand, UnmarkCheatDayCommandHandler())
+    event_bus.register_handler(
+        MarkCheatDayCommand,
+        MarkCheatDayCommandHandler(cache_invalidation=cache_invalidation_service),
+    )
+    event_bus.register_handler(
+        UnmarkCheatDayCommand,
+        UnmarkCheatDayCommandHandler(cache_invalidation=cache_invalidation_service),
+    )
     event_bus.register_handler(GetCheatDaysQuery, GetCheatDaysQueryHandler())
 
     # Register weight entry handlers
@@ -931,12 +973,14 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         SaveSuggestionCommand,
         SaveSuggestionCommandHandler(
-            uow=AsyncUnitOfWork(), cache_service=cache_service
+            uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service
         ),
     )
     event_bus.register_handler(
         DeleteSavedSuggestionCommand,
-        DeleteSavedSuggestionCommandHandler(cache_service=cache_service),
+        DeleteSavedSuggestionCommandHandler(
+            cache_invalidation=cache_invalidation_service
+        ),
     )
     event_bus.register_handler(
         GetSavedSuggestionsQuery,

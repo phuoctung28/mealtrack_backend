@@ -1,5 +1,6 @@
 """Tests for the default-off meal analysis graph scaffold."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -45,6 +46,7 @@ class _FakeGraphUow:
             side_effect=lambda meal_id, **_: self._saved_meals[-1]
         )
         self.commit = AsyncMock()
+        self.outbox = SimpleNamespace()
 
     async def __aenter__(self):
         return self
@@ -160,7 +162,7 @@ async def test_async_graph_runner_persists_ready_meal_and_invalidates_cache():
     )
     uow = _FakeGraphUow()
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     runtime = MealAnalyzeRuntime(
         command=UploadMealImageImmediatelyCommand(
             user_id="00000000-0000-0000-0000-000000000001",
@@ -190,7 +192,7 @@ async def test_async_graph_runner_persists_ready_meal_and_invalidates_cache():
         language="en",
     )
     uow.meals.save.assert_awaited_once()
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     meal = result["result"]
     assert meal.meal_id == meal_id
     assert meal.status == MealStatus.READY
@@ -235,7 +237,7 @@ async def test_async_graph_runner_schedules_value_insights_after_cache_invalidat
     )
     uow = _FakeGraphUow()
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
 
     class TaskManager:
         def __init__(self):
@@ -273,7 +275,7 @@ async def test_async_graph_runner_schedules_value_insights_after_cache_invalidat
         runtime,
     )
 
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     assert result["cache_invalidated"] is True
     assert result["meal_value_insight_scheduled"] is True
     assert result["meal_value_insight_source"] == "meal_analyze_graph"
@@ -344,7 +346,7 @@ async def test_graph_ready_response_returns_before_value_insight_ai_completes(ca
 
     task_manager = CapturingTaskManager()
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     insight_cache = FakeCache()
     ai_manager = AsyncMock()
     ai_manager.generate = AsyncMock(
@@ -573,7 +575,7 @@ async def test_async_graph_returns_same_call_locale_without_translation_reload()
         }
     )
     cache = AsyncMock()
-    cache.after_meal_write = AsyncMock()
+    cache.enqueue_meal_invalidation = AsyncMock()
     uow = _FakeGraphUow()
     runtime = MealAnalyzeRuntime(
         command=UploadMealImageImmediatelyCommand(
@@ -609,7 +611,7 @@ async def test_async_graph_returns_same_call_locale_without_translation_reload()
         language="vi",
     )
     assert uow.meals.find_by_id.await_count == 0
-    cache.after_meal_write.assert_awaited_once()
+    cache.enqueue_meal_invalidation.assert_awaited_once()
     assert result["result"].meal_id == "22222222-2222-4222-8222-222222222222"
     assert result["result"].dish_name == "Cơm gà"
     assert result["result"].nutrition.food_items[0].name == "Cơm gà"
@@ -794,7 +796,8 @@ async def test_acquire_image_upload_saves_bytes_in_runtime_not_state():
 
 @pytest.mark.asyncio
 async def test_acquire_image_scan_by_url_downloads_and_compresses_regular_scan():
-    download_image_bytes = AsyncMock(return_value=b"raw-image")
+    large_raw = b"x" * 300_000
+    download_image_bytes = AsyncMock(return_value=large_raw)
     compression_calls = []
 
     def compress_image(raw_bytes: bytes) -> bytes:
@@ -815,12 +818,14 @@ async def test_acquire_image_scan_by_url_downloads_and_compresses_regular_scan()
 
     state_update = await acquire_image({}, runtime)
 
-    download_image_bytes.assert_awaited_once_with(command.image_url)
-    assert compression_calls == [b"raw-image"]
+    download_image_bytes.assert_awaited_once_with(
+        "https://res.cloudinary.com/demo/image/upload/w_768,c_limit,q_auto,f_jpg/v1/mealtrack/image-456.jpg"
+    )
+    assert compression_calls == [large_raw]
     assert state_update == {
         "image_id": "image-456",
         "content_kind": "meal_image",
-        "image_size_bytes": len(b"raw-image"),
+        "image_size_bytes": len(large_raw),
     }
     assert runtime.acquired_image is not None
     assert runtime.acquired_image.image_url == command.image_url

@@ -15,12 +15,9 @@ from src.api.routes.v1.webhook_referral_funnel import (
     credit_referral_on_purchase,
     revoke_referral_on_refund,
 )
-from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
-from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
-from src.infra.services.email_template_renderer import EmailTemplateRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +29,6 @@ POSTHOG_LIFECYCLE_EVENTS = {
     "RENEWAL": "subscription_renewed",
     "PRODUCT_CHANGE": "subscription_product_changed",
 }
-
-
-def _get_email_service() -> EmailService:
-    """Get email service instance."""
-    adapter = ResendEmailAdapter()
-    renderer = EmailTemplateRenderer()
-    return EmailService(email_adapter=adapter, template_renderer=renderer)
 
 
 def _get_subscription_service():
@@ -172,15 +162,6 @@ async def handle_cancellation(uow, user, event):
         },
         event_id=event.get("id"),
     )
-
-    # Send cancellation email
-    if not user.email_opt_out:
-        try:
-            email_service = _get_email_service()
-            await email_service.send_cancellation_email(user)
-            logger.info(f"Cancellation email sent to user {user.id}")
-        except Exception as e:
-            logger.error(f"Failed to send cancellation email to {user.id}: {e}")
 
 
 async def handle_expiration(uow, user, event):

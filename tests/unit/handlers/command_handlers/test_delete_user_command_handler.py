@@ -173,15 +173,19 @@ class TestDeleteUserCommandHandler:
                 # Assert
                 assert result["firebase_uid"] == active_user.firebase_uid
                 assert result["deleted"] is True
-                assert result["firebase_deleted"] is True
-                assert result["message"] == "Account successfully deleted"
+                assert result["firebase_deleted"] is False
+                assert result["firebase_cleanup_queued"] is False
+                assert (
+                    result["message"]
+                    == "Account successfully deleted; Firebase cleanup queued"
+                )
 
                 # Verify user is soft deleted
                 deleted_user = (
                     db_session.query(User).filter(User.id == active_user.id).first()
                 )
                 assert deleted_user.is_active is False
-                mock_firebase.assert_called_once_with(active_user.firebase_uid)
+                mock_firebase.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_anonymize_user_data_on_deletion(

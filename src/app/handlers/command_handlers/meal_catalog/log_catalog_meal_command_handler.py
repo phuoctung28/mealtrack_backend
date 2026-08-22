@@ -13,6 +13,7 @@ from typing import Any
 from src.api.exceptions import ConflictException, ResourceNotFoundException
 from src.app.commands.meal_catalog import LogCatalogMealCommand
 from src.app.events.base import EventHandler, handles
+from src.app.services.background_job_scheduler import schedule_background_job
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.catalog_meal_log_service import (
     CatalogMealLogService,
@@ -76,13 +77,12 @@ class LogCatalogMealCommandHandler(
         write_started = time.perf_counter()
         result = await self._write(command, catalog_meal)
         write_ms = (time.perf_counter() - write_started) * 1000
-        await persist_meal_translation(
-            self.meal_translation_service, result.meal, command.language
+        await self._defer(
+            f"catalog-log-translation:{result.meal_id}",
+            persist_meal_translation(
+                self.meal_translation_service, result.meal, command.language
+            ),
         )
-        if self.cache_invalidation is not None:
-            await self.cache_invalidation.after_meal_write(
-                command.user_id, command.meal_date
-            )
         if self.recalculator is not None:
             await self._defer(
                 f"catalog-log-recalc:{command.request_id}",
@@ -105,12 +105,9 @@ class LogCatalogMealCommandHandler(
         return result
 
     async def _defer(self, name: str, coro: Coroutine[Any, Any, Any]) -> None:
-        """Run isolated post-log work in the background when a task manager exists."""
+        """Run isolated post-log work without blocking the committed meal write."""
 
-        if self.task_manager is not None:
-            self.task_manager.spawn(name, coro)
-            return
-        await coro
+        schedule_background_job(self.task_manager, name, coro, logger=logger)
 
     async def _write(self, command, catalog_meal) -> LogCatalogMealResult:
         async with self.uow as uow:
@@ -143,6 +140,12 @@ class LogCatalogMealCommandHandler(
                     target_meal_id=result.meal_id,
                     response=result.to_replay_payload(),
                 )
+                if self.cache_invalidation is not None:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        command.user_id,
+                        command.meal_date,
+                    )
                 return result
             except Exception:
                 await uow.meal_write_operations.release(reservation)

@@ -2,13 +2,14 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
 
 from src.app.commands.user.update_language_command import UpdateLanguageCommand
 from src.app.handlers.command_handlers.update_language_command_handler import (
     UpdateLanguageCommandHandler,
 )
 from src.domain.model.notification import NotificationPreferences
-from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
+from src.infra.event_bus.background_task_manager import BackgroundTaskManager
 
 
 @pytest.mark.asyncio
@@ -19,7 +20,10 @@ async def test_update_language_syncs_notification_preferences_and_reschedules():
         NotificationPreferences.create_default(user_id)
     )
     precompute = AsyncMock()
-    handler = UpdateLanguageCommandHandler(precompute_service=precompute)
+    task_manager = BackgroundTaskManager()
+    handler = UpdateLanguageCommandHandler(
+        precompute_service=precompute, task_manager=task_manager
+    )
 
     with patch(
         "src.app.handlers.command_handlers.update_language_command_handler.AsyncUnitOfWork",
@@ -31,6 +35,7 @@ async def test_update_language_syncs_notification_preferences_and_reschedules():
 
     assert result == {"success": True, "language_code": "vi"}
     assert fake_uow.notifications.preferences[user_id].language == "vi"
+    await task_manager.drain()
     precompute.reschedule_user_notifications.assert_awaited_once_with(user_id)
 
 

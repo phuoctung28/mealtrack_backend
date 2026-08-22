@@ -1,4 +1,5 @@
 from datetime import date
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -86,3 +87,25 @@ async def test_log_caloric_drink_credits_hydration_weight_and_localizes_name():
     assert result["credited_ml"] == 333  # hydration-weighted amount stored
     assert result["drink_name"] == "Nước ép"
     assert result["meal_id"] == uow.hydration_entries.saved.id  # backward-compat alias
+
+
+@pytest.mark.asyncio
+async def test_log_caloric_drink_invalidates_hydration_and_balance_caches():
+    cache_invalidation = MagicMock()
+    cache_invalidation.after_hydration_write = AsyncMock()
+    handler = LogCaloricDrinkCommandHandler(
+        uow=_Uow(), cache_invalidation=cache_invalidation
+    )
+
+    await handler.handle(
+        LogCaloricDrinkCommand(
+            user_id="user-1",
+            drink_id="coke",
+            volume_ml=330,
+            target_date=date(2026, 5, 26),
+        )
+    )
+
+    cache_invalidation.after_hydration_write.assert_awaited_once_with(
+        "user-1", date(2026, 5, 26)
+    )

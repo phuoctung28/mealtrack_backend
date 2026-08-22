@@ -32,6 +32,7 @@ from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     FoodLabelImageAnalysisStrategy,
 )
+from src.domain.utils.image_compression import to_compressed_cloudinary_url
 from src.domain.utils.timezone_utils import (
     get_zone_info,
     is_valid_timezone,
@@ -119,8 +120,13 @@ async def _acquire_scan_by_url_image(
         source_url = command.label_crop_image_url
         source_public_id = command.label_crop_public_id or command.public_id
 
-    raw_bytes = await runtime.download_image_bytes(source_url)
-    analysis_bytes = raw_bytes if is_food_label else runtime.compress_image(raw_bytes)
+    download_url = source_url if is_food_label else to_compressed_cloudinary_url(source_url)
+    raw_bytes = await runtime.download_image_bytes(download_url)
+    analysis_bytes = (
+        raw_bytes
+        if (is_food_label or len(raw_bytes) <= 200 * 1024)
+        else runtime.compress_image(raw_bytes)
+    )
     content_kind = "food_label_image" if is_food_label else "meal_image"
     image_id = source_public_id.split("/")[-1]
 
@@ -415,13 +421,13 @@ async def persist_meal(
 
     async with runtime.uow as uow:
         saved_meal = await uow.meals.save(meal)
+        if runtime.cache_invalidation and runtime.meal_date:
+            await runtime.cache_invalidation.enqueue_meal_invalidation(
+                uow.outbox,
+                runtime.command.user_id,
+                runtime.meal_date,
+            )
         await uow.commit()
-
-    if runtime.cache_invalidation and runtime.meal_date:
-        await runtime.cache_invalidation.after_meal_write(
-            runtime.command.user_id,
-            runtime.meal_date,
-        )
 
     runtime.saved_meal = saved_meal
     return {
@@ -435,14 +441,9 @@ async def invalidate_cache(
     state: MealAnalyzeGraphState,
     runtime: MealAnalyzeRuntime,
 ) -> MealAnalyzeGraphState:
-    """Invalidate meal caches before returning READY response."""
+    """Confirm the transactional event created by ``persist_meal``."""
     if state.get("cache_invalidated"):
         return {"cache_invalidated": True}
-    if runtime.cache_invalidation and runtime.meal_date:
-        await runtime.cache_invalidation.after_meal_write(
-            runtime.command.user_id,
-            runtime.meal_date,
-        )
     return {"cache_invalidated": True}
 
 

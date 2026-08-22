@@ -92,6 +92,27 @@ redis-cli ping
 
 ---
 
+### Cloudflare Cache Invalidation Stalls
+
+**Problem:** Meal writes succeed, but cache invalidation events stay pending, keep retrying, or land in the DLQ.
+
+**Diagnosis:**
+```bash
+echo $CLOUDFLARE_QUEUE_ENABLED
+rg -n "cache_invalidation.v1|CloudflareQueuePublisher|CacheInvalidationQueueHandler" src workers
+```
+
+**Solutions:**
+1. Confirm the business row committed and the `cache_invalidation.v1` outbox row exists.
+2. Check the outbox worker logs for disabled Queue publication, missing credentials, timeout, or 4xx rejection.
+3. Check the Cloudflare Worker logs for `ack`, `retry`, or DLQ movement on the matching `event_id`.
+4. Verify the Worker has valid Upstash Redis REST access and that the queue consumer is pointed at the correct staging or production queue.
+5. Leave `CLOUDFLARE_QUEUE_ENABLED=false` only when you want to stop new Queue publications; it does not repair pending rows.
+
+**Evidence note:** staging/live deployment proof for this slice is currently pending or blocked on environment credentials. Do not mark the rollout complete until Queue, Worker, and Upstash access are verified separately.
+
+---
+
 ### Slow Database Queries
 
 **Problem:** `[SLOW_REQUEST_DETECTED >1s]` in logs

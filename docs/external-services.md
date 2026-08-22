@@ -23,6 +23,8 @@ settings, wiring from adapters, and live health from OpenAPI `/docs`.
 | Redis optional caches | **Optional** | Bypass cache; continue from source of truth |
 | Redis provider budget | **Required for provider-origin manual writes** | Fail closed with `NUTRITION_PROVIDER_UNAVAILABLE` |
 | Redis meal-suggestion sessions | **Required transient state** (current design) | Session writes fail when store unavailable |
+| Cloudflare Queue cache invalidation | **Required when `CLOUDFLARE_QUEUE_ENABLED=true`** | Outbox publish retries until the Queue accepts the event |
+| Upstash Redis REST for Worker deletes | **Required for the Queue consumer** | Worker retries, then DLQ, on Redis/network/delete failures |
 | OpenAI translation | **Optional read-path localization** | Return canonical local/provider results without translated names; do not block startup or writes |
 | OpenAI, FatSecret, USDA, OFF, Brave, image stock APIs | **Optional enrichment** | Degrade to local/prior results when safe |
 | PostHog | **Optional analytics** | Skip capture |
@@ -42,6 +44,13 @@ disable this shared write-path budget.
 images, emails, auth tokens, full barcodes, or secrets. Prefer operation name,
 internal IDs, status codes, and error class.
 
+**Cloudflare async cache invalidation rule:** the durable slice is
+`business write -> outbox row -> Python publisher -> Cloudflare Queue ->
+Worker -> Upstash Redis REST delete`. One global
+`CLOUDFLARE_QUEUE_ENABLED` switch controls publication. There is no local-vs-
+Cloudflare dual routing, no percentage canary, no HMAC, no revision table or
+fencing, and no cache-value write path in this slice.
+
 ---
 
 ## Adapter map (WHERE)
@@ -56,12 +65,14 @@ internal IDs, status codes, and error class.
 | OpenAI prompt-cache policy | `src/infra/services/ai/openai_prompt_cache_policy.py` |
 | Food providers (USDA, FatSecret, OFF, Brave) | `src/infra/adapters/food_data_service.py`, `fat_secret_service.py`, `open_food_facts_service.py`, `brave_search_nutrition_service.py` |
 | Translation | `src/infra/adapters/openai_translation_adapter.py` |
+| Cloudflare cache invalidation relay | `src/infra/adapters/cloudflare_queue_publisher.py`, `src/infra/services/handlers/cache_invalidation_queue_handler.py`, `src/cron/outbox_worker.py` |
 | Stock / generated images | `pexels_image_adapter.py`, `unsplash_image_adapter.py`, `imagen_image_generator.py`, `pollinations_image_generator.py`, `cloudflare_workers_image_generator.py` |
 | RevenueCat | `src/infra/adapters/revenuecat_adapter.py`; webhook entry in `src/api/routes/v1/webhooks.py` with sibling modules `webhook_subscription_lifecycle.py`, `webhook_referral_funnel.py`, `webhook_lookup_parsing.py` |
 | Web funnel redemption | `src/infra/services/web_funnel_*` |
 | PostHog | `src/infra/adapters/posthog_adapter.py` |
 | Resend email | `src/infra/adapters/resend_email_adapter.py` |
 | Redis | `src/infra/cache/` |
+| Queue consumer | sibling `nutreeai_async` repository |
 | Sentry / observability facade | `src/infra/monitoring/`, `src/observability.py` |
 | Affiliate outbox client | `src/infra/adapters/affiliate_service_adapter.py`; cron `src/cron/affiliate_outbox.py` |
 | DB pool | `src/infra/database/config_async.py`, `connection_policy.py` — see `database-guide.md` |
@@ -134,6 +145,22 @@ and must not enter the global catalog. Logs must not include full raw barcodes.
 Default: do not cache. Admission checklist lives in the selective-cache decision
 above. `FAIL_ON_CACHE_ERROR=false` is the expected production posture for
 optional caches.
+
+### Cloudflare async cache invalidation
+
+- The backend publishes `cache_invalidation.v1` through the transactional
+  outbox. The `CacheInvalidationQueueHandler` only forwards validated payloads
+  to Cloudflare Queue; it does not write Redis values.
+- `CloudflareQueuePublisher.from_settings()` reads the single global
+  `CLOUDFLARE_QUEUE_ENABLED` switch plus the account, queue name, token, and
+  timeout settings. If disabled or misconfigured, the outbox stays retryable or
+  fails according to the publisher error class.
+- The Worker validates the event envelope and deletes exact keys or bounded
+  patterns through Upstash Redis REST. Queue ACK/retry/DLQ semantics own the
+  delivery lifecycle.
+- `HMAC`, revision tables/fencing, cache writes, local-vs-Cloudflare dual
+  routing, and percentage canaries are intentionally out of scope for this
+  slice.
 
 ### Parse-text nutrition validation
 

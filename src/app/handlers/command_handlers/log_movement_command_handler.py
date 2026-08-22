@@ -1,8 +1,7 @@
 """Command handler for logging a movement entry."""
 
 import logging
-from datetime import date, timedelta
-from typing import Optional
+from datetime import timedelta
 
 from src.api.exceptions import ValidationException
 from src.app.commands.movement import LogMovementCommand
@@ -44,9 +43,7 @@ def _validate_log_movement(cmd: LogMovementCommand) -> None:
             "Duration must be between 1 and 600 minutes", "INVALID_DURATION"
         )
     if cmd.kcal_burned < 0:
-        raise ValidationException(
-            "Calories burned cannot be negative", "INVALID_KCAL"
-        )
+        raise ValidationException("Calories burned cannot be negative", "INVALID_KCAL")
     if cmd.kcal_burned > 5000:
         raise ValidationException(
             "kcal_burned exceeds maximum allowed (5000)", "INVALID_KCAL"
@@ -72,7 +69,7 @@ class LogMovementCommandHandler(EventHandler[LogMovementCommand, dict]):
     def __init__(
         self,
         uow: AsyncUnitOfWork,
-        cache_invalidation: Optional[CacheInvalidationService] = None,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
         self.cache_invalidation = cache_invalidation
@@ -109,8 +106,6 @@ class LogMovementCommandHandler(EventHandler[LogMovementCommand, dict]):
             saved = await uow.movement_entries.add(entry)
 
         if self.cache_invalidation:
-            await self.cache_invalidation.schedule_after_movement_write(
-                cmd.user_id, log_date
-            )
+            await self.cache_invalidation.after_movement_write(cmd.user_id, log_date)
 
         return _movement_response(saved)

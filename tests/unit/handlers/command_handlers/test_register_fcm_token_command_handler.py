@@ -7,6 +7,7 @@ from src.app.commands.notification import RegisterFcmTokenCommand
 from src.app.handlers.command_handlers.register_fcm_token_command_handler import (
     RegisterFcmTokenCommandHandler,
 )
+from src.infra.event_bus.background_task_manager import BackgroundTaskManager
 
 
 def _mock_uow(current_timezone="UTC"):
@@ -30,11 +31,13 @@ def _mock_notification_repo():
 async def test_register_fcm_token_reschedules_when_timezone_changes():
     user_id = str(uuid4())
     precompute = AsyncMock()
+    task_manager = BackgroundTaskManager()
     repo = _mock_notification_repo()
     uow = _mock_uow(current_timezone="UTC")
     handler = RegisterFcmTokenCommandHandler(
         notification_repository=repo,
         precompute_service=precompute,
+        task_manager=task_manager,
     )
 
     with patch(
@@ -52,6 +55,7 @@ async def test_register_fcm_token_reschedules_when_timezone_changes():
 
     assert result["success"] is True
     uow.users.update_user_timezone.assert_awaited_once_with(user_id, "Asia/Ho_Chi_Minh")
+    await task_manager.drain()
     precompute.reschedule_user_notifications.assert_awaited_once_with(user_id)
 
 

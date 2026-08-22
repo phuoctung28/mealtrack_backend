@@ -4,7 +4,6 @@ Handler for editing meal ingredients.
 
 import logging
 from dataclasses import replace
-from datetime import timedelta
 from typing import Any
 
 from src.api.exceptions import (
@@ -204,25 +203,29 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                             },
                         },
                     )
-                await uow.commit()
 
                 old_meal_date = (meal.created_at or utc_now()).date()
                 meal_date = (saved_meal.created_at or utc_now()).date()
                 if self.cache_invalidation:
                     if old_meal_date != meal_date:
-                        await self.cache_invalidation.after_meal_write(
-                            saved_meal.user_id, old_meal_date
+                        await self.cache_invalidation.enqueue_meal_invalidation(
+                            uow.outbox,
+                            saved_meal.user_id,
+                            old_meal_date,
                         )
-                    await self.cache_invalidation.after_meal_write(
-                        saved_meal.user_id, meal_date
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        saved_meal.user_id,
+                        meal_date,
                     )
+                await uow.commit()
 
                 # 6. Calculate nutrition delta for event
                 nutrition_delta = self._calculate_nutrition_delta(
                     meal.nutrition, updated_nutrition
                 )
 
-                return {
+                response = {
                     "success": True,
                     "meal_id": saved_meal.meal_id,
                     "message": f"Meal updated successfully. {changes_summary}",
@@ -260,6 +263,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
             except Exception:
                 await uow.rollback()
                 raise
+
+        return response
 
     async def _handle_v2(self, command: EditMealCommand) -> dict[str, Any]:
         """Keep lease reservation and provider/reference resolution out of the write UoW."""
@@ -387,18 +392,22 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                     target_meal_id=saved_meal.meal_id,
                     response=replay_response,
                 )
+                old_meal_date = (meal.created_at or utc_now()).date()
+                meal_date = (saved_meal.created_at or utc_now()).date()
+                if self.cache_invalidation:
+                    if old_meal_date != meal_date:
+                        await self.cache_invalidation.enqueue_meal_invalidation(
+                            uow.outbox,
+                            saved_meal.user_id,
+                            old_meal_date,
+                        )
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        saved_meal.user_id,
+                        meal_date,
+                    )
                 await uow.commit()
 
-            old_meal_date = (meal.created_at or utc_now()).date()
-            meal_date = (saved_meal.created_at or utc_now()).date()
-            if self.cache_invalidation:
-                if old_meal_date != meal_date:
-                    await self.cache_invalidation.after_meal_write(
-                        saved_meal.user_id, old_meal_date
-                    )
-                await self.cache_invalidation.after_meal_write(
-                    saved_meal.user_id, meal_date
-                )
             replay_response["events"] = [
                 MealEditedEvent(
                     aggregate_id=saved_meal.meal_id,
@@ -438,12 +447,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
 
     async def _reserve_v2_write_short(self, command):
         async with self.uow_factory() as uow:
-            cleanup = getattr(uow.meal_write_operations, "cleanup_finished", None)
-            if cleanup is not None:
-                await cleanup(
-                    older_than=utc_now() - timedelta(days=30),
-                    limit=100,
-                )
             return await self._reserve_v2_write(command, uow)
 
     async def _release_v2_write(self, reservation):
@@ -602,7 +605,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 return replace(change, unit=existing_unit)
             return change
         snapshot = existing_item.source_snapshot or {}
-        allowed_units = snapshot.get("allowed_units") or existing_item.allowed_units or []
+        allowed_units = (
+            snapshot.get("allowed_units") or existing_item.allowed_units or []
+        )
         if not allowed_units:
             raise ValueError("v2 quantity updates require an immutable source snapshot")
         quantity = (

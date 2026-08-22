@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 from src.app.commands.saved_suggestion import DeleteSavedSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -18,8 +18,14 @@ class DeleteSavedSuggestionCommandHandler(
 ):
     """Delete a saved suggestion by suggestion_id for a user."""
 
-    def __init__(self, cache_service: Optional[CachePort] = None):
-        self.cache_service = cache_service
+    def __init__(
+        self,
+        cache_service: Optional[CachePort] = None,
+        cache_invalidation: CacheInvalidationService | None = None,
+    ):
+        self.cache_invalidation = cache_invalidation or CacheInvalidationService(
+            cache_service
+        )
 
     async def handle(self, command: DeleteSavedSuggestionCommand) -> Dict[str, Any]:
         async with AsyncUnitOfWork() as uow:
@@ -28,11 +34,12 @@ class DeleteSavedSuggestionCommandHandler(
             )
             if deleted:
                 logger.info(
-                    f"Deleted saved suggestion {command.suggestion_id} for user {command.user_id}"
+                    "Deleted saved suggestion %s for user %s",
+                    command.suggestion_id,
+                    command.user_id,
                 )
 
-        if self.cache_service:
-            cache_key, _ = CacheKeys.saved_suggestions(command.user_id)
-            await self.cache_service.invalidate(cache_key)
+        if deleted:
+            await self.cache_invalidation.after_saved_suggestion_write(command.user_id)
 
         return {"success": deleted}

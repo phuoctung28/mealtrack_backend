@@ -180,39 +180,14 @@ async def _fetch_pg_connection_stats() -> dict[str, Any]:
 @router.get("/health/notifications")
 async def notification_health_check(_monitor=Depends(require_monitoring_access)):
     """
-    Health check for push notification system.
-    Checks: Firebase SDK init, APNS config status, token stats.
+    Health check for notification system database tokens.
     """
     try:
-        from src.infra.services.firebase_service import FirebaseService
-
-        firebase_service = FirebaseService()
-
-        from src.infra.services.push.apns_payload_builder import apns_diagnostics
-
         health_status = {
             "status": "healthy",
-            "firebase_initialized": firebase_service.is_initialized(),
             "deployment": _deployment_info(),
-            "components": {
-                "apns": {"status": "healthy", **apns_diagnostics()},
-            },
+            "components": {},
         }
-
-        # Check Firebase Admin SDK
-        if not firebase_service.is_initialized():
-            health_status["status"] = "degraded"
-            health_status["components"]["firebase_sdk"] = {
-                "status": "error",
-                "message": "Firebase Admin SDK not initialized",
-            }
-        else:
-            health_status["components"]["firebase_sdk"] = {
-                "status": "healthy",
-                "message": "Firebase Admin SDK initialized",
-            }
-
-        # Get token stats from database
         async with AsyncUnitOfWork() as uow:
             total_tokens = (
                 await uow.session.execute(select(func.count(DBToken.id)))

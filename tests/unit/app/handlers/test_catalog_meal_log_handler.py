@@ -101,6 +101,7 @@ class _Uow:
         self.meal_write_operations = writes or _WriteOps()
         self.meal_recommendation_plans = plans or _Plans()
         self.meals = meals or SimpleNamespace(find_by_id=AsyncMock())
+        self.outbox = SimpleNamespace()
 
     async def __aenter__(self):
         return self
@@ -158,26 +159,45 @@ async def test_prefer_slot_logs_matching_unlogged_slot():
     log_service.execute = AsyncMock(
         return_value=_result(logged_via="slot", plan_id="plan-1", slot_id="slot-1")
     )
-    cache = SimpleNamespace(after_meal_write=AsyncMock())
+    cache = SimpleNamespace(enqueue_meal_invalidation=AsyncMock())
     recalculator = SimpleNamespace(recalculate=AsyncMock())
+
+    class _Tasks:
+        def __init__(self):
+            self.jobs = []
+
+        def spawn(self, name, coro):
+            self.jobs.append((name, coro))
+
+        async def drain(self):
+            for _, coro in self.jobs:
+                await coro
+
+    tasks = _Tasks()
     handler = _handler(
         _Uow(),
         _Browse(),
         log_service,
         cache=cache,
         recalculator=recalculator,
+        task_manager=tasks,
     )
 
     result = await handler.handle(_command())
 
     assert result.logged_via == "slot"
     assert result.plan_id == "plan-1"
-    cache.after_meal_write.assert_awaited_once_with("user-1", date(2026, 8, 18))
+    cache.enqueue_meal_invalidation.assert_awaited_once_with(
+        handler.uow.outbox,
+        "user-1",
+        date(2026, 8, 18),
+    )
+    await tasks.drain()
     recalculator.recalculate.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_translates_before_cache_invalidation():
+async def test_translation_runs_after_cache_invalidation_is_enqueued():
     order: list[str] = []
     log_service = AsyncMock()
     log_service.execute = AsyncMock(return_value=_result())
@@ -187,8 +207,21 @@ async def test_translates_before_cache_invalidation():
             order.append("translate")
 
     class _Cache:
-        async def after_meal_write(self, user_id, meal_date):
+        async def enqueue_meal_invalidation(self, outbox, user_id, meal_date):
             order.append("cache")
+
+    class _Tasks:
+        def __init__(self):
+            self.jobs = []
+
+        def spawn(self, name, coro):
+            self.jobs.append((name, coro))
+
+        async def drain(self):
+            for _, coro in self.jobs:
+                await coro
+
+    tasks = _Tasks()
 
     handler = _handler(
         _Uow(),
@@ -196,11 +229,13 @@ async def test_translates_before_cache_invalidation():
         log_service,
         cache=_Cache(),
         translation=_Translation(),
+        task_manager=tasks,
     )
 
     await handler.handle(_command(language="vi"))
+    await tasks.drain()
 
-    assert order == ["translate", "cache"]
+    assert order == ["cache", "translate"]
 
 
 @pytest.mark.asyncio
@@ -228,7 +263,10 @@ async def test_recalculate_is_backgrounded_when_task_manager_present():
     result = await handler.handle(_command())
 
     assert result.meal_id == "meal-1"
-    assert spawned == ["catalog-log-recalc:req-1"]
+    assert spawned == [
+        "catalog-log-translation:meal-1",
+        "catalog-log-recalc:req-1",
+    ]
     recalculator.recalculate.assert_called_once()
     recalculator.recalculate.assert_not_awaited()
 

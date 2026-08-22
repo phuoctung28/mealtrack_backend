@@ -117,9 +117,12 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
 
         async with self.uow as uow:
             saved_meal = await uow.meals.save(meal)
-
-        if self.cache_invalidation:
-            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
+            if self.cache_invalidation:
+                await self.cache_invalidation.enqueue_meal_invalidation(
+                    uow.outbox,
+                    command.user_id,
+                    meal_date,
+                )
 
         logger.info(
             f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "

@@ -1,7 +1,12 @@
 """Handler for logging recommended meals through normal meal persistence."""
 
+import logging
+from collections.abc import Coroutine
+from typing import Any
+
 from src.app.commands.meal_recommendation import LogRecommendedMealCommand
 from src.app.events.base import EventHandler, handles
+from src.app.services.background_job_scheduler import schedule_background_job
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.app.services.meal_translation_persistence import persist_meal_translation
 from src.app.services.recommended_meal_materialization_service import (
@@ -14,6 +19,8 @@ from src.domain.model.meal_recommendation import (
 from src.domain.services.meal_analysis.meal_translation_service import (
     MealTranslationService,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @handles(LogRecommendedMealCommand)
@@ -29,11 +36,13 @@ class LogRecommendedMealCommandHandler(
         materializer: RecommendedMealMaterializationService | None = None,
         meal_translation_service: MealTranslationService | None = None,
         cache_invalidation: CacheInvalidationService | None = None,
+        task_manager=None,
     ):
         self.uow = uow
         self.materializer = materializer or RecommendedMealMaterializationService()
         self.meal_translation_service = meal_translation_service
         self.cache_invalidation = cache_invalidation
+        self.task_manager = task_manager
 
     async def handle(
         self, command: LogRecommendedMealCommand
@@ -65,15 +74,23 @@ class LogRecommendedMealCommandHandler(
                 )
                 saved_meal = meal
                 meal_date = slot.slot_date
+                if self.cache_invalidation is not None:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        command.user_id,
+                        meal_date,
+                    )
 
         # meal_translation uses its own DB session; parent meal must be committed first.
         if saved_meal is not None:
-            if self.cache_invalidation is not None and meal_date is not None:
-                await self.cache_invalidation.after_meal_write(
-                    command.user_id, meal_date
-                )
-            await persist_meal_translation(
-                self.meal_translation_service, saved_meal, command.language
+            await self._defer(
+                f"recommendation-log-translation:{saved_meal.meal_id}",
+                persist_meal_translation(
+                    self.meal_translation_service, saved_meal, command.language
+                ),
             )
 
         return result
+
+    async def _defer(self, name: str, coro: Coroutine[Any, Any, Any]) -> None:
+        schedule_background_job(self.task_manager, name, coro, logger=logger)

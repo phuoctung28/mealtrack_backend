@@ -6,8 +6,6 @@ import time
 from typing import Any
 from uuid import uuid4
 
-import httpx
-
 from src.api.exceptions import ValidationException
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.app.events.base import EventHandler, handles
@@ -37,7 +35,10 @@ from src.domain.services.meal_type_determination_service import (
 from src.domain.strategies.meal_analysis_strategy import (
     FoodLabelImageAnalysisStrategy,
 )
-from src.domain.utils.image_compression import compress_image
+from src.domain.utils.image_compression import (
+    compress_image,
+    to_compressed_cloudinary_url,
+)
 from src.domain.utils.timezone_utils import (
     get_zone_info,
     is_valid_timezone,
@@ -67,6 +68,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         meal_value_insight_ai_manager: MealInsightAIPort | None = None,
         meal_analyze_workflow: MealAnalyzeWorkflow | None = None,
         meal_analyze_graph_enabled: bool = False,
+        download_image_bytes: Any | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -80,6 +82,7 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         self.meal_value_insight_ai_manager = meal_value_insight_ai_manager
         self.meal_analyze_workflow = meal_analyze_workflow
         self.meal_analyze_graph_enabled = meal_analyze_graph_enabled
+        self._download_image_bytes_fn = download_image_bytes
 
     def _record_food_label_metric(
         self,
@@ -121,6 +124,10 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         )
 
     async def _download_image_bytes(self, image_url: str) -> bytes:
+        if self._download_image_bytes_fn is not None:
+            return await self._download_image_bytes_fn(image_url)
+        import httpx
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(image_url)
             resp.raise_for_status()
@@ -168,11 +175,18 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
         image_id = command.public_id.split("/")[-1]
 
         try:
-            # Download from Cloudinary and compress off the event loop
-            raw_bytes = await self._download_image_bytes(command.image_url)
+            # For meal scans, fetch edge-compressed Cloudinary URL to avoid local PIL resizing
+            download_url = (
+                to_compressed_cloudinary_url(command.image_url)
+                if command.scan_mode != "food_label"
+                else command.image_url
+            )
+            raw_bytes = await self._download_image_bytes(download_url)
             image_bytes: bytes | None = None
             if command.scan_mode != "food_label":
-                image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
+                image_bytes = raw_bytes
+                if len(image_bytes) > 200 * 1024:
+                    image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
                 logger.info(
                     "[SCAN-BY-URL] image_id=%s raw=%d compressed=%d bytes",
                     image_id,
@@ -297,6 +311,12 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
                 async with self.uow as uow:
                     saved_meal = await uow.meals.save(meal)
+                    if self.cache_invalidation:
+                        await self.cache_invalidation.enqueue_meal_invalidation(
+                            uow.outbox,
+                            command.user_id,
+                            meal_date,
+                        )
                     await uow.commit()
 
                 logger.info(
@@ -305,11 +325,6 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                     vision_elapsed,
                     time.time() - start,
                 )
-
-                if self.cache_invalidation:
-                    await self.cache_invalidation.after_meal_write(
-                        command.user_id, meal_date
-                    )
 
                 return saved_meal
 
@@ -373,12 +388,13 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             async with self.uow as uow:
                 saved_meal = await uow.meals.save(meal)
+                if self.cache_invalidation:
+                    await self.cache_invalidation.enqueue_meal_invalidation(
+                        uow.outbox,
+                        command.user_id,
+                        meal_date,
+                    )
                 await uow.commit()
-
-            if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(
-                    command.user_id, meal_date
-                )
 
             logger.info(
                 "[SCAN-BY-URL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",
