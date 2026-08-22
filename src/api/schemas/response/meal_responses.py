@@ -92,6 +92,9 @@ class ParsedFoodItem(BaseModel):
     sugar_per_100g: float | None = Field(
         None, ge=0, description="Backend-derived sugar per 100g"
     )
+    canonical_name: str | None = Field(
+        None, description="English catalog identity retained beside the display name"
+    )
     source_snapshot: dict | None = Field(
         None, description="Validated nutrition snapshot for the confirmed item"
     )

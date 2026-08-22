@@ -49,6 +49,16 @@ STATUS_MAPPING = {
 }
 
 
+def _snapshot_canonical_name(item) -> str | None:
+    snapshot = getattr(item, "source_snapshot", None) or {}
+    if not isinstance(snapshot, dict):
+        return None
+    name = snapshot.get("canonical_name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return None
+
+
 def _apply_translated_food_name(food_item, translated_name, language: str | None) -> None:
     if not translated_name:
         return
@@ -162,9 +172,12 @@ class MealMapper:
             if meal.nutrition.food_items:
                 for index, item in enumerate(meal.nutrition.food_items):
                     canonical_name = (
-                        canonical_food_names[index]
-                        if index < len(canonical_food_names)
-                        else item.name
+                        _snapshot_canonical_name(item)
+                        or (
+                            canonical_food_names[index]
+                            if index < len(canonical_food_names)
+                            else item.name
+                        )
                     )
                     item_calories = effective_food_item_calories(
                         item,

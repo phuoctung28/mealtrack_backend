@@ -141,6 +141,40 @@ class _StructuredFatSecretService:
         ]
 
 
+class _BeefFatSecretService:
+    """Provider that only resolves beef so mixed local/FatSecret lists stay mixed."""
+
+    def __init__(self):
+        self.search_calls = []
+
+    async def search_food_candidates(self, query, **kwargs):
+        self.search_calls.append(query)
+        if "beef" not in str(query).lower():
+            return []
+        return [
+            {
+                "food_id": "fs-beef",
+                "food_name": "Beef",
+                "food_type": "Generic",
+            }
+        ]
+
+    async def get_food_details(self, food_id, **kwargs):
+        return {
+            "food_id": food_id,
+            "food_name": "Beef",
+            "source": "fatsecret",
+            "protein_100g": 26.3,
+            "carbs_100g": 0.0,
+            "fat_100g": 19.5,
+            "calories_100g": 282.0,
+            "metric_serving_amount": 100.0,
+            "allowed_units": [
+                {"unit": "g", "gram_weight": 1.0, "description": "1 g"}
+            ],
+        }
+
+
 class _StagedFatSecretService:
     """Fake exposing both legacy and staged APIs so the call boundary is visible."""
 
@@ -365,13 +399,89 @@ def test_parse_text_exposes_portion_density_for_confirmed_save():
         "sugar": 0,
     }
 
+    handler._retain_canonical_name(item)
     handler._attach_per_100g_snapshot(item)
 
     assert item["protein_per_100g"] == pytest.approx(90)
     assert item["fat_per_100g"] == pytest.approx(50)
     assert item["calories_per_100g"] == pytest.approx(810)
+    assert item["canonical_name"] == "Pork rib"
     assert item["source_snapshot"]["basis"] == "100g"
     assert item["source_snapshot"]["protein_per_100g"] == pytest.approx(90)
+    assert item["source_snapshot"]["canonical_name"] == "Pork rib"
+
+
+@pytest.mark.asyncio
+async def test_parse_text_keeps_local_reference_beside_fatsecret():
+    async def local_lookup(names):
+        return {
+            name: {
+                "id": 42,
+                "food_reference_id": 42,
+                "name": "Rice noodles",
+                "source": "food_reference",
+                "is_verified": True,
+                "protein_100g": 1.5,
+                "carbs_100g": 24.0,
+                "fat_100g": 0.22,
+                "fiber_100g": 0.4,
+                "sugar_100g": 0.1,
+                "allowed_units": [
+                    {"unit": "g", "gram_weight": 1.0, "description": "1 g"}
+                ],
+            }
+            for name in names
+            if name == "rice noodles"
+        }
+
+    provider = _BeefFatSecretService()
+    handler = ParseMealTextHandler(
+        meal_generation_service=_FakeMealGenerationService(
+            responses=[
+                {
+                    "items": [
+                        {
+                            "name": "Bún gạo",
+                            "lookup_name": "Rice noodles",
+                            "quantity": 180,
+                            "unit": "g",
+                            "english_unit": "g",
+                            "protein": 2.7,
+                            "carbs": 43.2,
+                            "fat": 0.4,
+                        },
+                        {
+                            "name": "Thịt bò",
+                            "lookup_name": "Beef",
+                            "quantity": 60,
+                            "unit": "g",
+                            "english_unit": "g",
+                            "protein": 15.8,
+                            "carbs": 0,
+                            "fat": 11.7,
+                        },
+                    ]
+                }
+            ]
+        ),
+        fat_secret_service=provider,
+        food_reference_batch_lookup=local_lookup,
+    )
+
+    response = await handler.handle(
+        ParseMealTextCommand(
+            text="bún gạo thịt bò", user_id="user-1", language="en"
+        )
+    )
+
+    assert [item.name for item in response.items] == ["Bún gạo", "Thịt bò"]
+    assert response.items[0].origin == "local"
+    assert response.items[0].food_reference_id == 42
+    assert response.items[0].canonical_name == "Rice noodles"
+    assert response.items[1].origin == "provider"
+    assert response.items[1].source_food_id == "fs-beef"
+    assert response.items[1].canonical_name == "Beef"
+    assert provider.search_calls == ["Beef"]
 
 
 @pytest.mark.asyncio

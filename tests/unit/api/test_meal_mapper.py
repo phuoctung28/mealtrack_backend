@@ -175,6 +175,37 @@ class TestMealMapper:
         # total_weight_grams is calculated from food items
         assert result.total_weight_grams == 350 or result.total_weight_grams is None
 
+    def test_to_detailed_response_uses_snapshot_canonical_name(self):
+        item = FoodItem(
+            id="item-1",
+            name="Bún gạo",
+            quantity=180,
+            unit="g",
+            macros=Macros(protein=2.7, carbs=43.2, fat=0.4),
+            source_snapshot={"canonical_name": "Rice noodles", "basis": "100g"},
+        )
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/bun.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+            ),
+            source="prompt",
+            dish_name="Bún bò",
+            created_at=datetime(2025, 1, 15),
+            ready_at=datetime(2025, 1, 15),
+            nutrition=Nutrition(macros=item.macros, food_items=[item]),
+        )
+
+        result = MealMapper.to_detailed_response(meal, target_language="vi")
+
+        assert result.food_items[0].name == "Bún gạo"
+        assert result.food_items[0].canonical_name == "Rice noodles"
+
     def test_to_detailed_response_falls_back_to_meal_image_url(self):
         """Meal detail must keep the photo when callers omit image_url."""
         image = MealImage(

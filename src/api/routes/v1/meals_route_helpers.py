@@ -52,5 +52,6 @@ def parsed_food_item_to_response(item) -> ParsedFoodItem:
         fat_per_100g=getattr(item, "fat_per_100g", None),
         fiber_per_100g=getattr(item, "fiber_per_100g", None),
         sugar_per_100g=getattr(item, "sugar_per_100g", None),
+        canonical_name=getattr(item, "canonical_name", None),
         source_snapshot=getattr(item, "source_snapshot", None),
     )

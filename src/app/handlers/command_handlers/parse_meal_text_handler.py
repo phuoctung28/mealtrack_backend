@@ -234,6 +234,7 @@ class ParseMealTextHandler(
         for item in enhanced_items:
             clamped = clamp_nutrition_values(item)
             item.update(clamped)
+            self._retain_canonical_name(item)
             self._attach_per_100g_snapshot(item)
 
         # Calculate totals
@@ -283,6 +284,7 @@ class ParseMealTextHandler(
                 fat_per_100g=item.get("fat_per_100g"),
                 fiber_per_100g=item.get("fiber_per_100g"),
                 sugar_per_100g=item.get("sugar_per_100g"),
+                canonical_name=item.get("canonical_name"),
                 source_snapshot=item.get("source_snapshot"),
             )
             for item in enhanced_items
@@ -329,7 +331,7 @@ class ParseMealTextHandler(
                 ),
                 4,
             )
-        item["source_snapshot"] = {
+        snapshot = {
             "basis": "100g",
             "protein_per_100g": item["protein_per_100g"],
             "carbs_per_100g": item["carbs_per_100g"],
@@ -342,6 +344,29 @@ class ParseMealTextHandler(
             "source_namespace": item.get("source_namespace"),
             "source_food_id": item.get("source_food_id"),
         }
+        canonical_name = item.get("canonical_name")
+        if isinstance(canonical_name, str) and canonical_name.strip():
+            snapshot["canonical_name"] = canonical_name.strip()
+        item["source_snapshot"] = snapshot
+
+    def _retain_canonical_name(self, item: dict[str, Any]) -> None:
+        """Keep English catalog identity before display-name localization."""
+        existing = str(item.get("canonical_name") or "").strip()
+        if existing:
+            item["canonical_name"] = existing
+            return
+        for key in ("food_name", "description"):
+            candidate = item.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                item["canonical_name"] = candidate.strip()
+                return
+        lookup_name = str(item.get("lookup_name") or "").strip()
+        if lookup_name:
+            item["canonical_name"] = lookup_name
+            return
+        extracted = self._extract_english_name(str(item.get("name") or "")).strip()
+        if extracted:
+            item["canonical_name"] = extracted
 
     async def _generate_parse_text_payload(
         self,
@@ -820,6 +845,15 @@ class ParseMealTextHandler(
         )
         item["fdc_id"] = raw.get("fdc_id")
         item.update(self._reference_identity(raw, source))
+        catalog_name = str(
+            raw.get("food_name")
+            or raw.get("description")
+            or raw.get("name")
+            or item.get("lookup_name")
+            or ""
+        ).strip()
+        if catalog_name:
+            item["canonical_name"] = catalog_name
         item["nutrition_basis"] = "100g"
         item["nutrition_contract_version"] = NUTRITION_INTEGRITY_POLICY_VERSION
         item["calories_per_100g"] = self._derive_calories_from_macros(
