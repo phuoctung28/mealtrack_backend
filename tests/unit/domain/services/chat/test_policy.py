@@ -232,7 +232,8 @@ def test_grounding_includes_meal_candidates():
     assert "Egg rice bowl" in text
     assert "420" in text
     assert "COACH INTENT next_meal" in text
-    assert "tappable meal cards" in text
+    assert "recommended meal card" in text
+    assert "tap the card" in text
     assert "https://cdn.example/pho.jpg" not in text
     assert "thumbnail_url" not in text
 

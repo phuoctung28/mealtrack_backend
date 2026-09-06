@@ -54,7 +54,6 @@ _LOCALIZED_UNIT_PATTERN = re.compile(
     r"livres?|onces?|tasses?|"
     r"gramm|kilogramm|pfund|unze|minuten|sekunden?|tassen?|"
     r"gam|phút|giây|cốc|minutos?|segundos?|"
-    r"miếng|lát|khúc|quả|trái|cái|phần|suất|tô|chén|bát|"
     r"グラム|キログラム|ミリリットル|リットル|ポンド|オンス|大さじ|小さじ|"
     r"カップ|分間|分钟|毫升|千克|公斤|毫克|汤匙|茶匙|盎司)"
     r"(?![A-Za-z0-9_])",
@@ -70,10 +69,12 @@ _CJK_NUMERIC_UNIT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _LOCALIZED_NUMERIC_UNIT_PATTERN = re.compile(
-    r"(?:(?<!\w)(?P<before>khẩu\s+phần|miếng|phần|pieza|piezas|rebanada|rebanadas|"
+    r"(?:(?<!\w)(?P<before>khẩu\s+phần|miếng|lát|khúc|quả|trái|cái|phần|"
+    r"suất|tô|chén|bát|pieza|piezas|rebanada|rebanadas|"
     r"porción|porciones|morceau|morceaux|tranche|tranches|portion|portions|"
     r"stück|scheibe)(?=\s*\d)(?!\w)|"
-    r"(?<=\d)\s*(?P<after>khẩu\s+phần|miếng|phần|pieza|piezas|rebanada|"
+    r"(?<=\d)\s*(?P<after>khẩu\s+phần|miếng|lát|khúc|quả|trái|cái|phần|"
+    r"suất|tô|chén|bát|pieza|piezas|rebanada|"
     r"rebanadas|porción|porciones|morceau|morceaux|tranche|tranches|portion|"
     r"portions|stück|scheibe)(?!\w))",
     re.IGNORECASE,
