@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -57,8 +58,6 @@ from src.domain.services.chat.policy import (
     inspect_sentence,
     no_evidence_message,
     nutrition_numbers_are_traceable,
-    out_of_scope_follow_ups,
-    out_of_scope_message,
     request_fingerprint,
     resolve_chat_locale,
     safe_fallback_message,
@@ -108,6 +107,126 @@ class PreparedChatTurn:
     started: float
     intent: str | None = None
     slot_acquired: bool = False
+
+
+CHAT_ORCHESTRATOR_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_next_meal",
+            "description": (
+                "Generate a personalised meal recommendation that fits the user's remaining calorie and macro budget. "
+                "Call this when the user asks for a meal idea, recipe, dinner/lunch/breakfast suggestion, "
+                "or says they are hungry — in any language."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "slot": {
+                        "type": "string",
+                        "enum": [
+                            "breakfast",
+                            "lunch",
+                            "dinner",
+                            "snack",
+                        ],
+                        "description": "Which meal slot this suggestion targets.",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Optional user preference or dietary constraint for this suggestion.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_daily_progress",
+            "description": (
+                "Check the user's daily progress and remaining calorie and macro budget for today. "
+                "Call this when the user asks about remaining calories, daily progress, how much they've eaten, or how much is left."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "focus": {
+                        "type": "string",
+                        "enum": ["remaining_budget", "day_progress"],
+                        "description": "Whether the user specifically asked for remaining budget vs overall daily progress.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_nutrition_knowledge",
+            "description": (
+                "Search Nutree's reviewed and verified nutrition and food knowledge base. "
+                "Call this when the user asks specific questions about nutrition science, food safety, ingredient benefits, "
+                "vitamins, or dietary guidelines."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query for nutrition knowledge.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "explain_limits_and_guidelines",
+            "description": (
+                "Explain Nutree Coach capabilities, guidelines, boundaries, and medical disclaimers. "
+                "Call this when the user asks what Nutree Coach can or cannot do, asks for medical advice, or inquires about app capabilities."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+]
+
+
+def _merge_retrieved_chunks(
+    existing_chunks: list[RetrievedKnowledgeChunk],
+    new_chunks: list[RetrievedKnowledgeChunk],
+) -> list[RetrievedKnowledgeChunk]:
+    merged = list(existing_chunks)
+    existing_keys = {c.source_key for c in existing_chunks}
+    for chunk in new_chunks:
+        if chunk.source_key not in existing_keys:
+            new_label = f"[K{len(merged) + 1}]"
+            labeled_chunk = RetrievedKnowledgeChunk(
+                chunk_id=chunk.chunk_id,
+                document_id=chunk.document_id,
+                source_key=chunk.source_key,
+                title=chunk.title,
+                content=chunk.content,
+                locale=chunk.locale,
+                canonical_uri=chunk.canonical_uri,
+                label=new_label,
+                vector_score=chunk.vector_score,
+                fts_rank=chunk.fts_rank,
+                fused_score=chunk.fused_score,
+                safety_tags=chunk.safety_tags,
+            )
+            merged.append(labeled_chunk)
+            existing_keys.add(chunk.source_key)
+    return merged
 
 
 class ChatTurnOrchestrator:
@@ -269,27 +388,33 @@ class ChatTurnOrchestrator:
             suggestions: list[dict[str, Any]] = []
             discover_session_id = last_discover_session_id(history_messages)
             meal_slot = resolve_meal_slot(context.suggested_meal_slot, trimmed)
-            
-            tools = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "suggest_next_meal",
-                        "description": "Suggest meals to the user for their next sitting.",
-                        "parameters": {"type": "object", "properties": {}, "required": []},
-                    },
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "check_daily_progress",
-                        "description": "Check the user's daily progress and remaining macro budget.",
-                        "parameters": {"type": "object", "properties": {}, "required": []},
-                    },
-                }
-            ]
 
-            generation = {
+            # When the client sends a next_meal intent chip, pre-fetch candidates
+            # so the LLM can immediately reference the card in its response.
+            if intent == ChatIntent.NEXT_MEAL.value:
+                if self._next_meals is not None:
+                    try:
+                        batch = await self._next_meals.fetch(
+                            user_id=user_id,
+                            context=context,
+                            user_text=trimmed,
+                            locale=resolved_locale,
+                            session_id=discover_session_id,
+                            slot=meal_slot,
+                        )
+                        suggestions = batch.suggestions
+                        discover_session_id = batch.session_id or discover_session_id
+                        meal_slot = batch.meal_slot
+                    except Exception:
+                        logger.warning(
+                            "Upfront next meal candidate generation failed",
+                            extra={"user_id": user_id, "meal_slot": meal_slot},
+                            exc_info=True,
+                        )
+
+            tools = list(CHAT_ORCHESTRATOR_TOOLS)
+
+            generation: dict[str, Any] = {
                 "text": "",
                 "usage": ChatUsage(model=self._model),
                 "provider_response_id": None,
@@ -297,11 +422,13 @@ class ChatTurnOrchestrator:
                 "tools": tools,
             }
             sentences: list[str] = []
-            
-            # Keep streaming until no tool calls are emitted
+
+            # Keep streaming until no tool calls are emitted (max 2 iterations)
             current_user_message = trimmed
-            while True:
-                tool_calls_emitted = False
+            max_tool_iterations = 2
+            iteration = 0
+            while iteration < max_tool_iterations:
+                iteration += 1
                 async for delta_text in self._iter_validated_sentences(
                     context=context,
                     chunks=chunks,
@@ -321,80 +448,178 @@ class ChatTurnOrchestrator:
                             "delta": delta_text,
                         },
                     )
-                
+
                 tool_calls = generation.get("tool_calls")
                 if tool_calls:
                     # Move user message into history before assistant's tool call turn
                     if current_user_message:
-                        history.append(ChatHistoryTurn(
-                            role=ChatMessageRole.USER,
-                            content=current_user_message,
-                        ))
+                        history.append(
+                            ChatHistoryTurn(
+                                role=ChatMessageRole.USER,
+                                content=current_user_message,
+                            )
+                        )
                         current_user_message = ""
 
                     # Add assistant's tool call turn to history
-                    history.append(ChatHistoryTurn(
-                        role=ChatMessageRole.ASSISTANT,
-                        content=generation.get("text") or "",
-                        tool_calls=tool_calls
-                    ))
-                    
+                    history.append(
+                        ChatHistoryTurn(
+                            role=ChatMessageRole.ASSISTANT,
+                            content=generation.get("text") or "",
+                            tool_calls=tool_calls,
+                        )
+                    )
+
                     for call in tool_calls:
                         name = call.get("name")
                         call_id = call.get("id") or f"call_{uuid.uuid4().hex[:8]}"
-                        result = "Executed successfully."
+                        raw_args = call.get("args") or {}
+                        if isinstance(raw_args, str):
+                            try:
+                                args = json.loads(raw_args)
+                            except Exception:
+                                args = {}
+                        elif isinstance(raw_args, dict):
+                            args = raw_args
+                        else:
+                            args = {}
+
+                        result: str | None = None
                         if name == "suggest_next_meal":
                             intent = ChatIntent.NEXT_MEAL.value
-                            if self._next_meals is not None:
+                            slot_arg = args.get("slot")
+                            query_arg = args.get("query")
+                            target_slot = slot_arg or meal_slot
+                            fetch_text = query_arg or trimmed
+                            if not suggestions and self._next_meals is not None:
                                 try:
                                     batch = await self._next_meals.fetch(
                                         user_id=user_id,
                                         context=context,
-                                        user_text=trimmed,
+                                        user_text=fetch_text,
                                         locale=resolved_locale,
                                         session_id=discover_session_id,
+                                        slot=target_slot,
                                     )
                                     suggestions = batch.suggestions
-                                    discover_session_id = batch.session_id or discover_session_id
+                                    discover_session_id = (
+                                        batch.session_id or discover_session_id
+                                    )
                                     meal_slot = batch.meal_slot
-                                    if suggestions:
-                                        result = (
-                                            f"Found {len(suggestions)} meal options for {meal_slot}: "
-                                            + ", ".join(
-                                                f"{m.get('name')} ({m.get('calories')} kcal, {m.get('protein_g')}g protein)"
-                                                for m in suggestions
-                                            )
-                                        )
-                                    else:
-                                        result = f"No meal options found for {meal_slot} matching current criteria."
                                 except Exception as exc:
-                                    logger.warning("Failed to fetch next meal candidates: %s", exc)
+                                    logger.warning(
+                                        "Failed to fetch next meal candidates: %s", exc
+                                    )
                                     result = "Meal catalog service is temporarily unavailable."
-                            else:
+                            if result:
+                                pass
+                            elif suggestions:
+                                primary = suggestions[0]
+                                primary_name = primary.get("name", "")
+                                primary_cal = primary.get("calories", "")
+                                primary_p = primary.get("protein_g", "")
+                                primary_c = primary.get("carbs_g", "")
+                                primary_f = primary.get("fat_g", "")
+                                prep_m = primary.get("prep_time_minutes")
+                                ingredients_summary = ""
+                                raw_ings = primary.get("ingredients")
+                                if raw_ings and isinstance(raw_ings, list):
+                                    ingredients_summary = ", ".join(
+                                        f"{ing.get('name')} ({ing.get('amount')}{ing.get('unit')})"
+                                        if isinstance(ing, dict)
+                                        else str(ing)
+                                        for ing in raw_ings[:5]
+                                    )
+                                lines = [
+                                    f"Found 1 meal options for {meal_slot}: {primary_name}.",
+                                    f"Portion: {primary_cal} kcal ({primary_p}g protein, {primary_c}g carbs, {primary_f}g fat).",
+                                ]
+                                if prep_m:
+                                    lines.append(f"Prep time: {prep_m} minutes.")
+                                if ingredients_summary:
+                                    lines.append(
+                                        f"Key ingredients: {ingredients_summary}."
+                                    )
+                                lines.append(
+                                    "Note: The user will see this meal recipe card directly in the chat UI where they can tap to view cooking instructions and log it."
+                                )
+                                result = "\n".join(lines)
+                            elif self._next_meals is None:
                                 result = "Meal candidate service not configured."
+                            else:
+                                result = f"No meal options found for {meal_slot} matching current criteria."
+
                         elif name == "check_daily_progress":
-                            intent = ChatIntent.REMAINING_BUDGET.value
+                            focus = args.get("focus")
+                            if focus == "day_progress" or (
+                                not focus
+                                and (
+                                    "tiến độ" in trimmed.casefold()
+                                    or "progress" in trimmed.casefold()
+                                )
+                            ):
+                                intent = ChatIntent.DAY_PROGRESS.value
+                            else:
+                                intent = ChatIntent.REMAINING_BUDGET.value
                             result = (
                                 f"Daily progress: consumed {context.consumed_calories} kcal "
                                 f"({context.consumed_protein_g}g P, {context.consumed_carbs_g}g C, {context.consumed_fat_g}g F). "
                                 f"Remaining: {context.remaining_calories} kcal "
-                                f"({context.remaining_protein_g}g P, {context.remaining_carbs_g}g C, {context.remaining_fat_g}g F)."
+                                f"({context.remaining_protein_g}g P, {context.remaining_carbs_g}g C, {context.remaining_fat_g}g F). "
+                                f"Daily targets: {context.target_calories} kcal ({context.target_protein_g}g P, {context.target_carbs_g}g C, {context.target_fat_g}g F). "
+                                f"Remaining days: {context.remaining_days}."
                             )
+
+                        elif name == "search_nutrition_knowledge":
+                            query_arg = args.get("query") or trimmed
+                            try:
+                                retrieved_chunks, _ = await self._retrieve(
+                                    query_arg, resolved_locale
+                                )
+                                filtered = filter_chunks_for_allergies(
+                                    retrieved_chunks, context.allergies or []
+                                )
+                                chunks = _merge_retrieved_chunks(chunks, filtered)
+                                if filtered:
+                                    result = (
+                                        "Retrieved Nutree knowledge:\n"
+                                        + "\n".join(
+                                            f"{c.label}: {c.title} - {c.content}"
+                                            for c in filtered
+                                        )
+                                    )
+                                else:
+                                    result = "No verified Nutree knowledge found for this query."
+                            except Exception as exc:
+                                logger.warning(
+                                    "Failed to search nutrition knowledge: %s", exc
+                                )
+                                result = "Nutrition knowledge retrieval is temporarily unavailable."
+
+                        elif name == "explain_limits_and_guidelines":
+                            intent = ChatIntent.LIMITS.value
+                            result = (
+                                "Nutree Coach capabilities and limits:\n"
+                                "- Can help with: logging meals, calculating calories and macros, suggesting balanced recipes fitting daily goals, tracking daily/weekly nutritional progress, and providing evidence-based dietary guidance.\n"
+                                "- Cannot help with: medical diagnoses, medical prescriptions or medication advice, replacing licensed physicians or dietitians, or diagnosing eating disorders."
+                            )
+
                         else:
                             result = f"Tool '{name}' is not recognized."
-                        
-                        history.append(ChatHistoryTurn(
-                            role="tool",
-                            tool_call_id=call_id,
-                            name=name,
-                            content=result
-                        ))
-                    
+
+                        history.append(
+                            ChatHistoryTurn(
+                                role="tool",
+                                tool_call_id=call_id,
+                                name=name,
+                                content=result,
+                            )
+                        )
+
                     # Clear generation tool calls so we don't loop forever
                     generation["tool_calls"] = None
                     # Disable further tools for subsequent iterations
                     generation["tools"] = None
-                    # Continue streaming the final response
                     continue
                 else:
                     break

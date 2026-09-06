@@ -238,6 +238,7 @@ async def test_adapter_accepts_valid_loanwords_and_reordered_brands(
         ("Use 1 piece", "Usa 1 pieza", "es"),
         ("Use 1 slice", "Utilisez 1 tranche", "fr"),
         ("Use 1 serving", "Verwende 1 Portion", "de"),
+        ("Use 2 slices", "Dùng 2 lát", "vi"),
         ("Breakfast 1", "Frühstück 1", "de"),
         ("Ratio 1 to 2", "Proportion 1 à 2", "fr"),
         ("Ratio 1 to 2", "Proporción 1 a 2", "es"),

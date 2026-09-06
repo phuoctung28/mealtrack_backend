@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 FOLLOW_UP_TIMEOUT_SECONDS = 2.0
 FOLLOW_UP_MAX_TOKENS = 180
-NEXT_MEAL_RECIPE_TIMEOUT_SECONDS = 45.0
-NEXT_MEAL_RECIPE_MAX_TOKENS = 2500
+NEXT_MEAL_RECIPE_TIMEOUT_SECONDS = 20.0
+NEXT_MEAL_RECIPE_MAX_TOKENS = 1000
 
 
 class OpenAIChatCompletionAdapter(
@@ -94,7 +94,13 @@ class OpenAIChatCompletionAdapter(
             if turn.role == ChatMessageRole.USER:
                 messages.append(HumanMessage(content=turn.content or ""))
             elif turn.role == "tool" and turn.tool_call_id:
-                messages.append(ToolMessage(content=turn.content or "", tool_call_id=turn.tool_call_id, name=turn.name or ""))
+                messages.append(
+                    ToolMessage(
+                        content=turn.content or "",
+                        tool_call_id=turn.tool_call_id,
+                        name=turn.name or "",
+                    )
+                )
             else:
                 cleaned_tool_calls = None
                 if turn.tool_calls:
@@ -108,7 +114,11 @@ class OpenAIChatCompletionAdapter(
                         for tc in turn.tool_calls
                         if isinstance(tc, dict) and tc.get("name")
                     ]
-                messages.append(AIMessage(content=turn.content or "", tool_calls=cleaned_tool_calls or []))
+                messages.append(
+                    AIMessage(
+                        content=turn.content or "", tool_calls=cleaned_tool_calls or []
+                    )
+                )
         if user_message:
             messages.append(HumanMessage(content=user_message))
 
@@ -119,17 +129,17 @@ class OpenAIChatCompletionAdapter(
         llm = self._llm(model)
         if tools:
             llm = llm.bind_tools(tools)
-            
+
         provider_response_id: str | None = None
         usage = ChatUsage(model=model)
         full_chunk = None
-        
+
         async for chunk in llm.astream(messages, **invocation):
             if full_chunk is None:
                 full_chunk = chunk
             else:
                 full_chunk += chunk
-                
+
             text = _chunk_text(chunk)
             provider_response_id = _response_id(chunk) or provider_response_id
             chunk_usage = _chunk_usage(chunk, model)
@@ -140,13 +150,13 @@ class OpenAIChatCompletionAdapter(
                     text=text,
                     provider_response_id=provider_response_id,
                 )
-                
+
         # At the very end, yield the accumulated tool calls if any
         tool_calls = getattr(full_chunk, "tool_calls", None)
         if tool_calls:
             # Langchain parses them into dicts: {"name": str, "args": dict, "id": str}
             pass
-            
+
         yield ChatCompletionDelta(
             text="",
             provider_response_id=provider_response_id,
@@ -296,16 +306,21 @@ Do not invent nutrition numbers. Do not claim a meal was saved or logged.
 If has_suggestions is true, one chip may request more ideas via next_meal.
 """
 
-_NEXT_MEAL_RECIPE_INSTRUCTIONS = """Return 3 distinct next-meal recipes for one sitting.
-Reuse the recipe schema: name, english_name, ingredients (3-8 with amount+unit), recipe_steps (2-6), prep_time_minutes, emoji.
-Meal name and recipe step instructions: use the locale from the user context.
-english_name: English meal name (repeat name when locale is already English).
-ALL ingredient names MUST be in ENGLISH ONLY — macros are computed from them via a food database.
-Use g or ml for units; typical single-serving amounts (protein 150-250g, grains 100-200g, vegetables 80-150g).
-Do not include calorie or macro numbers. Those are computed later from ingredients.
-One sitting only — not a full day's food. Portion roughly 400-700 kcal of food unless remaining calories are smaller.
-Honor allergies and dietary_preferences.
-Do not claim a meal was saved or logged.
+_NEXT_MEAL_RECIPE_INSTRUCTIONS = """Return 1 delicious next-meal recipe for one sitting.
+Schema fields: name, english_name, emoji, ingredients (3-8 with amount+unit), recipe_steps (2-6 with instruction+duration_minutes), prep_time_minutes, calories, protein_g, carbs_g, fat_g.
+
+LANGUAGE RULES:
+- Meal name, ingredient names, and recipe step instructions MUST be 100% in the requested locale from user context.
+- If locale is 'vi', meal name, all ingredient names, and all recipe step instructions MUST be written in natural, fluent Vietnamese.
+- NEVER mix English sentences, English phrases, or English ingredient names into recipe_steps or ingredients when locale is 'vi'.
+- english_name: English meal name for food photo search (repeat name when locale is already English).
+
+PORTIONS & NUTRITION:
+- Use g or ml for units; realistic single-serving portion amounts.
+- Provide realistic portion calories (kcal) and macros (protein_g, carbs_g, fat_g) for one sitting fitting the requested meal slot and remaining calories.
+- One sitting only — not a full day's food.
+- Honor allergies and dietary_preferences strictly.
+- Do not claim a meal was saved or logged.
 """
 
 

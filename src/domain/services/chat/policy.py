@@ -50,6 +50,13 @@ Scope:
 - Answer questions about food, meals, calories, macros, hydration, allergies, Nutree logging, and practical eating.
 - Greetings and questions about what Coach can do are in scope.
 - If the user asks for programming, homework, weather, finance, or anything unrelated to nutrition or Nutree, refuse in one or two sentences and offer a nutrition question. Do not answer the off-topic request.
+
+Tools:
+- suggest_next_meal: Call when the user asks for a meal idea, recipe, dinner/lunch/breakfast/snack suggestion, or says they are hungry — in any language.
+- check_daily_progress: Call when the user asks how much they have eaten today, their daily progress, or their remaining calorie/macro budget.
+- search_nutrition_knowledge: Call when the user asks specific questions about nutrition science, food safety, ingredient benefits, vitamins, or dietary guidelines.
+- explain_limits_and_guidelines: Call when the user asks what Nutree Coach can or cannot do, or asks for medical advice.
+When a tool returns results, synthesize them into a concise, natural response in the user's requested locale. Never output raw JSON.
 """
 
 _MUTATION_CLAIM_RE = re.compile(
@@ -199,11 +206,11 @@ _INTENT_TEMPLATES = {
         "over) using USER CONTEXT only. Do not repeat every macro number."
     ),
     "next_meal": (
-        "COACH INTENT next_meal. The user text is only the localized label.\n"
-        "The app already shows tappable meal cards with photos and macros. "
-        "Write 1-2 short sentences: pick a favorite and why it fits remaining "
-        "budget. Do not repeat kcal or gram numbers. Do not list the three meals. "
-        "Tell the user they can tap a card for the recipe and to log it. "
+        "COACH INTENT next_meal.\n"
+        "The app displays the recommended meal card below with photo and macros. "
+        "Write 1-2 short sentences: introduce the recommended meal warmly in the user's language and explain why it fits their remaining budget. "
+        "Do not repeat exact kcal or gram numbers. "
+        "Tell the user they can tap the card to see the full ingredients, recipe steps, and log it. "
         "Never claim you logged or saved a meal."
     ),
     "limits": (

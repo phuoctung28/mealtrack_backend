@@ -3,7 +3,6 @@ Pydantic schemas for structured meal generation output.
 Used with LangChain's with_structured_output() for guaranteed valid responses.
 """
 
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,7 +10,7 @@ from pydantic import BaseModel, Field
 class MealNamesResponse(BaseModel):
     """Phase 1: Response containing 4 diverse meal names."""
 
-    meal_names: List[str] = Field(
+    meal_names: list[str] = Field(
         description="List of exactly 4 diverse, concise meal names (max 60 chars each) with different cuisines and cooking styles",
         min_length=4,
         max_length=4,
@@ -45,7 +44,7 @@ class DiscoveryMealItem(BaseModel):
 class DiscoveryMealsResponse(BaseModel):
     """Lightweight discovery: names + macros for 6-10 meals in a single AI call."""
 
-    meals: List[DiscoveryMealItem] = Field(
+    meals: list[DiscoveryMealItem] = Field(
         description="List of meal suggestions with names and macros",
         min_length=1,
         max_length=12,
@@ -84,38 +83,38 @@ class RecipeDetailsResponse(BaseModel):
     Injected as structured-output schema via generate_selected_recipes.
     """
 
-    ingredients: List[IngredientItem] = Field(
+    ingredients: list[IngredientItem] = Field(
         description="List of 3-8 ingredients with exact amounts",
         min_length=3,
         max_length=8,
     )
-    recipe_steps: List[RecipeStepItem] = Field(
+    recipe_steps: list[RecipeStepItem] = Field(
         description="List of 2-6 recipe steps with instructions and durations",
         min_length=2,
         max_length=6,
     )
     prep_time_minutes: int = Field(
-        description="Total preparation and cooking time in minutes", ge=5, le=120
+        description="Total preparation and cooking time in minutes", ge=1, le=120
     )
     # Macros optional — ignored if present; computed deterministically from ingredients
-    calories: Optional[int] = Field(
+    calories: int | None = Field(
         default=None, description="AI-reported calories (ignored)"
     )
-    protein: Optional[float] = Field(
+    protein: float | None = Field(
         default=None, description="AI-reported protein (ignored)"
     )
-    carbs: Optional[float] = Field(
+    carbs: float | None = Field(
         default=None, description="AI-reported carbs (ignored)"
     )
-    fat: Optional[float] = Field(default=None, description="AI-reported fat (ignored)")
+    fat: float | None = Field(default=None, description="AI-reported fat (ignored)")
     # Metadata fields surfaced by the AI for UX enrichment
-    origin_country: Optional[str] = Field(
+    origin_country: str | None = Field(
         default=None, description="Country of origin for the dish"
     )
-    cuisine_type: Optional[str] = Field(
+    cuisine_type: str | None = Field(
         default=None, description="Cuisine type (e.g., 'Vietnamese', 'Japanese')"
     )
-    emoji: Optional[str] = Field(
+    emoji: str | None = Field(
         default=None, description="Single emoji representing the dish"
     )
 
@@ -130,26 +129,42 @@ class ChatMealRecipeItem(BaseModel):
         description="English meal name, or repeat name if already English"
     )
     emoji: str = Field(description="Single emoji representing the dish")
-    ingredients: List[IngredientItem] = Field(
+    ingredients: list[IngredientItem] = Field(
         description="List of 3-8 ingredients with exact amounts",
         min_length=3,
         max_length=8,
     )
-    recipe_steps: List[RecipeStepItem] = Field(
+    recipe_steps: list[RecipeStepItem] = Field(
         description="List of 2-6 recipe steps with instructions and durations",
         min_length=2,
         max_length=6,
     )
     prep_time_minutes: int = Field(
-        description="Total preparation and cooking time in minutes", ge=5, le=120
+        description="Total preparation and cooking time in minutes", ge=1, le=120
+    )
+    calories: int = Field(
+        description="Total estimated portion calories (kcal) for this meal sitting",
+        ge=50,
+        le=2500,
+    )
+    protein_g: float = Field(
+        description="Estimated protein in grams for this meal sitting", ge=0, le=250
+    )
+    carbs_g: float = Field(
+        description="Estimated carbohydrates in grams for this meal sitting",
+        ge=0,
+        le=350,
+    )
+    fat_g: float = Field(
+        description="Estimated fat in grams for this meal sitting", ge=0, le=180
     )
 
 
 class ChatMealRecipeBatch(BaseModel):
-    """Three next-meal recipes in one structured chat call."""
+    """Next-meal recipe in one structured chat call."""
 
     meals: list[ChatMealRecipeItem] = Field(
-        description="Exactly 3 complete next-meal recipes",
+        description="Exactly 1 complete next-meal recipe",
         min_length=1,
-        max_length=3,
+        max_length=1,
     )

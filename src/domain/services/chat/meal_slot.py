@@ -42,15 +42,15 @@ def is_known_slot(value: str | None) -> bool:
 _TEXT_SLOT_TOKENS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "breakfast",
-        ("breakfast", "bữa sáng", "bua sang"),
+        ("breakfast", "bữa sáng", "bua sang", "ăn sáng", "an sang", "sáng nay", "sang nay"),
     ),
     (
         "lunch",
-        ("lunch", "bữa trưa", "bua trua"),
+        ("lunch", "bữa trưa", "bua trua", "ăn trưa", "an trua", "trưa nay", "trua nay"),
     ),
     (
         "dinner",
-        ("dinner", "supper", "bữa tối", "bua toi", "tối nay", "toi nay"),
+        ("dinner", "supper", "bữa tối", "bua toi", "ăn tối", "an toi", "tối nay", "toi nay"),
     ),
     (
         "snack",

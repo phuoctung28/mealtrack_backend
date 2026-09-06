@@ -54,6 +54,7 @@ _LOCALIZED_UNIT_PATTERN = re.compile(
     r"livres?|onces?|tasses?|"
     r"gramm|kilogramm|pfund|unze|minuten|sekunden?|tassen?|"
     r"gam|phút|giây|cốc|minutos?|segundos?|"
+    r"miếng|lát|khúc|quả|trái|cái|phần|suất|tô|chén|bát|"
     r"グラム|キログラム|ミリリットル|リットル|ポンド|オンス|大さじ|小さじ|"
     r"カップ|分間|分钟|毫升|千克|公斤|毫克|汤匙|茶匙|盎司)"
     r"(?![A-Za-z0-9_])",

@@ -90,7 +90,7 @@ async def test_fetch_maps_discover_cards_and_keeps_session() -> None:
     )
     assert result.session_id == "sess-keep"
     assert result.meal_slot == "breakfast"
-    assert len(result.suggestions) == 3
+    assert len(result.suggestions) == 1
     assert result.suggestions[0]["protein_g"] == 28
     assert discover.calls[0]["session_id"] == "sess-keep"
     assert discover.calls[0]["meal_type"] == "breakfast"
@@ -333,3 +333,62 @@ def test_map_drops_meals_without_calories() -> None:
         "breakfast",
     )
     assert [card["name"] for card in cards] == ["Oats"]
+
+
+def test_map_preserves_recipe_steps_and_ingredients() -> None:
+    meal = {
+        "id": "m1",
+        "name": "Ức gà áp chảo",
+        "calories": 450,
+        "ingredients": [{"name": "ức gà", "amount": 200, "unit": "g"}],
+        "recipe_steps": [
+            {"step": 1, "instruction": "Ướp ức gà", "duration_minutes": 5},
+            {"step": 2, "instruction": "Áp chảo ức gà", "duration_minutes": 10},
+        ],
+    }
+    cards = map_discover_meals([meal], "lunch")
+    assert len(cards) == 1
+    assert cards[0]["ingredients"] == [{"name": "ức gà", "amount": 200, "unit": "g"}]
+    assert len(cards[0]["recipe_steps"]) == 2
+    assert cards[0]["recipe_steps"][0]["instruction"] == "Ướp ức gà"
+
+
+@pytest.mark.asyncio
+async def test_fetch_prioritizes_recipe_generator_and_returns_full_recipe() -> None:
+    class _FakeRecipeGen:
+        async def generate_next_meal_recipes(self, **kwargs):
+            del kwargs
+            return [
+                {
+                    "name": "Cơm cá hồi",
+                    "english_name": "Salmon rice",
+                    "emoji": "🐟",
+                    "calories": 500,
+                    "protein_g": 35.0,
+                    "carbs_g": 45.0,
+                    "fat_g": 15.0,
+                    "prep_time_minutes": 20,
+                    "ingredients": [{"name": "cá hồi", "amount": 150, "unit": "g"}],
+                    "recipe_steps": [
+                        {"step": 1, "instruction": "Áp chảo cá hồi", "duration_minutes": 8}
+                    ],
+                }
+            ]
+
+    discover = _FakeDiscover()
+    service = ChatNextMealCandidates(discover, recipe_generator=_FakeRecipeGen())
+    result = await service.fetch(
+        user_id="u1",
+        context=_context(),
+        user_text="Gợi ý bữa trưa",
+        locale="vi",
+        session_id="sess-prev",
+    )
+    assert len(discover.calls) == 0  # Generator was used first, discover not called
+    assert result.session_id is None
+    assert len(result.suggestions) == 1
+    card = result.suggestions[0]
+    assert card["name"] == "Cơm cá hồi"
+    assert card["ingredients"] == [{"name": "cá hồi", "amount": 150, "unit": "g"}]
+    assert card["recipe_steps"][0]["instruction"] == "Áp chảo cá hồi"
+

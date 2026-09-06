@@ -10,7 +10,6 @@ from typing import Any
 from src.app.services.chat_context_builder import ChatContextBuilder
 from src.app.services.chat_next_meal_candidates import (
     ChatNextMealCandidates,
-    SuggestionChatDiscoverAdapter,
 )
 from src.app.services.chat_turn_orchestrator import ChatTurnOrchestrator
 from src.domain.exceptions.chat_exceptions import ChatProviderUnavailableError
@@ -65,6 +64,11 @@ def get_chat_turn_orchestrator() -> ChatTurnOrchestrator:
         completion = _UnavailableCompletion()
         embedding = _UnavailableEmbedding()
 
+    next_meals = _next_meal_service(
+        recipe_generator=adapter if api_key else None,
+        model=settings.CHAT_MODEL,
+    )
+
     return ChatTurnOrchestrator(
         completion=completion,
         embedding=embedding,
@@ -82,25 +86,24 @@ def get_chat_turn_orchestrator() -> ChatTurnOrchestrator:
         max_output_tokens=settings.CHAT_MAX_OUTPUT_TOKENS,
         semaphore=get_chat_semaphore(settings.CHAT_GLOBAL_CONCURRENCY),
         circuit_breaker=get_chat_circuit_breaker(),
-        next_meals=_next_meal_service(),
+        next_meals=next_meals,
         follow_ups=follow_ups,
     )
 
 
-def _next_meal_service() -> ChatNextMealCandidates | None:
-    try:
-        from src.api.base_dependencies import get_suggestion_orchestration_service
-        from src.api.dependencies.food_image import get_food_image_service
+def _next_meal_service(
+    *,
+    recipe_generator: Any = None,
+    model: str = "gpt-5.6-luna",
+) -> ChatNextMealCandidates:
+    from src.api.dependencies.food_image import get_food_image_service
 
-        return ChatNextMealCandidates(
-            SuggestionChatDiscoverAdapter(
-                get_suggestion_orchestration_service(),
-                image_search=get_food_image_service().search_food_image,
-            )
-        )
-    except Exception:
-        logger.warning("chat next-meal discover is unavailable", exc_info=True)
-        return None
+    return ChatNextMealCandidates(
+        discover=None,
+        recipe_generator=recipe_generator,
+        image_search=get_food_image_service().search_food_image,
+        model=model,
+    )
 
 
 class _UnavailableCompletion(ChatCompletionPort):

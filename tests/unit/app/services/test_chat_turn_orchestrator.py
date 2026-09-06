@@ -119,7 +119,7 @@ class _FakeCompletion:
                 usage=ChatUsage(input_tokens=10, output_tokens=4, model="gpt-5.6-luna"),
             )
             return
-            
+
         for chunk in self.chunks:
             yield ChatCompletionDelta(text=chunk)
         yield ChatCompletionDelta(
@@ -713,7 +713,9 @@ async def test_next_meal_persists_suggestions_and_follow_ups():
         ["Here are suggestions. "],
         tool_calls=[{"id": "call_1", "name": "suggest_next_meal"}],
     )
-    orchestrator = _orchestrator(repo, next_meals=next_meals, follow_ups=follow_ups, completion=completion)
+    orchestrator = _orchestrator(
+        repo, next_meals=next_meals, follow_ups=follow_ups, completion=completion
+    )
 
     events = await _stream(orchestrator, intent=None)
     completed = next(event for event in events if event.event == "message.completed")
@@ -774,9 +776,6 @@ async def test_typed_dinner_fetches_next_meal_without_chip():
     assert completed.data["suggestions"] == _three_cards()
 
 
-
-
-
 @pytest.mark.asyncio
 async def test_nutrition_free_text_still_streams_an_answer():
     completion = _FakeCompletion(["Protein stays at your Nutree target. "])
@@ -791,9 +790,6 @@ async def test_nutrition_free_text_still_streams_an_answer():
     assert "Protein stays" in repo.completed["content"]
 
 
-
-
-
 @pytest.mark.asyncio
 async def test_remaining_budget_never_calls_discover():
     next_meals = _FakeNextMeals(
@@ -802,9 +798,7 @@ async def test_remaining_budget_never_calls_discover():
     repo = _FakeRepo(claim=_claim())
     orchestrator = _orchestrator(repo, next_meals=next_meals)
 
-    events = await _stream(
-        orchestrator, intent=None, content="What's left?"
-    )
+    events = await _stream(orchestrator, intent=None, content="What's left?")
     completed = next(event for event in events if event.event == "message.completed")
     assert next_meals.calls == []
     assert completed.data["suggestions"] == []
@@ -820,3 +814,45 @@ async def test_follow_up_failure_persists_empty_chips():
     completed = next(event for event in events if event.event == "message.completed")
     assert completed.data["follow_ups"] == []
     assert repo.completed["reply_payload"]["follow_ups"] == []
+
+
+def test_chat_orchestrator_tools_contains_suggest_next_meal():
+    from src.app.services.chat_turn_orchestrator import CHAT_ORCHESTRATOR_TOOLS
+
+    tool_names = [tool["function"]["name"] for tool in CHAT_ORCHESTRATOR_TOOLS]
+    assert "suggest_next_meal" in tool_names
+    assert set(tool_names) == {
+        "suggest_next_meal",
+        "check_daily_progress",
+        "search_nutrition_knowledge",
+        "explain_limits_and_guidelines",
+    }
+
+
+@pytest.mark.asyncio
+async def test_meal_recommendation_generates_upfront_with_intent_chip():
+    """When the client sends intent='next_meal' (chip tap), candidates are pre-fetched
+    so the LLM can immediately write a warm intro without a tool iteration."""
+    cards = _three_cards()
+    next_meals = _FakeNextMeals(
+        NextMealCandidateResult(suggestions=cards, meal_slot="lunch")
+    )
+    repo = _FakeRepo(claim=_claim())
+    completion = _FakeCompletion(["Dưới đây là gợi ý bữa trưa hấp dẫn cho bạn! "])
+    orchestrator = _orchestrator(
+        repo, next_meals=next_meals, completion=completion
+    )
+
+    events = await _stream(
+        orchestrator,
+        content="Hôm nay ăn gì cho bữa trưa?",
+        intent="next_meal",
+    )
+    completed = next(event for event in events if event.event == "message.completed")
+
+    assert completion.stream_calls == 1
+    assert next_meals.calls
+    assert completed.data["intent"] == "next_meal"
+    assert completed.data["suggestions"] == cards
+    assert repo.completed["reply_payload"]["suggestions"] == cards
+
