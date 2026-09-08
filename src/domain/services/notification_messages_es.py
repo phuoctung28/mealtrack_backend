@@ -7,10 +7,10 @@ NOTIFICATION_MESSAGES_ES = {
                 "body": "¡Buenos días! Desayuna o toma un café\nCuando puedas, regístralo 🌅",
             },
             "lunch": {
-                "body_template": "¡Es hora del almuerzo! Te quedan {remaining} cal\n¿Qué hay en el plato? 🥗",
+                "body": "¡Es hora del almuerzo!\n¿Qué hay en el plato? Regístralo cuando puedas 🥗",
             },
             "dinner": {
-                "body_template": "¡Hora de cenar! Te quedan {remaining} cal\nHaz que cuente esta noche 🌙",
+                "body": "¡Hora de cenar!\nRegistra la cena de esta noche cuando puedas 🌝",
             },
         },
         "daily_summary": {
@@ -42,10 +42,7 @@ NOTIFICATION_MESSAGES_ES = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "¡A mitad del día! {consumed_ml}ml tomados, faltan {remaining_ml}ml\nMantente hidratado 💧",
-            },
-            "evening": {
-                "body_template": "¡Casi! {consumed_ml}ml registrados hoy\nSolo {remaining_ml}ml para tu meta 💧",
+                "body": "¿Pausa para agua?\nUn sorbo rápido te mantiene fresco 🥤",
             },
         },
         "subscription_hook": {
@@ -59,10 +56,10 @@ NOTIFICATION_MESSAGES_ES = {
                 "body": "¡Buenos días! Desayuna o toma un café\nCuando puedas, regístralo 🌅",
             },
             "lunch": {
-                "body_template": "¡Es hora del almuerzo! Te quedan {remaining} cal\n¿Qué hay en el plato? 🥗",
+                "body": "¡Es hora del almuerzo!\n¿Qué hay en el plato? Regístralo cuando puedas 🥗",
             },
             "dinner": {
-                "body_template": "¡Hora de cenar! Te quedan {remaining} cal\nHaz que cuente esta noche 🌙",
+                "body": "¡Hora de cenar!\nRegistra la cena de esta noche cuando puedas 🌝",
             },
         },
         "daily_summary": {
@@ -94,10 +91,7 @@ NOTIFICATION_MESSAGES_ES = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "¡A mitad del día! {consumed_ml}ml tomados, faltan {remaining_ml}ml\nMantente hidratado 💧",
-            },
-            "evening": {
-                "body_template": "¡Casi! {consumed_ml}ml registrados hoy\nSolo {remaining_ml}ml para tu meta 💧",
+                "body": "¿Pausa para agua?\nUn sorbo rápido te mantiene fresco 🥤",
             },
         },
         "subscription_hook": {

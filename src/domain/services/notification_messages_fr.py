@@ -7,10 +7,10 @@ NOTIFICATION_MESSAGES_FR = {
                 "body": "Bonjour ! Prends un petit-déjeuner ou un café\nQuand tu peux — note-le 🌅",
             },
             "lunch": {
-                "body_template": "C'est l'heure du déjeuner ! Il te reste {remaining} cal\nQu'est-ce qu'il y a dans l'assiette ? 🥗",
+                "body": "C'est l'heure du déjeuner !\nQu'est-ce qu'il y a dans l'assiette ? Note-le quand tu peux 🥗",
             },
             "dinner": {
-                "body_template": "C'est l'heure du dîner ! Il te reste {remaining} cal\nFais-en sorte ce soir 🌙",
+                "body": "C'est l'heure du dîner !\nNote le plat de ce soir quand tu peux 🌝",
             },
         },
         "daily_summary": {
@@ -42,10 +42,7 @@ NOTIFICATION_MESSAGES_FR = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "Mi-journée ! {consumed_ml}ml bus, encore {remaining_ml}ml\nReste hydraté 💧",
-            },
-            "evening": {
-                "body_template": "Presque ! {consumed_ml}ml enregistrés aujourd'hui\nPlus que {remaining_ml}ml pour ton objectif 💧",
+                "body": "Pause hydratation ?\nUne gorgée rapide te garde en forme 🥤",
             },
         },
         "subscription_hook": {
@@ -59,10 +56,10 @@ NOTIFICATION_MESSAGES_FR = {
                 "body": "Bonjour ! Prends un petit-déjeuner ou un café\nQuand tu peux — note-le 🌅",
             },
             "lunch": {
-                "body_template": "C'est l'heure du déjeuner ! Il te reste {remaining} cal\nQu'est-ce qu'il y a dans l'assiette ? 🥗",
+                "body": "C'est l'heure du déjeuner !\nQu'est-ce qu'il y a dans l'assiette ? Note-le quand tu peux 🥗",
             },
             "dinner": {
-                "body_template": "C'est l'heure du dîner ! Il te reste {remaining} cal\nFais-en sorte ce soir 🌙",
+                "body": "C'est l'heure du dîner !\nNote le plat de ce soir quand tu peux 🌝",
             },
         },
         "daily_summary": {
@@ -94,10 +91,7 @@ NOTIFICATION_MESSAGES_FR = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "Mi-journée ! {consumed_ml}ml bus, encore {remaining_ml}ml\nReste hydraté 💧",
-            },
-            "evening": {
-                "body_template": "Presque ! {consumed_ml}ml enregistrés aujourd'hui\nPlus que {remaining_ml}ml pour ton objectif 💧",
+                "body": "Pause hydratation ?\nUne gorgée rapide te garde en forme 🥤",
             },
         },
         "subscription_hook": {

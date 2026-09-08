@@ -10,8 +10,8 @@ Gender-aware buddy terms:
 - VI: male="bro", female="bạn ơi"
 
 Placeholders:
-- Meal reminders (lunch/dinner): {remaining} for remaining calories
 - Daily summary: {percentage}, {deficit}, {excess}
+Meal and hydration reminders use static copy (no live values).
 """
 
 from src.domain.constants.languages import resolve_app_locale
@@ -29,10 +29,10 @@ NOTIFICATION_MESSAGES = {
                     "body": "Morning, bro! Grab a bite or coffee\nWhen you can — log it 🌅",
                 },
                 "lunch": {
-                    "body_template": "Lunch o'clock, bro! {remaining} cal left\nWhat's going on the plate? 🥗",
+                    "body": "Lunch o'clock, bro!\nWhat's on the plate? Log it when you can 🥗",
                 },
                 "dinner": {
-                    "body_template": "Dinner time, bro! {remaining} cal left\nMake it count tonight 🌙",
+                    "body": "Dinner time, bro!\nLog tonight's plate when you can 🌝",
                 },
             },
             "daily_summary": {
@@ -64,10 +64,7 @@ NOTIFICATION_MESSAGES = {
             },
             "hydration_reminder": {
                 "afternoon": {
-                    "body_template": "Halfway there, bro! {consumed_ml}ml down, {remaining_ml}ml to go\nStay hydrated 💧",
-                },
-                "evening": {
-                    "body_template": "Almost there, bro! {consumed_ml}ml logged today\nJust {remaining_ml}ml left to hit your goal 💧",
+                    "body": "Water break, bro?\nA quick sip keeps you sharp 🥤",
                 },
             },
             "subscription_hook": {
@@ -81,10 +78,10 @@ NOTIFICATION_MESSAGES = {
                     "body": "Morning, mate! Grab a bite or coffee\nWhen you can — log it 🌅",
                 },
                 "lunch": {
-                    "body_template": "Lunch o'clock, mate! {remaining} cal left\nWhat's going on the plate? 🥗",
+                    "body": "Lunch o'clock, mate!\nWhat's on the plate? Log it when you can 🥗",
                 },
                 "dinner": {
-                    "body_template": "Dinner time, mate! {remaining} cal left\nMake it count tonight 🌙",
+                    "body": "Dinner time, mate!\nLog tonight's plate when you can 🌝",
                 },
             },
             "daily_summary": {
@@ -116,10 +113,7 @@ NOTIFICATION_MESSAGES = {
             },
             "hydration_reminder": {
                 "afternoon": {
-                    "body_template": "Halfway there, mate! {consumed_ml}ml down, {remaining_ml}ml to go\nStay hydrated 💧",
-                },
-                "evening": {
-                    "body_template": "Almost there, mate! {consumed_ml}ml logged today\nJust {remaining_ml}ml left to hit your goal 💧",
+                    "body": "Water break, mate?\nA quick sip keeps you sharp 🥤",
                 },
             },
             "subscription_hook": {
@@ -135,10 +129,10 @@ NOTIFICATION_MESSAGES = {
                     "body": "Sáng rồi bro! Ăn nhẹ hay cà phê đi\nNhớ ghi lại nha 🌅",
                 },
                 "lunch": {
-                    "body_template": "Trưa rồi bro! Còn {remaining} cal\nĂn gì cho ngon đây? 🥗",
+                    "body": "Trưa rồi bro!\nĂn gì thì nhớ ghi lại nha 🥗",
                 },
                 "dinner": {
-                    "body_template": "Tối rồi bro! Còn {remaining} cal\nĂn gì cho đúng mục tiêu? 🌙",
+                    "body": "Tối rồi bro!\nGhi lại bữa tối khi nào tiện nha 🌝",
                 },
             },
             "daily_summary": {
@@ -170,10 +164,7 @@ NOTIFICATION_MESSAGES = {
             },
             "hydration_reminder": {
                 "afternoon": {
-                    "body_template": "Giữa ngày rồi bro! Uống thêm {remaining_ml}ml nữa nhé\nHôm nay uống được {consumed_ml}ml rồi đó 💧",
-                },
-                "evening": {
-                    "body_template": "Chiều tà rồi bro! Uống được {consumed_ml}ml rồi, còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
+                    "body": "Uống nước đi bro!\nMột ngụm nhỏ cũng giúp nạp năng lượng 🥤",
                 },
             },
             "subscription_hook": {
@@ -187,10 +178,10 @@ NOTIFICATION_MESSAGES = {
                     "body": "Sáng rồi bạn ơi! Ăn nhẹ hay cà phê đi\nNhớ ghi lại nha 🌅",
                 },
                 "lunch": {
-                    "body_template": "Trưa rồi bạn ơi! Còn {remaining} cal\nĂn gì cho ngon đây? 🥗",
+                    "body": "Trưa rồi bạn ơi!\nĂn gì thì nhớ ghi lại nha 🥗",
                 },
                 "dinner": {
-                    "body_template": "Tối rồi bạn ơi! Còn {remaining} cal\nĂn gì cho đúng mục tiêu? 🌙",
+                    "body": "Tối rồi bạn ơi!\nGhi lại bữa tối khi nào tiện nha 🌝",
                 },
             },
             "daily_summary": {
@@ -222,10 +213,7 @@ NOTIFICATION_MESSAGES = {
             },
             "hydration_reminder": {
                 "afternoon": {
-                    "body_template": "Giữa ngày rồi bạn ơi! Uống thêm {remaining_ml}ml nữa nhé\nHôm nay uống được {consumed_ml}ml rồi đó 💧",
-                },
-                "evening": {
-                    "body_template": "Chiều tà rồi bạn ơi! Uống được {consumed_ml}ml rồi, còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
+                    "body": "Uống nước đi bạn ơi!\nMột ngụm nhỏ cũng giúp nạp năng lượng 🥤",
                 },
             },
             "subscription_hook": {
