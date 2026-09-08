@@ -7,10 +7,10 @@ NOTIFICATION_MESSAGES_ZH = {
                 "body": "早上好！吃点东西或喝杯咖啡\n有空记得记录一下 🌅",
             },
             "lunch": {
-                "body_template": "午餐时间！还剩{remaining} cal\n今天吃什么？ 🥗",
+                "body": "午餐时间！\n有空记得记录一下今天的午餐 🥗",
             },
             "dinner": {
-                "body_template": "晚餐时间！还剩{remaining} cal\n今晚也要加油哦 🌙",
+                "body": "晚餐时间！\n有空记得记录今晚的晚餐 🌝",
             },
         },
         "daily_summary": {
@@ -42,10 +42,7 @@ NOTIFICATION_MESSAGES_ZH = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "半天过去了！已喝{consumed_ml}ml，还差{remaining_ml}ml\n记得补水 💧",
-            },
-            "evening": {
-                "body_template": "快完成了！今天已记录{consumed_ml}ml\n还差{remaining_ml}ml就达标 💧",
+                "body": "喝水时间到！\n小口喝一口也能补充能量 🥤",
             },
         },
         "subscription_hook": {
@@ -59,10 +56,10 @@ NOTIFICATION_MESSAGES_ZH = {
                 "body": "早上好！吃点东西或喝杯咖啡\n有空记得记录一下 🌅",
             },
             "lunch": {
-                "body_template": "午餐时间！还剩{remaining} cal\n今天吃什么？ 🥗",
+                "body": "午餐时间！\n有空记得记录一下今天的午餐 🥗",
             },
             "dinner": {
-                "body_template": "晚餐时间！还剩{remaining} cal\n今晚也要加油哦 🌙",
+                "body": "晚餐时间！\n有空记得记录今晚的晚餐 🌝",
             },
         },
         "daily_summary": {
@@ -94,10 +91,7 @@ NOTIFICATION_MESSAGES_ZH = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "半天过去了！已喝{consumed_ml}ml，还差{remaining_ml}ml\n记得补水 💧",
-            },
-            "evening": {
-                "body_template": "快完成了！今天已记录{consumed_ml}ml\n还差{remaining_ml}ml就达标 💧",
+                "body": "喝水时间到！\n小口喝一口也能补充能量 🥤",
             },
         },
         "subscription_hook": {

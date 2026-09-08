@@ -7,6 +7,7 @@ from src.api.schemas.request.notification_requests import (
 )
 from src.domain.services.notification_messages import NOTIFICATION_MESSAGES, get_messages
 
+
 class TestNotificationMessages:
     def test_all_seven_locales_present(self):
         assert set(NOTIFICATION_MESSAGES.keys()) == {
@@ -26,6 +27,28 @@ class TestNotificationMessages:
         assert set(locale_male.keys()) == set(en_male.keys())
         for category, en_blocks in en_male.items():
             assert set(locale_male[category].keys()) == set(en_blocks.keys())
+
+    @pytest.mark.parametrize("locale", ["en", "vi", "es", "fr", "de", "ja", "zh"])
+    def test_meal_and_hydration_are_static_without_value_placeholders(self, locale):
+        male = NOTIFICATION_MESSAGES[locale]["male"]
+        for slot in ("breakfast", "lunch", "dinner"):
+            body = male["meal_reminder"][slot]["body"]
+            assert body
+            assert "{remaining}" not in body
+            assert "body_template" not in male["meal_reminder"][slot]
+        hydra = male["hydration_reminder"]
+        assert "afternoon" in hydra
+        assert "evening" not in hydra
+        body = hydra["afternoon"]["body"]
+        assert body
+        assert "{consumed_ml}" not in body
+        assert "{remaining_ml}" not in body
+        assert "ml" not in body.lower()
+
+    def test_dinner_and_hydration_use_selected_emojis(self):
+        en = get_messages("en", "male")
+        assert "🌝" in en["meal_reminder"]["dinner"]["body"]
+        assert "🥤" in en["hydration_reminder"]["afternoon"]["body"]
 
     def test_ja_female_is_not_english(self):
         ja = get_messages("ja", "female")

@@ -7,10 +7,10 @@ NOTIFICATION_MESSAGES_JA = {
                 "body": "おはよう！軽食かコーヒーをどうぞ\n時間があれば記録してね 🌅",
             },
             "lunch": {
-                "body_template": "ランチの時間！残り{remaining} cal\n今日のランチは何？ 🥗",
+                "body": "ランチの時間！\n今日のランチを記録してね 🥗",
             },
             "dinner": {
-                "body_template": "ディナーの時間！残り{remaining} cal\n今夜も頑張ろう 🌙",
+                "body": "ディナーの時間！\n今夜の食事を記録してね 🌝",
             },
         },
         "daily_summary": {
@@ -42,10 +42,7 @@ NOTIFICATION_MESSAGES_JA = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "半分まで来た！{consumed_ml}ml飲んだ、あと{remaining_ml}ml\n水分補給を忘れずに 💧",
-            },
-            "evening": {
-                "body_template": "もう少し！今日は{consumed_ml}ml記録済み\nあと{remaining_ml}mlで目標達成 💧",
+                "body": "水分補給の時間！\nひと口でリフレッシュ 🥤",
             },
         },
         "subscription_hook": {
@@ -59,10 +56,10 @@ NOTIFICATION_MESSAGES_JA = {
                 "body": "おはよう！軽食かコーヒーをどうぞ\n時間があれば記録してね 🌅",
             },
             "lunch": {
-                "body_template": "ランチの時間！残り{remaining} cal\n今日のランチは何？ 🥗",
+                "body": "ランチの時間！\n今日のランチを記録してね 🥗",
             },
             "dinner": {
-                "body_template": "ディナーの時間！残り{remaining} cal\n今夜も頑張ろう 🌙",
+                "body": "ディナーの時間！\n今夜の食事を記録してね 🌝",
             },
         },
         "daily_summary": {
@@ -94,10 +91,7 @@ NOTIFICATION_MESSAGES_JA = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "半分まで来た！{consumed_ml}ml飲んだ、あと{remaining_ml}ml\n水分補給を忘れずに 💧",
-            },
-            "evening": {
-                "body_template": "もう少し！今日は{consumed_ml}ml記録済み\nあと{remaining_ml}mlで目標達成 💧",
+                "body": "水分補給の時間！\nひと口でリフレッシュ 🥤",
             },
         },
         "subscription_hook": {
