@@ -7,10 +7,10 @@ NOTIFICATION_MESSAGES_DE = {
                 "body": "Guten Morgen! Schnell frühstücken oder Kaffee\nWenn du kannst — logge es 🌅",
             },
             "lunch": {
-                "body_template": "Mittagszeit! Noch {remaining} cal übrig\nWas kommt auf den Teller? 🥗",
+                "body": "Mittagszeit!\nWas kommt auf den Teller? Logg es, wenn du kannst 🥗",
             },
             "dinner": {
-                "body_template": "Abendessen! Noch {remaining} cal übrig\nMach es heute Abend zählen 🌙",
+                "body": "Abendessen!\nLogg das Abendessen, wenn du kannst 🌝",
             },
         },
         "daily_summary": {
@@ -42,10 +42,7 @@ NOTIFICATION_MESSAGES_DE = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "Halbzeit! {consumed_ml}ml getrunken, noch {remaining_ml}ml\nBleib hydriert 💧",
-            },
-            "evening": {
-                "body_template": "Fast geschafft! {consumed_ml}ml heute geloggt\nNur noch {remaining_ml}ml bis zum Ziel 💧",
+                "body": "Wasserpause?\nEin schneller Schluck hält dich fit 🥤",
             },
         },
         "subscription_hook": {
@@ -59,10 +56,10 @@ NOTIFICATION_MESSAGES_DE = {
                 "body": "Guten Morgen! Schnell frühstücken oder Kaffee\nWenn du kannst — logge es 🌅",
             },
             "lunch": {
-                "body_template": "Mittagszeit! Noch {remaining} cal übrig\nWas kommt auf den Teller? 🥗",
+                "body": "Mittagszeit!\nWas kommt auf den Teller? Logg es, wenn du kannst 🥗",
             },
             "dinner": {
-                "body_template": "Abendessen! Noch {remaining} cal übrig\nMach es heute Abend zählen 🌙",
+                "body": "Abendessen!\nLogg das Abendessen, wenn du kannst 🌝",
             },
         },
         "daily_summary": {
@@ -94,10 +91,7 @@ NOTIFICATION_MESSAGES_DE = {
         },
         "hydration_reminder": {
             "afternoon": {
-                "body_template": "Halbzeit! {consumed_ml}ml getrunken, noch {remaining_ml}ml\nBleib hydriert 💧",
-            },
-            "evening": {
-                "body_template": "Fast geschafft! {consumed_ml}ml heute geloggt\nNur noch {remaining_ml}ml bis zum Ziel 💧",
+                "body": "Wasserpause?\nEin schneller Schluck hält dich fit 🥤",
             },
         },
         "subscription_hook": {

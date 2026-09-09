@@ -69,10 +69,12 @@ _CJK_NUMERIC_UNIT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _LOCALIZED_NUMERIC_UNIT_PATTERN = re.compile(
-    r"(?:(?<!\w)(?P<before>khẩu\s+phần|miếng|phần|pieza|piezas|rebanada|rebanadas|"
+    r"(?:(?<!\w)(?P<before>khẩu\s+phần|miếng|lát|khúc|quả|trái|cái|phần|"
+    r"suất|tô|chén|bát|pieza|piezas|rebanada|rebanadas|"
     r"porción|porciones|morceau|morceaux|tranche|tranches|portion|portions|"
     r"stück|scheibe)(?=\s*\d)(?!\w)|"
-    r"(?<=\d)\s*(?P<after>khẩu\s+phần|miếng|phần|pieza|piezas|rebanada|"
+    r"(?<=\d)\s*(?P<after>khẩu\s+phần|miếng|lát|khúc|quả|trái|cái|phần|"
+    r"suất|tô|chén|bát|pieza|piezas|rebanada|"
     r"rebanadas|porción|porciones|morceau|morceaux|tranche|tranches|portion|"
     r"portions|stück|scheibe)(?!\w))",
     re.IGNORECASE,

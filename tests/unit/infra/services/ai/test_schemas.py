@@ -209,8 +209,8 @@ class TestRecipeDetailsResponse:
                 prep_time_minutes=30,
             )
 
-    def test_validates_prep_time_min_5(self):
-        """Validates minimum prep time of 5 minutes."""
+    def test_validates_prep_time_min_1(self):
+        """Validates minimum prep time of 1 minute."""
         with pytest.raises(ValidationError):
             RecipeDetailsResponse(
                 ingredients=[
@@ -222,8 +222,28 @@ class TestRecipeDetailsResponse:
                     RecipeStepItem(step=1, instruction="Mix", duration_minutes=2),
                     RecipeStepItem(step=2, instruction="Cook", duration_minutes=2),
                 ],
-                prep_time_minutes=4,  # Too short
+                prep_time_minutes=0,  # Too short
             )
+
+    def test_accepts_short_prep_time_of_1_minute(self):
+        """Short recipes may take 1–4 minutes; the floor is 1, not 5."""
+        response = RecipeDetailsResponse(
+            ingredients=[
+                IngredientItem(name="A", amount=1, unit="g"),
+                IngredientItem(name="B", amount=2, unit="g"),
+                IngredientItem(name="C", amount=3, unit="g"),
+            ],
+            recipe_steps=[
+                RecipeStepItem(step=1, instruction="Mix", duration_minutes=1),
+                RecipeStepItem(step=2, instruction="Cook", duration_minutes=1),
+            ],
+            prep_time_minutes=1,
+            calories=50,
+            protein=1.0,
+            carbs=2.0,
+            fat=0.5,
+        )
+        assert response.prep_time_minutes == 1
 
     def test_validates_prep_time_max_120(self):
         """Validates maximum prep time of 120 minutes."""
