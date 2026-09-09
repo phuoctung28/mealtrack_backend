@@ -2,9 +2,7 @@ name: Preprod
 
 # Temporary production clone of nutree_backend (Render image preview).
 # Copies production env as-is. Only needs RENDER_API_KEY.
-#
-# Create: label a PR `preprod`, or Actions → Preprod → create
-# Delete: close/unlabel the PR, or Actions → Preprod → delete
+# Manual only — does not run on push/merge to main.
 
 on:
   workflow_dispatch:
@@ -19,11 +17,9 @@ on:
         description: Existing GHCR tag (empty = build this SHA)
         required: false
         type: string
-  pull_request:
-    types: [labeled, unlabeled, synchronize, closed]
 
 concurrency:
-  group: preprod-${{ github.event.pull_request.number || github.run_id }}
+  group: preprod
   cancel-in-progress: true
 
 env:
@@ -31,20 +27,16 @@ env:
   IMAGE_NAME: nutree-ai-vietnam/mealtrack_backend
   RENDER_API: https://api.render.com/v1
   BASE_SERVICE_ID: srv-d7d36ql8nd3s73dnoodg
-  LABEL: preprod
+  NAME: nutree-backend-preprod
 
 jobs:
   create:
     name: Create preprod
+    if: inputs.action == 'create'
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'workflow_dispatch' && inputs.action == 'create') ||
-      (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'preprod') ||
-      (github.event_name == 'pull_request' && github.event.action == 'synchronize' && contains(join(github.event.pull_request.labels.*.name, ','), 'preprod'))
     permissions:
       contents: read
       packages: write
-      pull-requests: write
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
     steps:
@@ -52,22 +44,17 @@ jobs:
         run: |
           test -n "$RENDER_API_KEY" || { echo "::error::Set secret RENDER_API_KEY"; exit 1; }
 
-      - name: Resolve name / image
+      - name: Resolve image
         id: meta
         run: |
-          PR="${{ github.event.pull_request.number }}"
           TAG="${{ inputs.image_tag }}"
-          if [ -n "$PR" ]; then
-            NAME="nutree-backend-preprod-pr-${PR}"
-            TAG="${TAG:-preprod-pr-${PR}}"
+          if [ -n "$TAG" ]; then
+            BUILD=false
           else
-            NAME="nutree-backend-preprod"
-            TAG="${TAG:-preprod-${GITHUB_SHA::7}}"
+            TAG="preprod-${GITHUB_SHA::7}"
+            BUILD=true
           fi
-          BUILD=true
-          [ -n "${{ inputs.image_tag }}" ] && BUILD=false
           {
-            echo "name=${NAME}"
             echo "tag=${TAG}"
             echo "build=${BUILD}"
             echo "image=${REGISTRY}/${IMAGE_NAME}:${TAG}"
@@ -93,7 +80,6 @@ jobs:
       - name: Create preprod
         id: publish
         env:
-          NAME: ${{ steps.meta.outputs.name }}
           IMAGE: ${{ steps.meta.outputs.image }}
         run: |
           set -euo pipefail
@@ -128,51 +114,24 @@ jobs:
           open(os.environ["GITHUB_OUTPUT"], "a").write(
               "id=%s\nurl=%s\n" % (s["id"], d.get("url") or "")
           )
-          print(s["id"], d.get("url") or "")
+          print("Preprod:", s["id"], d.get("url") or "")
           '
-
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --body "$(cat <<EOF
-          <!-- preprod -->
-          **Preprod** is up (production clone).
-
-          - URL: ${{ steps.publish.outputs.url }}
-          - Service: \`${{ steps.publish.outputs.id }}\`
-          - Image: \`${{ steps.meta.outputs.image }}\`
-
-          Shares production DB/Redis. Deleted when the PR is closed or the \`preprod\` label is removed.
-          EOF
-          )"
 
   delete:
     name: Delete preprod
+    if: inputs.action == 'delete'
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'workflow_dispatch' && inputs.action == 'delete') ||
-      (github.event_name == 'pull_request' && github.event.action == 'unlabeled' && github.event.label.name == 'preprod') ||
-      (github.event_name == 'pull_request' && github.event.action == 'closed')
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
     steps:
       - name: Delete preprod
-        env:
-          PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           test -n "$RENDER_API_KEY" || { echo "::error::Set secret RENDER_API_KEY"; exit 1; }
-          if [ -n "${PR:-}" ]; then
-            NAME="nutree-backend-preprod-pr-${PR}"
-          else
-            NAME="nutree-backend-preprod"
-          fi
-          encoded="$(NAME="$NAME" python3 -c 'import urllib.parse,os; print(urllib.parse.quote(os.environ["NAME"]))')"
+          encoded="$(python3 -c 'import urllib.parse,os; print(urllib.parse.quote(os.environ["NAME"]))')"
           curl -sS -o /tmp/list.json -H "Authorization: Bearer $RENDER_API_KEY" \
             "$RENDER_API/services?includePreviews=true&limit=50&name=$encoded"
-          id="$(NAME="$NAME" python3 -c '
+          id="$(python3 -c '
           import json, os
           name = os.environ["NAME"]
           rows = json.load(open("/tmp/list.json"))
