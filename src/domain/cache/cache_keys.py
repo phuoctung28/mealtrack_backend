@@ -115,6 +115,23 @@ class CacheKeys:
         )
 
     @staticmethod
+    def progress_recap(
+        user_id: str,
+        horizon: str,
+        start_date: date,
+        end_date: date,
+        locale: str,
+    ) -> tuple[str, int]:
+        """Cached AI recap for one timeline window. 6 hour TTL."""
+        return (
+            (
+                f"user:{user_id}:progress_recap:{horizon}:"
+                f"{start_date.isoformat()}:{end_date.isoformat()}:{locale}"
+            ),
+            CacheKeys.TTL_1_HOUR * 6,
+        )
+
+    @staticmethod
     def food_search(
         query: str,
         *,
