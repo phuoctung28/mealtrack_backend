@@ -561,14 +561,18 @@ class ChatTurnOrchestrator:
                                 intent = ChatIntent.DAY_PROGRESS.value
                             else:
                                 intent = ChatIntent.REMAINING_BUDGET.value
-                            result = (
-                                f"Daily progress: consumed {context.consumed_calories} kcal "
-                                f"({context.consumed_protein_g}g P, {context.consumed_carbs_g}g C, {context.consumed_fat_g}g F). "
-                                f"Remaining: {context.remaining_calories} kcal "
-                                f"({context.remaining_protein_g}g P, {context.remaining_carbs_g}g C, {context.remaining_fat_g}g F). "
-                                f"Daily targets: {context.target_calories} kcal ({context.target_protein_g}g P, {context.target_carbs_g}g C, {context.target_fat_g}g F). "
-                                f"Remaining days: {context.remaining_days}."
-                            )
+                            if not context.has_complete_nutrition:
+                                result = _daily_progress_unavailable(resolved_locale)
+                            else:
+                                result = (
+                                    f"Daily progress: food consumed {context.food_calories} kcal; "
+                                    f"activity burned {context.movement_kcal_burned} kcal. "
+                                    f"Macros consumed: {context.consumed_protein_g}g P, {context.consumed_carbs_g}g C, {context.consumed_fat_g}g F. "
+                                    f"Remaining: {context.remaining_calories} kcal "
+                                    f"({context.remaining_protein_g}g P, {context.remaining_carbs_g}g C, {context.remaining_fat_g}g F). "
+                                    f"Daily targets: {context.target_calories} kcal ({context.target_protein_g}g P, {context.target_carbs_g}g C, {context.target_fat_g}g F). "
+                                    f"Remaining days: {context.remaining_days}."
+                                )
 
                         elif name == "search_nutrition_knowledge":
                             query_arg = args.get("query") or trimmed
@@ -660,6 +664,11 @@ class ChatTurnOrchestrator:
                     discover_session_id=discover_session_id,
                     intent=intent,
                     citations=citations,
+                    nutrition_snapshot=(
+                        context.to_nutrition_snapshot()
+                        if context.has_complete_nutrition
+                        else None
+                    ),
                 ),
             )
             if completed is None:
@@ -1217,6 +1226,7 @@ def _reply_payload(
     discover_session_id: str | None,
     intent: str | None,
     citations: list[ChatCitation] | None = None,
+    nutrition_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "suggestions": suggestions,
@@ -1230,7 +1240,21 @@ def _reply_payload(
         payload["citation_refs"] = [
             {"label": item.label, "source_key": item.source_key} for item in citations
         ]
+    if nutrition_snapshot is not None:
+        payload["nutrition_snapshot"] = nutrition_snapshot
     return payload
+
+
+def _daily_progress_unavailable(locale: str) -> str:
+    if locale == "vi":
+        return (
+            "Nutree chưa thể tải đủ số liệu hôm nay. "
+            "Vui lòng thử lại sau khi dữ liệu được đồng bộ."
+        )
+    return (
+        "Nutree cannot load complete nutrition data for today yet. "
+        "Please try again after your data finishes syncing."
+    )
 
 
 def _hydrate_message_citations(

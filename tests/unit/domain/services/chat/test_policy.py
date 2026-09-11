@@ -22,6 +22,7 @@ def _context(**overrides) -> ChatUserContext:
     values = {
         "context_version": "chat_context_v1",
         "as_of": "2026-09-01T00:00:00+00:00",
+        "local_date": "2026-09-01",
         "locale": "en",
         "timezone": "UTC",
         "allergies": ["peanut"],
@@ -56,6 +57,28 @@ def test_prompt_dict_includes_local_meal_slot() -> None:
     assert payload["today"]["local_hour"] == 8
     assert payload["today"]["local_minute"] == 12
     assert payload["today"]["suggested_meal_slot"] == "breakfast"
+
+
+def test_nutrition_snapshot_preserves_gross_food_and_activity_semantics() -> None:
+    context = _context(food_calories=1150, movement_kcal_burned=250)
+
+    assert context.has_complete_nutrition is True
+    assert context.to_nutrition_snapshot() == {
+        "version": "chat_nutrition_v1",
+        "as_of": "2026-09-01T00:00:00+00:00",
+        "local_date": "2026-09-01",
+        "timezone": "UTC",
+        "target_calories": 1800,
+        "food_calories": 1150,
+        "movement_kcal_burned": 250,
+        "remaining_calories": 650,
+        "remaining_days": 4,
+        "macros": {
+            "protein": {"consumed_g": 90, "target_g": 140, "remaining_g": 50},
+            "carbs": {"consumed_g": 100, "target_g": 180, "remaining_g": 80},
+            "fat": {"consumed_g": 40, "target_g": 60, "remaining_g": 20},
+        },
+    }
 
 
 def test_locale_prefers_supported_request_then_profile():
@@ -169,6 +192,43 @@ def test_nutrition_number_is_not_a_substring_match():
     assert (
         nutrition_numbers_are_traceable(
             "Stay at 140 g protein.",
+            context=context,
+            chunks=[],
+        )
+        is True
+    )
+
+
+def test_nutrition_number_must_match_the_named_macro():
+    context = _context(remaining_protein_g=50, remaining_carbs_g=80)
+
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 50 g protein remaining.",
+            context=context,
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 80 g protein remaining.",
+            context=context,
+            chunks=[],
+        )
+        is False
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 80 g P remaining.",
+            context=context,
+            chunks=[],
+        )
+        is False
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 80 g C remaining.",
             context=context,
             chunks=[],
         )
