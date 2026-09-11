@@ -236,6 +236,59 @@ def test_nutrition_number_must_match_the_named_macro():
     )
 
 
+def test_nutrition_numbers_accept_display_rounding_without_widening_exact_match():
+    context = _context(target_calories=1875.6)
+
+    assert (
+        nutrition_numbers_are_traceable(
+            "Your daily target is 1876 kcal.",
+            context=context,
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "Your daily target is 1877 kcal.",
+            context=context,
+            chunks=[],
+        )
+        is False
+    )
+
+
+def test_compact_macro_claims_are_scanned_once_in_order():
+    assert (
+        nutrition_numbers_are_traceable(
+            "P: 90g C: 100g",
+            context=_context(remaining_protein_g=90, remaining_carbs_g=100),
+            chunks=[],
+        )
+        is True
+    )
+
+
+def test_carbohydrates_plural_is_traceable():
+    context = _context(remaining_carbs_g=100)
+
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 100 g carbohydrates remaining.",
+            context=context,
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 101 g carbohydrates remaining.",
+            context=context,
+            chunks=[],
+        )
+        is False
+    )
+
+
 def test_hydrate_citations_keeps_stored_labels():
     citations = hydrate_citations(
         ["fiber-guide"],

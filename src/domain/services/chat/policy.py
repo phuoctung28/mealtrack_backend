@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from src.domain.constants.languages import DEFAULT_LANGUAGE, normalize_language
@@ -88,19 +90,26 @@ _CALORIE_CLAIM_RE = re.compile(
     re.IGNORECASE,
 )
 _MACRO_CLAIM_RE = re.compile(
-    r"(?P<num>\d+(?:\.\d+)?)\s*g(?:rams?)?\s*(?:of\s+)?"
-    r"(?P<macro>protein|carb(?:s|ohydrate)?|fat|p|c|f)\b",
-    re.IGNORECASE,
-)
-_PREFIX_MACRO_CLAIM_RE = re.compile(
-    r"(?P<macro>protein|carb(?:s|ohydrate)?|fat|p|c|f)\s*(?:is|:)?\s*"
-    r"(?P<num>\d+(?:\.\d+)?)\s*g(?:rams?)?\b",
+    r"(?:"
+    r"(?P<prefix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)"
+    r"\s*(?:is|:)?\s*(?P<prefix_num>\d+(?:\.\d+)?)\s*g(?:rams?)?\b"
+    r"|"
+    r"(?P<suffix_num>\d+(?:\.\d+)?)\s*g(?:rams?)?\s*(?:of\s+)?"
+    r"(?P<suffix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)\b"
+    r")",
     re.IGNORECASE,
 )
 
 _CITATION_RE = re.compile(r"\[K(\d+)\]")
 
 _SENTENCE_END_RE = re.compile(r"(?s)(.+?(?:[.!?…][\"')\]]*|\n{2,})\s+)")
+
+
+@dataclass(frozen=True, slots=True)
+class _NutritionClaim:
+    metric: str
+    number: float
+    decimal_places: int
 
 _SAFE_FALLBACK_EN = (
     "I can only use Nutree's recorded values and reviewed Nutree guidance. "
@@ -403,28 +412,45 @@ def nutrition_numbers_are_traceable(
     meal_candidates: Sequence[Mapping[str, Any]] | None = None,
 ) -> bool:
     """Require each calorie/macro number to match its own source field."""
-    for metric, number in _nutrition_claims(text):
-        if not _claim_matches_context(metric, number, context):
+    for claim in _nutrition_claims(text):
+        if not _claim_matches_context(claim, context):
             if not _claim_matches_candidates(
-                metric, number, meal_candidates
-            ) and not _claim_matches_chunks(metric, number, chunks):
+                claim, meal_candidates
+            ) and not _claim_matches_chunks(claim, chunks):
                 return False
     return True
 
 
-def _nutrition_claims(text: str) -> Iterable[tuple[str, float]]:
+def _nutrition_claims(text: str) -> Iterable[_NutritionClaim]:
+    seen: set[_NutritionClaim] = set()
     for match in _CALORIE_CLAIM_RE.finditer(text):
-        yield "calories", float(match.group("num"))
-    for pattern in (_MACRO_CLAIM_RE, _PREFIX_MACRO_CLAIM_RE):
-        for match in pattern.finditer(text):
-            macro = _normalize_macro_name(match.group("macro"))
-            if macro:
-                yield macro, float(match.group("num"))
+        claim = _NutritionClaim(
+            metric="calories",
+            number=float(match.group("num")),
+            decimal_places=_decimal_places(match.group("num")),
+        )
+        if claim not in seen:
+            seen.add(claim)
+            yield claim
+    for match in _MACRO_CLAIM_RE.finditer(text):
+        macro = _normalize_macro_name(
+            match.group("prefix_macro") or match.group("suffix_macro")
+        )
+        raw_number = match.group("prefix_num") or match.group("suffix_num")
+        if not macro or not raw_number:
+            continue
+        claim = _NutritionClaim(
+            metric=macro,
+            number=float(raw_number),
+            decimal_places=_decimal_places(raw_number),
+        )
+        if claim not in seen:
+            seen.add(claim)
+            yield claim
 
 
 def _claim_matches_context(
-    metric: str,
-    number: float,
+    claim: _NutritionClaim,
     context: ChatUserContext,
 ) -> bool:
     fields = {
@@ -451,12 +477,18 @@ def _claim_matches_context(
             context.remaining_fat_g,
         ),
     }
-    return any(_numbers_equal(number, value) for value in fields.get(metric, ()))
+    return any(
+        _numbers_equal(
+            claim.number,
+            value,
+            decimal_places=claim.decimal_places,
+        )
+        for value in fields.get(claim.metric, ())
+    )
 
 
 def _claim_matches_candidates(
-    metric: str,
-    number: float,
+    claim: _NutritionClaim,
     meal_candidates: Sequence[Mapping[str, Any]] | None,
 ) -> bool:
     if not meal_candidates:
@@ -466,25 +498,33 @@ def _claim_matches_candidates(
         "protein": "protein_g",
         "carbs": "carbs_g",
         "fat": "fat_g",
-    }.get(metric)
+    }.get(claim.metric)
     if field is None:
         return False
     return any(
-        _numbers_equal(number, item.get(field))
+        _numbers_equal(
+            claim.number,
+            item.get(field),
+            decimal_places=claim.decimal_places,
+        )
         for item in meal_candidates
         if isinstance(item, Mapping)
     )
 
 
 def _claim_matches_chunks(
-    metric: str,
-    number: float,
+    claim: _NutritionClaim,
     chunks: Sequence[RetrievedKnowledgeChunk],
 ) -> bool:
     return any(
-        source_metric == metric and _numbers_equal(number, source_number)
+        source_claim.metric == claim.metric
+        and _numbers_equal(
+            claim.number,
+            source_claim.number,
+            decimal_places=claim.decimal_places,
+        )
         for chunk in chunks
-        for source_metric, source_number in _nutrition_claims(chunk.content)
+        for source_claim in _nutrition_claims(chunk.content)
     )
 
 
@@ -501,11 +541,27 @@ def _normalize_macro_name(value: str | None) -> str | None:
     return None
 
 
-def _numbers_equal(left: float, right: Any) -> bool:
+def _decimal_places(value: str) -> int:
+    return len(value.partition(".")[2])
+
+
+def _numbers_equal(
+    left: float,
+    right: Any,
+    *,
+    decimal_places: int = 2,
+) -> bool:
     try:
-        return abs(left - float(right)) <= 0.05
-    except (TypeError, ValueError):
+        right_number = float(right)
+    except (TypeError, ValueError, OverflowError):
         return False
+    if not math.isfinite(left) or not math.isfinite(right_number):
+        return False
+    if abs(left - right_number) <= 0.05:
+        return True
+    if decimal_places == 0 and right_number >= 0:
+        return left == math.floor(right_number + 0.5)
+    return False
 
 
 def cited_labels(text: str) -> tuple[str, ...]:
