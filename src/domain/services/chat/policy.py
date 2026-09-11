@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from src.domain.constants.languages import DEFAULT_LANGUAGE, normalize_language
@@ -32,7 +34,11 @@ Authority and precedence, highest to lowest:
 4. Recent conversation.
 5. General model knowledge, which is never a Nutree source.
 
-Calories and macros are authoritative server values. Never recalculate them. Never invent a missing Nutree value; ask a clarifying question instead.
+Calories and macros are authoritative server values. Never recalculate them. In the
+daily context, `food_calories` is the gross food eaten, `movement_kcal_burned`
+is included activity, and `consumed_calories` is the net accounting value used
+for the remaining budget. Do not describe net calories as food eaten. Never
+invent a missing Nutree value; ask a clarifying question instead.
 
 You may explain and recommend. You cannot change a meal, target, profile, or subscription. Never claim that you wrote, updated, logged, or saved Nutree data.
 
@@ -79,16 +85,31 @@ _SUGGEST_RE = re.compile(
     re.IGNORECASE,
 )
 
-_NUTRITION_NUMBER_RE = re.compile(
-    r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>kcal|calories?|cal|"
-    r"g(?:rams?)?\s*(?:of\s+)?(?:protein|carb(?:s|ohydrate)?s?|fat)|"
-    r"(?:protein|carb(?:s|ohydrate)?s?|fat)\s*(?:of\s+)?)?",
+_CALORIE_CLAIM_RE = re.compile(
+    r"(?P<num>\d+(?:\.\d+)?)\s*(?:kcal|calories?|cal)\b",
+    re.IGNORECASE,
+)
+_MACRO_CLAIM_RE = re.compile(
+    r"(?:"
+    r"(?P<prefix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)"
+    r"\s*(?:is|:)?\s*(?P<prefix_num>\d+(?:\.\d+)?)\s*g(?:rams?)?\b"
+    r"|"
+    r"(?P<suffix_num>\d+(?:\.\d+)?)\s*g(?:rams?)?\s*(?:of\s+)?"
+    r"(?P<suffix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)\b"
+    r")",
     re.IGNORECASE,
 )
 
 _CITATION_RE = re.compile(r"\[K(\d+)\]")
 
 _SENTENCE_END_RE = re.compile(r"(?s)(.+?(?:[.!?…][\"')\]]*|\n{2,})\s+)")
+
+
+@dataclass(frozen=True, slots=True)
+class _NutritionClaim:
+    metric: str
+    number: float
+    decimal_places: int
 
 _SAFE_FALLBACK_EN = (
     "I can only use Nutree's recorded values and reviewed Nutree guidance. "
@@ -390,33 +411,157 @@ def nutrition_numbers_are_traceable(
     chunks: Sequence[RetrievedKnowledgeChunk],
     meal_candidates: Sequence[Mapping[str, Any]] | None = None,
 ) -> bool:
-    """Require calorie/macro numbers to appear in context or cited chunks."""
-    source = _trace_source_text(context, chunks, meal_candidates)
-    for match in _NUTRITION_NUMBER_RE.finditer(text):
-        unit = match.group("unit")
-        if not unit:
-            continue
-        number = match.group("num")
-        if not _source_contains_number(source, number):
-            return False
+    """Require each calorie/macro number to match its own source field."""
+    for claim in _nutrition_claims(text):
+        if not _claim_matches_context(claim, context):
+            if not _claim_matches_candidates(
+                claim, meal_candidates
+            ) and not _claim_matches_chunks(claim, chunks):
+                return False
     return True
 
 
-def _source_contains_number(source: str, number: str) -> bool:
-    """Match whole numbers only so '50' is not accepted because '150' exists."""
-    return re.search(rf"(?<![\d.]){re.escape(number)}(?![\d.])", source) is not None
+def _nutrition_claims(text: str) -> Iterable[_NutritionClaim]:
+    seen: set[_NutritionClaim] = set()
+    for match in _CALORIE_CLAIM_RE.finditer(text):
+        claim = _NutritionClaim(
+            metric="calories",
+            number=float(match.group("num")),
+            decimal_places=_decimal_places(match.group("num")),
+        )
+        if claim not in seen:
+            seen.add(claim)
+            yield claim
+    for match in _MACRO_CLAIM_RE.finditer(text):
+        macro = _normalize_macro_name(
+            match.group("prefix_macro") or match.group("suffix_macro")
+        )
+        raw_number = match.group("prefix_num") or match.group("suffix_num")
+        if not macro or not raw_number:
+            continue
+        claim = _NutritionClaim(
+            metric=macro,
+            number=float(raw_number),
+            decimal_places=_decimal_places(raw_number),
+        )
+        if claim not in seen:
+            seen.add(claim)
+            yield claim
 
 
-def _trace_source_text(
+def _claim_matches_context(
+    claim: _NutritionClaim,
     context: ChatUserContext,
+) -> bool:
+    fields = {
+        "calories": (
+            context.target_calories,
+            context.consumed_calories,
+            context.remaining_calories,
+            context.food_calories,
+            context.movement_kcal_burned,
+        ),
+        "protein": (
+            context.target_protein_g,
+            context.consumed_protein_g,
+            context.remaining_protein_g,
+        ),
+        "carbs": (
+            context.target_carbs_g,
+            context.consumed_carbs_g,
+            context.remaining_carbs_g,
+        ),
+        "fat": (
+            context.target_fat_g,
+            context.consumed_fat_g,
+            context.remaining_fat_g,
+        ),
+    }
+    return any(
+        _numbers_equal(
+            claim.number,
+            value,
+            decimal_places=claim.decimal_places,
+        )
+        for value in fields.get(claim.metric, ())
+    )
+
+
+def _claim_matches_candidates(
+    claim: _NutritionClaim,
+    meal_candidates: Sequence[Mapping[str, Any]] | None,
+) -> bool:
+    if not meal_candidates:
+        return False
+    field = {
+        "calories": "calories",
+        "protein": "protein_g",
+        "carbs": "carbs_g",
+        "fat": "fat_g",
+    }.get(claim.metric)
+    if field is None:
+        return False
+    return any(
+        _numbers_equal(
+            claim.number,
+            item.get(field),
+            decimal_places=claim.decimal_places,
+        )
+        for item in meal_candidates
+        if isinstance(item, Mapping)
+    )
+
+
+def _claim_matches_chunks(
+    claim: _NutritionClaim,
     chunks: Sequence[RetrievedKnowledgeChunk],
-    meal_candidates: Sequence[Mapping[str, Any]] | None = None,
-) -> str:
-    parts = [json.dumps(context.to_prompt_dict(), default=str)]
-    if meal_candidates:
-        parts.append(json.dumps(list(meal_candidates), default=str))
-    parts.extend(chunk.content for chunk in chunks)
-    return "\n".join(parts)
+) -> bool:
+    return any(
+        source_claim.metric == claim.metric
+        and _numbers_equal(
+            claim.number,
+            source_claim.number,
+            decimal_places=claim.decimal_places,
+        )
+        for chunk in chunks
+        for source_claim in _nutrition_claims(chunk.content)
+    )
+
+
+def _normalize_macro_name(value: str | None) -> str | None:
+    if not value:
+        return None
+    lowered = value.casefold()
+    if lowered in {"protein", "p"}:
+        return "protein"
+    if lowered == "c" or lowered.startswith("carb"):
+        return "carbs"
+    if lowered in {"fat", "f"}:
+        return "fat"
+    return None
+
+
+def _decimal_places(value: str) -> int:
+    return len(value.partition(".")[2])
+
+
+def _numbers_equal(
+    left: float,
+    right: Any,
+    *,
+    decimal_places: int = 2,
+) -> bool:
+    try:
+        right_number = float(right)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    if not math.isfinite(left) or not math.isfinite(right_number):
+        return False
+    if abs(left - right_number) <= 0.05:
+        return True
+    if decimal_places == 0 and right_number >= 0:
+        return left == math.floor(right_number + 0.5)
+    return False
 
 
 def cited_labels(text: str) -> tuple[str, ...]:

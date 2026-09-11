@@ -174,6 +174,9 @@ class _FakeContext:
             target_protein_g=140,
             target_carbs_g=180,
             target_fat_g=60,
+            food_calories=1150,
+            movement_kcal_burned=0,
+            local_date="2026-09-01",
             consumed_calories=1150,
             consumed_protein_g=90,
             consumed_carbs_g=100,
@@ -353,6 +356,12 @@ async def test_new_turn_streams_sentence_and_persists():
     completed = next(event for event in events if event.event == "message.completed")
     assert completed.data["suggestions"] == []
     assert completed.data["follow_ups"] == []
+    assert completed.data["nutrition_snapshot"]["food_calories"] == 1150
+    assert completed.data["nutrition_snapshot"]["movement_kcal_burned"] == 0
+    assert (
+        repo.completed["reply_payload"]["nutrition_snapshot"]["remaining_calories"]
+        == 650
+    )
 
 
 @pytest.mark.asyncio
@@ -855,4 +864,3 @@ async def test_meal_recommendation_generates_upfront_with_intent_chip():
     assert completed.data["intent"] == "next_meal"
     assert completed.data["suggestions"] == cards
     assert repo.completed["reply_payload"]["suggestions"] == cards
-
