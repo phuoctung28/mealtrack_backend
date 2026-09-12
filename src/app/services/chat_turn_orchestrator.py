@@ -38,6 +38,7 @@ from src.domain.model.chat import (
     ChatUsage,
     ChatUserContext,
     RetrievedKnowledgeChunk,
+    chronological_chat_messages,
     empty_reply_payload,
     reply_sidecar,
 )
@@ -711,7 +712,9 @@ class ChatTurnOrchestrator:
             citation_metadata = await repo.list_citation_metadata(source_keys)
         has_more = len(messages) > limit
         page = messages[:limit]
-        chronological = list(reversed(page))
+        # Newest-first page → oldest-first; tie-break user before assistant when
+        # both rows share the same claim-time created_at.
+        chronological = chronological_chat_messages(page)
         return {
             "thread": {
                 "id": thread.id,

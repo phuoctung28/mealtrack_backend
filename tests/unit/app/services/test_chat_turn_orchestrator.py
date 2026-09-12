@@ -690,6 +690,43 @@ async def test_get_thread_includes_in_flight_and_citations():
     assert payload["messages"][0]["nutrition_snapshot"]["remaining_calories"] == 1932
 
 
+@pytest.mark.asyncio
+async def test_get_thread_orders_equal_timestamp_user_before_assistant():
+    """Turn pairs share claim-time created_at; UUID reverse must not flip them."""
+    now = utc_now()
+    # Assistant UUID sorts after user UUID under id.desc → reversed(page) would
+    # put assistant first — the staging bug for "View today's progress".
+    assistant = ChatMessage(
+        id="aeb4c7f8-e3d6-4e2a-bd52-c1fd6d446569",
+        thread_id="t1",
+        role=ChatMessageRole.ASSISTANT,
+        status=ChatMessageStatus.COMPLETED,
+        created_at=now,
+        updated_at=now,
+        content="You're on track today.",
+        reply_payload={"intent": "day_progress"},
+    )
+    user = ChatMessage(
+        id="0223f710-f7ee-41e1-8c5c-156d752819a1",
+        thread_id="t1",
+        role=ChatMessageRole.USER,
+        status=ChatMessageStatus.COMPLETED,
+        created_at=now,
+        updated_at=now,
+        content="View today's progress",
+    )
+    claim = _claim()
+    # Fake repo returns newest-first (assistant then user when id.desc).
+    repo = _FakeRepo(claim=claim, history=[user, assistant])
+    orchestrator = _orchestrator(repo)
+
+    payload = await orchestrator.get_thread(user_id="u1", limit=50, before=None)
+
+    assert [m["role"] for m in payload["messages"]] == ["user", "assistant"]
+    assert payload["messages"][0]["content"] == "View today's progress"
+    assert payload["messages"][1]["content"] == "You're on track today."
+
+
 def _three_cards() -> list[dict]:
     return [
         {
