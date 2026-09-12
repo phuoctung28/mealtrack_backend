@@ -640,6 +640,16 @@ async def test_get_thread_includes_in_flight_and_citations():
         content="Stay at protein [K1].",
         citation_source_keys=("protein-guide",),
         model="gpt-5.6-luna",
+        reply_payload={
+            "suggestions": [],
+            "follow_ups": [],
+            "intent": "remaining_budget",
+            "nutrition_snapshot": {
+                "version": "chat_nutrition_v1",
+                "food_calories": 0,
+                "remaining_calories": 1932,
+            },
+        },
     )
     repo = _FakeRepo(claim=claim, history=[completed])
     repo.generating_turn = (claim.user_message, claim.assistant_message)
@@ -654,6 +664,8 @@ async def test_get_thread_includes_in_flight_and_citations():
     assert payload["messages"][0]["citations"][0]["label"] == "[K1]"
     assert payload["messages"][0]["suggestions"] == []
     assert payload["messages"][0]["follow_ups"] == []
+    assert payload["messages"][0]["intent"] == "remaining_budget"
+    assert payload["messages"][0]["nutrition_snapshot"]["remaining_calories"] == 1932
 
 
 def _three_cards() -> list[dict]:

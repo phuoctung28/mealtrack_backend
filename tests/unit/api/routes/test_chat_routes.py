@@ -145,6 +145,56 @@ def test_get_chat_defaults_empty_suggestions_and_follow_ups():
     message = response.json()["messages"][0]
     assert message["suggestions"] == []
     assert message["follow_ups"] == []
+    assert message["intent"] is None
+    assert message["discover_session_id"] is None
+    assert message["nutrition_snapshot"] is None
+
+
+def test_get_chat_keeps_intent_and_nutrition_snapshot():
+    snapshot = {
+        "version": "chat_nutrition_v1",
+        "as_of": "2026-09-11T12:48:00+00:00",
+        "local_date": "2026-09-11",
+        "timezone": "Asia/Ho_Chi_Minh",
+        "target_calories": 1932,
+        "food_calories": 0,
+        "movement_kcal_burned": 0,
+        "remaining_calories": 1932,
+        "remaining_days": 5,
+        "macros": {
+            "protein": {"consumed_g": 0, "target_g": 140, "remaining_g": 140},
+            "carbs": {"consumed_g": 0, "target_g": 250, "remaining_g": 250},
+            "fat": {"consumed_g": 0, "target_g": 70, "remaining_g": 70},
+        },
+    }
+    orchestrator = _StubOrchestrator(
+        thread_payload={
+            "thread": {
+                "id": "t1",
+                "created_at": "2026-09-01T00:00:00+00:00",
+                "updated_at": "2026-09-01T00:00:00+00:00",
+            },
+            "messages": [
+                {
+                    "id": "m1",
+                    "role": "assistant",
+                    "content": "You have 1932 remaining.",
+                    "created_at": "2026-09-11T12:48:00+00:00",
+                    "status": "completed",
+                    "intent": "remaining_budget",
+                    "nutrition_snapshot": snapshot,
+                }
+            ],
+            "has_more": False,
+        }
+    )
+    client = TestClient(_app(orchestrator))
+    response = client.get("/v1/chat")
+    assert response.status_code == 200
+    message = response.json()["messages"][0]
+    assert message["intent"] == "remaining_budget"
+    assert message["nutrition_snapshot"]["food_calories"] == 0
+    assert message["nutrition_snapshot"]["remaining_calories"] == 1932
 
 
 def test_delete_chat_clears_messages():

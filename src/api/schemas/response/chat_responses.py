@@ -54,6 +54,8 @@ class ChatMessageResponse(BaseModel):
     citations: list[ChatCitationResponse] = Field(default_factory=list)
     suggestions: list[dict[str, Any]] = Field(default_factory=list)
     follow_ups: list[dict[str, Any]] = Field(default_factory=list)
+    intent: str | None = None
+    discover_session_id: str | None = None
     nutrition_snapshot: ChatNutritionSnapshotResponse | None = None
 
 
