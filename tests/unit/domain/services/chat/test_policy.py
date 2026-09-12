@@ -201,11 +201,48 @@ def test_nutrition_numbers_accept_localized_thousands_separators():
     )
     assert (
         nutrition_numbers_are_traceable(
+            "About 1.821,5 kcal left.",
+            context=_context(remaining_calories=1821.5),
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "About 1,821.5 kcal left.",
+            context=_context(remaining_calories=1821.5),
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
             "Còn 117,7 g protein và 195,2 g carbs.",
             context=context,
             chunks=[],
         )
         is True
+    )
+
+
+def test_malformed_same_separator_number_blocks_without_raising():
+    """Same-separator hybrids must not crash the chat turn as a provider error."""
+    context = _context(remaining_calories=1821)
+    assert (
+        nutrition_numbers_are_traceable(
+            "Hôm nay còn 1.821.5 kcal.",
+            context=context,
+            chunks=[],
+        )
+        is False
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 1,821,5 kcal left.",
+            context=context,
+            chunks=[],
+        )
+        is False
     )
 
 

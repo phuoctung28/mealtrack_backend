@@ -86,8 +86,11 @@ _SUGGEST_RE = re.compile(
 )
 
 # Accept plain decimals (117.7 / 117,7) and thousands grouping (1.821 / 1,821).
+# When both thousands and a fraction appear, separators must differ (1.821,5 / 1,821.5).
+# Same-separator hybrids like 1.821.5 are rejected so float() never sees them.
 _LOCAL_NUMBER = (
-    r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?"  # 1.821 / 1,821 / 1.821,5
+    r"\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?"  # 1.821 / 1.821,5
+    r"|\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?"  # 1,821 / 1,821.5
     r"|\d+[.,]\d{1,2}"  # 117.7 / 117,7
     r"|\d+"
 )
@@ -418,8 +421,16 @@ def nutrition_numbers_are_traceable(
     chunks: Sequence[RetrievedKnowledgeChunk],
     meal_candidates: Sequence[Mapping[str, Any]] | None = None,
 ) -> bool:
-    """Require each calorie/macro number to match its own source field."""
-    for claim in _nutrition_claims(text):
+    """Require each calorie/macro number to match its own source field.
+
+    Malformed locale numbers return False (block the stream) instead of raising,
+    so stream safety never surfaces as a provider/circuit failure.
+    """
+    try:
+        claims = list(_nutrition_claims(text))
+    except ValueError:
+        return False
+    for claim in claims:
         if not _claim_matches_context(claim, context):
             if not _claim_matches_candidates(
                 claim, meal_candidates
@@ -489,7 +500,9 @@ def _parse_localized_number(raw: str) -> tuple[float, int]:
         if re.fullmatch(r"\d{1,3}(?:\.\d{3})+", value):
             # Vietnamese/EU thousands: 1.821 → 1821
             return float(value.replace(".", "")), 0
-        return float(value), _decimal_places(value)
+        if re.fullmatch(r"\d+\.\d{1,2}", value):
+            return float(value), _decimal_places(value)
+        raise ValueError(f"unsupported nutrition number: {raw}")
 
     return float(value), 0
 
