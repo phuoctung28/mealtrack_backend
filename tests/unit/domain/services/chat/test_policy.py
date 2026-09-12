@@ -173,6 +173,94 @@ def test_nutrition_numbers_must_come_from_context():
     assert nutrition_numbers_are_traceable(bad, context=context, chunks=[]) is False
 
 
+def test_nutrition_numbers_accept_localized_thousands_separators():
+    context = _context(
+        remaining_calories=1821,
+        consumed_calories=111,
+        target_calories=1932,
+        food_calories=111,
+        remaining_protein_g=117.7,
+        remaining_carbs_g=195.2,
+        remaining_fat_g=62.6,
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "Hôm nay bạn còn khoảng 1.821 kcal.",
+            context=context,
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have about 1,821 kcal left.",
+            context=context,
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "About 1.821,5 kcal left.",
+            context=_context(remaining_calories=1821.5),
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "About 1,821.5 kcal left.",
+            context=_context(remaining_calories=1821.5),
+            chunks=[],
+        )
+        is True
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "Còn 117,7 g protein và 195,2 g carbs.",
+            context=context,
+            chunks=[],
+        )
+        is True
+    )
+
+
+def test_malformed_same_separator_number_blocks_without_raising():
+    """Same-separator hybrids must not crash the chat turn as a provider error."""
+    context = _context(remaining_calories=1821)
+    assert (
+        nutrition_numbers_are_traceable(
+            "Hôm nay còn 1.821.5 kcal.",
+            context=context,
+            chunks=[],
+        )
+        is False
+    )
+    assert (
+        nutrition_numbers_are_traceable(
+            "You have 1,821,5 kcal left.",
+            context=context,
+            chunks=[],
+        )
+        is False
+    )
+
+
+def test_sanitize_incomplete_assistant_text_strips_cut_off_vn_budget_line():
+    from src.domain.services.chat.policy import sanitize_incomplete_assistant_text
+
+    assert (
+        sanitize_incomplete_assistant_text("Hôm nay bạn còn khoảng **1.821")
+        == "Hôm nay bạn còn"
+    )
+    assert (
+        sanitize_incomplete_assistant_text(
+            "You still have room for a balanced dinner."
+        )
+        == "You still have room for a balanced dinner."
+    )
+
+
 def test_nutrition_number_is_not_a_substring_match():
     context = _context(
         remaining_protein_g=140,

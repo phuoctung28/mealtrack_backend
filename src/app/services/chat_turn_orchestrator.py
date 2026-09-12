@@ -61,6 +61,7 @@ from src.domain.services.chat.policy import (
     request_fingerprint,
     resolve_chat_locale,
     safe_fallback_message,
+    sanitize_incomplete_assistant_text,
     stable_system_instructions,
 )
 from src.domain.utils.timezone_utils import utc_now
@@ -632,6 +633,11 @@ class ChatTurnOrchestrator:
             usage = generation["usage"]
             provider_response_id = generation["provider_response_id"]
             blocked = bool(generation["blocked"])
+            if blocked:
+                # Mid-token safety cuts leave truncated locale numbers / unclosed
+                # markdown (e.g. "còn khoảng **1.821"). Prefer a clean sentence.
+                final_text = sanitize_incomplete_assistant_text(final_text)
+                generation["text"] = final_text
             if not final_text:
                 blocked = True
                 final_text = safe_fallback_message(resolved_locale)

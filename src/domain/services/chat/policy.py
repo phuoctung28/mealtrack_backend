@@ -85,18 +85,28 @@ _SUGGEST_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Accept plain decimals (117.7 / 117,7) and thousands grouping (1.821 / 1,821).
+# When both thousands and a fraction appear, separators must differ (1.821,5 / 1,821.5).
+# Same-separator hybrids like 1.821.5 are rejected so float() never sees them.
+_LOCAL_NUMBER = (
+    r"\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?"  # 1.821 / 1.821,5
+    r"|\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?"  # 1,821 / 1,821.5
+    r"|\d+[.,]\d{1,2}"  # 117.7 / 117,7
+    r"|\d+"
+)
+
 _CALORIE_CLAIM_RE = re.compile(
-    r"(?P<num>\d+(?:\.\d+)?)\s*(?:kcal|calories?|cal)\b",
+    rf"(?P<num>{_LOCAL_NUMBER})\s*(?:kcal|calories?|cal)\b",
     re.IGNORECASE,
 )
 _MACRO_CLAIM_RE = re.compile(
-    r"(?:"
-    r"(?P<prefix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)"
-    r"\s*(?:is|:)?\s*(?P<prefix_num>\d+(?:\.\d+)?)\s*g(?:rams?)?\b"
-    r"|"
-    r"(?P<suffix_num>\d+(?:\.\d+)?)\s*g(?:rams?)?\s*(?:of\s+)?"
-    r"(?P<suffix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)\b"
-    r")",
+    rf"(?:"
+    rf"(?P<prefix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)"
+    rf"\s*(?:is|:)?\s*(?P<prefix_num>{_LOCAL_NUMBER})\s*g(?:rams?)?\b"
+    rf"|"
+    rf"(?P<suffix_num>{_LOCAL_NUMBER})\s*g(?:rams?)?\s*(?:of\s+)?"
+    rf"(?P<suffix_macro>protein|carb(?:s|ohydrate(?:s)?)?|fat|p|c|f)\b"
+    rf")",
     re.IGNORECASE,
 )
 
@@ -411,8 +421,16 @@ def nutrition_numbers_are_traceable(
     chunks: Sequence[RetrievedKnowledgeChunk],
     meal_candidates: Sequence[Mapping[str, Any]] | None = None,
 ) -> bool:
-    """Require each calorie/macro number to match its own source field."""
-    for claim in _nutrition_claims(text):
+    """Require each calorie/macro number to match its own source field.
+
+    Malformed locale numbers return False (block the stream) instead of raising,
+    so stream safety never surfaces as a provider/circuit failure.
+    """
+    try:
+        claims = list(_nutrition_claims(text))
+    except ValueError:
+        return False
+    for claim in claims:
         if not _claim_matches_context(claim, context):
             if not _claim_matches_candidates(
                 claim, meal_candidates
@@ -424,10 +442,11 @@ def nutrition_numbers_are_traceable(
 def _nutrition_claims(text: str) -> Iterable[_NutritionClaim]:
     seen: set[_NutritionClaim] = set()
     for match in _CALORIE_CLAIM_RE.finditer(text):
+        number, decimal_places = _parse_localized_number(match.group("num"))
         claim = _NutritionClaim(
             metric="calories",
-            number=float(match.group("num")),
-            decimal_places=_decimal_places(match.group("num")),
+            number=number,
+            decimal_places=decimal_places,
         )
         if claim not in seen:
             seen.add(claim)
@@ -439,14 +458,80 @@ def _nutrition_claims(text: str) -> Iterable[_NutritionClaim]:
         raw_number = match.group("prefix_num") or match.group("suffix_num")
         if not macro or not raw_number:
             continue
+        number, decimal_places = _parse_localized_number(raw_number)
         claim = _NutritionClaim(
             metric=macro,
-            number=float(raw_number),
-            decimal_places=_decimal_places(raw_number),
+            number=number,
+            decimal_places=decimal_places,
         )
         if claim not in seen:
             seen.add(claim)
             yield claim
+
+
+def _parse_localized_number(raw: str) -> tuple[float, int]:
+    """Parse coach display numbers across en/vi thousand and decimal separators.
+
+    Examples: ``1821``, ``1.821``, ``1,821``, ``117.7``, ``117,7``, ``1.821,5``.
+    """
+    value = raw.strip()
+    if not value:
+        raise ValueError("empty nutrition number")
+
+    if "," in value and "." in value:
+        if value.rfind(",") > value.rfind("."):
+            # European: 1.821,50
+            normalized = value.replace(".", "").replace(",", ".")
+        else:
+            # US: 1,821.50
+            normalized = value.replace(",", "")
+        return float(normalized), _decimal_places(normalized)
+
+    if "," in value:
+        if re.fullmatch(r"\d{1,3}(?:,\d{3})+", value):
+            normalized = value.replace(",", "")
+            return float(normalized), 0
+        if re.fullmatch(r"\d+,\d{1,2}", value):
+            normalized = value.replace(",", ".")
+            return float(normalized), _decimal_places(normalized)
+        raise ValueError(f"unsupported nutrition number: {raw}")
+
+    if "." in value:
+        if re.fullmatch(r"\d{1,3}(?:\.\d{3})+", value):
+            # Vietnamese/EU thousands: 1.821 → 1821
+            return float(value.replace(".", "")), 0
+        if re.fullmatch(r"\d+\.\d{1,2}", value):
+            return float(value), _decimal_places(value)
+        raise ValueError(f"unsupported nutrition number: {raw}")
+
+    return float(value), 0
+
+
+def sanitize_incomplete_assistant_text(text: str) -> str:
+    """Drop trailing cut-off fragments left when stream safety blocks mid-token."""
+    cleaned = text.strip()
+    if not cleaned:
+        return cleaned
+
+    # Unclosed markdown bold usually means the model was cut before finishing.
+    if cleaned.count("**") % 2 == 1:
+        cleaned = cleaned[: cleaned.rfind("**")].rstrip()
+
+    # Drop a trailing bare number/unit stump like "khoảng 1.821" with no closer.
+    cleaned = re.sub(
+        rf"(?:^|\s)(?:khoảng|about|around)?\s*(?:{_LOCAL_NUMBER})\s*$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).rstrip(" :,-–—")
+    # Number may already have been removed with the unclosed bold marker.
+    cleaned = re.sub(
+        r"(?:^|\s)(?:khoảng|about|around)\s*$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).rstrip(" :,-–—")
+    return cleaned.strip()
 
 
 def _claim_matches_context(
