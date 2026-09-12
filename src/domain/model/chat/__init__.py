@@ -34,6 +34,7 @@ from src.domain.model.chat.models import (
     ChatUsage,
     ChatUserContext,
     RetrievedKnowledgeChunk,
+    chronological_chat_messages,
     empty_reply_payload,
     reply_sidecar,
 )
@@ -72,6 +73,7 @@ __all__ = [
     "ChatUsage",
     "ChatUserContext",
     "RetrievedKnowledgeChunk",
+    "chronological_chat_messages",
     "empty_reply_payload",
     "reply_sidecar",
 ]

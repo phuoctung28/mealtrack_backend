@@ -144,6 +144,20 @@ class ChatMessage:
         return value if isinstance(value, dict) else None
 
 
+def chronological_chat_messages(
+    messages: list[ChatMessage],
+) -> list[ChatMessage]:
+    """Oldest first. Equal created_at: user before assistant (turn pairs share now)."""
+    return sorted(
+        messages,
+        key=lambda message: (
+            message.created_at,
+            0 if message.role == ChatMessageRole.USER else 1,
+            message.id,
+        ),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ChatCitation:
     label: str
