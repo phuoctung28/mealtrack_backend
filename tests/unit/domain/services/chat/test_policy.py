@@ -81,6 +81,11 @@ def test_nutrition_snapshot_preserves_gross_food_and_activity_semantics() -> Non
     }
 
 
+def test_nutrition_snapshot_falls_back_to_consumed_when_food_calories_missing() -> None:
+    snapshot = _context(consumed_calories=111).to_nutrition_snapshot()
+    assert snapshot["food_calories"] == 111
+
+
 def test_locale_prefers_supported_request_then_profile():
     assert resolve_chat_locale("vi", "en") == "vi"
     assert resolve_chat_locale("fr", "vi") == "vi"
