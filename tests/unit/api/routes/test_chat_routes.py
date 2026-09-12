@@ -310,6 +310,32 @@ def test_chat_capabilities_advertise_single_thread_contract():
         "day_progress",
         "limits",
     ]
+    assert body["functions"] == [
+        {
+            "name": "check_daily_progress",
+            "aliases": ["remaining_budget", "day_progress"],
+            "direct_invoke": True,
+            "needs_retrieval": False,
+        },
+        {
+            "name": "suggest_next_meal",
+            "aliases": ["next_meal"],
+            "direct_invoke": True,
+            "needs_retrieval": False,
+        },
+        {
+            "name": "explain_limits_and_guidelines",
+            "aliases": ["limits"],
+            "direct_invoke": True,
+            "needs_retrieval": False,
+        },
+        {
+            "name": "search_nutrition_knowledge",
+            "aliases": [],
+            "direct_invoke": True,
+            "needs_retrieval": True,
+        },
+    ]
     assert "CHAT_BUSY" in body["error_codes"]
     assert "CHAT_UNAVAILABLE" in body["error_codes"]
 
@@ -342,6 +368,71 @@ def test_post_forwards_structured_intent():
     )
     assert response.status_code == 200
     assert orchestrator.prepare_kwargs["intent"] == "remaining_budget"
+    assert orchestrator.prepare_kwargs["function_name"] is None
+
+
+def test_post_forwards_tool_and_preferred_alias():
+    orchestrator = _StubOrchestrator(
+        events=[
+            ChatSseEvent(
+                event="message.started",
+                data={"thread_id": "t1"},
+            )
+        ]
+    )
+    client = TestClient(_app(orchestrator))
+    response = client.post(
+        "/v1/chat/messages",
+        json={
+            "content": "What's left?",
+            "tool": {
+                "name": "check_daily_progress",
+                "args": {"focus": "remaining_budget"},
+            },
+        },
+        headers={"Idempotency-Key": "k1"},
+    )
+    assert response.status_code == 200
+    assert orchestrator.prepare_kwargs["intent"] == "remaining_budget"
+    assert orchestrator.prepare_kwargs["function_name"] == "check_daily_progress"
+    assert orchestrator.prepare_kwargs["function_args"] == {
+        "focus": "remaining_budget"
+    }
+
+
+def test_post_tool_wins_over_conflicting_intent():
+    orchestrator = _StubOrchestrator(
+        events=[
+            ChatSseEvent(
+                event="message.started",
+                data={"thread_id": "t1"},
+            )
+        ]
+    )
+    client = TestClient(_app(orchestrator))
+    response = client.post(
+        "/v1/chat/messages",
+        json={
+            "content": "Suggest something",
+            "intent": "limits",
+            "tool": {"name": "suggest_next_meal"},
+        },
+        headers={"Idempotency-Key": "k1"},
+    )
+    assert response.status_code == 200
+    assert orchestrator.prepare_kwargs["intent"] == "next_meal"
+    assert orchestrator.prepare_kwargs["function_name"] == "suggest_next_meal"
+
+
+def test_post_rejects_unknown_tool():
+    client = TestClient(_app(_StubOrchestrator()))
+    response = client.post(
+        "/v1/chat/messages",
+        json={"content": "Search", "tool": {"name": "web_search_recipes"}},
+        headers={"Idempotency-Key": "k1"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["error_code"] == "CHAT_UNKNOWN_TOOL"
 
 
 def test_post_rejects_unknown_intent():

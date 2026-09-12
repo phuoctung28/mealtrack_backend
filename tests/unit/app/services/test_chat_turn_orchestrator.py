@@ -149,17 +149,29 @@ class _GatedCompletion:
 
 
 class _FakeEmbedding:
+    def __init__(self):
+        self.calls: list[str] = []
+
     async def embed_query(self, text: str) -> list[float]:
+        self.calls.append(text)
         return [0.1, 0.2]
 
 
 class _FakeRetrieval:
+    def __init__(self):
+        self.calls: list[dict] = []
+
     async def retrieve(self, **kwargs):
+        self.calls.append(kwargs)
         return []
 
 
 class _FakeContext:
+    def __init__(self):
+        self.calls: list[dict] = []
+
     async def build(self, **kwargs) -> ChatUserContext:
+        self.calls.append(kwargs)
         return ChatUserContext(
             context_version="chat_context_v1",
             as_of="2026-09-01T00:00:00+00:00",
@@ -279,16 +291,22 @@ def _orchestrator(
     circuit_breaker=None,
     next_meals=None,
     follow_ups=None,
+    embedding=None,
+    retrieval=None,
+    context_builder=None,
 ):
     repo.turns_used = turns_used
     uow = _FakeUow(repo)
+    embedding = embedding or _FakeEmbedding()
+    retrieval = retrieval or _FakeRetrieval()
+    context_builder = context_builder or _FakeContext()
 
-    return ChatTurnOrchestrator(
+    orchestrator = ChatTurnOrchestrator(
         completion=completion
         or _FakeCompletion(["Nutree has 650 calories remaining. "]),
-        embedding=_FakeEmbedding(),
-        retrieval=_FakeRetrieval(),
-        context_builder=_FakeContext(),
+        embedding=embedding,
+        retrieval=retrieval,
+        context_builder=context_builder,
         uow_factory=lambda: uow,
         model="gpt-5.6-luna",
         daily_turn_budget=40,
@@ -298,6 +316,10 @@ def _orchestrator(
         next_meals=next_meals,
         follow_ups=follow_ups,
     )
+    orchestrator.test_embedding = embedding  # type: ignore[attr-defined]
+    orchestrator.test_retrieval = retrieval  # type: ignore[attr-defined]
+    orchestrator.test_context = context_builder  # type: ignore[attr-defined]
+    return orchestrator
 
 
 @pytest.mark.asyncio
@@ -839,6 +861,7 @@ async def test_follow_up_failure_persists_empty_chips():
 
 def test_chat_orchestrator_tools_contains_suggest_next_meal():
     from src.app.services.chat_turn_orchestrator import CHAT_ORCHESTRATOR_TOOLS
+    from src.domain.services.chat.coach_functions import openai_tools
 
     tool_names = [tool["function"]["name"] for tool in CHAT_ORCHESTRATOR_TOOLS]
     assert "suggest_next_meal" in tool_names
@@ -848,6 +871,72 @@ def test_chat_orchestrator_tools_contains_suggest_next_meal():
         "search_nutrition_knowledge",
         "explain_limits_and_guidelines",
     }
+    assert CHAT_ORCHESTRATOR_TOOLS == openai_tools()
+
+
+@pytest.mark.asyncio
+async def test_remaining_budget_chip_skips_embed_and_retrieve():
+    repo = _FakeRepo(claim=_claim())
+    orchestrator = _orchestrator(repo)
+
+    await _stream(orchestrator, intent="remaining_budget", content="What's left?")
+
+    assert orchestrator.test_embedding.calls == []
+    assert orchestrator.test_retrieval.calls == []
+    assert orchestrator.test_context.calls
+
+
+@pytest.mark.asyncio
+async def test_day_progress_chip_skips_embed_and_retrieve():
+    repo = _FakeRepo(claim=_claim())
+    orchestrator = _orchestrator(repo)
+
+    await _stream(orchestrator, intent="day_progress", content="Day progress")
+
+    assert orchestrator.test_embedding.calls == []
+    assert orchestrator.test_retrieval.calls == []
+
+
+@pytest.mark.asyncio
+async def test_limits_chip_skips_embed_and_retrieve():
+    repo = _FakeRepo(claim=_claim())
+    orchestrator = _orchestrator(repo)
+
+    events = await _stream(orchestrator, intent="limits", content="What can you do?")
+    completed = next(event for event in events if event.event == "message.completed")
+
+    assert orchestrator.test_embedding.calls == []
+    assert orchestrator.test_retrieval.calls == []
+    assert completed.data["intent"] == "limits"
+
+
+@pytest.mark.asyncio
+async def test_next_meal_chip_skips_retrieve_but_prefetches_card():
+    cards = _three_cards()
+    next_meals = _FakeNextMeals(
+        NextMealCandidateResult(suggestions=cards, meal_slot="lunch")
+    )
+    repo = _FakeRepo(claim=_claim())
+    orchestrator = _orchestrator(repo, next_meals=next_meals)
+
+    events = await _stream(orchestrator, intent="next_meal", content="Lunch ideas")
+    completed = next(event for event in events if event.event == "message.completed")
+
+    assert orchestrator.test_embedding.calls == []
+    assert orchestrator.test_retrieval.calls == []
+    assert next_meals.calls
+    assert completed.data["suggestions"] == cards
+
+
+@pytest.mark.asyncio
+async def test_free_text_still_embeds_and_retrieves():
+    repo = _FakeRepo(claim=_claim())
+    orchestrator = _orchestrator(repo)
+
+    await _stream(orchestrator, intent=None, content="Cite protein guidance")
+
+    assert orchestrator.test_embedding.calls
+    assert orchestrator.test_retrieval.calls
 
 
 @pytest.mark.asyncio

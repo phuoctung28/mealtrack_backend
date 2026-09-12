@@ -98,6 +98,17 @@ def test_fingerprint_changes_with_body_or_locale():
     ) == request_fingerprint("hello", "en", "remaining_budget")
 
 
+def test_fingerprint_alias_matches_resolved_tool():
+    alias_fp = request_fingerprint("hello", "en", "remaining_budget")
+    tool_fp = request_fingerprint(
+        "hello",
+        "en",
+        function_name="check_daily_progress",
+        function_args={"focus": "remaining_budget"},
+    )
+    assert alias_fp == tool_fp
+
+
 def test_hydrate_citations_rebuilds_labels_and_titles():
     citations = hydrate_citations(
         ["protein-guide", "missing"],
