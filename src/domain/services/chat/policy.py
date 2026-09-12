@@ -17,6 +17,7 @@ from src.domain.model.chat import (
     ChatUserContext,
     RetrievedKnowledgeChunk,
 )
+from src.domain.services.chat.coach_functions import output_contract_for
 
 PROMPT_VERSION = CHAT_PROMPT_VERSION
 
@@ -121,6 +122,7 @@ class _NutritionClaim:
     number: float
     decimal_places: int
 
+
 _SAFE_FALLBACK_EN = (
     "I can only use Nutree's recorded values and reviewed Nutree guidance. "
     "Ask about a logged meal, remaining target, or allergy-safe option."
@@ -223,36 +225,6 @@ def build_grounding_message(
     )
 
 
-_INTENT_TEMPLATES = {
-    "remaining_budget": (
-        "COACH INTENT remaining_budget. The user text is only the localized label.\n"
-        "The app already shows remaining kcal and P/C/F as beakers from Nutree. "
-        "Write 1-2 short sentences about what is left. Do not repeat the leftover "
-        "numbers. Do not list meals. Do not claim you logged anything."
-    ),
-    "day_progress": (
-        "COACH INTENT day_progress. The user text is only the localized label.\n"
-        "The app already shows remaining beakers from Nutree. Write 1-2 short "
-        "sentences about how the day is going (nothing logged yet, on track, or "
-        "over) using USER CONTEXT only. Do not repeat every macro number."
-    ),
-    "next_meal": (
-        "COACH INTENT next_meal.\n"
-        "The app displays the recommended meal card below with photo and macros. "
-        "Write 1-2 short sentences: introduce the recommended meal warmly in the user's language and explain why it fits their remaining budget. "
-        "Do not repeat exact kcal or gram numbers. "
-        "Tell the user they can tap the card to see the full ingredients, recipe steps, and log it. "
-        "Never claim you logged or saved a meal."
-    ),
-    "limits": (
-        "COACH INTENT limits. The user text is only the localized label.\n"
-        "The app already shows a can/can't card. Write at most two sentences: "
-        "you explain the log and suggest meals; you cannot log meals, change "
-        "targets, or give medical advice. Do not include nutrition numbers."
-    ),
-}
-
-
 def intent_template(intent: str | None) -> str:
     """Per-intent output contract. Missing intent → free-text nutrition answer."""
     if not intent:
@@ -263,11 +235,42 @@ def intent_template(intent: str | None) -> str:
             "nutrition, meals, or Nutree, refuse in 1-2 sentences and offer a "
             "Coach topic instead."
         )
-    return _INTENT_TEMPLATES.get(intent, "")
+    return output_contract_for(intent)
 
 
-def request_fingerprint(content: str, locale: str, intent: str | None = None) -> str:
-    payload = {"content": content, "intent": intent, "locale": locale}
+def request_fingerprint(
+    content: str,
+    locale: str,
+    intent: str | None = None,
+    *,
+    function_name: str | None = None,
+    function_args: dict | None = None,
+) -> str:
+    """Idempotency identity for a chat turn.
+
+    Prefer resolved function+args when available so chip alias and tool name
+    with the same focus collide. Falls back to legacy `{content,intent,locale}`
+    when nothing resolves.
+    """
+    from src.domain.services.chat.coach_functions import resolve_coach_function
+
+    resolved_name = function_name
+    resolved_args = dict(function_args or {})
+    if resolved_name is None and intent:
+        resolved = resolve_coach_function(intent)
+        if resolved is not None:
+            resolved_name = resolved.name
+            resolved_args = dict(resolved.args)
+
+    if resolved_name:
+        payload = {
+            "content": content,
+            "locale": locale,
+            "function": resolved_name,
+            "args": resolved_args,
+        }
+    else:
+        payload = {"content": content, "intent": intent, "locale": locale}
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
