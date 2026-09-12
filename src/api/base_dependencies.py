@@ -195,10 +195,10 @@ def _register_local_insight_hook() -> None:
 
 def _register_local_cache_invalidation_hook() -> None:
     """Purge daily-macros Redis keys locally when Cloudflare Queue is not configured."""
-    from src.app.events.meal.meal_events import register_local_cache_invalidation_hook
-    from src.infra.cache.meal_write_cache_invalidation import (
+    from src.api.services.local_meal_cache_invalidation import (
         apply_meal_write_cache_invalidation,
     )
+    from src.app.events.meal.meal_events import register_local_cache_invalidation_hook
 
     async def _invalidate(user_id, meal_date, old_meal_date=None):
         await apply_meal_write_cache_invalidation(

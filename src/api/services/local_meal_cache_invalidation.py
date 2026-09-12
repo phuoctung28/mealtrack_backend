@@ -1,10 +1,11 @@
-"""Apply meal-write cache deletes to the local Redis used by this API process."""
+"""Purge meal-write Redis keys on the local Docker cache the Worker cannot reach."""
 
 from __future__ import annotations
 
 import logging
 from datetime import date, datetime
 
+from src.api.services.local_meal_insight_cache import redis_url_is_local
 from src.domain.cache.cache_invalidation_operations import (
     DELETE_KEY,
     DELETE_PATTERN,
@@ -25,8 +26,11 @@ async def apply_meal_write_cache_invalidation(
     meal_date: date | datetime,
     old_meal_date: date | datetime | None = None,
 ) -> None:
-    """Delete daily-macros and related keys so Coach cannot keep a stale 0."""
+    """Delete daily-macros keys on Docker Redis so Coach cannot keep a stale 0."""
     if cache is None or not user_id:
+        return
+    redis_url = getattr(getattr(cache, "redis", None), "_redis_url", "")
+    if isinstance(redis_url, str) and redis_url and not redis_url_is_local(redis_url):
         return
     dates = {_as_date(meal_date)}
     if old_meal_date is not None:
