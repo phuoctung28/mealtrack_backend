@@ -114,6 +114,12 @@ class ChatContextBuilder:
         consumed_protein = (daily or {}).get("total_protein")
         consumed_carbs = (daily or {}).get("total_carbs")
         consumed_fat = (daily or {}).get("total_fat")
+        # Weekly `remaining_calories` is leftover for the whole week, not today.
+        # Coach cards and Nutrition home both show today's food vs daily target.
+        eaten_today = (
+            food_calories if food_calories is not None else consumed_calories
+        )
+        remaining_calories = _remaining(target_calories, eaten_today)
 
         return ChatUserContext(
             context_version=CHAT_CONTEXT_VERSION,
@@ -133,7 +139,7 @@ class ChatContextBuilder:
             consumed_protein_g=_num(consumed_protein),
             consumed_carbs_g=_num(consumed_carbs),
             consumed_fat_g=_num(consumed_fat),
-            remaining_calories=_remaining(target_calories, consumed_calories),
+            remaining_calories=remaining_calories,
             remaining_protein_g=_remaining(target_protein, consumed_protein),
             remaining_carbs_g=_remaining(target_carbs, consumed_carbs),
             remaining_fat_g=_remaining(target_fat, consumed_fat),

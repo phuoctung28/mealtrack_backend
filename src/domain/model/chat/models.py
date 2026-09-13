@@ -330,7 +330,11 @@ class ChatUserContext:
             "local_date": self.local_date,
             "timezone": self.timezone,
             "target_calories": self.target_calories,
-            "food_calories": self.food_calories,
+            "food_calories": (
+                self.food_calories
+                if self.food_calories is not None
+                else self.consumed_calories
+            ),
             "movement_kcal_burned": self.movement_kcal_burned,
             "remaining_calories": self.remaining_calories,
             "remaining_days": self.remaining_days,
